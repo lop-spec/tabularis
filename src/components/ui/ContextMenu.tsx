@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface ContextMenuItem {
   label: string;
@@ -16,6 +16,40 @@ interface ContextMenuProps {
 
 export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: y, left: x });
+
+  useEffect(() => {
+    if (menuRef.current) {
+      const menuRect = menuRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let adjustedX = x;
+      let adjustedY = y;
+
+      // Adjust horizontal position if menu overflows right edge
+      if (x + menuRect.width > viewportWidth) {
+        adjustedX = viewportWidth - menuRect.width - 10; // 10px margin
+      }
+
+      // Adjust vertical position if menu overflows bottom edge
+      if (y + menuRect.height > viewportHeight) {
+        adjustedY = viewportHeight - menuRect.height - 10; // 10px margin
+      }
+
+      // Ensure menu doesn't go off the left edge
+      if (adjustedX < 10) {
+        adjustedX = 10;
+      }
+
+      // Ensure menu doesn't go off the top edge
+      if (adjustedY < 10) {
+        adjustedY = 10;
+      }
+
+      setPosition({ top: adjustedY, left: adjustedX });
+    }
+  }, [x, y]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -39,8 +73,8 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
 
   // Adjust position to keep within viewport
   const style: React.CSSProperties = {
-    top: y,
-    left: x,
+    top: position.top,
+    left: position.left,
   };
 
   return (
