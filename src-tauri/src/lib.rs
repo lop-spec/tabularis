@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod export;
 pub mod keychain_utils;
 pub mod models;
 pub mod pool_manager;
@@ -22,6 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(commands::QueryCancellationState::default())
+        .manage(export::ExportCancellationState::default())
         .invoke_handler(tauri::generate_handler![
             commands::test_connection,
             commands::save_connection,
@@ -39,6 +41,8 @@ pub fn run() {
             commands::execute_query,
             commands::cancel_query,
             commands::set_window_title,
+            export::export_query_to_file,
+            export::cancel_export,
             saved_queries::get_saved_queries,
             saved_queries::save_query,
             saved_queries::update_saved_query,

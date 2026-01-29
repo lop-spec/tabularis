@@ -1,6 +1,7 @@
 {
   "common": {
     "save": "Save",
+    "close": "Close",
     "cancel": "Cancel",
     "delete": "Delete",
     "edit": "Edit",
@@ -190,7 +191,9 @@
     "newVisualQuery": "New Visual Query",
     "submitChanges": "Submit Changes",
     "rollbackChanges": "Rollback Changes",
-    "executingQuery": "Executing query..."
+    "executingQuery": "Executing query...",
+    "exporting": "Exporting...",
+    "rowsProcessed": "Rows Processed"
   },
   "createTable": {
     "title": "Create New Table",

@@ -30,16 +30,17 @@ import {
   ListFilter,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { DataGrid } from "../components/ui/DataGrid";
 import { NewRowModal } from "../components/ui/NewRowModal";
 import { QuerySelectionModal } from "../components/ui/QuerySelectionModal";
 import { QueryModal } from "../components/ui/QueryModal";
 import { VisualQueryBuilder } from "../components/ui/VisualQueryBuilder";
 import { ContextMenu } from "../components/ui/ContextMenu";
+import { ExportProgressModal, type ExportStatus } from "../components/ui/ExportProgressModal";
 import { splitQueries, extractTableName } from "../utils/sql";
 import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 import { save, message } from "@tauri-apps/plugin-dialog";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { useDatabase } from "../hooks/useDatabase";
 import { useSavedQueries } from "../hooks/useSavedQueries";
 import { useSettings } from "../hooks/useSettings";
@@ -69,6 +70,10 @@ interface EditorState {
     queryName?: string;
 }
 
+interface ExportProgress {
+    rows_processed: number;
+}
+
 export const Editor = () => {
   const { t } = useTranslation();
   const { activeConnectionId } = useDatabase();
@@ -95,6 +100,30 @@ export const Editor = () => {
     y: number;
     tabId: string;
   } | null>(null);
+
+  const [exportState, setExportState] = useState<{
+    isExporting: boolean; // Keep for backward compat or refactor logic
+    isOpen: boolean;
+    status: ExportStatus;
+    rowsProcessed: number;
+    fileName: string;
+    errorMessage?: string;
+  }>({
+    isExporting: false,
+    isOpen: false,
+    status: "exporting",
+    rowsProcessed: 0,
+    fileName: "",
+  });
+
+  useEffect(() => {
+    const unlisten = listen<ExportProgress>("export_progress", (event) => {
+       setExportState(prev => ({ ...prev, rowsProcessed: event.payload.rows_processed }));
+    });
+    return () => {
+        unlisten.then(f => f());
+    };
+  }, []);
 
   const handleTabContextMenu = (e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
@@ -635,58 +664,82 @@ export const Editor = () => {
     document.addEventListener("mouseup", stopResize);
   };
 
-  const handleExportCSV = async () => {
-    if (!activeTab?.result) return;
-    const result = activeTab.result;
+  const cancelExport = useCallback(async () => {
+      if (!activeConnectionId) return;
+      try {
+          await invoke("cancel_export", { connectionId: activeConnectionId });
+          setExportState(prev => ({ ...prev, isOpen: false, isExporting: false }));
+      } catch (e) {
+          console.error("Failed to cancel export", e);
+      }
+  }, [activeConnectionId]);
+
+  const closeExportModal = useCallback(() => {
+      setExportState(prev => ({ ...prev, isOpen: false, isExporting: false }));
+  }, []);
+
+  const handleExportCommon = async (format: "csv" | "json") => {
+    if (!activeTab || !activeConnectionId) return;
+
+    let query = activeTab.query;
+
+    // For Table Tabs, reconstruct query (ignoring Page Size limit, but respecting User Limit)
+    if (activeTab.type === "table" && activeTab.activeTable) {
+        const filter = activeTab.filterClause ? `WHERE ${activeTab.filterClause}` : "";
+        const sort = activeTab.sortClause ? `ORDER BY ${activeTab.sortClause}` : "";
+        
+        // Base query
+        let baseQuery = `SELECT * FROM ${activeTab.activeTable} ${filter} ${sort}`;
+        
+        // Apply user manual limit if present
+        if (activeTab.limitClause && activeTab.limitClause > 0) {
+            baseQuery = `${baseQuery} LIMIT ${activeTab.limitClause}`;
+        }
+        
+        query = baseQuery;
+    }
+
+    if (!query || !query.trim()) return;
+
     try {
-      const filePath = await save({
-        filters: [{ name: "CSV", extensions: ["csv"] }],
-        defaultPath: `result_${Date.now()}.csv`,
-      });
-      if (!filePath) return;
-      const headers = result.columns.join(",");
-      const rows = result.rows
-        .map((row) =>
-          row
-            .map((cell) => {
-              if (cell === null) return "NULL";
-              const str = String(cell);
-              return str.includes(",") ||
-                str.includes('"') ||
-                str.includes("\n")
-                ? `"${str.replace(/"/g, '""')}"`
-                : str;
-            })
-            .join(","),
-        )
-        .join("\n");
-      await writeTextFile(filePath, `${headers}\n${rows}`);
-      setExportMenuOpen(false);
+        const filePath = await save({
+            filters: [{ name: format.toUpperCase(), extensions: [format] }],
+            defaultPath: `result_${Date.now()}.${format}`,
+        });
+
+        if (!filePath) return;
+
+        setExportState({
+            isOpen: true,
+            isExporting: true,
+            status: "exporting",
+            rowsProcessed: 0,
+            fileName: filePath.split(/[/\\]/).pop() || filePath, // Show only filename
+        });
+        setExportMenuOpen(false);
+
+        await invoke("export_query_to_file", {
+            connectionId: activeConnectionId,
+            query,
+            filePath,
+            format
+        });
+        
+        // Success: update modal state instead of showing toast
+        setExportState(prev => ({ ...prev, isExporting: false, status: "completed" }));
     } catch (e) {
-      updateActiveTab({ error: "Export failed: " + String(e) });
+        // Error: update modal state
+        setExportState(prev => ({ 
+            ...prev, 
+            isExporting: false, 
+            status: "error", 
+            errorMessage: String(e) 
+        }));
     }
   };
 
-  const handleExportJSON = async () => {
-    if (!activeTab?.result) return;
-    const result = activeTab.result;
-    try {
-      const filePath = await save({
-        filters: [{ name: "JSON", extensions: ["json"] }],
-        defaultPath: `result_${Date.now()}.json`,
-      });
-      if (!filePath) return;
-      const data = result.rows.map((row) => {
-        const obj: Record<string, unknown> = {};
-        result.columns.forEach((col, i) => (obj[col] = row[i]));
-        return obj;
-      });
-      await writeTextFile(filePath, JSON.stringify(data, null, 2));
-      setExportMenuOpen(false);
-    } catch (e) {
-      updateActiveTab({ error: "Export failed: " + String(e) });
-    }
-  };
+  const handleExportCSV = () => handleExportCommon("csv");
+  const handleExportJSON = () => handleExportCommon("json");
 
   const handleRunDropdownToggle = useCallback(() => {
     if (!isRunDropdownOpen) {
@@ -1352,6 +1405,15 @@ export const Editor = () => {
           ]}
         />
       )}
+      <ExportProgressModal 
+        isOpen={exportState.isOpen} 
+        status={exportState.status}
+        rowsProcessed={exportState.rowsProcessed} 
+        fileName={exportState.fileName}
+        errorMessage={exportState.errorMessage}
+        onCancel={cancelExport} 
+        onClose={closeExportModal}
+      />
     </div>
   );
 };

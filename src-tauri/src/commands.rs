@@ -31,7 +31,7 @@ impl Default for QueryCancellationState {
 
 // --- Persistence Helpers ---
 
-fn resolve_connection_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
+pub fn resolve_connection_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
     if params.ssh_enabled.unwrap_or(false) {
         let ssh_host = params.ssh_host.as_deref().ok_or("Missing SSH Host")?;
         let ssh_port = params.ssh_port.unwrap_or(22);
@@ -84,7 +84,7 @@ fn resolve_connection_params(params: &ConnectionParams) -> Result<ConnectionPara
     }
 }
 
-fn get_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+pub fn get_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
@@ -92,7 +92,7 @@ fn get_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     Ok(config_dir.join("connections.json"))
 }
 
-fn find_connection_by_id<R: Runtime>(
+pub fn find_connection_by_id<R: Runtime>(
     app: &AppHandle<R>,
     id: &str,
 ) -> Result<SavedConnection, String> {

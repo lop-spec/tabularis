@@ -1,6 +1,7 @@
 {
   "common": {
     "save": "Salva",
+    "close": "Chiudi",
     "cancel": "Annulla",
     "delete": "Elimina",
     "edit": "Modifica",
@@ -190,7 +191,9 @@
     "newVisualQuery": "Nuova Query Visuale",
     "submitChanges": "Invia Modifiche",
     "rollbackChanges": "Annulla Modifiche",
-    "executingQuery": "Esecuzione query..."
+    "executingQuery": "Esecuzione query...",
+    "exporting": "Esportazione in corso...",
+    "rowsProcessed": "Righe processate"
   },
   "createTable": {
     "title": "Crea Nuova Tabella",
