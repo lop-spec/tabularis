@@ -503,11 +503,13 @@ export const Settings = () => {
                   <Code2 size={120} />
                 </div>
 
-                <img
-                  src="/logo.png"
-                  alt="tabularis"
-                  className="w-16 h-16 bg-white rounded-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30"
-                />
+                <div className="p-2">
+                  <img
+                    src="/logo.png"
+                    alt="tabularis"
+                    className="w-16 h-16 bg-[#010101] rounded-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30"
+                  />
+                </div>
 
                 <h1 className="text-3xl font-bold text-white mb-2">
                   tabularis
