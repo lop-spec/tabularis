@@ -187,7 +187,9 @@
     "saveThisQuery": "Salva questa query",
     "noValidQueries": "Nessuna query valida trovata",
     "queryFailed": "Esecuzione query fallita.",
-    "newVisualQuery": "Nuova Query Visuale"
+    "newVisualQuery": "Nuova Query Visuale",
+    "submitChanges": "Invia Modifiche",
+    "rollbackChanges": "Annulla Modifiche"
   },
   "createTable": {
     "title": "Crea Nuova Tabella",

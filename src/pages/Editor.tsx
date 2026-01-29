@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Play,
   Plus,
+  Minus,
   Download,
   Square,
   ChevronDown,
@@ -22,6 +23,8 @@ import {
   ArrowRightToLine,
   XCircle,
   Trash2,
+  Check,
+  Undo2,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { DataGrid } from "../components/ui/DataGrid";
@@ -32,7 +35,7 @@ import { VisualQueryBuilder } from "../components/ui/VisualQueryBuilder";
 import { ContextMenu } from "../components/ui/ContextMenu";
 import { splitQueries } from "../utils/sql";
 import MonacoEditor, { type OnMount } from "@monaco-editor/react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { save, message } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { useDatabase } from "../hooks/useDatabase";
 import { useSavedQueries } from "../hooks/useSavedQueries";
@@ -127,6 +130,31 @@ export const Editor = () => {
   const tabsRef = useRef<Tab[]>([]);
   const activeTabIdRef = useRef<string | null>(null);
   const processingRef = useRef<string | null>(null);
+
+  const selectionHasPending = useMemo(() => {
+    if (!activeTab) return false;
+    const { pendingChanges, pendingDeletions, selectedRows, result, pkColumn } = activeTab;
+    const hasGlobalPending = (pendingChanges && Object.keys(pendingChanges).length > 0) ||
+                             (pendingDeletions && Object.keys(pendingDeletions).length > 0);
+
+    if (!selectedRows || selectedRows.length === 0) return hasGlobalPending;
+
+    if (!result || !pkColumn) return false;
+    const pkIndex = result.columns.indexOf(pkColumn);
+    if (pkIndex === -1) return false;
+
+    return selectedRows.some(rowIndex => {
+        const row = result.rows[rowIndex];
+        if (!row) return false;
+        const pkVal = String(row[pkIndex]);
+        return (pendingChanges && pendingChanges[pkVal]) || (pendingDeletions && pendingDeletions[pkVal]);
+    });
+  }, [activeTab]);
+
+  const hasPendingChanges = useMemo(() => {
+    return (activeTab?.pendingChanges && Object.keys(activeTab.pendingChanges).length > 0) || 
+           (activeTab?.pendingDeletions && Object.keys(activeTab.pendingDeletions).length > 0);
+  }, [activeTab?.pendingChanges, activeTab?.pendingDeletions]);
 
   useEffect(() => {
     tabsRef.current = tabs;
@@ -260,6 +288,210 @@ export const Editor = () => {
     if (activeTab?.activeTable && activeConnectionId)
       runQuery(activeTab.query, activeTab.page);
   }, [activeTab, activeConnectionId, runQuery]);
+
+  const handlePendingChange = useCallback((pkVal: unknown, colName: string, value: unknown) => {
+    if (!activeTabIdRef.current) return;
+    const tabId = activeTabIdRef.current;
+    
+    const currentTab = tabsRef.current.find(t => t.id === tabId);
+    if (!currentTab) return;
+
+    const pkKey = String(pkVal);
+    const currentPending = currentTab.pendingChanges || {};
+    const rowEntry = currentPending[pkKey] || { pkOriginalValue: pkVal, changes: {} };
+    
+    // Create new changes object
+    const newChanges = { ...rowEntry.changes };
+    
+    if (value === undefined) {
+        // Remove change
+        delete newChanges[colName];
+    } else {
+        // Update change
+        newChanges[colName] = value;
+    }
+
+    const newPending = { ...currentPending };
+
+    // If no changes left for this row, remove the row entry
+    if (Object.keys(newChanges).length === 0) {
+        delete newPending[pkKey];
+    } else {
+        newPending[pkKey] = {
+            ...rowEntry,
+            changes: newChanges
+        };
+    }
+    
+    updateTab(tabId, { pendingChanges: newPending });
+  }, [updateTab]);
+
+  const handleSelectionChange = useCallback((indices: Set<number>) => {
+    if (!activeTabIdRef.current) return;
+    updateTab(activeTabIdRef.current, { selectedRows: Array.from(indices) });
+  }, [updateTab]);
+
+  const handleDeleteRows = useCallback(() => {
+    if (!activeTab || !activeTab.result || !activeTab.pkColumn || !activeTab.selectedRows || activeTab.selectedRows.length === 0) return;
+    
+    const pkIndex = activeTab.result.columns.indexOf(activeTab.pkColumn);
+    if (pkIndex === -1) return;
+
+    const currentPendingDeletions = activeTab.pendingDeletions || {};
+    const newPendingDeletions = { ...currentPendingDeletions };
+
+    activeTab.selectedRows.forEach(rowIndex => {
+        const row = activeTab.result!.rows[rowIndex];
+        if (row) {
+            const pkVal = row[pkIndex];
+            newPendingDeletions[String(pkVal)] = pkVal;
+        }
+    });
+
+    updateActiveTab({ pendingDeletions: newPendingDeletions, selectedRows: [] });
+  }, [activeTab, updateActiveTab]);
+
+  const handleSubmitChanges = useCallback(async () => {
+    if (!activeTab || !activeTab.activeTable || !activeTab.pkColumn || !activeConnectionId) return;
+    
+    const { pendingChanges, pendingDeletions, activeTable, pkColumn, selectedRows } = activeTab;
+    const updates: { pkVal: unknown; colName: string; newVal: unknown }[] = [];
+    const deletions: unknown[] = [];
+
+    // Filter pending changes by selected rows IF there is a selection
+    const hasSelection = selectedRows && selectedRows.length > 0;
+    const selectedPkSet = new Set<string>();
+    
+    if (hasSelection && activeTab.result) {
+        const pkIndex = activeTab.result.columns.indexOf(pkColumn);
+        if (pkIndex !== -1) {
+            selectedRows.forEach(rowIndex => {
+                const row = activeTab.result!.rows[rowIndex];
+                if (row) selectedPkSet.add(String(row[pkIndex]));
+            });
+        }
+    }
+
+    if (pendingChanges) {
+        for (const [pkKey, rowData] of Object.entries(pendingChanges)) {
+            // Apply filter if selection exists
+            if (hasSelection && !selectedPkSet.has(pkKey)) continue;
+
+            const { pkOriginalValue, changes } = rowData;
+            for (const [colName, newVal] of Object.entries(changes)) {
+                updates.push({ pkVal: pkOriginalValue, colName, newVal });
+            }
+        }
+    }
+
+    if (pendingDeletions) {
+        for (const [pkKey, pkVal] of Object.entries(pendingDeletions)) {
+             // Apply filter if selection exists
+             if (hasSelection && !selectedPkSet.has(pkKey)) continue;
+             deletions.push(pkVal);
+        }
+    }
+
+    if (updates.length === 0 && deletions.length === 0) return;
+
+    updateActiveTab({ isLoading: true });
+
+    try {
+        const promises = [];
+        
+        // Deletions
+        if (deletions.length > 0) {
+            promises.push(...deletions.map(pkVal => invoke('delete_record', {
+                connectionId: activeConnectionId,
+                table: activeTable,
+                pkCol: pkColumn,
+                pkVal
+            })));
+        }
+
+        // Updates
+        if (updates.length > 0) {
+            promises.push(...updates.map(u => invoke('update_record', {
+                connectionId: activeConnectionId,
+                table: activeTable,
+                pkCol: pkColumn,
+                pkVal: u.pkVal,
+                colName: u.colName,
+                newVal: u.newVal
+            })));
+        }
+
+        await Promise.all(promises);
+        
+        // Remove processed changes from state
+        const newPendingChanges = { ...(pendingChanges || {}) };
+        const newPendingDeletions = { ...(pendingDeletions || {}) };
+
+        // If we processed everything, clear all. If partial, clear only processed.
+        if (!hasSelection) {
+             updateActiveTab({ pendingChanges: undefined, pendingDeletions: undefined, isLoading: false });
+        } else {
+             // Partial cleanup
+             updates.forEach(u => delete newPendingChanges[String(u.pkVal)]);
+             deletions.forEach(d => delete newPendingDeletions[String(d)]);
+             
+             // Cleanup empty change objects
+             Object.keys(newPendingChanges).forEach(key => {
+                 // @ts-ignore
+                 if (Object.keys(newPendingChanges[key]?.changes || {}).length === 0) delete newPendingChanges[key];
+             });
+
+             updateActiveTab({ 
+                 pendingChanges: Object.keys(newPendingChanges).length > 0 ? newPendingChanges : undefined, 
+                 pendingDeletions: Object.keys(newPendingDeletions).length > 0 ? newPendingDeletions : undefined, 
+                 isLoading: false 
+             });
+        }
+        
+        runQuery(activeTab.query, activeTab.page);
+    } catch (e) {
+        console.error("Batch update failed", e);
+        updateActiveTab({ isLoading: false });
+        await message(t('dataGrid.updateFailed') + String(e), { title: t('common.error'), kind: 'error' });
+    }
+  }, [activeTab, activeConnectionId, updateActiveTab, runQuery, t]);
+
+  const handleRollbackChanges = useCallback(() => {
+    if (!activeTab) return;
+    const { selectedRows, result, pkColumn, pendingChanges, pendingDeletions } = activeTab;
+    
+    // If no selection, rollback everything
+    if (!selectedRows || selectedRows.length === 0) {
+        updateActiveTab({ pendingChanges: undefined, pendingDeletions: undefined });
+        return;
+    }
+
+    // Filter rollback by selection
+    const selectedPkSet = new Set<string>();
+    if (result && pkColumn) {
+        const pkIndex = result.columns.indexOf(pkColumn);
+        if (pkIndex !== -1) {
+            selectedRows.forEach(rowIndex => {
+                const row = result.rows[rowIndex];
+                if (row) selectedPkSet.add(String(row[pkIndex]));
+            });
+        }
+    }
+
+    const newPendingChanges = { ...(pendingChanges || {}) };
+    const newPendingDeletions = { ...(pendingDeletions || {}) };
+
+    selectedPkSet.forEach(pk => {
+        delete newPendingChanges[pk];
+        delete newPendingDeletions[pk];
+    });
+
+    updateActiveTab({ 
+        pendingChanges: Object.keys(newPendingChanges).length > 0 ? newPendingChanges : undefined, 
+        pendingDeletions: Object.keys(newPendingDeletions).length > 0 ? newPendingDeletions : undefined
+    });
+
+  }, [activeTab, updateActiveTab]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -590,19 +822,6 @@ export const Editor = () => {
         <span className="text-xs text-slate-500 ml-2">
           {activeConnectionId ? t("editor.connected") : t("editor.disconnected")}
         </span>
-        {activeTab.activeTable && activeTab.pkColumn && (
-          <div className="ml-auto flex items-center gap-3">
-            <button
-              onClick={() => setShowNewRowModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium"
-            >
-              <Plus size={16} /> {t("editor.newRow")}
-            </button>
-            <span className="text-xs text-blue-400 border border-blue-900 bg-blue-900/20 px-2 py-0.5 rounded shrink-0">
-              {t("editor.editing", { table: activeTab.activeTable })}
-            </span>
-          </div>
-        )}
       </div>
 
       <div
@@ -804,6 +1023,62 @@ export const Editor = () => {
                     </div>
                   )}
                 </div>
+                
+                {/* Data Manipulation Toolbar (Below Header) */}
+                {activeTab.activeTable && activeTab.pkColumn && (
+                    <div className="p-1 px-2 bg-slate-900 border-b border-slate-800 flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setShowNewRowModal(true)}
+                                className="flex items-center justify-center w-7 h-7 text-slate-400 hover:text-green-400 hover:bg-slate-800 rounded transition-colors"
+                                title={t("editor.newRow")}
+                            >
+                                <Plus size={16} />
+                            </button>
+                            <button
+                                onClick={handleDeleteRows}
+                                disabled={!activeTab.selectedRows || activeTab.selectedRows.length === 0}
+                                className="flex items-center justify-center w-7 h-7 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-30"
+                                title={t("dataGrid.deleteRow")}
+                            >
+                                <Minus size={16} />
+                            </button>
+                        </div>
+
+                        {/* Separator */}
+                        {(hasPendingChanges) && (
+                            <div className="w-[1px] h-4 bg-slate-800 mx-1"></div>
+                        )}
+                        
+                        {hasPendingChanges && (
+                            <div className="flex items-center gap-1 ml-2 border border-blue-900 bg-blue-900/20 rounded px-1 py-0.5">
+                                <button 
+                                    onClick={handleSubmitChanges}
+                                    disabled={!selectionHasPending}
+                                    className="flex items-center gap-1.5 px-2 h-7 text-green-400 hover:bg-green-900/20 hover:text-green-300 rounded text-xs font-medium border border-transparent hover:border-green-900/50 transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-transparent disabled:cursor-not-allowed"
+                                    title={t("editor.submitChanges")}
+                                >
+                                    <Check size={14} />
+                                    <span>Submit</span>
+                                </button>
+                                <button 
+                                    onClick={handleRollbackChanges}
+                                    disabled={!selectionHasPending}
+                                    className="flex items-center gap-1.5 px-2 h-7 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded text-xs font-medium border border-transparent hover:border-slate-700 transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-transparent disabled:cursor-not-allowed"
+                                    title={t("editor.rollbackChanges")}
+                                >
+                                    <Undo2 size={14} />
+                                    <span>Rollback</span>
+                                </button>
+                                <span className="text-[10px] text-blue-400 bg-blue-900/20 border border-blue-900/30 px-2 py-0.5 rounded-full font-medium select-none ml-2">
+                                    {(Object.keys(activeTab.pendingChanges || {}).length) + (Object.keys(activeTab.pendingDeletions || {}).length)} pending
+                                </span>
+                            </div>
+                        )}
+
+                    </div>
+                )}
+
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <DataGrid
                     columns={activeTab.result.columns}
@@ -812,6 +1087,11 @@ export const Editor = () => {
                     pkColumn={activeTab.pkColumn}
                     connectionId={activeConnectionId}
                     onRefresh={handleRefresh}
+                    pendingChanges={activeTab.pendingChanges}
+                    pendingDeletions={activeTab.pendingDeletions}
+                    onPendingChange={handlePendingChange}
+                    selectedRows={new Set(activeTab.selectedRows || [])}
+                    onSelectionChange={handleSelectionChange}
                   />
                 </div>
               </div>

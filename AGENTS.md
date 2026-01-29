@@ -325,3 +325,26 @@ Adhere to the rules defined in the [rules directory](./.rules/):
 - **Status:** Documentation.
 - **Actions:**
     - **Installation:** Added Arch Linux (AUR) installation instructions for `tabularis-bin`.
+
+### Session 29: Batch Editing (DataGrip Style)
+- **Status:** Feature Complete.
+- **Actions:**
+    - **Frontend:**
+        - **Pending Changes:** Implemented state tracking for inline edits without immediate commit.
+        - **DataGrid:** Updated to render pending changes (blue highlight) and support batch editing.
+        - **Toolbar:** Added "Submit Changes" (Check) and "Rollback Changes" (Undo) buttons that appear when modifications are pending.
+        - **Logic:** Edits are stored in `pendingChanges` within the tab state, allowing users to modify multiple rows before committing.
+    - **Localization:** Added translations for new actions.
+
+### Session 30: Toolbar Refactoring & Batch Deletion
+- **Status:** Feature Complete.
+- **Actions:**
+    - **Frontend:**
+        - **Toolbar Moved:** Consolidated the Editor Toolbar into the Tab Bar (right side) to save vertical space.
+        - **Batch Deletion:** Added support for multi-row deletion with "Save/Rollback" logic.
+        - **Deletion UI:** Rows marked for deletion are displayed with a red strikethrough style.
+        - **Delete Button:** Added a "-" button to the toolbar to mark selected rows for deletion.
+        - **Selection Sync:** Synchronized row selection between DataGrid and Editor to enable toolbar actions on selected rows.
+    - **Refactoring:**
+        - Updated `Tab` interface to support `pendingDeletions`.
+        - Updated `DataGrid` to accept selection state from parent.

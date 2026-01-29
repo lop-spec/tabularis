@@ -19,16 +19,43 @@ interface DataGridProps {
   pkColumn?: string | null;
   connectionId?: string | null;
   onRefresh?: () => void;
+  pendingChanges?: Record<string, { pkOriginalValue: unknown; changes: Record<string, unknown> }>;
+  pendingDeletions?: Record<string, unknown>;
+  onPendingChange?: (pkVal: unknown, colName: string, value: unknown) => void;
+  selectedRows?: Set<number>;
+  onSelectionChange?: (indices: Set<number>) => void;
 }
 
-export const DataGrid = ({ columns, data, tableName, pkColumn, connectionId, onRefresh }: DataGridProps) => {
+export const DataGrid = ({ 
+    columns, 
+    data, 
+    tableName, 
+    pkColumn, 
+    connectionId, 
+    onRefresh, 
+    pendingChanges, 
+    pendingDeletions,
+    onPendingChange,
+    selectedRows: externalSelectedRows,
+    onSelectionChange
+}: DataGridProps) => {
   const { t } = useTranslation();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: unknown[] } | null>(null);
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; colIndex: number; value: unknown } | null>(null);
-  const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
+  const [internalSelectedRowIndices, setInternalSelectedRowIndices] = useState<Set<number>>(new Set());
   const [lastSelectedRowIndex, setLastSelectedRowIndex] = useState<number | null>(null);
   const [editRowModalData, setEditRowModalData] = useState<unknown[] | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedRowIndices = externalSelectedRows || internalSelectedRowIndices;
+
+  const updateSelection = (newSelection: Set<number>) => {
+      if (onSelectionChange) {
+          onSelectionChange(newSelection);
+      } else {
+          setInternalSelectedRowIndices(newSelection);
+      }
+  };
 
   const handleRowClick = (index: number, event: React.MouseEvent) => {
     const newSelected = new Set(selectedRowIndices);
@@ -61,15 +88,15 @@ export const DataGrid = ({ columns, data, tableName, pkColumn, connectionId, onR
       setLastSelectedRowIndex(index);
     }
 
-    setSelectedRowIndices(newSelected);
+    updateSelection(newSelected);
   };
 
   const handleSelectAll = () => {
     if (selectedRowIndices.size === data.length) {
-      setSelectedRowIndices(new Set());
+      updateSelection(new Set());
     } else {
       const allIndices = new Set(data.map((_, i) => i));
-      setSelectedRowIndices(allIndices);
+      updateSelection(allIndices);
     }
   };
 
@@ -85,7 +112,7 @@ export const DataGrid = ({ columns, data, tableName, pkColumn, connectionId, onR
   };
 
   const handleEditCommit = async () => {
-    if (!editingCell || !tableName || !pkColumn || !connectionId) {
+    if (!editingCell || !tableName || !pkColumn) {
         setEditingCell(null);
         return;
     }
@@ -96,7 +123,11 @@ export const DataGrid = ({ columns, data, tableName, pkColumn, connectionId, onR
     
     // Original value
     const originalValue = row[colIndex];
-    if (value === originalValue) {
+    
+    // Check if value changed (handling string/number differences)
+    const isUnchanged = String(value) === String(originalValue);
+
+    if (isUnchanged && !onPendingChange) {
         setEditingCell(null);
         return;
     }
@@ -105,7 +136,16 @@ export const DataGrid = ({ columns, data, tableName, pkColumn, connectionId, onR
     const pkVal = row[pkIndex];
     const colName = columns[colIndex];
 
-    // Optimistic or waiting? Let's wait.
+    if (onPendingChange) {
+      // If value matches original, pass undefined to remove the pending change
+      onPendingChange(pkVal, colName, isUnchanged ? undefined : value);
+      setEditingCell(null);
+      return;
+    }
+
+    if (!connectionId) return;
+
+    // Legacy immediate update
     try {
         await invoke('update_record', {
             connectionId,
@@ -224,18 +264,32 @@ export const DataGrid = ({ columns, data, tableName, pkColumn, connectionId, onR
         <tbody>
           {table.getRowModel().rows.map((row, rowIndex) => {
             const isSelected = selectedRowIndices.has(rowIndex);
+            
+            // Get PK for pending check
+            const pkIndex = pkColumn ? columns.indexOf(pkColumn) : -1;
+            const pkVal = pkIndex >= 0 ? String(row.original[pkIndex]) : null;
+            const isPendingDelete = pkVal ? pendingDeletions?.[pkVal] !== undefined : false;
+
             return (
               <tr 
                 key={row.id} 
-                className={`transition-colors group ${isSelected ? 'bg-blue-900/20' : 'hover:bg-slate-800/50'}`}
+                className={`transition-colors group ${
+                    isPendingDelete 
+                        ? 'bg-red-900/20 opacity-60' 
+                        : isSelected 
+                            ? 'bg-blue-900/20' 
+                            : 'hover:bg-slate-800/50'
+                }`}
                 onContextMenu={(e) => handleContextMenu(e, row.original)}
               >
                 <td 
                   onClick={(e) => handleRowClick(rowIndex, e)}
                   className={`px-2 py-1.5 text-xs text-center border-b border-r border-slate-800 sticky left-0 z-10 cursor-pointer select-none w-[50px] min-w-[50px] ${
-                    isSelected 
-                      ? 'bg-blue-900/40 text-blue-200 font-bold' 
-                      : 'bg-slate-950 text-slate-500 hover:bg-slate-800'
+                    isPendingDelete
+                      ? 'bg-red-950/50 text-red-500 line-through'
+                      : isSelected 
+                        ? 'bg-blue-900/40 text-blue-200 font-bold' 
+                        : 'bg-slate-950 text-slate-500 hover:bg-slate-800'
                   }`}
                 >
                   {rowIndex + 1}
@@ -243,12 +297,26 @@ export const DataGrid = ({ columns, data, tableName, pkColumn, connectionId, onR
                 {row.getVisibleCells().map((cell, colIndex) => {
                   const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.colIndex === colIndex;
                   
+                  // Check if this cell has a pending change
+                  const colName = cell.column.id;
+                  const pendingVal = (pkVal && pendingChanges?.[pkVal]?.changes?.[colName]);
+                  const hasPendingChange = pendingVal !== undefined;
+                  const displayValue = hasPendingChange ? pendingVal : cell.getValue();
+                  const isModified = hasPendingChange && String(pendingVal) !== String(cell.getValue());
+
                   return (
                     <td 
                       key={cell.id}
-                      onDoubleClick={() => handleCellDoubleClick(rowIndex, colIndex, cell.getValue())}
-                      className="px-4 py-1.5 text-sm text-slate-300 border-b border-r border-slate-800 last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text"
-                      title={!isEditing ? String(cell.getValue()) : ''}
+                      onClick={(e) => handleRowClick(rowIndex, e)}
+                      onDoubleClick={() => !isPendingDelete && handleCellDoubleClick(rowIndex, colIndex, displayValue)}
+                      className={`px-4 py-1.5 text-sm border-b border-r border-slate-800 last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text ${
+                        isPendingDelete
+                            ? 'text-red-400/60 line-through decoration-red-500/30'
+                            : isModified 
+                                ? 'bg-blue-600/30 text-blue-100 italic font-medium' 
+                                : 'text-slate-300'
+                      }`}
+                      title={!isEditing ? String(displayValue) : ''}
                     >
                       {isEditing ? (
                           <input
@@ -260,7 +328,7 @@ export const DataGrid = ({ columns, data, tableName, pkColumn, connectionId, onR
                               className="w-full bg-slate-950 text-white border-none outline-none p-0 m-0 font-mono"
                           />
                       ) : (
-                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                          hasPendingChange ? String(displayValue) : flexRender(cell.column.columnDef.cell, cell.getContext())
                       )}
                     </td>
                   );

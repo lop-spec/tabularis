@@ -33,4 +33,7 @@ export interface Tab {
   isLoading?: boolean;
   connectionId: string;
   flowState?: FlowState;
+  pendingChanges?: Record<string, { pkOriginalValue: unknown; changes: Record<string, unknown> }>;
+  pendingDeletions?: Record<string, unknown>; // Map of stringified PK -> original PK value
+  selectedRows?: number[]; // Selected row indices
 }
