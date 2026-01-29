@@ -302,7 +302,6 @@ pub async fn execute_query(
     let mut pagination: Option<Pagination> = None;
     let final_query: String;
     let mut manual_limit = limit;
-    let mut truncated = false;
 
     if is_select && limit.is_some() {
         let l = limit.unwrap();
@@ -322,9 +321,6 @@ pub async fn execute_query(
             page_size: l,
             total_rows,
         });
-
-        // Set truncated if there are more results than shown
-        truncated = total_rows > l as u64;
 
         final_query = format!("SELECT * FROM ({}) LIMIT {} OFFSET {}", query, l, offset);
         manual_limit = None;

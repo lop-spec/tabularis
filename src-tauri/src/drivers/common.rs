@@ -1,4 +1,5 @@
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use rust_decimal::Decimal;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -24,6 +25,17 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         "[DEBUG] Extracting column '{}' of type '{}'",
         col_name, col_type
     );
+
+    // DECIMAL/NUMERIC optimization
+    if col_type == "DECIMAL" || col_type == "NEWDECIMAL" || col_type == "NUMERIC" {
+        if let Ok(v) = row.try_get::<Decimal, _>(index) {
+            return serde_json::Value::String(v.to_string());
+        }
+        // Fallback to string if Decimal fails
+        if let Ok(v) = row.try_get::<String, _>(index) {
+            return serde_json::Value::String(v);
+        }
+    }
 
     // For TIMESTAMP/DATETIME, try all possible representations
     if col_type == "TIMESTAMP" || col_type == "DATETIME" {
@@ -179,6 +191,11 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         return serde_json::Value::from(v);
     }
 
+    // Decimal
+    if let Ok(v) = row.try_get::<Decimal, _>(index) {
+        return serde_json::Value::String(v.to_string());
+    }
+
     // Floating point
     if let Ok(v) = row.try_get::<f64, _>(index) {
         return serde_json::Number::from_f64(v)
@@ -215,15 +232,25 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
     }
 
     // Fallback
+    let type_info = row.column(index).type_info();
     eprintln!(
-        "[WARNING] Column '{}' [{}] type '{}' could not be extracted",
-        col_name, index, col_type
+        "[WARNING] Column '{}' [{}] type '{}' (TypeInfo: {:?}) could not be extracted. Raw value available: {:?}",
+        col_name, index, col_type, type_info, row.try_get_raw(index).is_ok()
     );
     serde_json::Value::Null
 }
 
 /// Extract value from PostgreSQL row
 pub fn extract_postgres_value(row: &sqlx::postgres::PgRow, index: usize) -> serde_json::Value {
+    use sqlx::ValueRef;
+
+    // Check for NULL first
+    if let Ok(val_ref) = row.try_get_raw(index) {
+        if val_ref.is_null() {
+            return serde_json::Value::Null;
+        }
+    }
+
     // DateTime types FIRST
     if let Ok(v) = row.try_get::<DateTime<Utc>, _>(index) {
         return serde_json::Value::String(v.to_rfc3339());
@@ -247,6 +274,11 @@ pub fn extract_postgres_value(row: &sqlx::postgres::PgRow, index: usize) -> serd
     }
     if let Ok(v) = row.try_get::<i16, _>(index) {
         return serde_json::Value::from(v);
+    }
+
+    // Decimal
+    if let Ok(v) = row.try_get::<Decimal, _>(index) {
+        return serde_json::Value::String(v.to_string());
     }
 
     // Floating point
@@ -294,6 +326,15 @@ pub fn extract_postgres_value(row: &sqlx::postgres::PgRow, index: usize) -> serd
 
 /// Extract value from SQLite row
 pub fn extract_sqlite_value(row: &sqlx::sqlite::SqliteRow, index: usize) -> serde_json::Value {
+    use sqlx::ValueRef;
+
+    // Check for NULL first
+    if let Ok(val_ref) = row.try_get_raw(index) {
+        if val_ref.is_null() {
+            return serde_json::Value::Null;
+        }
+    }
+
     // String first (SQLite stores dates as text)
     if let Ok(v) = row.try_get::<String, _>(index) {
         return serde_json::Value::from(v);

@@ -367,38 +367,32 @@ impl SshTunnel {
                             }
 
                             let mut buf = [0u8; 8192];
-                            let mut active = true;
 
-                            while active && running_inner.load(Ordering::Relaxed) {
+                            while running_inner.load(Ordering::Relaxed) {
                                 let mut did_work = false;
 
                                 match local_stream.read(&mut buf) {
                                     Ok(0) => {
-                                        active = false;
                                         break;
                                     }
                                     Ok(n) => {
                                         if channel.write_all(&buf[..n]).is_err() {
-                                            active = false;
                                             break;
                                         }
                                         did_work = true;
                                     }
                                     Err(ref e) if e.kind() == ErrorKind::WouldBlock => {}
                                     Err(_) => {
-                                        active = false;
                                         break;
                                     }
                                 }
 
                                 match channel.read(&mut buf) {
                                     Ok(0) => {
-                                        active = false;
                                         break;
                                     }
                                     Ok(n) => {
                                         if local_stream.write_all(&buf[..n]).is_err() {
-                                            active = false;
                                             break;
                                         }
                                         did_work = true;
