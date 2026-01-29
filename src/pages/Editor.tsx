@@ -221,6 +221,10 @@ export const Editor = () => {
         result: null,
         executionTime: null,
         page: pageNum,
+        // Clear pending changes and selection when running a new query
+        pendingChanges: undefined,
+        pendingDeletions: undefined,
+        selectedRows: [],
       });
 
       try {
