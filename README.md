@@ -51,23 +51,31 @@ yay -S tabularis-bin
 ### 🔌 Connection Management
 
 - Support for **PostgreSQL**, **MySQL/MariaDB**, and **SQLite**.
-- Save and manage multiple connection profiles.
+- Save and manage multiple connection profiles with clone/duplicate functionality.
 - Secure local persistence of connection settings.
-- **SSH Tunneling:** Connect to remote databases securely via SSH tunnels.
+- **Keychain Integration:** Optional secure password storage in system keychain.
+- **SSH Tunneling:** Connect to remote databases securely via SSH tunnels with automatic readiness detection.
 
 ### 🗄️ Database Explorer
 
 - **Sidebar Navigation:** Quickly browse tables and saved queries.
+- **DataGrip-Style Tree View:** Expandable folders for Columns, Keys, Foreign Keys, and Indexes.
 - **Context Actions:**
-  - Right-click tables to: `Select Top 100`, `Count Rows`, `View Schema`, `Copy Name`.
+  - Right-click tables to: `Select Top 100`, `Count Rows`, `View Schema`, `Copy Name`, `Add Column`, `Delete Table`.
+  - Intelligent context menus with viewport overflow prevention.
+- **Schema Metadata:** Parallel fetching for fast schema loading.
 
 ### 📝 SQL Editor
 
 - **Monaco Editor:** Industry-standard editor with syntax highlighting.
 - **Multiple Tabs:** DataGrip-style tab management with connection isolation.
+- **Typed Tabs:** Separate `console` (SQL scripts) and `table` (data view) tabs with smart re-use.
 - **Execution:** Run queries with `Ctrl+Enter` or Run button.
 - **Partial Execution:** Select specific text to run only that portion.
-- **Query History:** (Saved Queries feature covers this usage).
+- **Multi-Statement Support:** Select which query to execute when multiple statements are present.
+- **Query Cancellation:** Stop long-running queries with the Stop button.
+- **Auto-Detection:** Automatically identifies table queries vs. aggregates for appropriate editing mode.
+- **Saved Queries:** Save and organize frequently-used queries with full CRUD support.
 
 ### 🎨 Visual Query Builder (Experimental)
 
@@ -89,9 +97,16 @@ yay -S tabularis-bin
 
 - **Interactive Results:** Fast rendering of large result sets.
 - **Inline Editing:** Double-click any cell to edit data (requires Primary Key).
-- **Row Management:** Right-click to delete rows.
+- **Batch Editing:** DataGrip-style pending changes - modify multiple rows before committing.
+- **Row Management:** 
+  - Right-click to delete rows.
+  - Multi-row selection (Single/Multi/Range) with Ctrl/Shift.
+  - Submit/Rollback toolbar for batch operations.
 - **Create New Row:** Use "New Row" button to insert data into tables.
 - **Export Data:** Export query results to CSV or JSON formats.
+- **Smart Context Detection:** Automatically enables editing for table queries, read-only for aggregates (COUNT, SUM, etc.).
+- **Loading States:** Visual feedback during query execution with animated spinner.
+
 
 ### 💾 Configuration Storage
 
@@ -137,17 +152,23 @@ npm run tauri build
 ## Roadmap
 
 - [x] Multi-database support
-- [x] Schema introspection
-- [x] SQL Execution & Results
-- [x] Inline Editing & Deletion
-- [x] Create New Row
+- [x] Schema introspection with advanced metadata (Keys, FKs, Indexes)
+- [x] SQL Execution & Results with pagination
+- [x] Inline Editing & Batch Editing (DataGrip-style)
+- [x] Multi-row selection and deletion
+- [x] Create New Row with smart FK selectors
 - [x] Data Export (CSV/JSON)
 - [x] Saved Queries & Persistence
 - [x] Pagination & Result Limiting
-- [x] Multiple Tabs support
+- [x] Multiple Tabs support with connection isolation
 - [x] Visual Query Builder (Experimental)
+- [x] Query cancellation
+- [x] Aggregate query detection and smart read-only mode
+- [x] Internationalization (English, Italian)
+- [x] Keychain integration for secure password storage
 - [ ] Database Export/Dump
 - [ ] Multi-statement execution
+- [ ] Query history and autocomplete
 
 ## License
 

@@ -348,3 +348,31 @@ Adhere to the rules defined in the [rules directory](./.rules/):
     - **Refactoring:**
         - Updated `Tab` interface to support `pendingDeletions`.
         - Updated `DataGrid` to accept selection state from parent.
+
+### Session 31: Bug Fixes - NULL Values & Query Execution
+- **Status:** Critical Bug Fixes.
+- **Actions:**
+    - **Query Execution Race Condition:**
+        - **Fixed NULL Flash:** Modified `runQuery` to await `fetchPkColumn` BEFORE showing results, eliminating brief flash of NULL values when opening tables.
+        - **Explicit NULL Setting:** Query results without tables now explicitly set `pkColumn: null` to ensure proper read-only rendering.
+    - **Aggregate Query Support:**
+        - **SQL Parser:** Created `extractTableName()` utility in `sql.ts` to automatically detect table names from SELECT queries.
+        - **Aggregate Detection:** Implemented recognition of aggregate queries (COUNT, SUM, AVG, MIN, MAX, GROUP BY) to skip PK column fetching.
+        - **Smart Context Menu:** "Select Top 100" passes `tableName` (enables editing), "Count Rows" doesn't (read-only mode).
+    - **DataGrid NULL Bug Fix:**
+        - **Root Cause:** DataGrid was checking `pendingChanges` even when `pkColumn` was NULL, causing undefined values to render as NULL.
+        - **Fix:** Added `pkColumn` check before accessing `pendingChanges`: `hasPendingChange = pkColumn ? (pendingVal !== undefined) : false`.
+        - **Force Re-render:** Added dynamic `key` prop to DataGrid to ensure fresh renders on data changes.
+    - **UX Polish:**
+        - **Loading Indicator:** Added animated spinner with "Executing query..." message during query execution instead of showing empty results.
+        - **Context Menu Position:** Implemented intelligent positioning to prevent menu overflow outside viewport boundaries with 10px safety margins.
+    - **Backend:**
+        - **Error Handling:** Improved `fetchPkColumn` to set `pkColumn: null` on failure instead of leaving state undefined.
+    - **Files Modified:**
+        - `src/pages/Editor.tsx`: Query execution flow, loading states, PK fetching logic
+        - `src/utils/sql.ts`: Added `extractTableName()` function
+        - `src/components/ui/DataGrid.tsx`: Fixed pending changes logic, added pkColumn guards
+        - `src/components/ui/ContextMenu.tsx`: Viewport overflow prevention
+        - `src/components/layout/Sidebar.tsx`: Smart tableName passing for context menu actions
+        - `src/i18n/locales/{en,it}.json`: Added "executingQuery" translation
+
