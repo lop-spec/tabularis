@@ -79,3 +79,37 @@ pub fn delete_ssh_password(connection_id: &str) -> Result<(), String> {
         Err(e) => Err(e.to_string()),
     }
 }
+
+pub fn set_ai_key(provider: &str, key: &str) -> Result<(), String> {
+    println!("[Keychain] Setting AI key for {}", provider);
+    let entry =
+        Entry::new(SERVICE_NAME, &format!("ai_key:{}", provider)).map_err(|e| e.to_string())?;
+    entry.set_password(key).map_err(|e| {
+        println!("[Keychain] Error setting AI key: {}", e);
+        e.to_string()
+    })
+}
+
+pub fn get_ai_key(provider: &str) -> Result<String, String> {
+    println!("[Keychain] Getting AI key for {}", provider);
+    let entry =
+        Entry::new(SERVICE_NAME, &format!("ai_key:{}", provider)).map_err(|e| e.to_string())?;
+    match entry.get_password() {
+        Ok(pwd) => Ok(pwd),
+        Err(keyring::Error::NoEntry) => Err("No key found".to_string()),
+        Err(e) => {
+            println!("[Keychain] Error getting AI key for {}: {}", provider, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+pub fn delete_ai_key(provider: &str) -> Result<(), String> {
+    let entry =
+        Entry::new(SERVICE_NAME, &format!("ai_key:{}", provider)).map_err(|e| e.to_string())?;
+    match entry.delete_credential() {
+        Ok(_) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}

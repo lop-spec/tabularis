@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { AiQueryModal } from "../components/ui/AiQueryModal";
+import { AiExplainModal } from "../components/ui/AiExplainModal";
 import {
   Play,
   Plus,
@@ -25,6 +27,8 @@ import {
   Trash2,
   Check,
   Undo2,
+  Sparkles,
+  BookOpen,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -146,6 +150,8 @@ export const Editor = () => {
   const [isQuerySelectionModalOpen, setIsQuerySelectionModalOpen] =
     useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isAiExplainModalOpen, setIsAiExplainModalOpen] = useState(false);
   const [isEditingPage, setIsEditingPage] = useState(false);
   const [tempPage, setTempPage] = useState("1");
   
@@ -298,8 +304,8 @@ export const Editor = () => {
 
       try {
         const start = performance.now();
-        // Use settings.queryLimit for Page Size (pagination), ignoring the "Total Limit" input which is handled in SQL
-        const pageSize = settings.queryLimit > 0 ? settings.queryLimit : null;
+        // Use settings.resultPageSize for Page Size (pagination), ignoring the "Total Limit" input which is handled in SQL
+        const pageSize = settings.resultPageSize > 0 ? settings.resultPageSize : null;
 
         const res = await invoke<QueryResult>("execute_query", {
           connectionId: activeConnectionId,
@@ -338,7 +344,7 @@ export const Editor = () => {
         });
       }
     },
-    [activeConnectionId, updateTab, settings.queryLimit, fetchPkColumn, t],
+    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t],
   );
 
   const handleRunButton = useCallback(() => {
@@ -944,7 +950,31 @@ export const Editor = () => {
           </div>
         )}
 
-        <div className="relative">
+        {/* AI Assist Button */}
+        {!isTableTab && activeTab.type !== "query_builder" && settings.aiEnabled && (
+           <div className="flex items-center gap-1 ml-2">
+             <button
+               onClick={() => setIsAiModalOpen(true)}
+               disabled={!activeConnectionId}
+               className="flex items-center gap-2 px-3 py-1.5 bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-500/30 rounded text-sm font-medium transition-colors disabled:opacity-50"
+               title="Generate SQL with AI"
+             >
+               <Sparkles size={16} />
+               <span className="hidden sm:inline">AI Assist</span>
+             </button>
+             <button
+               onClick={() => setIsAiExplainModalOpen(true)}
+               disabled={!activeConnectionId || !activeTab.query?.trim()}
+               className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/40 hover:bg-blue-900/60 text-blue-200 border border-blue-500/30 rounded text-sm font-medium transition-colors disabled:opacity-50"
+               title="Explain this Query"
+             >
+               <BookOpen size={16} />
+               <span className="hidden sm:inline">Explain</span>
+             </button>
+           </div>
+        )}
+
+        <div className="relative ml-auto">
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
             disabled={!activeTab.result || activeTab.result.rows.length === 0}
@@ -1021,7 +1051,7 @@ export const Editor = () => {
                 initialLimit={activeTab?.limitClause}
                 placeholderColumn={placeholders.column}
                 placeholderSort={placeholders.sort}
-                defaultLimit={settings.queryLimit || 100}
+                defaultLimit={settings.resultPageSize || 100}
                 onUpdate={handleToolbarUpdate}
              />
           ) : (
@@ -1392,6 +1422,22 @@ export const Editor = () => {
         errorMessage={exportState.errorMessage}
         onCancel={cancelExport} 
         onClose={closeExportModal}
+      />
+      <AiQueryModal 
+        isOpen={isAiModalOpen} 
+        onClose={() => setIsAiModalOpen(false)} 
+        onInsert={(sql) => {
+            if (!activeTabIdRef.current) return;
+            // Update query and close editor
+            updateTab(activeTabIdRef.current, { query: sql });
+            // Optionally run it? No, let user review.
+        }} 
+      />
+      
+      <AiExplainModal 
+        isOpen={isAiExplainModalOpen}
+        onClose={() => setIsAiExplainModalOpen(false)}
+        query={activeTab.query || ""}
       />
     </div>
   );

@@ -1,4 +1,6 @@
 pub mod commands;
+pub mod config;
+pub mod ai;
 pub mod export;
 pub mod keychain_utils;
 pub mod models;
@@ -46,7 +48,21 @@ pub fn run() {
             saved_queries::get_saved_queries,
             saved_queries::save_query,
             saved_queries::update_saved_query,
-            saved_queries::delete_saved_query
+            saved_queries::delete_saved_query,
+            // Config
+            config::get_config,
+            config::save_config,
+            config::set_ai_key,
+            config::check_ai_key,
+            config::get_system_prompt,
+            config::save_system_prompt,
+            config::reset_system_prompt,
+            config::get_explain_prompt,
+            config::save_explain_prompt,
+            config::reset_explain_prompt,
+            // AI
+            ai::generate_ai_query,
+            ai::explain_ai_query
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
