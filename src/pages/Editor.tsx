@@ -33,7 +33,7 @@ import { QuerySelectionModal } from "../components/ui/QuerySelectionModal";
 import { QueryModal } from "../components/ui/QueryModal";
 import { VisualQueryBuilder } from "../components/ui/VisualQueryBuilder";
 import { ContextMenu } from "../components/ui/ContextMenu";
-import { splitQueries } from "../utils/sql";
+import { splitQueries, extractTableName } from "../utils/sql";
 import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 import { save, message } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -181,6 +181,9 @@ export const Editor = () => {
         if (targetId) updateTab(targetId, { pkColumn: pk ? pk.name : null });
       } catch (e) {
         console.error("Failed to fetch PK:", e);
+        // Even if PK fetch fails, set pkColumn to null to unblock the UI
+        const targetId = tabId || activeTabId;
+        if (targetId) updateTab(targetId, { pkColumn: null });
       }
     },
     [activeConnectionId, activeTabId, updateTab],
@@ -229,17 +232,29 @@ export const Editor = () => {
           page: pageNum,
         });
         const end = performance.now();
+        
+        // Fetch PK column if this is a table tab OR if the query references a table
+        const currentTab = tabsRef.current.find((t) => t.id === targetTabId);
+        let tableName = currentTab?.activeTable;
+        
+        // If not a table tab, try to extract table name from the query
+        if (!tableName && textToRun) {
+          tableName = extractTableName(textToRun) || undefined;
+        }
+        
+        if (tableName) {
+          // Wait for PK column to be fetched before showing results
+          await fetchPkColumn(tableName, targetTabId);
+        } else {
+          // No table, explicitly set pkColumn to null (read-only mode)
+          updateTab(targetTabId, { pkColumn: null });
+        }
+        
         updateTab(targetTabId, {
           result: res,
           executionTime: end - start,
           isLoading: false,
         });
-
-        // Fetch PK column if this is a table tab
-        // We need to check both current targetTab and the updated tab state
-        const currentTab = tabsRef.current.find((t) => t.id === targetTabId);
-        const tableName = currentTab?.activeTable;
-        if (tableName) fetchPkColumn(tableName, targetTabId);
       } catch (err) {
         updateTab(targetTabId, {
           error: typeof err === "string" ? err : t("editor.queryFailed"),
@@ -1087,6 +1102,7 @@ export const Editor = () => {
 
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <DataGrid
+                    key={`${activeTab.id}-${activeTab.result.rows.length}-${JSON.stringify(activeTab.result.rows[0])}`}
                     columns={activeTab.result.columns}
                     data={activeTab.result.rows}
                     tableName={activeTab.activeTable}

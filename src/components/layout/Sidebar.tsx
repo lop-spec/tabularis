@@ -492,9 +492,9 @@ export const Sidebar = () => {
 
   const getQuote = () => (activeDriver === 'mysql' || activeDriver === 'mariadb') ? '`' : '"';
 
-  const runQuery = (sql: string, queryName?: string) => {
+  const runQuery = (sql: string, queryName?: string, tableName?: string) => {
     navigate('/editor', {
-      state: { initialQuery: sql, queryName }
+      state: { initialQuery: sql, queryName, tableName }
     });
   };
 
@@ -682,7 +682,7 @@ export const Sidebar = () => {
                     icon: PlaySquare,
                     action: () => {
                         const q = getQuote();
-                        runQuery(`SELECT * FROM ${q}${contextMenu.id}${q} LIMIT 100`);
+                        runQuery(`SELECT * FROM ${q}${contextMenu.id}${q} LIMIT 100`, undefined, contextMenu.id);
                     }
                 },
                 {
@@ -690,6 +690,7 @@ export const Sidebar = () => {
                     icon: Hash,
                     action: () => {
                         const q = getQuote();
+                        // Don't pass tableName for aggregate queries - let extractTableName handle it
                         runQuery(`SELECT COUNT(*) as count FROM ${q}${contextMenu.id}${q}`);
                     }
                 },
