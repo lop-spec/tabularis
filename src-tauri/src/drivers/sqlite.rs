@@ -2,17 +2,15 @@ use crate::drivers::common::extract_sqlite_value;
 use crate::models::{
     ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo,
 };
-use sqlx::{Column, Connection, Row};
+use sqlx::{Column, Row};
+use crate::pool_manager::get_sqlite_pool;
 
 pub async fn get_tables(params: &ConnectionParams) -> Result<Vec<TableInfo>, String> {
-    let url = format!("sqlite://{}", params.database);
-    let mut conn = sqlx::sqlite::SqliteConnection::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = get_sqlite_pool(params).await?;
     let rows = sqlx::query(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
     )
-    .fetch_all(&mut conn)
+    .fetch_all(&pool)
     .await
     .map_err(|e| e.to_string())?;
     Ok(rows
@@ -27,10 +25,7 @@ pub async fn get_columns(
     params: &ConnectionParams,
     table_name: &str,
 ) -> Result<Vec<TableColumn>, String> {
-    let url = format!("sqlite://{}", params.database);
-    let mut conn = sqlx::sqlite::SqliteConnection::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = get_sqlite_pool(params).await?;
 
     // PRAGMA table_info doesn't explicitly say "AUTO_INCREMENT"
     // But INTEGER PRIMARY KEY is implicitly so in sqlite.
@@ -38,7 +33,7 @@ pub async fn get_columns(
     let query = format!("PRAGMA table_info('{}')", table_name);
 
     let rows = sqlx::query(&query)
-        .fetch_all(&mut conn)
+        .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -66,14 +61,11 @@ pub async fn get_foreign_keys(
     params: &ConnectionParams,
     table_name: &str,
 ) -> Result<Vec<ForeignKey>, String> {
-    let url = format!("sqlite://{}", params.database);
-    let mut conn = sqlx::sqlite::SqliteConnection::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = get_sqlite_pool(params).await?;
 
     let query = format!("PRAGMA foreign_key_list('{}')", table_name);
     let rows = sqlx::query(&query)
-        .fetch_all(&mut conn)
+        .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -102,14 +94,11 @@ pub async fn get_indexes(
     params: &ConnectionParams,
     table_name: &str,
 ) -> Result<Vec<Index>, String> {
-    let url = format!("sqlite://{}", params.database);
-    let mut conn = sqlx::sqlite::SqliteConnection::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = get_sqlite_pool(params).await?;
 
     let list_query = format!("PRAGMA index_list('{}')", table_name);
     let indexes = sqlx::query(&list_query)
-        .fetch_all(&mut conn)
+        .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -122,7 +111,7 @@ pub async fn get_indexes(
 
         let info_query = format!("PRAGMA index_info('{}')", name);
         let info_rows = sqlx::query(&info_query)
-            .fetch_all(&mut conn)
+            .fetch_all(&pool)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -146,10 +135,7 @@ pub async fn delete_record(
     pk_col: &str,
     pk_val: serde_json::Value,
 ) -> Result<u64, String> {
-    let url = format!("sqlite://{}", params.database);
-    let mut conn = sqlx::sqlite::SqliteConnection::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = get_sqlite_pool(params).await?;
 
     let query = format!("DELETE FROM \"{}\" WHERE \"{}\" = ?", table, pk_col);
 
@@ -158,16 +144,16 @@ pub async fn delete_record(
             if n.is_i64() {
                 sqlx::query(&query)
                     .bind(n.as_i64())
-                    .execute(&mut conn)
+                    .execute(&pool)
                     .await
             } else {
                 sqlx::query(&query)
                     .bind(n.as_f64())
-                    .execute(&mut conn)
+                    .execute(&pool)
                     .await
             }
         }
-        serde_json::Value::String(s) => sqlx::query(&query).bind(s).execute(&mut conn).await,
+        serde_json::Value::String(s) => sqlx::query(&query).bind(s).execute(&pool).await,
         _ => return Err("Unsupported PK type".into()),
     };
 
@@ -182,10 +168,7 @@ pub async fn update_record(
     col_name: &str,
     new_val: serde_json::Value,
 ) -> Result<u64, String> {
-    let url = format!("sqlite://{}", params.database);
-    let mut conn = sqlx::sqlite::SqliteConnection::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = get_sqlite_pool(params).await?;
 
     let mut qb = sqlx::QueryBuilder::new(format!("UPDATE \"{}\" SET \"{}\" = ", table, col_name));
 
@@ -226,7 +209,7 @@ pub async fn update_record(
     }
 
     let query = qb.build();
-    let result = query.execute(&mut conn).await.map_err(|e| e.to_string())?;
+    let result = query.execute(&pool).await.map_err(|e| e.to_string())?;
     Ok(result.rows_affected())
 }
 
@@ -235,10 +218,7 @@ pub async fn insert_record(
     table: &str,
     data: std::collections::HashMap<String, serde_json::Value>,
 ) -> Result<u64, String> {
-    let url = format!("sqlite://{}", params.database);
-    let mut conn = sqlx::sqlite::SqliteConnection::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = get_sqlite_pool(params).await?;
 
     let mut cols = Vec::new();
     let mut vals = Vec::new();
@@ -283,7 +263,7 @@ pub async fn insert_record(
     separated.push_unseparated(")");
 
     let query = qb.build();
-    let result = query.execute(&mut conn).await.map_err(|e| e.to_string())?;
+    let result = query.execute(&pool).await.map_err(|e| e.to_string())?;
     Ok(result.rows_affected())
 }
 
@@ -293,10 +273,8 @@ pub async fn execute_query(
     limit: Option<u32>,
     page: u32,
 ) -> Result<QueryResult, String> {
-    let url = format!("sqlite://{}", params.database);
-    let mut conn = sqlx::sqlite::SqliteConnection::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = get_sqlite_pool(params).await?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     let is_select = query.trim_start().to_uppercase().starts_with("SELECT");
     let mut pagination: Option<Pagination> = None;
@@ -308,7 +286,7 @@ pub async fn execute_query(
         let offset = (page - 1) * l;
 
         let count_q = format!("SELECT COUNT(*) FROM ({})", query);
-        let count_res = sqlx::query(&count_q).fetch_one(&mut conn).await;
+        let count_res = sqlx::query(&count_q).fetch_one(&mut *conn).await;
 
         let total_rows: u64 = if let Ok(row) = count_res {
             row.try_get::<i64, _>(0).unwrap_or(0) as u64
@@ -329,7 +307,7 @@ pub async fn execute_query(
     }
 
     // Streaming
-    let mut rows_stream = sqlx::query(&final_query).fetch(&mut conn);
+    let mut rows_stream = sqlx::query(&final_query).fetch(&mut *conn);
 
     let mut columns: Vec<String> = Vec::new();
     let mut json_rows = Vec::new();

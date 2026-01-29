@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod keychain_utils;
 pub mod models;
+pub mod pool_manager;
 pub mod saved_queries;
 pub mod ssh_tunnel;
 pub mod drivers {
