@@ -43,7 +43,7 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         match row.try_get::<NaiveDateTime, _>(index) {
             Ok(v) => {
                 eprintln!("[DEBUG] ✓ {} as NaiveDateTime: {}", col_name, v);
-                return serde_json::Value::String(v.to_string());
+                return serde_json::Value::String(v.format("%Y-%m-%d %H:%M:%S").to_string());
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as NaiveDateTime: {}", col_name, e),
         }
@@ -51,7 +51,7 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         match row.try_get::<DateTime<Utc>, _>(index) {
             Ok(v) => {
                 eprintln!("[DEBUG] ✓ {} as DateTime<Utc>: {}", col_name, v);
-                return serde_json::Value::String(v.to_rfc3339());
+                return serde_json::Value::String(v.format("%Y-%m-%d %H:%M:%S").to_string());
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as DateTime<Utc>: {}", col_name, e),
         }
@@ -60,6 +60,13 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         match row.try_get::<String, _>(index) {
             Ok(v) => {
                 eprintln!("[DEBUG] ✓ {} as String: {}", col_name, v);
+                // Try to parse typical SQL string formats to clean them up if they look like ISO
+                if let Ok(dt) = NaiveDateTime::parse_from_str(&v, "%Y-%m-%dT%H:%M:%S%.f") {
+                    return serde_json::Value::String(dt.format("%Y-%m-%d %H:%M:%S").to_string());
+                }
+                if let Ok(dt) = NaiveDateTime::parse_from_str(&v, "%Y-%m-%dT%H:%M:%S") {
+                    return serde_json::Value::String(dt.format("%Y-%m-%d %H:%M:%S").to_string());
+                }
                 return serde_json::Value::String(v);
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as String: {}", col_name, e),
@@ -154,7 +161,7 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
 
     // DateTime types (for other date columns)
     if let Ok(v) = row.try_get::<NaiveDateTime, _>(index) {
-        return serde_json::Value::String(v.to_string());
+        return serde_json::Value::String(v.format("%Y-%m-%d %H:%M:%S").to_string());
     }
     if let Ok(v) = row.try_get::<NaiveDate, _>(index) {
         return serde_json::Value::String(v.to_string());
@@ -253,10 +260,10 @@ pub fn extract_postgres_value(row: &sqlx::postgres::PgRow, index: usize) -> serd
 
     // DateTime types FIRST
     if let Ok(v) = row.try_get::<DateTime<Utc>, _>(index) {
-        return serde_json::Value::String(v.to_rfc3339());
+        return serde_json::Value::String(v.format("%Y-%m-%d %H:%M:%S").to_string());
     }
     if let Ok(v) = row.try_get::<NaiveDateTime, _>(index) {
-        return serde_json::Value::String(v.to_string());
+        return serde_json::Value::String(v.format("%Y-%m-%d %H:%M:%S").to_string());
     }
     if let Ok(v) = row.try_get::<NaiveDate, _>(index) {
         return serde_json::Value::String(v.to_string());
