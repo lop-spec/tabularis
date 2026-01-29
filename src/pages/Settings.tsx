@@ -162,11 +162,13 @@ export const Settings = () => {
                   <Code2 size={120} />
                 </div>
 
-                <img
-                  src="/logo.png"
-                  alt="tabularis"
-                  className="w-16 h-16 bg-white rounded-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30"
-                />
+                <div className="p-2">
+                  <img
+                    src="/logo.png"
+                    alt="tabularis"
+                    className="w-16 h-16 bg-[#010101] rounded-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30"
+                  />
+                </div>
 
                 <h1 className="text-3xl font-bold text-white mb-2">
                   tabularis
@@ -179,7 +181,9 @@ export const Settings = () => {
 
                 <div className="flex justify-center gap-4">
                   <button
-                    onClick={() => openUrl("https://github.com/debba/tabularis")}
+                    onClick={() =>
+                      openUrl("https://github.com/debba/tabularis")
+                    }
                     className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors border border-slate-700"
                   >
                     <Github size={18} />
@@ -189,7 +193,9 @@ export const Settings = () => {
                     <span className="text-xs font-bold uppercase tracking-wider">
                       {t("settings.version")}
                     </span>
-                    <span className="font-mono font-bold">{APP_VERSION} (Beta)</span>
+                    <span className="font-mono font-bold">
+                      {APP_VERSION} (Beta)
+                    </span>
                   </div>
                 </div>
               </div>
