@@ -217,20 +217,34 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     return tabs.filter(t => t.connectionId === activeConnectionId);
   }, [tabs, activeConnectionId]);
 
+  const contextValue = useMemo(() => ({
+    tabs: connectionTabs,
+    activeTabId,
+    activeTab,
+    addTab,
+    closeTab,
+    updateTab,
+    setActiveTabId,
+    closeAllTabs,
+    closeOtherTabs,
+    closeTabsToLeft,
+    closeTabsToRight
+  }), [
+    connectionTabs,
+    activeTabId,
+    activeTab,
+    addTab,
+    closeTab,
+    updateTab,
+    setActiveTabId,
+    closeAllTabs,
+    closeOtherTabs,
+    closeTabsToLeft,
+    closeTabsToRight
+  ]);
+
   return (
-    <EditorContext.Provider value={{ 
-      tabs: connectionTabs, 
-      activeTabId, 
-      activeTab,
-      addTab, 
-      closeTab, 
-      updateTab, 
-      setActiveTabId,
-      closeAllTabs,
-      closeOtherTabs,
-      closeTabsToLeft,
-      closeTabsToRight
-    }}>
+    <EditorContext.Provider value={contextValue}>
       {children}
     </EditorContext.Provider>
   );

@@ -127,23 +127,13 @@ export const Editor = () => {
     !isTableTab &&
     (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
 
-  // State for Table View Filter/Sort
-  const [tableFilter, setTableFilter] = useState("");
-  const [tableSort, setTableSort] = useState("");
-  const [tableLimit, setTableLimit] = useState(""); // String to handle empty input
+  // Removed redundant state - using activeTab values directly with controlled inputs
 
-  // Sync state with active tab
-  useEffect(() => {
-    if (activeTab?.type === "table") {
-      setTableFilter(activeTab.filterClause || "");
-      setTableSort(activeTab.sortClause || "");
-      setTableLimit(activeTab.limitClause ? String(activeTab.limitClause) : "");
-    }
-  }, [activeTab?.id, activeTab?.filterClause, activeTab?.sortClause, activeTab?.limitClause, activeTab?.type]);
-
-  // Placeholder Logic
-  const placeholderColumn = activeTab?.result?.columns?.[0] || 'id';
-  const placeholderSort = activeTab?.result?.columns?.[0] || 'created_at';
+  // Placeholder Logic - memoized to avoid recalculation on every render
+  const placeholders = useMemo(() => ({
+    column: activeTab?.result?.columns?.[0] || 'id',
+    sort: activeTab?.result?.columns?.[0] || 'created_at'
+  }), [activeTab?.result?.columns]);
 
   const dropdownQueries = useMemo(() => {
     if (activeTabType === "query_builder" && activeTabQuery) {
@@ -174,7 +164,14 @@ export const Editor = () => {
         const pkVal = String(row[pkIndex]);
         return (pendingChanges && pendingChanges[pkVal]) || (pendingDeletions && pendingDeletions[pkVal]);
     });
-  }, [activeTab]);
+  }, [
+    // Specific dependencies instead of entire activeTab object
+    activeTab?.pendingChanges,
+    activeTab?.pendingDeletions,
+    activeTab?.selectedRows,
+    activeTab?.result,
+    activeTab?.pkColumn
+  ]);
 
   const hasPendingChanges = useMemo(() => {
     return (activeTab?.pendingChanges && Object.keys(activeTab.pendingChanges).length > 0) || 
@@ -319,6 +316,12 @@ export const Editor = () => {
 
   const handleRunButton = useCallback(() => {
     if (!activeTab) return;
+
+    // Table Tab: run query with filter/sort/limit from activeTab
+    if (activeTab.type === "table") {
+      runQuery(undefined, 1);
+      return;
+    }
 
     // Visual Query Builder: run the generated SQL directly
     if (activeTab.type === "query_builder") {
@@ -937,55 +940,50 @@ export const Editor = () => {
                 <div className="flex items-center gap-2 flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
                     <Filter size={14} className="text-slate-500 shrink-0" />
                     <span className="text-xs text-blue-400 font-mono shrink-0">WHERE</span>
-                    <input 
-                        type="text" 
-                        value={tableFilter}
-                        onChange={(e) => setTableFilter(e.target.value)}
-                        onBlur={() => updateActiveTab({ filterClause: tableFilter })}
+                    <input
+                        type="text"
+                        value={activeTab?.filterClause || ""}
+                        onChange={(e) => updateActiveTab({ filterClause: e.target.value })}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                                updateActiveTab({ filterClause: tableFilter });
                                 // Small delay to ensure state update propagates before runQuery reads it
                                 setTimeout(() => runQuery(undefined, 1), 0);
                             }
                         }}
                         className="bg-transparent border-none outline-none text-xs text-slate-300 w-full placeholder:text-slate-600 font-mono"
-                        placeholder={`${placeholderColumn} > 5 AND status = 'active'`}
+                        placeholder={`${placeholders.column} > 5 AND status = 'active'`}
                     />
                 </div>
                 <div className="flex items-center gap-2 flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
                     <ArrowUpDown size={14} className="text-slate-500 shrink-0" />
                     <span className="text-xs text-blue-400 font-mono shrink-0">ORDER BY</span>
-                    <input 
-                        type="text" 
-                        value={tableSort}
-                        onChange={(e) => setTableSort(e.target.value)}
-                        onBlur={() => updateActiveTab({ sortClause: tableSort })}
+                    <input
+                        type="text"
+                        value={activeTab?.sortClause || ""}
+                        onChange={(e) => updateActiveTab({ sortClause: e.target.value })}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                                updateActiveTab({ sortClause: tableSort });
+                                // Small delay to ensure state update propagates before runQuery reads it
                                 setTimeout(() => runQuery(undefined, 1), 0);
                             }
                         }}
                         className="bg-transparent border-none outline-none text-xs text-slate-300 w-full placeholder:text-slate-600 font-mono"
-                        placeholder={`${placeholderSort} DESC`}
+                        placeholder={`${placeholders.sort} DESC`}
                     />
                 </div>
                 <div className="flex items-center gap-2 w-32 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
                     <ListFilter size={14} className="text-slate-500 shrink-0" />
                     <span className="text-xs text-blue-400 font-mono shrink-0">LIMIT</span>
-                    <input 
+                    <input
                         type="number"
-                        value={tableLimit}
-                        onChange={(e) => setTableLimit(e.target.value)}
-                        onBlur={() => {
-                            const val = parseInt(tableLimit);
-                            updateActiveTab({ limitClause: !isNaN(val) && val > 0 ? val : undefined });
+                        value={activeTab?.limitClause ? String(activeTab.limitClause) : ""}
+                        onChange={(e) => {
+                            const val = e.target.value ? parseInt(e.target.value) : undefined;
+                            updateActiveTab({ limitClause: val });
                         }}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                                const val = parseInt(tableLimit);
-                                updateActiveTab({ limitClause: !isNaN(val) && val > 0 ? val : undefined });
+                                // Small delay to ensure state update propagates before runQuery reads it
                                 setTimeout(() => runQuery(undefined, 1), 0);
                             }
                         }}

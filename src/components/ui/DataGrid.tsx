@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useReactTable,
@@ -44,12 +44,7 @@ export const DataGrid = ({
 }: DataGridProps) => {
   const { t } = useTranslation();
 
-  console.log("DataGrid MOUNTED with:", {
-    columns,
-    dataLength: data.length,
-    firstRow: data[0],
-    pkColumn,
-  });
+
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -82,7 +77,14 @@ export const DataGrid = ({
     }
   };
 
-  const handleRowClick = (index: number, event: React.MouseEvent) => {
+  // Pre-calculate pkIndex once for O(1) lookup instead of O(n) in render loop
+  const pkIndexMap = useMemo(() => {
+    if (!pkColumn) return null;
+    const pkIndex = columns.indexOf(pkColumn);
+    return pkIndex >= 0 ? pkIndex : null;
+  }, [columns, pkColumn]);
+
+  const handleRowClick = useCallback((index: number, event: React.MouseEvent) => {
     const newSelected = new Set(selectedRowIndices);
 
     if (event.shiftKey && lastSelectedRowIndex !== null) {
@@ -114,16 +116,16 @@ export const DataGrid = ({
     }
 
     updateSelection(newSelected);
-  };
+  }, [selectedRowIndices, lastSelectedRowIndex, updateSelection]);
 
-  const handleSelectAll = () => {
+  const handleSelectAll = useCallback(() => {
     if (selectedRowIndices.size === data.length) {
       updateSelection(new Set());
     } else {
       const allIndices = new Set(data.map((_, i) => i));
       updateSelection(allIndices);
     }
-  };
+  }, [selectedRowIndices.size, data.length, updateSelection]);
 
   useEffect(() => {
     if (editingCell && editInputRef.current) {
@@ -148,7 +150,6 @@ export const DataGrid = ({
 
     const { rowIndex, colIndex, value } = editingCell;
     const row = data[rowIndex];
-    const pkIndex = columns.indexOf(pkColumn);
 
     // Original value
     const originalValue = row[colIndex];
@@ -161,8 +162,12 @@ export const DataGrid = ({
       return;
     }
 
-    // PK Value
-    const pkVal = row[pkIndex];
+    // PK Value - check pkIndexMap is valid
+    if (pkIndexMap === null) {
+      setEditingCell(null);
+      return;
+    }
+    const pkVal = row[pkIndexMap];
     const colName = columns[colIndex];
 
     if (onPendingChange) {
@@ -203,7 +208,7 @@ export const DataGrid = ({
     }
   };
 
-  const columnHelper = createColumnHelper<unknown[]>();
+  const columnHelper = useMemo(() => createColumnHelper<unknown[]>(), []);
 
   const tableColumns = React.useMemo(
     () =>
@@ -213,18 +218,6 @@ export const DataGrid = ({
           header: () => colName,
           cell: (info) => {
             const val = info.getValue();
-            const actualValue = info.row.original[index];
-
-            // Debug: log EVERY cell value
-            console.log(`Cell [${colName}]:`, {
-              getValue: val,
-              originalRow: info.row.original,
-              actualValue,
-              valType: typeof val,
-              actualType: typeof actualValue,
-              isNull: val === null,
-              isUndefined: val === undefined,
-            });
 
             if (val === null || val === undefined)
               return (
@@ -248,18 +241,17 @@ export const DataGrid = ({
     getCoreRowModel: getCoreRowModel(),
   });
 
-  const handleContextMenu = (e: React.MouseEvent, row: unknown[]) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, row: unknown[]) => {
     if (tableName && pkColumn) {
       e.preventDefault();
       setContextMenu({ x: e.clientX, y: e.clientY, row });
     }
-  };
+  }, [tableName, pkColumn]);
 
-  const deleteRow = async () => {
-    if (!contextMenu || !tableName || !pkColumn || !connectionId) return;
+  const deleteRow = useCallback(async () => {
+    if (!contextMenu || !tableName || !pkColumn || !connectionId || pkIndexMap === null) return;
 
-    const pkIndex = columns.indexOf(pkColumn);
-    const pkVal = contextMenu.row[pkIndex];
+    const pkVal = contextMenu.row[pkIndexMap];
 
     const confirmed = await ask(t("dataGrid.confirmDelete"), {
       title: t("dataGrid.deleteTitle"),
@@ -282,7 +274,7 @@ export const DataGrid = ({
         });
       }
     }
-  };
+  }, [contextMenu, tableName, pkColumn, connectionId, pkIndexMap, onRefresh, t]);
 
   if (columns.length === 0) {
     return (
@@ -322,9 +314,8 @@ export const DataGrid = ({
           {table.getRowModel().rows.map((row, rowIndex) => {
             const isSelected = selectedRowIndices.has(rowIndex);
 
-            // Get PK for pending check
-            const pkIndex = pkColumn ? columns.indexOf(pkColumn) : -1;
-            const pkVal = pkIndex >= 0 ? String(row.original[pkIndex]) : null;
+            // Get PK for pending check (using pre-calculated pkIndexMap)
+            const pkVal = pkIndexMap !== null ? String(row.original[pkIndexMap]) : null;
             const isPendingDelete = pkVal
               ? pendingDeletions?.[pkVal] !== undefined
               : false;
