@@ -406,3 +406,32 @@ Adhere to the rules defined in the [rules directory](./.rules/):
         - `src/types/editor.ts`: Added `isEditorOpen`, `filterClause`, `sortClause`, `limitClause` to `Tab`.
         - `src/contexts/EditorProvider.tsx`: Initialized `isEditorOpen`.
         - `src/pages/Editor.tsx`: Implemented conditional rendering logic for `isTableTab` vs `Console`, added Filter/Sort/Limit UI with dynamic placeholders.
+
+### Session 33: SQL Autocomplete (DataGrip Style) & Word Wrap
+- **Status:** Feature Complete.
+- **Actions:**
+    - **SQL Autocomplete:**
+        - **DataGrip-Style IntelliSense:** Implemented context-aware SQL autocomplete matching DataGrip functionality.
+        - **Features:**
+            - **Dot Completion:** `table.column` and `alias.column` autocomplete with partial matching.
+            - **Context Awareness:** Suggests columns only from tables present in current query's FROM/JOIN clauses.
+            - **Alias Support:** Recognizes table aliases (e.g., `FROM users u` → `u.` shows user columns).
+            - **Multi-Statement Isolation:** Each SQL statement has its own autocomplete context.
+            - **Smart Suggestions:** Columns prioritized over keywords, detailed info shows table name and alias.
+        - **Performance Optimizations:**
+            - **Intelligent Cache:** TTL-based (5 min) with max 50 entries, automatic cleanup on size/age.
+            - **Connection Cleanup:** Cache cleared on disconnect to prevent memory leaks.
+            - **SQL Parsing:** Early exit for queries without FROM/JOIN, max 10 table matches to prevent regex backtracking.
+            - **Statement Extraction:** Small files (<500 chars) return full text, large files search ±2000 chars from cursor.
+            - **Fetch Limits:** Max 5 parallel column fetches, max 50 table suggestions, max 200 total suggestions.
+            - **Memory Efficiency:** Stored only essential data (label + detail), keywords conditionally shown, deduplication with Set.
+        - **Files Modified:**
+            - `src/utils/autocomplete.ts`: Complete rewrite with optimized parsing, caching, and suggestion logic.
+            - `src/contexts/DatabaseProvider.tsx`: Added `clearAutocompleteCache()` call on disconnect.
+    - **Word Wrap:**
+        - **Monaco Editor:** Enabled `wordWrap: "on"` for all SQL editors (main editor + save query modal).
+        - **UX:** Long queries now wrap automatically instead of horizontal scrolling.
+        - **Files Modified:**
+            - `src/pages/Editor.tsx`: Added `wordWrap: "on"` to MonacoEditor options.
+            - `src/components/ui/QueryModal.tsx`: Added `wordWrap: "on"` to MonacoEditor options.
+

@@ -87,7 +87,8 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
                         lineNumbers: 'on',
                         scrollBeyondLastLine: false,
                         automaticLayout: true,
-                        padding: { top: 8 }
+                        padding: { top: 8 },
+                        wordWrap: 'on',
                     }}
                 />
             </div>

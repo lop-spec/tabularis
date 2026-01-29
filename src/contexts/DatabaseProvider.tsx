@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { DatabaseContext, type TableInfo, type SavedConnection } from './DatabaseContext';
 import type { ReactNode } from 'react';
+import { clearAutocompleteCache } from '../utils/autocomplete';
 
 export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
@@ -77,6 +78,11 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const disconnect = () => {
+    // Clear autocomplete cache for this connection
+    if (activeConnectionId) {
+      clearAutocompleteCache(activeConnectionId);
+    }
+    
     setActiveConnectionId(null);
     setActiveDriver(null);
     setActiveTable(null);

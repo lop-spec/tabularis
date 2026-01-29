@@ -37,7 +37,8 @@ import { VisualQueryBuilder } from "../components/ui/VisualQueryBuilder";
 import { ContextMenu } from "../components/ui/ContextMenu";
 import { ExportProgressModal, type ExportStatus } from "../components/ui/ExportProgressModal";
 import { splitQueries, extractTableName } from "../utils/sql";
-import MonacoEditor, { type OnMount } from "@monaco-editor/react";
+import { registerSqlAutocomplete } from "../utils/autocomplete";
+import MonacoEditor, { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save, message } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../hooks/useDatabase";
 import { useSavedQueries } from "../hooks/useSavedQueries";
@@ -74,7 +75,7 @@ interface ExportProgress {
 
 export const Editor = () => {
   const { t } = useTranslation();
-  const { activeConnectionId } = useDatabase();
+  const { activeConnectionId, tables } = useDatabase();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
   const {
@@ -139,6 +140,7 @@ export const Editor = () => {
   const [isResultsCollapsed, setIsResultsCollapsed] = useState(false);
   const isDragging = useRef(false);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
 
   const [selectableQueries, setSelectableQueries] = useState<string[]>([]);
   const [isQuerySelectionModalOpen, setIsQuerySelectionModalOpen] =
@@ -606,6 +608,7 @@ export const Editor = () => {
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    setMonacoInstance(monaco);
     editor.addAction({
       id: "run-selection",
       label: "Execute Selection",
@@ -625,6 +628,17 @@ export const Editor = () => {
       handleRunButton,
     );
   };
+
+  useEffect(() => {
+    if (monacoInstance && activeConnectionId) {
+      const disposable = registerSqlAutocomplete(
+        monacoInstance,
+        activeConnectionId,
+        tables
+      );
+      return () => disposable.dispose();
+    }
+  }, [monacoInstance, activeConnectionId, tables]);
 
   useEffect(() => {
     const state = location.state as EditorState;
@@ -990,6 +1004,7 @@ export const Editor = () => {
                 padding: { top: 16 },
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
+                wordWrap: "on",
               }}
             />
           )}
