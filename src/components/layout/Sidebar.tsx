@@ -503,7 +503,7 @@ export const Sidebar = () => {
     const q = getQuote();
     navigate('/editor', {
       state: { 
-        initialQuery: `SELECT * FROM ${q}${tableName}${q} LIMIT 100`,
+        initialQuery: `SELECT * FROM ${q}${tableName}${q}`,
         tableName: tableName
       }
     });

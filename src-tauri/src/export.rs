@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Runtime, State};
 use tokio::task::AbortHandle;
 
 pub struct ExportCancellationState {
@@ -72,9 +72,10 @@ pub async fn export_query_to_file<R: Runtime>(
 
                     while let Some(row_res) = rows.next().await {
                         let row = row_res.map_err(|e| e.to_string())?;
-                        
+
                         if !headers_written {
-                            let headers: Vec<String> = row.columns().iter().map(|c| c.name().to_string()).collect();
+                            let headers: Vec<String> =
+                                row.columns().iter().map(|c| c.name().to_string()).collect();
                             csv_wtr.write_record(&headers).map_err(|e| e.to_string())?;
                             headers_written = true;
                         }
@@ -89,10 +90,16 @@ pub async fn export_query_to_file<R: Runtime>(
                             }
                         }
                         csv_wtr.write_record(&record).map_err(|e| e.to_string())?;
-                        
+
                         count += 1;
                         if count % 100 == 0 {
-                            app.emit("export_progress", ExportProgress { rows_processed: count }).unwrap_or(());
+                            app.emit(
+                                "export_progress",
+                                ExportProgress {
+                                    rows_processed: count,
+                                },
+                            )
+                            .unwrap_or(());
                         }
                     }
                     csv_wtr.flush().map_err(|e| e.to_string())?;
@@ -102,7 +109,7 @@ pub async fn export_query_to_file<R: Runtime>(
 
                     while let Some(row_res) = rows.next().await {
                         let row = row_res.map_err(|e| e.to_string())?;
-                        
+
                         if !first {
                             writer.write_all(b",").map_err(|e| e.to_string())?;
                         }
@@ -118,13 +125,19 @@ pub async fn export_query_to_file<R: Runtime>(
 
                         count += 1;
                         if count % 100 == 0 {
-                            app.emit("export_progress", ExportProgress { rows_processed: count }).unwrap_or(());
+                            app.emit(
+                                "export_progress",
+                                ExportProgress {
+                                    rows_processed: count,
+                                },
+                            )
+                            .unwrap_or(());
                         }
                     }
                     writer.write_all(b"]").map_err(|e| e.to_string())?;
                     writer.flush().map_err(|e| e.to_string())?;
                 }
-            },
+            }
             "postgres" => {
                 let pool = get_postgres_pool(&params).await?;
                 let mut rows = sqlx::query(&sanitized_query).fetch(&pool);
@@ -135,9 +148,10 @@ pub async fn export_query_to_file<R: Runtime>(
 
                     while let Some(row_res) = rows.next().await {
                         let row = row_res.map_err(|e| e.to_string())?;
-                        
+
                         if !headers_written {
-                            let headers: Vec<String> = row.columns().iter().map(|c| c.name().to_string()).collect();
+                            let headers: Vec<String> =
+                                row.columns().iter().map(|c| c.name().to_string()).collect();
                             csv_wtr.write_record(&headers).map_err(|e| e.to_string())?;
                             headers_written = true;
                         }
@@ -152,10 +166,16 @@ pub async fn export_query_to_file<R: Runtime>(
                             }
                         }
                         csv_wtr.write_record(&record).map_err(|e| e.to_string())?;
-                        
+
                         count += 1;
                         if count % 100 == 0 {
-                            app.emit("export_progress", ExportProgress { rows_processed: count }).unwrap_or(());
+                            app.emit(
+                                "export_progress",
+                                ExportProgress {
+                                    rows_processed: count,
+                                },
+                            )
+                            .unwrap_or(());
                         }
                     }
                     csv_wtr.flush().map_err(|e| e.to_string())?;
@@ -165,7 +185,7 @@ pub async fn export_query_to_file<R: Runtime>(
 
                     while let Some(row_res) = rows.next().await {
                         let row = row_res.map_err(|e| e.to_string())?;
-                        
+
                         if !first {
                             writer.write_all(b",").map_err(|e| e.to_string())?;
                         }
@@ -181,13 +201,19 @@ pub async fn export_query_to_file<R: Runtime>(
 
                         count += 1;
                         if count % 100 == 0 {
-                            app.emit("export_progress", ExportProgress { rows_processed: count }).unwrap_or(());
+                            app.emit(
+                                "export_progress",
+                                ExportProgress {
+                                    rows_processed: count,
+                                },
+                            )
+                            .unwrap_or(());
                         }
                     }
                     writer.write_all(b"]").map_err(|e| e.to_string())?;
                     writer.flush().map_err(|e| e.to_string())?;
                 }
-            },
+            }
             "sqlite" => {
                 let pool = get_sqlite_pool(&params).await?;
                 let mut rows = sqlx::query(&sanitized_query).fetch(&pool);
@@ -198,9 +224,10 @@ pub async fn export_query_to_file<R: Runtime>(
 
                     while let Some(row_res) = rows.next().await {
                         let row = row_res.map_err(|e| e.to_string())?;
-                        
+
                         if !headers_written {
-                            let headers: Vec<String> = row.columns().iter().map(|c| c.name().to_string()).collect();
+                            let headers: Vec<String> =
+                                row.columns().iter().map(|c| c.name().to_string()).collect();
                             csv_wtr.write_record(&headers).map_err(|e| e.to_string())?;
                             headers_written = true;
                         }
@@ -215,10 +242,16 @@ pub async fn export_query_to_file<R: Runtime>(
                             }
                         }
                         csv_wtr.write_record(&record).map_err(|e| e.to_string())?;
-                        
+
                         count += 1;
                         if count % 100 == 0 {
-                            app.emit("export_progress", ExportProgress { rows_processed: count }).unwrap_or(());
+                            app.emit(
+                                "export_progress",
+                                ExportProgress {
+                                    rows_processed: count,
+                                },
+                            )
+                            .unwrap_or(());
                         }
                     }
                     csv_wtr.flush().map_err(|e| e.to_string())?;
@@ -228,7 +261,7 @@ pub async fn export_query_to_file<R: Runtime>(
 
                     while let Some(row_res) = rows.next().await {
                         let row = row_res.map_err(|e| e.to_string())?;
-                        
+
                         if !first {
                             writer.write_all(b",").map_err(|e| e.to_string())?;
                         }
@@ -244,13 +277,19 @@ pub async fn export_query_to_file<R: Runtime>(
 
                         count += 1;
                         if count % 100 == 0 {
-                            app.emit("export_progress", ExportProgress { rows_processed: count }).unwrap_or(());
+                            app.emit(
+                                "export_progress",
+                                ExportProgress {
+                                    rows_processed: count,
+                                },
+                            )
+                            .unwrap_or(());
                         }
                     }
                     writer.write_all(b"]").map_err(|e| e.to_string())?;
                     writer.flush().map_err(|e| e.to_string())?;
                 }
-            },
+            }
             _ => return Err("Unsupported driver".into()),
         }
 
