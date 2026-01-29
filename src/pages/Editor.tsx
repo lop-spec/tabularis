@@ -235,9 +235,10 @@ export const Editor = () => {
           isLoading: false,
         });
 
-        const tableName =
-          targetTab?.activeTable ||
-          (sql?.toLowerCase().includes("from") ? null : null); // Simple heuristics
+        // Fetch PK column if this is a table tab
+        // We need to check both current targetTab and the updated tab state
+        const currentTab = tabsRef.current.find((t) => t.id === targetTabId);
+        const tableName = currentTab?.activeTable;
         if (tableName) fetchPkColumn(tableName, targetTabId);
       } catch (err) {
         updateTab(targetTabId, {
@@ -872,7 +873,12 @@ export const Editor = () => {
 
           {/* Results Panel */}
           <div className="flex-1 overflow-hidden bg-slate-900 flex flex-col min-h-0">
-            {activeTab.error ? (
+            {activeTab.isLoading ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                <div className="w-12 h-12 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                <p className="text-sm">{t("editor.executingQuery")}</p>
+              </div>
+            ) : activeTab.error ? (
               <div className="p-4 text-red-400 font-mono text-sm bg-red-900/10 h-full overflow-auto whitespace-pre-wrap">
                 Error: {activeTab.error}
               </div>

@@ -189,7 +189,8 @@
     "queryFailed": "Esecuzione query fallita.",
     "newVisualQuery": "Nuova Query Visuale",
     "submitChanges": "Invia Modifiche",
-    "rollbackChanges": "Annulla Modifiche"
+    "rollbackChanges": "Annulla Modifiche",
+    "executingQuery": "Esecuzione query..."
   },
   "createTable": {
     "title": "Crea Nuova Tabella",

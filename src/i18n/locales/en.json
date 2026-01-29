@@ -189,7 +189,8 @@
     "queryFailed": "Query failed.",
     "newVisualQuery": "New Visual Query",
     "submitChanges": "Submit Changes",
-    "rollbackChanges": "Rollback Changes"
+    "rollbackChanges": "Rollback Changes",
+    "executingQuery": "Executing query..."
   },
   "createTable": {
     "title": "Create New Table",
