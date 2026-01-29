@@ -1,3 +1,19 @@
+## [0.7.1](https://github.com/debba/tabularis/compare/v0.7.0...v0.7.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* **editor:** clear pending state when running query ([fe3354b](https://github.com/debba/tabularis/commit/fe3354b98d70475e776c7ea201fc3576dec17b68))
+
+
+### Features
+
+* **database:** implement connection pool manager ([8ea4278](https://github.com/debba/tabularis/commit/8ea4278bebfd4b3fcc83da014fa48651c06c0145))
+* **table-view:** enhance filtering with dynamic placeholders and limit ([cfc5f53](https://github.com/debba/tabularis/commit/cfc5f531aca00a7b699e9f4c7e6d5eaee58bd7a0))
+* **ui:** enhance table view with full-screen mode and filters ([b528821](https://github.com/debba/tabularis/commit/b528821b6806802178c4c1faff076936977b7ec3))
+
+
+
 # [0.7.0](https://github.com/debba/tabularis/compare/v0.6.1...v0.7.0) (2026-01-29)
 
 
