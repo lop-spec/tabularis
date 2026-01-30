@@ -1,3 +1,19 @@
+# [0.8.0](https://github.com/debba/tabularis/compare/v0.7.1...v0.8.0) (2026-01-29)
+
+
+### Features
+
+* **ai:** add AI integration with backend, settings UI, and docs ([0ff1899](https://github.com/debba/tabularis/commit/0ff1899ab502327faaf279f511d824aaa4d8f7b6))
+* **ai:** add AI query generation and explanation support ([370f1e8](https://github.com/debba/tabularis/commit/370f1e846c5a98ed2b49c7b963761ce440ce3d46))
+* **ai:** add dynamic model loading with fallback and experimental flag ([702103e](https://github.com/debba/tabularis/commit/702103efd253b0f5f851fed2054a885f1fb0cf80))
+* **drivers:** add table sorting for all database types ([beb8abc](https://github.com/debba/tabularis/commit/beb8abc095d9729eedd7da24d6235657ab78874d))
+* **editor:** add DataGrip‑style SQL autocomplete and enable word wrap ([fb1d252](https://github.com/debba/tabularis/commit/fb1d252adec6a36e2abd1c3a9ec756820a5382fd))
+* **export:** add query result export to CSV and JSON ([e283aa1](https://github.com/debba/tabularis/commit/e283aa14fc310343fe6f8aae5320dfd83e787bc8))
+* **mcp:** add MCP server integration with UI and config handling ([8d61571](https://github.com/debba/tabularis/commit/8d615714966801d39d3e074c0ee831d2ca6e525a))
+* **mcp:** add name support for connection resolution ([f01d685](https://github.com/debba/tabularis/commit/f01d68512c8227c06a1de97bb928c2532e87b8af))
+
+
+
 ## [0.7.1](https://github.com/debba/tabularis/compare/v0.7.0...v0.7.1) (2026-01-29)
 
 

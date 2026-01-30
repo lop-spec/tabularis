@@ -423,3 +423,35 @@ Adhere to the rules defined in the [rules directory](./.rules/):
         - `src/components/modals/QueryParamsModal.tsx` (New)
         - `src/types/editor.ts`
         - `src/pages/Editor.tsx`
+
+### Session 34: AI Integration & Configuration
+- **Status:** Feature Complete.
+- **Actions:**
+    - **AI Engine:**
+        - **Backend:**
+            - Implemented `ai.rs` module to handle requests to OpenAI, Anthropic, and OpenRouter.
+            - Added `generate_ai_query` (Text-to-SQL) and `explain_ai_query` (Query Explanation) commands.
+            - Integrated `keychain_utils.rs` for secure storage of AI API keys.
+            - Added `config.json` support for persisting settings (theme, language, AI preferences) and custom model overrides.
+    - **Frontend:**
+        - **Settings:**
+            - Refactored `SettingsProvider` to use backend `config.json` instead of localStorage.
+            - Added "AI" tab in Settings page with:
+                - Enable/Disable toggle for AI features.
+                - Provider selection (OpenAI, Anthropic, OpenRouter).
+                - Model selection dropdown (populates from defaults or `config.json`).
+                - Secure API Key management (save to Keychain).
+                - System Prompt and Explain Prompt customization editors.
+        - **Editor:**
+            - Added "AI Assist" button to generate SQL from natural language (context-aware of table schema).
+            - Added "Explain" button to get natural language explanations of SQL queries.
+            - Integrated `AiQueryModal` and `AiExplainModal`.
+    - **Localization:**
+        - Added comprehensive English and Italian translations for all new AI features and settings.
+
+### Session 35: MCP Improvements
+- **Status:** Feature Complete.
+- **Actions:**
+    - **MCP:**
+        - Added support for resolving connections by **Name** (in addition to ID) in MCP resources (`tabularis://{name}/schema`) and tools (`run_query`).
+        - Updated MCP tool definitions to reflect name support.

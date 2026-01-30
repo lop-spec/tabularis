@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { AiQueryModal } from "../components/ui/AiQueryModal";
+import { AiExplainModal } from "../components/ui/AiExplainModal";
 import {
   Play,
   Plus,
@@ -25,12 +27,12 @@ import {
   Trash2,
   Check,
   Undo2,
-  Filter,
-  ArrowUpDown,
-  ListFilter,
+  Sparkles,
+  BookOpen,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { TableToolbar } from "../components/ui/TableToolbar";
 import { DataGrid } from "../components/ui/DataGrid";
 import { NewRowModal } from "../components/ui/NewRowModal";
 import { QuerySelectionModal } from "../components/ui/QuerySelectionModal";
@@ -42,7 +44,8 @@ import { ExportProgressModal, type ExportStatus } from "../components/ui/ExportP
 import { splitQueries, extractTableName } from "../utils/sql";
 import { extractQueryParams, interpolateQueryParams } from "../utils/queryParameters";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
-import { type OnMount } from "@monaco-editor/react";
+import { registerSqlAutocomplete } from "../utils/autocomplete";
+import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save, message } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../hooks/useDatabase";
 import { useSavedQueries } from "../hooks/useSavedQueries";
@@ -79,7 +82,7 @@ interface ExportProgress {
 
 export const Editor = () => {
   const { t } = useTranslation();
-  const { activeConnectionId } = useDatabase();
+  const { activeConnectionId, tables } = useDatabase();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
   const {
@@ -154,14 +157,17 @@ export const Editor = () => {
   const [isResultsCollapsed, setIsResultsCollapsed] = useState(false);
   const isDragging = useRef(false);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
 
   const [selectableQueries, setSelectableQueries] = useState<string[]>([]);
   const [isQuerySelectionModalOpen, setIsQuerySelectionModalOpen] =
     useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isAiExplainModalOpen, setIsAiExplainModalOpen] = useState(false);
   const [isEditingPage, setIsEditingPage] = useState(false);
   const [tempPage, setTempPage] = useState("1");
-
+  
   const activeTabType = activeTab?.type;
   const activeTabQuery = activeTab?.query;
   const isTableTab = activeTab?.type === "table";
@@ -231,8 +237,6 @@ export const Editor = () => {
     tabsRef.current = tabs;
     activeTabIdRef.current = activeTabId;
   }, [tabs, activeTabId]);
-
-  /* Removed redundant updateActiveTab definition */
 
   const fetchPkColumn = useCallback(
     async (table: string, tabId?: string) => {
@@ -341,8 +345,9 @@ export const Editor = () => {
 
       try {
         const start = performance.now();
-        // Use settings.queryLimit for Page Size (pagination), ignoring the "Total Limit" input which is handled in SQL
-        const pageSize = settings.queryLimit > 0 ? settings.queryLimit : null;
+        // Use settings.resultPageSize for Page Size (pagination), ignoring the "Total Limit" input which is handled in SQL
+        // Fallback to 100 if settings not loaded yet
+        const pageSize = (settings.resultPageSize && settings.resultPageSize > 0) ? settings.resultPageSize : 100;
 
         const res = await invoke<QueryResult>("execute_query", {
           connectionId: activeConnectionId,
@@ -381,7 +386,7 @@ export const Editor = () => {
         });
       }
     },
-    [activeConnectionId, updateTab, settings.queryLimit, fetchPkColumn, t],
+    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t],
   );
 
   const handleRunButton = useCallback(() => {
@@ -430,6 +435,21 @@ export const Editor = () => {
     if (currentTab?.activeTable && activeConnectionId)
       runQuery(currentTab.query, currentTab.page);
   }, [activeConnectionId, runQuery]);
+
+  const handleToolbarUpdate = useCallback((filter: string, sort: string, limit: number | undefined) => {
+    if (!activeTabIdRef.current) return;
+    
+    updateTab(activeTabIdRef.current, {
+        filterClause: filter,
+        sortClause: sort,
+        limitClause: limit
+    });
+    
+    // Small delay to ensure state update propagates before runQuery reads it
+    // We pass the new values directly to runQuery could be cleaner, but current runQuery reads from tabsRef
+    // Since tabsRef is updated in useEffect, setTimeout 0 helps
+    setTimeout(() => runQuery(undefined, 1), 0);
+  }, [updateTab, runQuery]);
 
   const handlePendingChange = useCallback((pkVal: unknown, colName: string, value: unknown) => {
     if (!activeTabIdRef.current) return;
@@ -672,6 +692,7 @@ export const Editor = () => {
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    setMonacoInstance(monaco);
     editor.addAction({
       id: "run-selection",
       label: "Execute Selection",
@@ -691,6 +712,17 @@ export const Editor = () => {
       handleRunButton,
     );
   };
+
+  useEffect(() => {
+    if (monacoInstance && activeConnectionId) {
+      const disposable = registerSqlAutocomplete(
+        monacoInstance,
+        activeConnectionId,
+        tables
+      );
+      return () => disposable.dispose();
+    }
+  }, [monacoInstance, activeConnectionId, tables]);
 
   useEffect(() => {
     const state = location.state as EditorState;
@@ -1009,7 +1041,31 @@ export const Editor = () => {
           </button>
         )}
 
-        <div className="relative">
+        {/* AI Assist Button */}
+        {!isTableTab && activeTab.type !== "query_builder" && settings.aiEnabled && (
+           <div className="flex items-center gap-1 ml-2">
+             <button
+               onClick={() => setIsAiModalOpen(true)}
+               disabled={!activeConnectionId}
+               className="flex items-center gap-2 px-3 py-1.5 bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-500/30 rounded text-sm font-medium transition-colors disabled:opacity-50"
+               title="Generate SQL with AI"
+             >
+               <Sparkles size={16} />
+               <span className="hidden sm:inline">AI Assist</span>
+             </button>
+             <button
+               onClick={() => setIsAiExplainModalOpen(true)}
+               disabled={!activeConnectionId || !activeTab.query?.trim()}
+               className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/40 hover:bg-blue-900/60 text-blue-200 border border-blue-500/30 rounded text-sm font-medium transition-colors disabled:opacity-50"
+               title="Explain this Query"
+             >
+               <BookOpen size={16} />
+               <span className="hidden sm:inline">Explain</span>
+             </button>
+           </div>
+        )}
+
+        <div className="relative ml-auto">
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
             disabled={!activeTab.result || activeTab.result.rows.length === 0}
@@ -1062,6 +1118,14 @@ export const Editor = () => {
               onChange={(val) => updateActiveTab({ query: val })}
               onRun={handleRunButton}
               onMount={handleEditorMount}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                padding: { top: 16 },
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                wordWrap: "on",
+              }}
             />
           )}
         </div>
@@ -1071,62 +1135,15 @@ export const Editor = () => {
       {isTableTab || !isResultsCollapsed ? (
         <>
           {isTableTab ? (
-             <div className="h-10 bg-slate-900 border-y border-slate-800 flex items-center px-2 gap-4">
-                <div className="flex items-center gap-2 flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
-                    <Filter size={14} className="text-slate-500 shrink-0" />
-                    <span className="text-xs text-blue-400 font-mono shrink-0">WHERE</span>
-                    <input
-                        type="text"
-                        value={activeTab?.filterClause || ""}
-                        onChange={(e) => updateActiveTab({ filterClause: e.target.value })}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                // Small delay to ensure state update propagates before runQuery reads it
-                                setTimeout(() => runQuery(undefined, 1), 0);
-                            }
-                        }}
-                        className="bg-transparent border-none outline-none text-xs text-slate-300 w-full placeholder:text-slate-600 font-mono"
-                        placeholder={`${placeholders.column} > 5 AND status = 'active'`}
-                    />
-                </div>
-                <div className="flex items-center gap-2 flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
-                    <ArrowUpDown size={14} className="text-slate-500 shrink-0" />
-                    <span className="text-xs text-blue-400 font-mono shrink-0">ORDER BY</span>
-                    <input
-                        type="text"
-                        value={activeTab?.sortClause || ""}
-                        onChange={(e) => updateActiveTab({ sortClause: e.target.value })}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                // Small delay to ensure state update propagates before runQuery reads it
-                                setTimeout(() => runQuery(undefined, 1), 0);
-                            }
-                        }}
-                        className="bg-transparent border-none outline-none text-xs text-slate-300 w-full placeholder:text-slate-600 font-mono"
-                        placeholder={`${placeholders.sort} DESC`}
-                    />
-                </div>
-                <div className="flex items-center gap-2 w-32 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
-                    <ListFilter size={14} className="text-slate-500 shrink-0" />
-                    <span className="text-xs text-blue-400 font-mono shrink-0">LIMIT</span>
-                    <input
-                        type="number"
-                        value={activeTab?.limitClause ? String(activeTab.limitClause) : ""}
-                        onChange={(e) => {
-                            const val = e.target.value ? parseInt(e.target.value) : undefined;
-                            updateActiveTab({ limitClause: val });
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                // Small delay to ensure state update propagates before runQuery reads it
-                                setTimeout(() => runQuery(undefined, 1), 0);
-                            }
-                        }}
-                        className="bg-transparent border-none outline-none text-xs text-slate-300 w-full placeholder:text-slate-600 font-mono"
-                        placeholder={String(settings.queryLimit || 100)}
-                    />
-                </div>
-             </div>
+             <TableToolbar
+                initialFilter={activeTab?.filterClause}
+                initialSort={activeTab?.sortClause}
+                initialLimit={activeTab?.limitClause}
+                placeholderColumn={placeholders.column}
+                placeholderSort={placeholders.sort}
+                defaultLimit={settings.resultPageSize || 100}
+                onUpdate={handleToolbarUpdate}
+             />
           ) : (
             <div
               onMouseDown={isEditorOpen ? startResize : undefined}
@@ -1452,6 +1469,16 @@ export const Editor = () => {
           title={t("editor.saveQuery")}
         />
       )}
+      <AiQueryModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        onInsert={(q) => runQuery(q, 1)}
+      />
+      <AiExplainModal
+        isOpen={isAiExplainModalOpen}
+        onClose={() => setIsAiExplainModalOpen(false)}
+        query={activeTab.query}
+      />
       {tabContextMenu && (
         <ContextMenu
           x={tabContextMenu.x}

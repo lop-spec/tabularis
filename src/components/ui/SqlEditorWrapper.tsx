@@ -7,10 +7,11 @@ interface SqlEditorWrapperProps {
   onRun: () => void;
   onMount?: OnMount;
   height?: string | number;
+  options?: React.ComponentProps<typeof MonacoEditor>['options'];
 }
 
 export const SqlEditorWrapper: React.FC<SqlEditorWrapperProps> = React.memo(
-  ({ initialValue, onChange, onRun, onMount, height = "100%" }) => {
+  ({ initialValue, onChange, onRun, onMount, height = "100%", options }) => {
     const [localValue, setLocalValue] = useState(initialValue);
     const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -71,6 +72,7 @@ export const SqlEditorWrapper: React.FC<SqlEditorWrapperProps> = React.memo(
           padding: { top: 16 },
           scrollBeyondLastLine: false,
           automaticLayout: true,
+          ...options
         }}
       />
     );

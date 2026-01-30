@@ -1,6 +1,6 @@
 [package]
 name = "tabularis"
-version = "0.7.1"
+version = "0.8.0"
 description = "tabularis - A database manager for developers"
 authors = ["Debba"]
 edition = "2021"
@@ -36,6 +36,10 @@ keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "li
 tauri-plugin-opener = "2"
 once_cell = "1.20"
 csv = "1.4.0"
+reqwest = { version = "0.13.1", features = ["json"] }
+clap = { version = "4.5.56", features = ["derive"] }
+directories = "6.0.0"
+serde_yaml = "0.9.34"
 
 # GTK dependencies for Wayland window title workaround (Linux only)
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -16,15 +16,9 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
     let value_ref = row.try_get_raw(index).ok();
     if let Some(val_ref) = value_ref {
         if val_ref.is_null() {
-            eprintln!("[DEBUG] Column '{}' is NULL", col_name);
             return serde_json::Value::Null;
         }
     }
-
-    eprintln!(
-        "[DEBUG] Extracting column '{}' of type '{}'",
-        col_name, col_type
-    );
 
     // DECIMAL/NUMERIC optimization
     if col_type == "DECIMAL" || col_type == "NEWDECIMAL" || col_type == "NUMERIC" {
@@ -42,7 +36,6 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         // Try chrono types
         match row.try_get::<NaiveDateTime, _>(index) {
             Ok(v) => {
-                eprintln!("[DEBUG] ✓ {} as NaiveDateTime: {}", col_name, v);
                 return serde_json::Value::String(v.format("%Y-%m-%d %H:%M:%S").to_string());
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as NaiveDateTime: {}", col_name, e),
@@ -50,7 +43,6 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
 
         match row.try_get::<DateTime<Utc>, _>(index) {
             Ok(v) => {
-                eprintln!("[DEBUG] ✓ {} as DateTime<Utc>: {}", col_name, v);
                 return serde_json::Value::String(v.format("%Y-%m-%d %H:%M:%S").to_string());
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as DateTime<Utc>: {}", col_name, e),
@@ -59,7 +51,6 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         // Try as string
         match row.try_get::<String, _>(index) {
             Ok(v) => {
-                eprintln!("[DEBUG] ✓ {} as String: {}", col_name, v);
                 // Try to parse typical SQL string formats to clean them up if they look like ISO
                 if let Ok(dt) = NaiveDateTime::parse_from_str(&v, "%Y-%m-%dT%H:%M:%S%.f") {
                     return serde_json::Value::String(dt.format("%Y-%m-%d %H:%M:%S").to_string());
@@ -75,7 +66,6 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         // Try as i64 (unix timestamp)
         match row.try_get::<i64, _>(index) {
             Ok(v) => {
-                eprintln!("[DEBUG] ✓ {} as i64 (unix ts): {}", col_name, v);
                 return serde_json::Value::from(v);
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as i64: {}", col_name, e),
@@ -87,20 +77,12 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         // First try as Vec<u8> (native binary format)
         match row.try_get::<Vec<u8>, _>(index) {
             Ok(v) => {
-                eprintln!(
-                    "[DEBUG] ✓ {} as Vec<u8> (BLOB, {} bytes)",
-                    col_name,
-                    v.len()
-                );
-
                 // Try to decode as UTF-8 string first (many BLOBs contain text/JSON)
                 if let Ok(s) = String::from_utf8(v.clone()) {
-                    eprintln!("[DEBUG]   → Decoded as UTF-8 string");
                     return serde_json::Value::String(s);
                 }
 
                 // If not valid UTF-8, encode as base64
-                eprintln!("[DEBUG]   → Not UTF-8, encoding as base64");
                 return serde_json::Value::String(base64::Engine::encode(
                     &base64::engine::general_purpose::STANDARD,
                     v,
@@ -112,11 +94,6 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         // Try as string directly (for text-based binary data)
         match row.try_get::<String, _>(index) {
             Ok(v) => {
-                eprintln!(
-                    "[DEBUG] ✓ {} as String (BLOB fallback): {} chars",
-                    col_name,
-                    v.len()
-                );
                 return serde_json::Value::String(v);
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as String: {}", col_name, e),
@@ -127,11 +104,6 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
     if col_type.contains("TEXT") {
         match row.try_get::<String, _>(index) {
             Ok(v) => {
-                eprintln!(
-                    "[DEBUG] ✓ {} as String (TEXT type): {} chars",
-                    col_name,
-                    v.len()
-                );
                 return serde_json::Value::String(v);
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as String: {}", col_name, e),
@@ -140,11 +112,6 @@ pub fn extract_mysql_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_j
         // Fallback to Vec<u8> for non-UTF8 text
         match row.try_get::<Vec<u8>, _>(index) {
             Ok(v) => {
-                eprintln!(
-                    "[DEBUG] ✓ {} as Vec<u8> (TEXT fallback, {} bytes)",
-                    col_name,
-                    v.len()
-                );
                 // Try to convert to UTF-8 string first
                 if let Ok(s) = String::from_utf8(v.clone()) {
                     return serde_json::Value::String(s);
