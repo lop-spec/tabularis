@@ -1472,7 +1472,10 @@ export const Editor = () => {
       <AiQueryModal
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
-        onInsert={(q) => runQuery(q, 1)}
+        onInsert={(q) => {
+            updateActiveTab({ query: q });
+            runQuery(q, 1);
+        }}
       />
       <AiExplainModal
         isOpen={isAiExplainModalOpen}
