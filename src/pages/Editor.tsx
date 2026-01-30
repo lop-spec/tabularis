@@ -660,7 +660,7 @@ export const Editor = () => {
              
              // Cleanup empty change objects
              Object.keys(newPendingChanges).forEach(key => {
-                 // @ts-expect-error - Dynamic key access in cleanup logic
+                 //  Dynamic key access in cleanup logic
                  if (Object.keys(newPendingChanges[key]?.changes || {}).length === 0) delete newPendingChanges[key];
              });
 
