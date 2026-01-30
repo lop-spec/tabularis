@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "./ContextMenu";
-import { Trash2, Edit } from "lucide-react";
+import { Trash2, Edit, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { EditRowModal } from "./EditRowModal";
@@ -28,6 +28,8 @@ interface DataGridProps {
   onPendingChange?: (pkVal: unknown, colName: string, value: unknown) => void;
   selectedRows?: Set<number>;
   onSelectionChange?: (indices: Set<number>) => void;
+  sortClause?: string;
+  onSort?: (colName: string) => void;
 }
 
 export const DataGrid = React.memo(({
@@ -42,6 +44,8 @@ export const DataGrid = React.memo(({
   onPendingChange,
   selectedRows: externalSelectedRows,
   onSelectionChange,
+  sortClause,
+  onSort,
 }: DataGridProps) => {
   const { t } = useTranslation();
 
@@ -216,7 +220,43 @@ export const DataGrid = React.memo(({
       columns.map((colName, index) =>
         columnHelper.accessor((row) => row[index], {
           id: colName,
-          header: () => colName,
+          header: () => {
+            let sortState: "none" | "asc" | "desc" = "none";
+            if (sortClause) {
+              const parts = sortClause.trim().split(/\s+/);
+              if (parts[0] === colName) {
+                const dir = parts[1]?.toUpperCase();
+                if (dir === "DESC") sortState = "desc";
+                else sortState = "asc";
+              }
+            }
+
+            return (
+              <div
+                className="flex items-center gap-2 cursor-pointer select-none group/header"
+                onClick={() => onSort && onSort(colName)}
+                title={
+                  sortState === "none"
+                    ? t("dataGrid.sortByAsc", { col: colName })
+                    : sortState === "asc"
+                      ? t("dataGrid.sortByDesc", { col: colName })
+                      : t("dataGrid.clearSort")
+                }
+              >
+                <span>{colName}</span>
+                <span className="flex flex-col items-center justify-center">
+                  {sortState === "asc" && <ArrowUp size={14} className="text-blue-400" />}
+                  {sortState === "desc" && <ArrowDown size={14} className="text-blue-400" />}
+                  {sortState === "none" && (
+                    <ArrowUpDown 
+                      size={14} 
+                      className="text-slate-600 opacity-50 group-hover/header:opacity-100 transition-opacity" 
+                    />
+                  )}
+                </span>
+              </div>
+            );
+          },
           cell: (info) => {
             const val = info.getValue();
 
@@ -232,7 +272,7 @@ export const DataGrid = React.memo(({
           },
         }),
       ),
-    [columns, columnHelper, t],
+    [columns, columnHelper, t, sortClause, onSort],
   );
 
   const parentRef = useRef<HTMLDivElement>(null);

@@ -452,6 +452,36 @@ export const Editor = () => {
     setTimeout(() => runQuery(undefined, 1), 0);
   }, [updateTab, runQuery]);
 
+  const handleSort = useCallback((colName: string) => {
+    if (!activeTabIdRef.current) return;
+    const currentTab = tabsRef.current.find(t => t.id === activeTabIdRef.current);
+    if (!currentTab) return;
+
+    const currentSort = currentTab.sortClause || "";
+    const parts = currentSort.trim().split(/\s+/);
+    
+    let newSort = "";
+    
+    // Check if we are currently sorting by this column
+    if (parts[0] === colName && parts.length <= 2) {
+        // Toggle logic
+        const currentDir = parts[1]?.toUpperCase();
+        
+        if (!currentDir || currentDir === 'ASC') {
+            // ASC -> DESC
+            newSort = `${colName} DESC`;
+        } else {
+             // DESC -> None (Clear)
+             newSort = "";
+        }
+    } else {
+        // New column -> ASC
+        newSort = `${colName} ASC`;
+    }
+    
+    handleToolbarUpdate(currentTab.filterClause || "", newSort, currentTab.limitClause);
+  }, [handleToolbarUpdate]);
+
   const handlePendingChange = useCallback((pkVal: unknown, colName: string, value: unknown) => {
     if (!activeTabIdRef.current) return;
     const tabId = activeTabIdRef.current;
@@ -1441,6 +1471,8 @@ export const Editor = () => {
                     onPendingChange={handlePendingChange}
                     selectedRows={new Set(activeTab.selectedRows || [])}
                     onSelectionChange={handleSelectionChange}
+                    sortClause={activeTab.sortClause}
+                    onSort={handleSort}
                   />
                 </div>
               </div>

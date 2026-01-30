@@ -188,7 +188,10 @@
     "deleteTitle": "Elimina riga",
     "updateFailed": "Aggiornamento fallito: ",
     "deleteFailed": "Eliminazione riga fallita: ",
-    "null": "null"
+    "null": "null",
+    "sortByAsc": "Ordina per {{col}} ASC",
+    "sortByDesc": "Ordina per {{col}} DESC",
+    "clearSort": "Rimuovi ordinamento"
   },
   "editRow": {
     "title": "Modifica riga",

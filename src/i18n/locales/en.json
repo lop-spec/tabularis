@@ -188,7 +188,10 @@
     "deleteTitle": "Delete Row",
     "updateFailed": "Update failed: ",
     "deleteFailed": "Failed to delete row: ",
-    "null": "null"
+    "null": "null",
+    "sortByAsc": "Sort by {{col}} ASC",
+    "sortByDesc": "Sort by {{col}} DESC",
+    "clearSort": "Clear sort"
   },
   "editRow": {
     "title": "Edit Row",
