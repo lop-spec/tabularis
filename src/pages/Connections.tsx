@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { NewConnectionModal } from '../components/ui/NewConnectionModal';
 import { invoke } from '@tauri-apps/api/core';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { Database, Plus, Power, Edit, Trash2, Shield, AlertCircle, Copy } from 'lucide-react';
+import { Database, Plus, Power, Edit, Trash2, Shield, AlertCircle, Copy, Loader2 } from 'lucide-react';
 import { useDatabase } from '../hooks/useDatabase';
 
 interface SavedConnection {
@@ -34,6 +34,7 @@ export const Connections = () => {
   const [editingConnection, setEditingConnection] = useState<SavedConnection | null>(null);
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
 
   const loadConnections = async () => {
     try {
@@ -59,12 +60,15 @@ export const Connections = () => {
 
   const handleConnect = async (conn: SavedConnection) => {
     setError(null);
+    setConnectingId(conn.id);
     try {
       await connect(conn.id);
       navigate('/editor');
     } catch (e) {
       console.error(e);
       setError(t('connections.failConnect', { name: conn.name }));
+    } finally {
+      setConnectingId(null);
     }
   };
 
@@ -141,10 +145,13 @@ export const Connections = () => {
                 onDoubleClick={() => handleConnect(conn)}
                 className={`
                   p-4 border rounded-lg transition-all cursor-pointer group relative
-                  ${isActive 
+                  ${connectingId === conn.id
+                    ? 'bg-blue-900/10 border-blue-400/30 animate-pulse'
+                    : isActive 
                     ? 'bg-blue-900/20 border-blue-500/50' 
                     : 'bg-slate-900 border-slate-800 hover:border-slate-600'
                   }
+                  ${connectingId === conn.id ? 'pointer-events-none' : ''}
                 `}
               >
                 <div className="flex items-start justify-between mb-2">
@@ -224,9 +231,19 @@ export const Connections = () => {
                    >
                        <Trash2 size={14} />
                    </button>
-                </div>
-              </div>
-            );
+                 </div>
+                 {connectingId === conn.id && (
+                   <div className="absolute inset-0 bg-slate-900/80 rounded-lg flex items-center justify-center">
+                     <div className="flex flex-col items-center gap-2">
+                       <Loader2 size={24} className="animate-spin text-blue-400" />
+                       <span className="text-sm text-blue-300 font-medium">
+                         {t('connections.connecting')}
+                       </span>
+                     </div>
+                   </div>
+                 )}
+               </div>
+             );
           })}
         </div>
       )}

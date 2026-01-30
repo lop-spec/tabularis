@@ -81,7 +81,8 @@
     "confirmDelete": "Sei sicuro di voler eliminare questa connessione?",
     "deleteTitle": "Conferma eliminazione",
     "failConnect": "Impossibile connettersi a {{name}}. Verifica le impostazioni o assicurati che il database sia in esecuzione.",
-    "failDuplicate": "Impossibile duplicare la connessione"
+    "failDuplicate": "Impossibile duplicare la connessione",
+    "connecting": "Connessione in corso..."
   },
   "settings": {
     "title": "Impostazioni",
