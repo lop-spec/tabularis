@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Save } from "lucide-react";
+import { X, Save, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface QueryParamsModalProps {
@@ -8,6 +8,7 @@ interface QueryParamsModalProps {
   onSubmit: (values: Record<string, string>) => void;
   parameters: string[];
   initialValues: Record<string, string>;
+  mode?: "run" | "save";
 }
 
 export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
@@ -16,6 +17,7 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
   onSubmit,
   parameters,
   initialValues,
+  mode = "save",
 }) => {
   const { t } = useTranslation();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -34,6 +36,10 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
     e.preventDefault();
     onSubmit(values);
   };
+
+  const isFormValid = parameters.every(
+    (param) => values[param] && values[param].trim().length > 0
+  );
 
   if (!isOpen) return null;
 
@@ -81,10 +87,15 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
+              disabled={!isFormValid}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save size={16} fill="currentColor" />
-              {t("common.save")}
+              {mode === "run" ? (
+                <Play size={16} fill="currentColor" />
+              ) : (
+                <Save size={16} fill="currentColor" />
+              )}
+              {mode === "run" ? t("editor.run") : t("common.save")}
             </button>
           </div>
         </form>

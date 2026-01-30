@@ -145,7 +145,8 @@ export const Editor = () => {
     parameters: string[];
     pendingPageNum: number;
     pendingTabId?: string;
-  }>({ isOpen: false, sql: "", parameters: [], pendingPageNum: 1 });
+    mode: "run" | "save";
+  }>({ isOpen: false, sql: "", parameters: [], pendingPageNum: 1, mode: "save" });
 
   const [showNewRowModal, setShowNewRowModal] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -295,7 +296,9 @@ export const Editor = () => {
       const params = extractQueryParams(textToRun);
       if (params.length > 0) {
           const storedParams = paramsOverride || targetTab.queryParams || {};
-          const missingParams = params.filter(p => storedParams[p] === undefined);
+          const missingParams = params.filter(p => 
+              storedParams[p] === undefined || storedParams[p].trim() === ""
+          );
           
           // If we have missing params
           if (missingParams.length > 0) {
@@ -304,7 +307,8 @@ export const Editor = () => {
                   sql: textToRun,
                   parameters: params,
                   pendingPageNum: pageNum,
-                  pendingTabId: targetTabId
+                  pendingTabId: targetTabId,
+                  mode: "run"
               });
               return;
           }
@@ -595,7 +599,7 @@ export const Editor = () => {
   }, [activeTab, activeConnectionId, updateActiveTab, runQuery, t]);
 
   const handleParamsSubmit = useCallback((values: Record<string, string>) => {
-    const { pendingTabId } = queryParamsModal;
+    const { pendingTabId, mode, sql, pendingPageNum } = queryParamsModal;
     if (!pendingTabId) return;
 
     // Update tab with new params (merge with existing)
@@ -606,7 +610,12 @@ export const Editor = () => {
     
     // Close modal
     setQueryParamsModal(prev => ({ ...prev, isOpen: false }));
-  }, [queryParamsModal, updateTab]);
+
+    // If mode was run, execute query immediately
+    if (mode === "run") {
+        runQuery(sql, pendingPageNum, pendingTabId, newParams);
+    }
+  }, [queryParamsModal, updateTab, runQuery]);
 
   const handleEditParams = useCallback(() => {
     if (!activeTab || !activeTab.query) return;
@@ -619,7 +628,8 @@ export const Editor = () => {
         sql: activeTab.query,
         parameters: params,
         pendingPageNum: 1,
-        pendingTabId: activeTab.id
+        pendingTabId: activeTab.id,
+        mode: "save"
     });
   }, [activeTab]);
 
@@ -1494,6 +1504,7 @@ export const Editor = () => {
         initialValues={
              tabsRef.current.find(t => t.id === queryParamsModal.pendingTabId)?.queryParams || {}
         }
+        mode={queryParamsModal.mode}
       />
     </div>
   );
