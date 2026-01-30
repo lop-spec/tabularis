@@ -220,14 +220,7 @@ export const Editor = () => {
         const pkVal = String(row[pkIndex]);
         return (pendingChanges && pendingChanges[pkVal]) || (pendingDeletions && pendingDeletions[pkVal]);
     });
-  }, [
-    // Specific dependencies instead of entire activeTab object
-    activeTab?.pendingChanges,
-    activeTab?.pendingDeletions,
-    activeTab?.selectedRows,
-    activeTab?.result,
-    activeTab?.pkColumn
-  ]);
+  }, [activeTab]);
 
   const hasPendingChanges = useMemo(() => {
     return (activeTab?.pendingChanges && Object.keys(activeTab.pendingChanges).length > 0) || 
@@ -271,25 +264,38 @@ export const Editor = () => {
   }, [activeConnectionId, updateActiveTab]);
 
   const runQuery = useCallback(
-    async (sql?: string, pageNum: number = 1, tabId?: string, paramsOverride?: Record<string, string>) => {
+    async (
+      sql?: string,
+      pageNum: number = 1,
+      tabId?: string,
+      paramsOverride?: Record<string, string>,
+      filterOverride?: string,
+      sortOverride?: string,
+      limitOverride?: number
+    ) => {
       const targetTabId = tabId || activeTabIdRef.current;
       if (!activeConnectionId || !targetTabId) return;
 
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
-      
+
       let textToRun = sql?.trim() || targetTab?.query;
-      
+
       // For Table Tabs, reconstruct query if filter/sort are present
       if (targetTab?.type === "table" && targetTab.activeTable) {
-          const filter = targetTab.filterClause ? `WHERE ${targetTab.filterClause}` : "";
-          const sort = targetTab.sortClause ? `ORDER BY ${targetTab.sortClause}` : "";
-          
+          // Use overrides if provided, otherwise use tab values
+          const filterClause = filterOverride !== undefined ? filterOverride : targetTab.filterClause;
+          const sortClause = sortOverride !== undefined ? sortOverride : targetTab.sortClause;
+          const limitClause = limitOverride !== undefined ? limitOverride : targetTab.limitClause;
+
+          const filter = filterClause ? `WHERE ${filterClause}` : "";
+          const sort = sortClause ? `ORDER BY ${sortClause}` : "";
+
           const baseQuery = `SELECT * FROM ${targetTab.activeTable} ${filter} ${sort}`;
-          
-          if (targetTab.limitClause && targetTab.limitClause > 0) {
+
+          if (limitClause && limitClause > 0) {
               // Wrap in subquery to apply "Total Limit" while allowing pagination (Page Size) via backend
-              textToRun = `SELECT * FROM (${baseQuery} LIMIT ${targetTab.limitClause}) AS limited_subset`;
+              textToRun = `SELECT * FROM (${baseQuery} LIMIT ${limitClause}) AS limited_subset`;
           } else {
               textToRun = baseQuery;
           }
@@ -357,16 +363,16 @@ export const Editor = () => {
           page: pageNum,
         });
         const end = performance.now();
-        
+
         // Fetch PK column if this is a table tab OR if the query references a table
         const currentTab = tabsRef.current.find((t) => t.id === targetTabId);
         let tableName = currentTab?.activeTable;
-        
+
         // If not a table tab, try to extract table name from the query
         if (!tableName && textToRun) {
           tableName = extractTableName(textToRun) || undefined;
         }
-        
+
         if (tableName) {
           // Wait for PK column to be fetched before showing results
           await fetchPkColumn(tableName, targetTabId);
@@ -374,7 +380,7 @@ export const Editor = () => {
           // No table, explicitly set pkColumn to null (read-only mode)
           updateTab(targetTabId, { pkColumn: null });
         }
-        
+
         updateTab(targetTabId, {
           result: res,
           executionTime: end - start,
@@ -439,34 +445,30 @@ export const Editor = () => {
 
   const handleToolbarUpdate = useCallback((filter: string, sort: string, limit: number | undefined) => {
     if (!activeTabIdRef.current) return;
-    
+
     updateTab(activeTabIdRef.current, {
         filterClause: filter,
         sortClause: sort,
         limitClause: limit
     });
-    
-    // Small delay to ensure state update propagates before runQuery reads it
-    // We pass the new values directly to runQuery could be cleaner, but current runQuery reads from tabsRef
-    // Since tabsRef is updated in useEffect, setTimeout 0 helps
-    setTimeout(() => runQuery(undefined, 1), 0);
+
+    // Pass values directly to runQuery to avoid race conditions with ref updates
+    runQuery(undefined, 1, undefined, undefined, filter, sort, limit);
   }, [updateTab, runQuery]);
 
   const handleSort = useCallback((colName: string) => {
-    if (!activeTabIdRef.current) return;
-    const currentTab = tabsRef.current.find(t => t.id === activeTabIdRef.current);
-    if (!currentTab) return;
+    if (!activeTab) return;
 
-    const currentSort = currentTab.sortClause || "";
+    const currentSort = activeTab.sortClause || "";
     const parts = currentSort.trim().split(/\s+/);
-    
+
     let newSort = "";
-    
+
     // Check if we are currently sorting by this column
     if (parts[0] === colName && parts.length <= 2) {
         // Toggle logic
         const currentDir = parts[1]?.toUpperCase();
-        
+
         if (!currentDir || currentDir === 'ASC') {
             // ASC -> DESC
             newSort = `${colName} DESC`;
@@ -478,9 +480,9 @@ export const Editor = () => {
         // New column -> ASC
         newSort = `${colName} ASC`;
     }
-    
-    handleToolbarUpdate(currentTab.filterClause || "", newSort, currentTab.limitClause);
-  }, [handleToolbarUpdate]);
+
+    handleToolbarUpdate(activeTab.filterClause || "", newSort, activeTab.limitClause);
+  }, [activeTab, handleToolbarUpdate]);
 
   const handlePendingChange = useCallback((pkVal: unknown, colName: string, value: unknown) => {
     if (!activeTabIdRef.current) return;
@@ -630,7 +632,7 @@ export const Editor = () => {
              
              // Cleanup empty change objects
              Object.keys(newPendingChanges).forEach(key => {
-                 // @ts-ignore
+                 // @ts-expect-error - Dynamic key access in cleanup logic
                  if (Object.keys(newPendingChanges[key]?.changes || {}).length === 0) delete newPendingChanges[key];
              });
 
@@ -1459,7 +1461,7 @@ export const Editor = () => {
 
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <DataGrid
-                    key={`${activeTab.id}-${activeTab.result.rows.length}-${JSON.stringify(activeTab.result.rows[0])}`}
+                    key={`${activeTab.id}-${activeTab.sortClause || 'none'}-${activeTab.filterClause || 'none'}-${activeTab.result.rows.length}`}
                     columns={activeTab.result.columns}
                     data={activeTab.result.rows}
                     tableName={activeTab.activeTable}
@@ -1472,7 +1474,7 @@ export const Editor = () => {
                     selectedRows={new Set(activeTab.selectedRows || [])}
                     onSelectionChange={handleSelectionChange}
                     sortClause={activeTab.sortClause}
-                    onSort={handleSort}
+                    onSort={activeTab.type === 'table' ? handleSort : undefined}
                   />
                 </div>
               </div>

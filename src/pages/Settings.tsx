@@ -147,11 +147,11 @@ export const Settings = () => {
   useEffect(() => {
     // eslint-disable-next-line
     checkKeys();
-    // eslint-disable-next-line
+     
     loadSystemPrompt();
-    // eslint-disable-next-line
+     
     loadExplainPrompt();
-    // eslint-disable-next-line
+     
     loadModels();
   }, []);
 

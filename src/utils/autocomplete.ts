@@ -56,7 +56,7 @@ const getTableColumns = async (connectionId: string, tableName: string) => {
   }
 
   try {
-    const cols = await invoke<any[]>("get_columns", {
+    const cols = await invoke<Array<{ name: string; data_type: string }>>("get_columns", {
       connectionId,
       tableName,
     });
@@ -124,7 +124,7 @@ const parseTablesFromQuery = (sql: string): Map<string, string> | null => {
 };
 
 // Optimized statement extractor - avoid full text scan when possible
-const getCurrentStatement = (model: any, position: any): string => {
+const getCurrentStatement = (model: { getValue: () => string; getOffsetAt: (position: { lineNumber: number; column: number }) => number }, position: { lineNumber: number; column: number }): string => {
   const fullText = model.getValue();
   
   // For small files, just return full text
@@ -166,7 +166,7 @@ export const registerSqlAutocomplete = (
 ) => {
   const provider = monaco.languages.registerCompletionItemProvider("sql", {
     triggerCharacters: [".", " ", "\n"],
-    provideCompletionItems: async (model: any, position: any) => {
+    provideCompletionItems: async (model: { getWordUntilPosition: (position: { lineNumber: number; column: number }) => { startColumn: number; endColumn: number }; getValueInRange: (range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }) => string; getValue: () => string; getOffsetAt: (position: { lineNumber: number; column: number }) => number }, position: { lineNumber: number; column: number }) => {
       if (!connectionId) return { suggestions: [] };
 
       const wordUntil = model.getWordUntilPosition(position);
@@ -235,7 +235,14 @@ export const registerSqlAutocomplete = (
       // ============================================
       // 2. CONTEXT-AWARE COLUMN SUGGESTIONS
       // ============================================
-      let contextColumnSuggestions: any[] = [];
+      const contextColumnSuggestions: Array<{
+        label: string;
+        kind: number;
+        detail: string;
+        insertText: string;
+        range: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number };
+        sortText: string;
+      }> = [];
       
       if (tableAliases && tableAliases.size > 0) {
         // User is inside a query with FROM/JOIN - suggest columns from those tables
@@ -288,7 +295,13 @@ export const registerSqlAutocomplete = (
       // ============================================
       // 3. KEYWORD SUGGESTIONS (only if no context columns)
       // ============================================
-      let keywordSuggestions: any[] = [];
+      let keywordSuggestions: Array<{
+        label: string;
+        kind: number;
+        insertText: string;
+        range: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number };
+        sortText: string;
+      }> = [];
       if (contextColumnSuggestions.length === 0) {
         keywordSuggestions = SQL_KEYWORDS.map((kw) => ({
           label: kw,

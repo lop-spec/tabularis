@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import MonacoEditor, { type OnMount } from "@monaco-editor/react";
 
 interface SqlEditorWrapperProps {
@@ -10,23 +10,18 @@ interface SqlEditorWrapperProps {
   options?: React.ComponentProps<typeof MonacoEditor>['options'];
 }
 
-export const SqlEditorWrapper: React.FC<SqlEditorWrapperProps> = React.memo(
-  ({ initialValue, onChange, onRun, onMount, height = "100%", options }) => {
-    const [localValue, setLocalValue] = useState(initialValue);
-    const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
-
-    useEffect(() => {
-      // Only update if the prop value is significantly different from local state
-      // (e.g. when switching tabs or loading a saved query)
-      // We don't want to overwrite local state while user is typing if the prop update is delayed
-      if (initialValue !== localValue) {
-          // Simple check to avoid loop, but ideally we trust the parent to only send stable initialValue
-          setLocalValue(initialValue);
-      }
-    }, [initialValue]); 
-    // ^ Warning: this might still cause cursor jumps if parent updates 'initialValue' while typing.
-    // Ideally parent should only change 'initialValue' when switching context (tabs).
+// Internal component that resets when key changes
+const SqlEditorInternal: React.FC<SqlEditorWrapperProps & { editorKey: string }> = ({
+  initialValue,
+  onChange,
+  onRun,
+  onMount,
+  height = "100%",
+  options
+}) => {
+  const [localValue, setLocalValue] = useState(initialValue);
+  const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
     const handleChange = useCallback(
       (val: string | undefined) => {
@@ -76,5 +71,9 @@ export const SqlEditorWrapper: React.FC<SqlEditorWrapperProps> = React.memo(
         }}
       />
     );
-  }
-);
+};
+
+export const SqlEditorWrapper: React.FC<SqlEditorWrapperProps> = React.memo((props) => {
+  // Use initialValue as key to reset component state when it changes
+  return <SqlEditorInternal key={props.initialValue} editorKey={props.initialValue} {...props} />;
+});

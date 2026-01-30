@@ -252,7 +252,8 @@
     "exporting": "Exporting...",
     "rowsProcessed": "Rows Processed",
     "queryParameters": "Query Parameters",
-    "parameters": "Parameters"
+    "parameters": "Parameters",
+    "paramValuePlaceholder": "Value (e.g. 'text' or 123)"
   },
   "createTable": {
     "title": "Create New Table",

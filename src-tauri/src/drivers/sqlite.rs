@@ -267,6 +267,27 @@ pub async fn insert_record(
     Ok(result.rows_affected())
 }
 
+/// Extracts ORDER BY clause from a SQL query (case-insensitive)
+fn extract_order_by(query: &str) -> String {
+    let query_upper = query.to_uppercase();
+    if let Some(pos) = query_upper.rfind("ORDER BY") {
+        // Return the ORDER BY clause from the original query (preserving case)
+        query[pos..].trim().to_string()
+    } else {
+        String::new()
+    }
+}
+
+/// Removes ORDER BY clause from a SQL query
+fn remove_order_by(query: &str) -> String {
+    let query_upper = query.to_uppercase();
+    if let Some(pos) = query_upper.rfind("ORDER BY") {
+        query[..pos].trim().to_string()
+    } else {
+        query.to_string()
+    }
+}
+
 pub async fn execute_query(
     params: &ConnectionParams,
     query: &str,
@@ -300,7 +321,20 @@ pub async fn execute_query(
             total_rows,
         });
 
-        final_query = format!("SELECT * FROM ({}) LIMIT {} OFFSET {}", query, l, offset);
+        // Extract ORDER BY clause from the original query to preserve sorting
+        let order_by_clause = extract_order_by(query);
+
+        if !order_by_clause.is_empty() {
+            // Remove ORDER BY from inner query and add it to outer query
+            let query_without_order = remove_order_by(query);
+            final_query = format!(
+                "SELECT * FROM ({}) {} LIMIT {} OFFSET {}",
+                query_without_order, order_by_clause, l, offset
+            );
+        } else {
+            final_query = format!("SELECT * FROM ({}) LIMIT {} OFFSET {}", query, l, offset);
+        }
+
         manual_limit = None;
     } else {
         final_query = query.to_string();

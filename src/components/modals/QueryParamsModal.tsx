@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { X, Save, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -19,14 +19,30 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
   initialValues,
   mode = "save",
 }) => {
-  const { t } = useTranslation();
-  const [values, setValues] = useState<Record<string, string>>({});
+  if (!isOpen) return null;
 
-  useEffect(() => {
-    if (isOpen) {
-      setValues(initialValues || {});
-    }
-  }, [isOpen, initialValues]);
+  return (
+    <div key={isOpen ? 'open' : 'closed'} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <QueryParamsForm
+        parameters={parameters}
+        initialValues={initialValues}
+        onSubmit={onSubmit}
+        onClose={onClose}
+        mode={mode}
+      />
+    </div>
+  );
+};
+
+const QueryParamsForm: React.FC<{
+  parameters: string[];
+  initialValues: Record<string, string>;
+  onSubmit: (values: Record<string, string>) => void;
+  onClose: () => void;
+  mode: "run" | "save";
+}> = ({ parameters, initialValues, onSubmit, onClose, mode }) => {
+  const { t } = useTranslation();
+  const [values, setValues] = useState<Record<string, string>>(initialValues || {});
 
   const handleChange = (param: string, value: string) => {
     setValues((prev) => ({ ...prev, [param]: value }));
@@ -41,11 +57,8 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
     (param) => values[param] && values[param].trim().length > 0
   );
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-xl w-[500px] flex flex-col max-h-[80vh]">
+    <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-xl w-[500px] flex flex-col max-h-[80vh]">
         <div className="flex items-center justify-between p-4 border-b border-slate-800">
           <h2 className="text-lg font-semibold text-white">
             {t("editor.queryParameters")}
@@ -69,7 +82,7 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
                   type="text"
                   value={values[param] || ""}
                   onChange={(e) => handleChange(param, e.target.value)}
-                  placeholder="Value (e.g. 'text' or 123)"
+                  placeholder={t("editor.paramValuePlaceholder")}
                   className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
                   autoFocus={parameters[0] === param}
                 />
@@ -100,6 +113,5 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
   );
 };

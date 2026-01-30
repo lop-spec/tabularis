@@ -74,13 +74,13 @@ export const DataGrid = React.memo(({
 
   const selectedRowIndices = externalSelectedRows || internalSelectedRowIndices;
 
-  const updateSelection = (newSelection: Set<number>) => {
+  const updateSelection = useCallback((newSelection: Set<number>) => {
     if (onSelectionChange) {
       onSelectionChange(newSelection);
     } else {
       setInternalSelectedRowIndices(newSelection);
     }
-  };
+  }, [onSelectionChange]);
 
   // Pre-calculate pkIndex once for O(1) lookup instead of O(n) in render loop
   const pkIndexMap = useMemo(() => {
@@ -130,7 +130,7 @@ export const DataGrid = React.memo(({
       const allIndices = new Set(data.map((_, i) => i));
       updateSelection(allIndices);
     }
-  }, [selectedRowIndices.size, data.length, updateSelection]);
+  }, [selectedRowIndices.size, data, updateSelection]);
 
   useEffect(() => {
     if (editingCell && editInputRef.current) {
@@ -233,27 +233,31 @@ export const DataGrid = React.memo(({
 
             return (
               <div
-                className="flex items-center gap-2 cursor-pointer select-none group/header"
+                className={`flex items-center gap-2 select-none group/header ${onSort ? 'cursor-pointer' : ''}`}
                 onClick={() => onSort && onSort(colName)}
                 title={
-                  sortState === "none"
-                    ? t("dataGrid.sortByAsc", { col: colName })
-                    : sortState === "asc"
-                      ? t("dataGrid.sortByDesc", { col: colName })
-                      : t("dataGrid.clearSort")
+                  onSort ? (
+                    sortState === "none"
+                      ? t("dataGrid.sortByAsc", { col: colName })
+                      : sortState === "asc"
+                        ? t("dataGrid.sortByDesc", { col: colName })
+                        : t("dataGrid.clearSort")
+                  ) : undefined
                 }
               >
                 <span>{colName}</span>
-                <span className="flex flex-col items-center justify-center">
-                  {sortState === "asc" && <ArrowUp size={14} className="text-blue-400" />}
-                  {sortState === "desc" && <ArrowDown size={14} className="text-blue-400" />}
-                  {sortState === "none" && (
-                    <ArrowUpDown 
-                      size={14} 
-                      className="text-slate-600 opacity-50 group-hover/header:opacity-100 transition-opacity" 
-                    />
-                  )}
-                </span>
+                {onSort && (
+                  <span className="flex flex-col items-center justify-center">
+                    {sortState === "asc" && <ArrowUp size={14} className="text-blue-400" />}
+                    {sortState === "desc" && <ArrowDown size={14} className="text-blue-400" />}
+                    {sortState === "none" && (
+                      <ArrowUpDown
+                        size={14}
+                        className="text-slate-600 opacity-50 group-hover/header:opacity-100 transition-opacity"
+                      />
+                    )}
+                  </span>
+                )}
               </div>
             );
           },

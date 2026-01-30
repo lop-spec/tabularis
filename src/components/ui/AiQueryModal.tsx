@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { X, Sparkles, Loader2 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useDatabase } from "../../hooks/useDatabase";
@@ -25,13 +25,7 @@ export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) =
   const [schemaContext, setSchemaContext] = useState<string>("");
   const [isSchemaLoading, setIsSchemaLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && activeConnectionId && tables.length > 0) {
-      loadSchema();
-    }
-  }, [isOpen, activeConnectionId, tables]);
-
-  const loadSchema = async () => {
+  const loadSchema = useCallback(async () => {
     setIsSchemaLoading(true);
     setError(null);
     try {
@@ -62,7 +56,13 @@ export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) =
     } finally {
       setIsSchemaLoading(false);
     }
-  };
+  }, [activeConnectionId, tables]);
+
+  useEffect(() => {
+    if (isOpen && activeConnectionId && tables.length > 0) {
+      loadSchema();
+    }
+  }, [isOpen, activeConnectionId, tables, loadSchema]);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !settings.aiProvider) {

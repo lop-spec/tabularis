@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Filter, ArrowUpDown, ListFilter } from "lucide-react";
 
 interface TableToolbarProps {
@@ -11,7 +11,8 @@ interface TableToolbarProps {
   onUpdate: (filter: string, sort: string, limit: number | undefined) => void;
 }
 
-export const TableToolbar = ({
+// Internal component that resets when key changes
+const TableToolbarInternal: React.FC<TableToolbarProps> = ({
   initialFilter,
   initialSort,
   initialLimit,
@@ -19,20 +20,13 @@ export const TableToolbar = ({
   placeholderSort,
   defaultLimit,
   onUpdate,
-}: TableToolbarProps) => {
+}) => {
   // Local state to isolate typing from parent re-renders
   const [filterInput, setFilterInput] = useState(initialFilter || "");
   const [sortInput, setSortInput] = useState(initialSort || "");
   const [limitInput, setLimitInput] = useState(
     initialLimit && initialLimit > 0 ? String(initialLimit) : ""
   );
-
-  // Sync with props if they change externally (e.g. tab switch)
-  useEffect(() => {
-    setFilterInput(initialFilter || "");
-    setSortInput(initialSort || "");
-    setLimitInput(initialLimit && initialLimit > 0 ? String(initialLimit) : "");
-  }, [initialFilter, initialSort, initialLimit]);
 
   const commitChanges = () => {
     const limitVal = limitInput ? parseInt(limitInput) : undefined;
@@ -97,4 +91,10 @@ export const TableToolbar = ({
       </div>
     </div>
   );
+};
+
+export const TableToolbar: React.FC<TableToolbarProps> = (props) => {
+  // Use a stable key based on initial values to reset component when they change
+  const stateKey = `${props.initialFilter}-${props.initialSort}-${props.initialLimit}`;
+  return <TableToolbarInternal key={stateKey} {...props} />;
 };

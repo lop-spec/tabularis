@@ -252,7 +252,8 @@
     "exporting": "Esportazione in corso...",
     "rowsProcessed": "Righe processate",
     "queryParameters": "Parametri Query",
-    "parameters": "Parametri"
+    "parameters": "Parametri",
+    "paramValuePlaceholder": "Valore (es. 'testo' o 123)"
   },
   "createTable": {
     "title": "Crea Nuova Tabella",

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 
 interface ContextMenuItem {
   label: string;
@@ -16,40 +16,48 @@ interface ContextMenuProps {
 
 export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ top: y, left: x });
+  const [menuSize, setMenuSize] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     if (menuRef.current) {
       const menuRect = menuRef.current.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      let adjustedX = x;
-      let adjustedY = y;
-
-      // Adjust horizontal position if menu overflows right edge
-      if (x + menuRect.width > viewportWidth) {
-        adjustedX = viewportWidth - menuRect.width - 10; // 10px margin
-      }
-
-      // Adjust vertical position if menu overflows bottom edge
-      if (y + menuRect.height > viewportHeight) {
-        adjustedY = viewportHeight - menuRect.height - 10; // 10px margin
-      }
-
-      // Ensure menu doesn't go off the left edge
-      if (adjustedX < 10) {
-        adjustedX = 10;
-      }
-
-      // Ensure menu doesn't go off the top edge
-      if (adjustedY < 10) {
-        adjustedY = 10;
-      }
-
-      setPosition({ top: adjustedY, left: adjustedX });
+      setMenuSize({ width: menuRect.width, height: menuRect.height });
     }
-  }, [x, y]);
+  }, []);
+
+  const position = useMemo(() => {
+    if (!menuSize) {
+      return { top: y, left: x };
+    }
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let adjustedX = x;
+    let adjustedY = y;
+
+    // Adjust horizontal position if menu overflows right edge
+    if (x + menuSize.width > viewportWidth) {
+      adjustedX = viewportWidth - menuSize.width - 10; // 10px margin
+    }
+
+    // Adjust vertical position if menu overflows bottom edge
+    if (y + menuSize.height > viewportHeight) {
+      adjustedY = viewportHeight - menuSize.height - 10; // 10px margin
+    }
+
+    // Ensure menu doesn't go off the left edge
+    if (adjustedX < 10) {
+      adjustedX = 10;
+    }
+
+    // Ensure menu doesn't go off the top edge
+    if (adjustedY < 10) {
+      adjustedY = 10;
+    }
+
+    return { top: adjustedY, left: adjustedX };
+  }, [x, y, menuSize]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
