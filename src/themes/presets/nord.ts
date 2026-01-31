@@ -91,6 +91,7 @@ export const nord: Theme = {
   monacoTheme: {
     base: 'vs-dark',
     inherit: true,
+    themeName: 'Nord',
     rules: [
       { token: 'comment', foreground: '616E88', fontStyle: 'italic' },
       { token: 'keyword', foreground: '81A1C1' },

@@ -90,6 +90,7 @@ export const highContrast: Theme = {
   monacoTheme: {
     base: 'hc-black',
     inherit: true,
+    themeName: 'Night Owl',
     rules: [
       { token: 'comment', foreground: 'FFFFFF' },
       { token: 'keyword', foreground: 'FFFF00' },

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Loader2, BookOpen } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../../hooks/useSettings";
+import { useTheme } from "../../hooks/useTheme";
 import MonacoEditor from "@monaco-editor/react";
 
 interface AiExplainModalProps {
@@ -12,6 +13,7 @@ interface AiExplainModalProps {
 
 export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) => {
   const { settings } = useSettings();
+  const { currentTheme } = useTheme();
   const [explanation, setExplanation] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) 
                 <MonacoEditor
                     height="100%"
                     language="sql"
-                    theme="vs-dark"
+                    theme={currentTheme.id}
                     value={query}
                     options={{
                         readOnly: true,

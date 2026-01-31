@@ -91,6 +91,7 @@ export const oneDarkPro: Theme = {
   monacoTheme: {
     base: 'vs-dark',
     inherit: true,
+    themeName: 'One Dark Pro',
     rules: [
       { token: 'comment', foreground: '5C6370', fontStyle: 'italic' },
       { token: 'keyword', foreground: 'C678DD' },

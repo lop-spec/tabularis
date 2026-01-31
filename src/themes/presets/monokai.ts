@@ -91,6 +91,7 @@ export const monokai: Theme = {
   monacoTheme: {
     base: 'vs-dark',
     inherit: true,
+    themeName: 'Monokai',
     rules: [
       { token: 'comment', foreground: '75715E' },
       { token: 'keyword', foreground: 'F92672' },

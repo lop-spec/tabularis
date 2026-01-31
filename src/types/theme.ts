@@ -8,6 +8,8 @@ export interface MonacoThemeDefinition {
     fontStyle?: string;
   }>;
   colors: Record<string, string>;
+  /** Optional: Name of the monaco-themes theme to use */
+  themeName?: string;
 }
 
 export interface ThemeColors {

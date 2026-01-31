@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { invoke } from '@tauri-apps/api/core';
 import { ThemeContext } from './ThemeContext';
 import { themeRegistry } from '../themes/themeRegistry';
-import { applyThemeToCSS, generateMonacoTheme } from '../themes/themeUtils';
+import { applyThemeToCSS } from '../themes/themeUtils';
 import type { Theme, ThemeSettings } from '../types/theme';
 
 const THEME_SETTINGS_KEY = 'tabularis_theme_settings';
@@ -66,9 +66,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (currentTheme) {
       applyThemeToCSS(currentTheme);
-      
-      // Monaco Editor uses fixed vs-dark theme for now
-      // Theme integration can be re-enabled here in the future
     }
   }, [currentTheme]);
 
@@ -218,8 +215,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     // This is handled separately in a dedicated effect
   }, []);
 
-  const getMonacoThemeJson = useCallback(() => {
-    return generateMonacoTheme(currentTheme);
+  const getMonacoThemeJson = useCallback(async () => {
+    // This method is deprecated - Monaco themes are loaded automatically
+    // Kept for backwards compatibility
+    const monaco = await import('monaco-editor');
+    const themeName = currentTheme.monacoTheme.themeName || 'vs-dark';
+    return monaco.editor.getTheme(themeName);
   }, [currentTheme]);
 
   const value = useMemo(() => ({

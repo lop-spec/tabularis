@@ -1,5 +1,7 @@
 import React, { useRef, useCallback, useEffect } from "react";
-import MonacoEditor, { type OnMount } from "@monaco-editor/react";
+import MonacoEditor, { type OnMount, type BeforeMount } from "@monaco-editor/react";
+import { useTheme } from "../../hooks/useTheme";
+import { loadMonacoTheme } from "../../themes/themeUtils";
 
 interface SqlEditorWrapperProps {
   initialValue: string;
@@ -22,6 +24,7 @@ const SqlEditorInternal: React.FC<SqlEditorWrapperProps & { editorKey: string }>
 }) => {
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const { currentTheme } = useTheme();
 
   // Sync editor value only when initialValue changes externally (e.g., tab switch)
   useEffect(() => {
@@ -29,6 +32,13 @@ const SqlEditorInternal: React.FC<SqlEditorWrapperProps & { editorKey: string }>
       editorRef.current.setValue(initialValue);
     }
   }, [initialValue]);
+
+  // Update Monaco theme when theme changes
+  useEffect(() => {
+    if (editorRef.current) {
+      loadMonacoTheme(currentTheme);
+    }
+  }, [currentTheme]);
 
     const handleChange = useCallback(
       (val: string | undefined) => {
@@ -44,6 +54,11 @@ const SqlEditorInternal: React.FC<SqlEditorWrapperProps & { editorKey: string }>
       },
       [onChange]
     );
+
+    const handleBeforeMount: BeforeMount = (monaco) => {
+      // Load Monaco theme before editor is created
+      loadMonacoTheme(currentTheme, monaco);
+    };
 
     const handleEditorMount: OnMount = (editor, monaco) => {
       editorRef.current = editor;
@@ -63,9 +78,10 @@ const SqlEditorInternal: React.FC<SqlEditorWrapperProps & { editorKey: string }>
       <MonacoEditor
         height={height}
         defaultLanguage="sql"
-        theme="vs-dark"
+        theme={currentTheme.id}
         defaultValue={initialValue}
         onChange={handleChange}
+        beforeMount={handleBeforeMount}
         onMount={handleEditorMount}
         options={{
           minimap: { enabled: false },

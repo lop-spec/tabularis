@@ -7,6 +7,8 @@ pub struct MonacoThemeDefinition {
     pub inherit: bool,
     pub rules: Vec<MonacoThemeRule>,
     pub colors: HashMap<String, String>,
+    #[serde(rename = "themeName", skip_serializing_if = "Option::is_none")]
+    pub theme_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

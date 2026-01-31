@@ -91,6 +91,7 @@ export const dracula: Theme = {
   monacoTheme: {
     base: 'vs-dark',
     inherit: true,
+    themeName: 'Dracula',
     rules: [
       { token: 'comment', foreground: '6272A4' },
       { token: 'keyword', foreground: 'FF79C6' },

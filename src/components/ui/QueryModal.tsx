@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import MonacoEditor from '@monaco-editor/react';
+import { useTheme } from '../../hooks/useTheme';
 
 interface QueryModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
   const [sql, setSql] = useState(initialSql);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const { currentTheme } = useTheme();
 
   useEffect(() => {
     if (isOpen) {
@@ -78,7 +80,7 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
                 <MonacoEditor
                     height="100%"
                     defaultLanguage="sql"
-                    theme="vs-dark"
+                    theme={currentTheme.id}
                     value={sql}
                     onChange={(val) => setSql(val || '')}
                     options={{

@@ -91,6 +91,7 @@ export const solarizedLight: Theme = {
   monacoTheme: {
     base: 'vs',
     inherit: true,
+    themeName: 'Solarized-light',
     rules: [
       { token: 'comment', foreground: '93A1A1', fontStyle: 'italic' },
       { token: 'keyword', foreground: '859900' },

@@ -90,6 +90,7 @@ export const tabularisLight: Theme = {
   monacoTheme: {
     base: 'vs',
     inherit: true,
+    themeName: 'GitHub Light',
     rules: [
       { token: 'comment', foreground: '6B7280', fontStyle: 'italic' },
       { token: 'keyword', foreground: '9333EA' },

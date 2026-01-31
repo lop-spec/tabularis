@@ -91,6 +91,7 @@ export const solarizedDark: Theme = {
   monacoTheme: {
     base: 'vs-dark',
     inherit: true,
+    themeName: 'Solarized-dark',
     rules: [
       { token: 'comment', foreground: '586E75', fontStyle: 'italic' },
       { token: 'keyword', foreground: '859900' },
