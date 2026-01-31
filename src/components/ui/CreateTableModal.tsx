@@ -158,19 +158,19 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-slate-900 rounded-xl shadow-2xl w-[900px] border border-slate-700 flex flex-col max-h-[90vh]">
+      <div className="bg-elevated rounded-xl shadow-2xl w-[900px] border border-strong flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50 rounded-t-xl">
+        <div className="flex items-center justify-between p-4 border-b border-default bg-surface-secondary/50 rounded-t-xl">
           <div className="flex items-center gap-3">
              <div className="bg-blue-600/20 p-2 rounded-lg border border-blue-600/30">
                 <Plus className="text-blue-400" size={20} />
              </div>
              <div>
                 <h2 className="text-lg font-bold text-white">{t('createTable.title')}</h2>
-                <p className="text-xs text-slate-400 font-mono">{currentDriver.toUpperCase()}</p>
+                <p className="text-xs text-secondary font-mono">{currentDriver.toUpperCase()}</p>
              </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-secondary hover:text-white transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -180,51 +180,51 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
             
             {/* Table Name */}
             <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wider">{t('createTable.tableName')}</label>
+                <label className="block text-xs font-semibold text-secondary mb-1 uppercase tracking-wider">{t('createTable.tableName')}</label>
                 <input 
                     value={tableName}
                     onChange={(e) => setTableName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all font-mono"
+                    className="w-full bg-base border border-strong rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all font-mono"
                     placeholder={t('createTable.tableNamePlaceholder')}
                     autoFocus
                 />
             </div>
 
             {/* Columns Grid */}
-            <div className="flex-1 flex flex-col min-h-0 border border-slate-700 rounded-lg bg-slate-950/50 overflow-hidden">
-                <div className="bg-slate-900/80 p-2 border-b border-slate-700 flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-slate-300">{t('createTable.columns')}</h3>
-                    <button onClick={handleAddColumn} className="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-2 py-1 rounded flex items-center gap-1 transition-colors">
+            <div className="flex-1 flex flex-col min-h-0 border border-strong rounded-lg bg-base/50 overflow-hidden">
+                <div className="bg-elevated/80 p-2 border-b border-strong flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-secondary">{t('createTable.columns')}</h3>
+                    <button onClick={handleAddColumn} className="text-xs bg-surface-secondary hover:bg-surface-tertiary border border-strong text-white px-2 py-1 rounded flex items-center gap-1 transition-colors">
                         <Plus size={12} /> {t('createTable.addColumn')}
                     </button>
                 </div>
                 
                 <div className="overflow-auto flex-1">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-900/50 sticky top-0 z-10">
+                        <thead className="bg-elevated/50 sticky top-0 z-10">
                             <tr>
-                                <th className="p-2 text-[10px] uppercase text-slate-500 font-semibold w-8"></th>
-                                <th className="p-2 text-[10px] uppercase text-slate-500 font-semibold">{t('createTable.colName')}</th>
-                                <th className="p-2 text-[10px] uppercase text-slate-500 font-semibold w-32">{t('createTable.colType')}</th>
-                                <th className="p-2 text-[10px] uppercase text-slate-500 font-semibold w-20">{t('createTable.colLen')}</th>
-                                <th className="p-2 text-[10px] uppercase text-slate-500 font-semibold w-10 text-center" title="Primary Key">{t('createTable.colPk')}</th>
-                                <th className="p-2 text-[10px] uppercase text-slate-500 font-semibold w-10 text-center" title="Not Null">{t('createTable.colNn')}</th>
-                                <th className="p-2 text-[10px] uppercase text-slate-500 font-semibold w-10 text-center" title="Auto Increment">{t('createTable.colAi')}</th>
-                                <th className="p-2 text-[10px] uppercase text-slate-500 font-semibold w-32">{t('createTable.colDefault')}</th>
+                                <th className="p-2 text-[10px] uppercase text-muted font-semibold w-8"></th>
+                                <th className="p-2 text-[10px] uppercase text-muted font-semibold">{t('createTable.colName')}</th>
+                                <th className="p-2 text-[10px] uppercase text-muted font-semibold w-32">{t('createTable.colType')}</th>
+                                <th className="p-2 text-[10px] uppercase text-muted font-semibold w-20">{t('createTable.colLen')}</th>
+                                <th className="p-2 text-[10px] uppercase text-muted font-semibold w-10 text-center" title="Primary Key">{t('createTable.colPk')}</th>
+                                <th className="p-2 text-[10px] uppercase text-muted font-semibold w-10 text-center" title="Not Null">{t('createTable.colNn')}</th>
+                                <th className="p-2 text-[10px] uppercase text-muted font-semibold w-10 text-center" title="Auto Increment">{t('createTable.colAi')}</th>
+                                <th className="p-2 text-[10px] uppercase text-muted font-semibold w-32">{t('createTable.colDefault')}</th>
                                 <th className="p-2 w-8"></th>
                             </tr>
                         </thead>
                         <tbody>
                             {columns.map((col) => (
-                                <tr key={col.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 group">
-                                    <td className="p-2 text-center text-slate-600 text-xs">
+                                <tr key={col.id} className="border-b border-default/50 hover:bg-surface-secondary/30 group">
+                                    <td className="p-2 text-center text-surface-tertiary text-xs">
                                         ⋮
                                     </td>
                                     <td className="p-2">
                                         <input 
                                             value={col.name}
                                             onChange={(e) => updateColumn(col.id, 'name', e.target.value)}
-                                            className="w-full bg-transparent text-sm text-white focus:outline-none border-b border-transparent focus:border-blue-500 font-mono placeholder:text-slate-600"
+                                            className="w-full bg-transparent text-sm text-white focus:outline-none border-b border-transparent focus:border-blue-500 font-mono placeholder:text-surface-tertiary"
                                             placeholder="col_name"
                                         />
                                     </td>
@@ -232,7 +232,7 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                                         <select 
                                             value={col.type}
                                             onChange={(e) => updateColumn(col.id, 'type', e.target.value)}
-                                            className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer hover:bg-slate-700 transition-colors"
+                                            className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer hover:bg-surface-tertiary transition-colors"
                                             style={{
                                               backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
                                               backgroundPosition: `right 0.5rem center`,
@@ -248,7 +248,7 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                                         <input 
                                             value={col.length}
                                             onChange={(e) => updateColumn(col.id, 'length', e.target.value)}
-                                            className="w-full bg-transparent text-xs text-slate-300 focus:outline-none border-b border-transparent focus:border-blue-500 text-center"
+                                            className="w-full bg-transparent text-xs text-secondary focus:outline-none border-b border-transparent focus:border-blue-500 text-center"
                                             placeholder={col.type.includes('CHAR') ? "255" : "-"}
                                             disabled={!col.type.includes('CHAR')}
                                         />
@@ -282,14 +282,14 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                                          <input 
                                             value={col.defaultValue}
                                             onChange={(e) => updateColumn(col.id, 'defaultValue', e.target.value)}
-                                            className="w-full bg-transparent text-xs text-slate-300 focus:outline-none border-b border-transparent focus:border-blue-500"
+                                            className="w-full bg-transparent text-xs text-secondary focus:outline-none border-b border-transparent focus:border-blue-500"
                                             placeholder="NULL"
                                         />
                                     </td>
                                     <td className="p-2 text-center">
                                         <button 
                                             onClick={() => handleRemoveColumn(col.id)}
-                                            className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            className="text-surface-tertiary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                                         >
                                             <Trash2 size={14} />
                                         </button>
@@ -305,14 +305,14 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
             <div className="flex flex-col gap-2">
                 <button 
                     onClick={() => setShowSqlPreview(!showSqlPreview)}
-                    className="text-xs text-slate-500 hover:text-blue-400 flex items-center gap-2 self-start font-medium"
+                    className="text-xs text-muted hover:text-blue-400 flex items-center gap-2 self-start font-medium"
                 >
                     <Code size={14} />
                     {showSqlPreview ? t('createTable.hideSql') : t('createTable.showSql')}
                 </button>
                 
                 {showSqlPreview && (
-                    <div className="h-32 bg-slate-950 rounded-lg border border-slate-800 p-3 overflow-auto">
+                    <div className="h-32 bg-base rounded-lg border border-default p-3 overflow-auto">
                         <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap">{sqlPreview}</pre>
                     </div>
                 )}
@@ -326,10 +326,10 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-800/50 border-t border-slate-800 rounded-b-xl flex justify-end gap-3">
+        <div className="p-4 bg-surface-secondary/50 border-t border-default rounded-b-xl flex justify-end gap-3">
           <button 
             onClick={onClose}
-            className="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm transition-colors"
+            className="px-4 py-2 text-secondary hover:text-white font-medium text-sm transition-colors"
           >
             {t('createTable.cancel')}
           </button>

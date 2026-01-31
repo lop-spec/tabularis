@@ -10,6 +10,8 @@ pub mod pool_manager;
 pub mod saved_queries;
 pub mod ssh_tunnel;
 pub mod mcp;
+pub mod theme_commands;
+pub mod theme_models;
 pub mod drivers {
     pub mod common;
     pub mod mysql;
@@ -92,7 +94,14 @@ pub fn run() {
             commands::get_schema_snapshot,
             // MCP
             mcp::install::get_mcp_status,
-            mcp::install::install_mcp_config
+            mcp::install::install_mcp_config,
+            // Themes
+            theme_commands::get_all_themes,
+            theme_commands::get_theme,
+            theme_commands::save_custom_theme,
+            theme_commands::delete_custom_theme,
+            theme_commands::import_theme,
+            theme_commands::export_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

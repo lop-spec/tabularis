@@ -48,36 +48,36 @@ export const SchemaModal = ({ isOpen, onClose, tableName }: SchemaModalProps) =>
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-lg shadow-xl w-[600px] border border-slate-700 flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+      <div className="bg-surface-secondary rounded-lg shadow-xl w-[600px] border border-strong flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-4 border-b border-strong">
           <h2 className="text-lg font-semibold text-white">{t('schema.title', { table: tableName })}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-secondary hover:text-white">
             <X size={20} />
           </button>
         </div>
 
         <div className="p-0 overflow-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-40 gap-2 text-slate-400">
+            <div className="flex items-center justify-center h-40 gap-2 text-secondary">
               <Loader2 size={24} className="animate-spin" />
               <span>{t('schema.loading')}</span>
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-900 sticky top-0">
+              <thead className="bg-elevated sticky top-0">
                 <tr>
-                  <th className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase border-b border-slate-700">{t('schema.colName')}</th>
-                  <th className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase border-b border-slate-700">{t('schema.colType')}</th>
-                  <th className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase border-b border-slate-700 text-center">{t('schema.colNullable')}</th>
-                  <th className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase border-b border-slate-700 text-center">{t('schema.colKey')}</th>
+                  <th className="px-4 py-2 text-xs font-semibold text-secondary uppercase border-b border-strong">{t('schema.colName')}</th>
+                  <th className="px-4 py-2 text-xs font-semibold text-secondary uppercase border-b border-strong">{t('schema.colType')}</th>
+                  <th className="px-4 py-2 text-xs font-semibold text-secondary uppercase border-b border-strong text-center">{t('schema.colNullable')}</th>
+                  <th className="px-4 py-2 text-xs font-semibold text-secondary uppercase border-b border-strong text-center">{t('schema.colKey')}</th>
                 </tr>
               </thead>
               <tbody>
                 {columns.map(col => (
-                  <tr key={col.name} className="border-b border-slate-800 hover:bg-slate-700/50">
-                    <td className="px-4 py-2 text-sm text-slate-200 font-mono">{col.name}</td>
+                  <tr key={col.name} className="border-b border-default hover:bg-surface-tertiary/50">
+                    <td className="px-4 py-2 text-sm text-primary font-mono">{col.name}</td>
                     <td className="px-4 py-2 text-sm text-blue-300 font-mono">{col.data_type}</td>
-                    <td className="px-4 py-2 text-sm text-slate-400 text-center">
+                    <td className="px-4 py-2 text-sm text-secondary text-center">
                       {col.is_nullable ? t('schema.yes') : t('schema.no')}
                     </td>
                     <td className="px-4 py-2 text-center">

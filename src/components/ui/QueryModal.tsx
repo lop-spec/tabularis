@@ -51,30 +51,30 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl w-full max-w-2xl p-6">
+      <div className="bg-elevated border border-default rounded-xl shadow-2xl w-full max-w-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-secondary hover:text-white transition-colors">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Name</label>
+            <label className="block text-sm font-medium text-secondary mb-1">Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-base border border-strong rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
               placeholder="My Query"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">SQL</label>
-            <div className="h-64 w-full border border-slate-700 rounded overflow-hidden">
+            <label className="block text-sm font-medium text-secondary mb-1">SQL</label>
+            <div className="h-64 w-full border border-strong rounded overflow-hidden">
                 <MonacoEditor
                     height="100%"
                     defaultLanguage="sql"
@@ -100,7 +100,7 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+              className="px-4 py-2 text-secondary hover:text-white hover:bg-surface-secondary rounded transition-colors"
             >
               Cancel
             </button>

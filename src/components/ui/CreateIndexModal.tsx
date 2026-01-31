@@ -92,43 +92,43 @@ export const CreateIndexModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
-      <div className="bg-slate-900 rounded-xl shadow-2xl w-[500px] border border-slate-700 flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50 rounded-t-xl">
+      <div className="bg-elevated rounded-xl shadow-2xl w-[500px] border border-strong flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-default bg-surface-secondary/50 rounded-t-xl">
            <h2 className="text-lg font-bold text-white">{t('createIndex.title')}</h2>
-           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+           <button onClick={onClose} className="text-secondary hover:text-white transition-colors">
              <X size={20} />
            </button>
         </div>
 
         <div className="p-6 flex flex-col gap-4">
             <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('createIndex.name')}</label>
+                <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('createIndex.name')}</label>
                 <input 
                     value={indexName}
                     onChange={(e) => setIndexName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono"
+                    className="w-full bg-base border border-strong rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono"
                     placeholder="idx_table_column"
                     autoFocus
                 />
             </div>
 
             <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase">{t('createIndex.columns')}</label>
+                <label className="block text-xs font-semibold text-secondary mb-2 uppercase">{t('createIndex.columns')}</label>
                 {fetchingCols ? (
-                    <div className="flex items-center gap-2 text-slate-500 text-sm">
+                    <div className="flex items-center gap-2 text-muted text-sm">
                         <Loader2 size={14} className="animate-spin" /> {t('common.loading')}
                     </div>
                 ) : (
-                    <div className="border border-slate-700 rounded-lg bg-slate-950/50 max-h-40 overflow-y-auto p-2 flex flex-col gap-1">
+                    <div className="border border-strong rounded-lg bg-base/50 max-h-40 overflow-y-auto p-2 flex flex-col gap-1">
                         {availableColumns.map(col => (
-                            <label key={col.name} className="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded cursor-pointer group">
+                            <label key={col.name} className="flex items-center gap-2 p-1.5 hover:bg-surface-secondary rounded cursor-pointer group">
                                 <input 
                                     type="checkbox"
                                     checked={selectedColumns.includes(col.name)}
                                     onChange={() => toggleColumn(col.name)}
                                     className="accent-blue-500"
                                 />
-                                <span className={`text-sm font-mono ${selectedColumns.includes(col.name) ? 'text-blue-300' : 'text-slate-300'}`}>
+                                <span className={`text-sm font-mono ${selectedColumns.includes(col.name) ? 'text-blue-300' : 'text-secondary'}`}>
                                     {col.name}
                                 </span>
                             </label>
@@ -145,13 +145,13 @@ export const CreateIndexModal = ({
                     onChange={(e) => setIsUnique(e.target.checked)}
                     className="accent-blue-500"
                 />
-                <label htmlFor="isUnique" className="text-sm text-slate-300 select-none cursor-pointer">
+                <label htmlFor="isUnique" className="text-sm text-secondary select-none cursor-pointer">
                     {t('createIndex.unique')}
                 </label>
             </div>
 
-            <div className="bg-slate-950 border border-slate-800 rounded p-3 mt-2">
-                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">{t('createIndex.sqlPreview')}</div>
+            <div className="bg-base border border-default rounded p-3 mt-2">
+                <div className="text-[10px] text-muted mb-1 uppercase tracking-wider">{t('createIndex.sqlPreview')}</div>
                 <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap break-all">{sqlPreview}</pre>
             </div>
 
@@ -162,8 +162,8 @@ export const CreateIndexModal = ({
             )}
         </div>
 
-        <div className="p-4 bg-slate-800/50 border-t border-slate-800 rounded-b-xl flex justify-end gap-3">
-           <button onClick={onClose} className="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm transition-colors">
+        <div className="p-4 bg-surface-secondary/50 border-t border-default rounded-b-xl flex justify-end gap-3">
+           <button onClick={onClose} className="px-4 py-2 text-secondary hover:text-white font-medium text-sm transition-colors">
              {t('createIndex.cancel')}
            </button>
            <button 

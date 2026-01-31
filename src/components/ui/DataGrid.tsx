@@ -253,7 +253,7 @@ export const DataGrid = React.memo(({
                     {sortState === "none" && (
                       <ArrowUpDown
                         size={14}
-                        className="text-slate-600 opacity-50 group-hover/header:opacity-100 transition-opacity"
+                        className="text-secondary/60 opacity-50 group-hover/header:opacity-100 transition-opacity"
                       />
                     )}
                   </span>
@@ -266,7 +266,7 @@ export const DataGrid = React.memo(({
 
             if (val === null || val === undefined)
               return (
-                <span className="text-slate-500 italic">
+                <span className="text-muted italic">
                   {t("dataGrid.null")}
                 </span>
               );
@@ -334,7 +334,7 @@ export const DataGrid = React.memo(({
 
   if (columns.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-slate-500">
+      <div className="h-full flex items-center justify-center text-muted">
         {t("dataGrid.noData")}
       </div>
     );
@@ -343,23 +343,23 @@ export const DataGrid = React.memo(({
   return (
     <div 
         ref={parentRef}
-        className="h-full overflow-auto border border-slate-800 rounded bg-slate-900 relative"
+        className="h-full overflow-auto border border-default rounded bg-elevated relative"
     >
       <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
         <table className="w-full text-left border-collapse absolute top-0 left-0" style={{ transform: `translateY(${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px)` }}>
-          <thead className="bg-slate-950 sticky top-0 z-10 shadow-sm" style={{ transform: `translateY(${-1 * (rowVirtualizer.getVirtualItems()[0]?.start ?? 0)}px)` }}>
+          <thead className="bg-base sticky top-0 z-10 shadow-sm" style={{ transform: `translateY(${-1 * (rowVirtualizer.getVirtualItems()[0]?.start ?? 0)}px)` }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 <th
                   onClick={handleSelectAll}
-                  className="px-2 py-2 text-xs font-semibold text-slate-500 border-b border-r border-slate-800 bg-slate-950 sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-slate-900"
+                  className="px-2 py-2 text-xs font-semibold text-muted border-b border-r border-default bg-base sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-elevated"
                 >
                   #
                 </th>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-r border-slate-800 last:border-r-0 whitespace-nowrap"
+                    className="px-4 py-2 text-xs font-semibold text-secondary uppercase tracking-wider border-b border-r border-default last:border-r-0 whitespace-nowrap"
                   >
                     {flexRender(
                       header.column.columnDef.header,
@@ -392,18 +392,18 @@ export const DataGrid = React.memo(({
                       ? "bg-red-900/20 opacity-60"
                       : isSelected
                         ? "bg-blue-900/20"
-                        : "hover:bg-slate-800/50"
+                        : "hover:bg-surface-secondary/50"
                   }`}
                   onContextMenu={(e) => handleContextMenu(e, row.original)}
                 >
                   <td
                     onClick={(e) => handleRowClick(rowIndex, e)}
-                    className={`px-2 py-1.5 text-xs text-center border-b border-r border-slate-800 sticky left-0 z-10 cursor-pointer select-none w-[50px] min-w-[50px] ${
+                    className={`px-2 py-1.5 text-xs text-center border-b border-r border-default sticky left-0 z-10 cursor-pointer select-none w-[50px] min-w-[50px] ${
                       isPendingDelete
                         ? "bg-red-950/50 text-red-500 line-through"
                         : isSelected
                           ? "bg-blue-900/40 text-blue-200 font-bold"
-                          : "bg-slate-950 text-slate-500 hover:bg-slate-800"
+                          : "bg-base text-muted hover:bg-surface-secondary"
                     }`}
                   >
                     {rowIndex + 1}
@@ -433,12 +433,12 @@ export const DataGrid = React.memo(({
                           !isPendingDelete &&
                           handleCellDoubleClick(rowIndex, colIndex, displayValue)
                         }
-                        className={`px-4 py-1.5 text-sm border-b border-r border-slate-800 last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text ${
+                        className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text ${
                           isPendingDelete
                             ? "text-red-400/60 line-through decoration-red-500/30"
                             : isModified
                               ? "bg-blue-600/30 text-blue-100 italic font-medium"
-                              : "text-slate-300"
+                              : "text-secondary"
                         }`}
                         title={!isEditing ? String(displayValue) : ""}
                       >
@@ -453,7 +453,7 @@ export const DataGrid = React.memo(({
                             }
                             onBlur={handleEditCommit}
                             onKeyDown={handleKeyDown}
-                            className="w-full bg-slate-950 text-white border-none outline-none p-0 m-0 font-mono"
+                            className="w-full bg-base text-primary border-none outline-none p-0 m-0 font-mono"
                           />
                         ) : hasPendingChange ? (
                           String(displayValue)

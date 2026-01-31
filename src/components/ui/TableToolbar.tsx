@@ -49,9 +49,9 @@ const TableToolbarInternal: React.FC<TableToolbarProps> = ({
   };
 
   return (
-    <div className="h-10 bg-slate-900 border-y border-slate-800 flex items-center px-2 gap-4">
-      <div className="flex items-center gap-2 flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
-        <Filter size={14} className="text-slate-500 shrink-0" />
+    <div className="h-10 bg-elevated border-y border-default flex items-center px-2 gap-4">
+      <div className="flex items-center gap-2 flex-1 bg-base border border-default rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
+        <Filter size={14} className="text-muted shrink-0" />
         <span className="text-xs text-blue-400 font-mono shrink-0">WHERE</span>
         <input
           type="text"
@@ -59,12 +59,12 @@ const TableToolbarInternal: React.FC<TableToolbarProps> = ({
           onChange={(e) => setFilterInput(e.target.value)}
           onBlur={commitChanges}
           onKeyDown={handleKeyDown}
-          className="bg-transparent border-none outline-none text-xs text-slate-300 w-full placeholder:text-slate-600 font-mono"
+          className="bg-transparent border-none outline-none text-xs text-secondary w-full placeholder:text-surface-tertiary font-mono"
           placeholder={`${placeholderColumn} > 5 AND status = 'active'`}
         />
       </div>
-      <div className="flex items-center gap-2 flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
-        <ArrowUpDown size={14} className="text-slate-500 shrink-0" />
+      <div className="flex items-center gap-2 flex-1 bg-base border border-default rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
+        <ArrowUpDown size={14} className="text-muted shrink-0" />
         <span className="text-xs text-blue-400 font-mono shrink-0">ORDER BY</span>
         <input
           type="text"
@@ -72,12 +72,12 @@ const TableToolbarInternal: React.FC<TableToolbarProps> = ({
           onChange={(e) => setSortInput(e.target.value)}
           onBlur={commitChanges}
           onKeyDown={handleKeyDown}
-          className="bg-transparent border-none outline-none text-xs text-slate-300 w-full placeholder:text-slate-600 font-mono"
+          className="bg-transparent border-none outline-none text-xs text-secondary w-full placeholder:text-surface-tertiary font-mono"
           placeholder={`${placeholderSort} DESC`}
         />
       </div>
-      <div className="flex items-center gap-2 w-32 bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
-        <ListFilter size={14} className="text-slate-500 shrink-0" />
+      <div className="flex items-center gap-2 w-32 bg-base border border-default rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
+        <ListFilter size={14} className="text-muted shrink-0" />
         <span className="text-xs text-blue-400 font-mono shrink-0">LIMIT</span>
         <input
           type="number"
@@ -85,7 +85,7 @@ const TableToolbarInternal: React.FC<TableToolbarProps> = ({
           onChange={(e) => setLimitInput(e.target.value)}
           onBlur={commitChanges}
           onKeyDown={handleKeyDown}
-          className="bg-transparent border-none outline-none text-xs text-slate-300 w-full placeholder:text-slate-600 font-mono"
+          className="bg-transparent border-none outline-none text-xs text-secondary w-full placeholder:text-surface-tertiary font-mono"
           placeholder={String(defaultLimit)}
         />
       </div>

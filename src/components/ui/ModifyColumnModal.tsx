@@ -238,13 +238,13 @@ export const ModifyColumnModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
-      <div className="bg-slate-900 rounded-xl shadow-2xl w-[500px] border border-slate-700 flex flex-col">
+      <div className="bg-elevated rounded-xl shadow-2xl w-[500px] border border-strong flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50 rounded-t-xl">
+        <div className="flex items-center justify-between p-4 border-b border-default bg-surface-secondary/50 rounded-t-xl">
            <h2 className="text-lg font-bold text-white">
              {isEdit ? t('modifyColumn.titleEdit') : t('modifyColumn.titleAdd')}
            </h2>
-           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+           <button onClick={onClose} className="text-secondary hover:text-white transition-colors">
              <X size={20} />
            </button>
         </div>
@@ -259,11 +259,11 @@ export const ModifyColumnModal = ({
             )}
 
             <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('modifyColumn.name')}</label>
+                <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('modifyColumn.name')}</label>
                 <input 
                     value={form.name}
                     onChange={(e) => setForm({...form, name: e.target.value})}
-                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono"
+                    className="w-full bg-base border border-strong rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono"
                     placeholder="column_name"
                     autoFocus
                 />
@@ -271,7 +271,7 @@ export const ModifyColumnModal = ({
 
             <div className="flex gap-4">
                 <div className="flex-1">
-                    <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('modifyColumn.type')}</label>
+                    <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('modifyColumn.type')}</label>
                     <select 
                         value={form.type}
                         onChange={(e) => {
@@ -287,7 +287,7 @@ export const ModifyColumnModal = ({
                             });
                         }}
                         disabled={driver === 'sqlite' && isEdit}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 outline-none disabled:opacity-50 appearance-none cursor-pointer hover:bg-slate-900 transition-colors"
+                        className="w-full bg-base border border-strong rounded p-2 text-white text-sm focus:border-blue-500 outline-none disabled:opacity-50 appearance-none cursor-pointer hover:bg-elevated transition-colors"
                         style={{
                           backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
                           backgroundPosition: `right 0.5rem center`,
@@ -300,12 +300,12 @@ export const ModifyColumnModal = ({
                     </select>
                 </div>
                 <div className="w-24">
-                    <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('modifyColumn.length')}</label>
+                    <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('modifyColumn.length')}</label>
                     <input 
                         value={form.length}
                         onChange={(e) => setForm({...form, length: e.target.value})}
                         disabled={(driver === 'sqlite' && isEdit) || !['VARCHAR', 'CHAR', 'DECIMAL', 'FLOAT', 'DOUBLE'].some(t_type => form.type.includes(t_type))}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono disabled:opacity-50"
+                        className="w-full bg-base border border-strong rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono disabled:opacity-50"
                         placeholder={form.type.includes('VARCHAR') ? '255' : (['DECIMAL', 'FLOAT', 'DOUBLE'].some(t_type => form.type.includes(t_type)) ? '10,2' : '')}
                     />
                 </div>
@@ -313,12 +313,12 @@ export const ModifyColumnModal = ({
 
             <div className="flex gap-4">
                 <div className="flex-1">
-                    <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('modifyColumn.default')}</label>
+                    <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('modifyColumn.default')}</label>
                     <input 
                         value={form.defaultValue}
                         onChange={(e) => setForm({...form, defaultValue: e.target.value})}
                         disabled={driver === 'sqlite' && isEdit}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono disabled:opacity-50"
+                        className="w-full bg-base border border-strong rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono disabled:opacity-50"
                         placeholder="NULL"
                     />
                 </div>
@@ -334,7 +334,7 @@ export const ModifyColumnModal = ({
                         disabled={driver === 'sqlite' && isEdit}
                         className="accent-blue-500"
                     />
-                    <label htmlFor="isNullable" className="text-sm text-slate-300 select-none cursor-pointer">
+                    <label htmlFor="isNullable" className="text-sm text-secondary select-none cursor-pointer">
                         {t('modifyColumn.notNull')}
                     </label>
                 </div>
@@ -348,7 +348,7 @@ export const ModifyColumnModal = ({
                         disabled={isEdit || (driver === 'sqlite' && isEdit)}
                         className="accent-blue-500 disabled:opacity-50"
                     />
-                    <label htmlFor="isPk" className={`text-sm select-none cursor-pointer ${isEdit ? 'text-slate-500' : 'text-slate-300'}`}>
+                    <label htmlFor="isPk" className={`text-sm select-none cursor-pointer ${isEdit ? 'text-muted' : 'text-secondary'}`}>
                         {t('modifyColumn.primaryKey')}
                     </label>
                 </div>
@@ -365,15 +365,15 @@ export const ModifyColumnModal = ({
                         }
                         className="accent-blue-500 disabled:opacity-50"
                     />
-                    <label htmlFor="isAutoInc" className={`text-sm select-none cursor-pointer ${(isEdit && driver !== 'mysql' && driver !== 'mariadb') || !['INTEGER', 'BIGINT'].includes(form.type) ? 'text-slate-500' : 'text-slate-300'}`}>
+                    <label htmlFor="isAutoInc" className={`text-sm select-none cursor-pointer ${(isEdit && driver !== 'mysql' && driver !== 'mariadb') || !['INTEGER', 'BIGINT'].includes(form.type) ? 'text-muted' : 'text-secondary'}`}>
                         {t('modifyColumn.autoInc')}
                     </label>
                 </div>
             </div>
 
             {/* Preview */}
-            <div className="bg-slate-950 border border-slate-800 rounded p-3 mt-2">
-                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">{t('modifyColumn.sqlPreview')}</div>
+            <div className="bg-base border border-default rounded p-3 mt-2">
+                <div className="text-[10px] text-muted mb-1 uppercase tracking-wider">{t('modifyColumn.sqlPreview')}</div>
                 <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap break-all">{sqlPreview}</pre>
             </div>
 
@@ -385,10 +385,10 @@ export const ModifyColumnModal = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-800/50 border-t border-slate-800 rounded-b-xl flex justify-end gap-3">
+        <div className="p-4 bg-surface-secondary/50 border-t border-default rounded-b-xl flex justify-end gap-3">
            <button 
              onClick={onClose}
-             className="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm transition-colors"
+             className="px-4 py-2 text-secondary hover:text-white font-medium text-sm transition-colors"
            >
              {t('modifyColumn.cancel')}
            </button>

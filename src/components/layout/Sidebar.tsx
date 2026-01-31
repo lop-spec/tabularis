@@ -91,17 +91,17 @@ const NavItem = ({
         "flex items-center justify-center w-12 h-12 rounded-lg transition-colors mb-2 relative group",
         isActive
           ? "bg-blue-600 text-white"
-          : "text-slate-400 hover:bg-slate-800 hover:text-slate-100",
+          : "text-muted hover:bg-surface-secondary hover:text-primary",
       )
     }
   >
     <div className="relative">
       <Icon size={24} />
       {isConnected && (
-        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-slate-900"></span>
+        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-elevated"></span>
       )}
     </div>
-    <span className="absolute left-14 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+    <span className="absolute left-14 bg-surface-secondary text-primary text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
       {label}
     </span>
   </NavLink>
@@ -118,7 +118,7 @@ const Accordion = ({
     <div className="flex items-center justify-between px-2 py-1 group/acc">
       <button
         onClick={onToggle}
-        className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-300 transition-colors select-none flex-1"
+        className="flex items-center gap-2 text-xs font-semibold text-muted uppercase tracking-wider hover:text-secondary transition-colors select-none flex-1"
       >
         {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span>{title}</span>
@@ -189,14 +189,14 @@ const SidebarColumnItem = ({
   return (
     <>
       <div
-        className="flex items-center gap-2 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer group font-mono"
+        className="flex items-center gap-2 px-3 py-1 text-xs text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group font-mono"
         onContextMenu={handleContextMenu}
         onDoubleClick={() => onEdit(column)}
       >
         {column.is_pk ? (
           <Key size={12} className="text-yellow-500 shrink-0" />
         ) : (
-          <Columns size={12} className="text-slate-600 shrink-0" />
+          <Columns size={12} className="text-muted shrink-0" />
         )}
         <span
           className={clsx(
@@ -206,7 +206,7 @@ const SidebarColumnItem = ({
         >
           {column.name}
         </span>
-        <span className="text-slate-600 text-[10px] ml-auto">
+        <span className="text-muted text-[10px] ml-auto">
           {column.data_type}
         </span>
       </div>
@@ -384,12 +384,12 @@ const SidebarTableItem = ({
           "flex items-center gap-1 pl-1 pr-3 py-1.5 text-sm cursor-pointer group select-none transition-colors border-l-2",
           activeTable === table.name
             ? "bg-blue-900/40 text-blue-200 border-blue-500"
-            : "text-slate-300 hover:bg-slate-800 border-transparent hover:text-white",
+            : "text-secondary hover:bg-surface-secondary border-transparent hover:text-primary",
         )}
       >
         <button
           onClick={handleExpand}
-          className="p-0.5 rounded hover:bg-slate-700 text-slate-500 hover:text-white transition-colors"
+          className="p-0.5 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
         >
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
@@ -398,15 +398,15 @@ const SidebarTableItem = ({
           className={
             activeTable === table.name
               ? "text-blue-400"
-              : "text-slate-500 group-hover:text-blue-400"
+              : "text-muted group-hover:text-blue-400"
           }
         />
         <span className="truncate flex-1">{table.name}</span>
       </div>
       {isExpanded && (
-        <div className="ml-[22px] border-l border-slate-800">
+        <div className="ml-[22px] border-l border-default">
           {isLoading ? (
-            <div className="flex items-center gap-2 p-2 text-xs text-slate-500">
+            <div className="flex items-center gap-2 p-2 text-xs text-muted">
               <Loader2 size={12} className="animate-spin" />
               {t("sidebar.loadingSchema")}
             </div>
@@ -415,7 +415,7 @@ const SidebarTableItem = ({
               {/* Columns Folder */}
               <div className="flex flex-col">
                 <div
-                  className="flex items-center gap-2 px-2 py-1 text-xs text-slate-500 hover:text-slate-300 cursor-pointer select-none"
+                  className="flex items-center gap-2 px-2 py-1 text-xs text-muted hover:text-secondary cursor-pointer select-none"
                   onClick={(e) => {
                     e.stopPropagation();
                     setExpandColumns(!expandColumns);
@@ -432,7 +432,7 @@ const SidebarTableItem = ({
                   </span>
                 </div>
                 {expandColumns && (
-                  <div className="ml-4 border-l border-slate-800/50">
+                  <div className="ml-4 border-l border-default/50">
                     {columns.map((col) => (
                       <SidebarColumnItem
                         key={col.name}
@@ -451,13 +451,13 @@ const SidebarTableItem = ({
               {/* Keys Folder (PK/Unique) */}
               {keys.length > 0 && (
                 <div className="flex flex-col">
-                  <div
-                    className="flex items-center gap-2 px-2 py-1 text-xs text-slate-500 hover:text-slate-300 cursor-pointer select-none"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpandKeys(!expandKeys);
-                    }}
-                  >
+                <div
+                  className="flex items-center gap-2 px-2 py-1 text-xs text-muted hover:text-secondary cursor-pointer select-none"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandKeys(!expandKeys);
+                  }}
+                >
                     <Folder size={12} className="text-yellow-500/70" />
                     <span>{t("sidebar.keys")}</span>
                     <span className="ml-auto text-[10px] opacity-50">
@@ -465,11 +465,11 @@ const SidebarTableItem = ({
                     </span>
                   </div>
                   {expandKeys && (
-                    <div className="ml-4 border-l border-slate-800/50">
+                    <div className="ml-4 border-l border-default/50">
                       {keys.map((k) => (
                         <div
                           key={k.name}
-                          className="flex items-center gap-2 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer group font-mono"
+                          className="flex items-center gap-2 px-3 py-1 text-xs text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group font-mono"
                           title={k.columns.join(", ")}
                           onContextMenu={(e) => {
                             // Keys are typically deleted as Indexes or Constraints
@@ -484,7 +484,7 @@ const SidebarTableItem = ({
                             className={
                               k.is_primary
                                 ? "text-yellow-500"
-                                : "text-slate-400"
+                                : "text-secondary"
                             }
                           />
                           <span className="truncate">{k.name}</span>
@@ -498,7 +498,7 @@ const SidebarTableItem = ({
               {/* Foreign Keys Folder */}
               <div className="flex flex-col">
                 <div
-                  className="flex items-center gap-2 px-2 py-1 text-xs text-slate-500 hover:text-slate-300 cursor-pointer select-none"
+                  className="flex items-center gap-2 px-2 py-1 text-xs text-muted hover:text-secondary cursor-pointer select-none"
                   onClick={(e) => {
                     e.stopPropagation();
                   }} // Toggle logic if needed, currently always visible if empty or not? Let's just allow click to toggle? No state for FK folder?
@@ -516,11 +516,11 @@ const SidebarTableItem = ({
                     {foreignKeys.length}
                   </span>
                 </div>
-                <div className="ml-4 border-l border-slate-800/50">
+                <div className="ml-4 border-l border-default/50">
                   {foreignKeys.map((fk) => (
                     <div
                       key={fk.name}
-                      className="flex items-center gap-2 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer group font-mono"
+                      className="flex items-center gap-2 px-3 py-1 text-xs text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group font-mono"
                       title={`${fk.column_name} -> ${fk.ref_table}.${fk.ref_column}`}
                       onContextMenu={(e) =>
                         showContextMenu(e, "foreign_key", fk.name)
@@ -536,7 +536,7 @@ const SidebarTableItem = ({
               {/* Indexes Folder */}
               <div className="flex flex-col">
                 <div
-                  className="flex items-center gap-2 px-2 py-1 text-xs text-slate-500 hover:text-slate-300 cursor-pointer select-none"
+                  className="flex items-center gap-2 px-2 py-1 text-xs text-muted hover:text-secondary cursor-pointer select-none"
                   onClick={(e) => {
                     e.stopPropagation();
                     setExpandIndexes(!expandIndexes);
@@ -552,11 +552,11 @@ const SidebarTableItem = ({
                   </span>
                 </div>
                 {expandIndexes && (
-                  <div className="ml-4 border-l border-slate-800/50">
+                  <div className="ml-4 border-l border-default/50">
                     {indexesList.map((idx) => (
                       <div
                         key={idx.name}
-                        className="flex items-center gap-2 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer group font-mono"
+                        className="flex items-center gap-2 px-3 py-1 text-xs text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group font-mono"
                         title={idx.columns.join(", ")}
                         onContextMenu={(e) =>
                           showContextMenu(e, "index", idx.name)
@@ -570,12 +570,12 @@ const SidebarTableItem = ({
                         />
                         <span className="truncate flex-1">
                           {idx.name}{" "}
-                          <span className="text-slate-600">
+                          <span className="text-muted">
                             ({idx.columns.join(", ")})
                           </span>
                         </span>
                         {idx.is_unique && (
-                          <span className="text-[9px] text-slate-500 border border-slate-700 px-1 rounded bg-slate-900/50">
+                          <span className="text-[9px] text-muted border border-strong px-1 rounded bg-elevated/50">
                             UNIQUE
                           </span>
                         )}
@@ -683,7 +683,7 @@ export const Sidebar = () => {
   return (
     <div className="flex h-full">
       {/* Primary Navigation Bar (Narrow) */}
-      <aside className="w-16 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 z-20">
+      <aside className="w-16 bg-elevated border-r border-default flex flex-col items-center py-4 z-20">
         <div className="mb-8 " title="tabularis">
           <img
             src="/logo.png"
@@ -711,12 +711,12 @@ export const Sidebar = () => {
         <div className="mt-auto">
           <button
             onClick={() => setIsMcpModalOpen(true)}
-            className="flex items-center justify-center w-12 h-12 rounded-lg transition-colors mb-2 relative group text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+            className="flex items-center justify-center w-12 h-12 rounded-lg transition-colors mb-2 relative group text-secondary hover:bg-surface-secondary hover:text-primary"
           >
             <div className="relative">
               <Cpu size={24} />
             </div>
-            <span className="absolute left-14 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+    <span className="absolute left-14 bg-surface-secondary text-primary text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
               MCP Server
             </span>
           </button>
@@ -734,8 +734,8 @@ export const Sidebar = () => {
         location.pathname !== "/settings" &&
         location.pathname !== "/" &&
         !isExplorerCollapsed && (
-          <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col">
-            <div className="p-4 border-b border-slate-800 font-semibold text-sm text-slate-200 flex items-center justify-between gap-2">
+          <aside className="w-64 bg-base border-r border-default flex flex-col">
+            <div className="p-4 border-b border-default font-semibold text-sm text-primary flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Database size={16} className="text-blue-400" />
                 <span>{t("sidebar.explorer")}</span>
@@ -753,14 +753,14 @@ export const Sidebar = () => {
                       console.error("Failed to open ER Diagram window:", e);
                     }
                   }}
-                  className="text-slate-500 hover:text-orange-400 transition-colors p-1 hover:bg-slate-800 rounded"
+                  className="text-muted hover:text-orange-400 transition-colors p-1 hover:bg-surface-secondary rounded"
                   title="View Schema Diagram"
                 >
                   <Network size={16} className="rotate-90" />
                 </button>
                 <button
                   onClick={() => setIsExplorerCollapsed(true)}
-                  className="text-slate-500 hover:text-slate-300 transition-colors p-1 hover:bg-slate-800 rounded"
+                  className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded"
                   title="Collapse Explorer"
                 >
                   <PanelLeftClose size={16} />
@@ -770,7 +770,7 @@ export const Sidebar = () => {
 
             <div className="flex-1 overflow-y-auto py-2">
               {isLoadingTables ? (
-                <div className="flex items-center justify-center h-20 text-slate-500 gap-2">
+                <div className="flex items-center justify-center h-20 text-muted gap-2">
                   <Loader2 size={16} className="animate-spin" />
                   <span className="text-sm">{t("sidebar.loadingSchema")}</span>
                 </div>
@@ -783,7 +783,7 @@ export const Sidebar = () => {
                     onToggle={() => setQueriesOpen(!queriesOpen)}
                   >
                     {queries.length === 0 ? (
-                      <div className="text-center p-2 text-xs text-slate-600 italic">
+                      <div className="text-center p-2 text-xs text-muted italic">
                         {t("sidebar.noSavedQueries")}
                       </div>
                     ) : (
@@ -795,7 +795,7 @@ export const Sidebar = () => {
                             onContextMenu={(e) =>
                               handleContextMenu(e, "query", q.id, q.name, q)
                             }
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer group transition-colors"
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group transition-colors"
                             title={q.name}
                           >
                             <FileCode
@@ -820,7 +820,7 @@ export const Sidebar = () => {
                           e.stopPropagation();
                           setIsCreateTableModalOpen(true);
                         }}
-                        className="p-1 rounded hover:bg-slate-700 text-slate-500 hover:text-white transition-colors"
+                        className="p-1 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
                         title="Create New Table"
                       >
                         <Plus size={14} />
@@ -828,7 +828,7 @@ export const Sidebar = () => {
                     }
                   >
                     {tables.length === 0 ? (
-                      <div className="text-center p-2 text-xs text-slate-600 italic">
+                      <div className="text-center p-2 text-xs text-muted italic">
                         {t("sidebar.noTables")}
                       </div>
                     ) : (
@@ -936,14 +936,14 @@ export const Sidebar = () => {
         location.pathname !== "/settings" &&
         location.pathname !== "/" &&
         isExplorerCollapsed && (
-          <div className="w-12 bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4">
+          <div className="w-12 bg-base border-r border-default flex flex-col items-center py-4">
             <button
               onClick={() => setIsExplorerCollapsed(false)}
-              className="text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-lg p-2 transition-colors group relative"
+              className="text-muted hover:text-secondary hover:bg-surface-secondary rounded-lg p-2 transition-colors group relative"
               title={t("sidebar.expandExplorer")}
             >
               <PanelLeft size={20} />
-              <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+              <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-surface-secondary text-primary text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
                 {t("sidebar.expandExplorer")}
               </span>
             </button>

@@ -189,10 +189,10 @@ const SchemaDiagramContent = ({
   }, [nodes.length]);
 
   return (
-    <div className="w-full h-full relative bg-slate-950">
+    <div className="w-full h-full relative bg-base">
       {loading && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-3 text-slate-400">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-base/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 text-secondary">
             <Loader2 size={32} className="animate-spin text-indigo-500" />
             <span>Generating Diagram...</span>
           </div>
@@ -220,14 +220,14 @@ const SchemaDiagramContent = ({
       >
         <Background gap={20} size={1} color="#334155" />
         <Controls
-          className="!bg-slate-800 !border-slate-700 !shadow-xl"
+          className="!bg-surface-secondary !border-strong !shadow-xl"
           showInteractive={false}
         />
         {shouldShowMiniMap && (
           <MiniMap
             nodeColor={() => "#6366f1"}
             maskColor="rgba(15, 23, 42, 0.9)"
-            className="!bg-slate-900 !border !border-slate-800 !shadow-xl"
+            className="!bg-elevated !border !border-default !shadow-xl"
             style={{ height: 120, width: 200 }}
           />
         )}

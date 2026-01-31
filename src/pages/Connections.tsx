@@ -125,7 +125,7 @@ export const Connections = () => {
       )}
       
       {connections.length === 0 ? (
-        <div className="p-8 border border-slate-800 rounded-lg bg-slate-900/50 flex flex-col items-center justify-center text-slate-400 min-h-[400px]">
+        <div className="p-8 border border-default rounded-lg bg-elevated/50 flex flex-col items-center justify-center text-secondary min-h-[400px]">
           <Database size={48} className="mb-4 opacity-50" />
           <p className="mb-4">{t('connections.noConnections')}</p>
           <button 
@@ -149,7 +149,7 @@ export const Connections = () => {
                     ? 'bg-blue-900/10 border-blue-400/30 animate-pulse'
                     : isActive 
                     ? 'bg-blue-900/20 border-blue-500/50' 
-                    : 'bg-slate-900 border-slate-800 hover:border-slate-600'
+                    : 'bg-elevated border-default hover:border-strong'
                   }
                   ${connectingId === conn.id ? 'pointer-events-none' : ''}
                 `}
@@ -158,18 +158,18 @@ export const Connections = () => {
                   <div className="flex items-center gap-3">
                     <div className={`
                       w-10 h-10 rounded flex items-center justify-center relative
-                      ${isActive ? 'bg-blue-600 text-white' : 'bg-slate-800 text-blue-400'}
+                      ${isActive ? 'bg-blue-600 text-white' : 'bg-surface-secondary text-blue-400'}
                     `}>
                       <Database size={20} />
                       {conn.params.ssh_enabled && (
-                          <div className="absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-0.5" title={t('connections.sshEnabled')}>
+                          <div className="absolute -bottom-1 -right-1 bg-elevated rounded-full p-0.5" title={t('connections.sshEnabled')}>
                               <Shield size={12} className="text-emerald-400 fill-emerald-400/20" />
                           </div>
                       )}
                     </div>
                     <div>
-                      <h3 className="font-semibold text-slate-200">{conn.name}</h3>
-                      <p className="text-xs text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <h3 className="font-semibold text-primary">{conn.name}</h3>
+                      <p className="text-xs text-muted uppercase tracking-wider flex items-center gap-1">
                           {conn.params.driver}
                           {conn.params.ssh_enabled && <span className="text-emerald-500 font-bold text-[10px] ml-1">SSH</span>}
                       </p>
@@ -183,57 +183,57 @@ export const Connections = () => {
                   )}
                 </div>
                 
-                <div className="text-sm text-slate-400 mt-3 truncate pl-1 font-mono">
+                <div className="text-sm text-secondary mt-3 truncate pl-1 font-mono">
                   {conn.params.driver === 'sqlite' 
                     ? conn.params.database 
                     : `${conn.params.host}:${conn.params.database}`}
                 </div>
 
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-slate-900/80 p-1 rounded-lg backdrop-blur-sm border border-slate-700/50">
-                   {isActive ? (
-                     <button 
-                       onClick={(e) => { e.stopPropagation(); disconnect(); }}
-                       className="p-1.5 hover:bg-red-900/50 text-slate-400 hover:text-red-400 rounded"
-                       title={t('connections.disconnect')}
-                     >
-                       <Power size={14} />
-                     </button>
-                   ) : (
-                     <button 
-                       onClick={(e) => { e.stopPropagation(); handleConnect(conn); }}
-                       className="p-1.5 hover:bg-green-900/50 text-slate-400 hover:text-green-400 rounded"
-                       title={t('connections.connect')}
-                     >
-                       <Power size={14} />
-                     </button>
-                   )}
+                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-elevated/80 p-1 rounded-lg backdrop-blur-sm border border-strong/50">
+                    {isActive ? (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); disconnect(); }}
+                        className="p-1.5 hover:bg-red-900/50 text-secondary hover:text-red-400 rounded"
+                        title={t('connections.disconnect')}
+                      >
+                        <Power size={14} />
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleConnect(conn); }}
+                         className="p-1.5 hover:bg-green-900/50 text-secondary hover:text-green-400 rounded"
+                        title={t('connections.connect')}
+                      >
+                        <Power size={14} />
+                      </button>
+                    )}
                    
-                   <div className="w-[1px] h-4 bg-slate-700 mx-0.5 self-center" />
+                    <div className="w-[1px] h-4 bg-strong mx-0.5 self-center" />
 
                    <button 
                        onClick={(e) => { e.stopPropagation(); openEdit(conn); }}
-                       className="p-1.5 hover:bg-blue-900/50 text-slate-400 hover:text-blue-400 rounded"
+                        className="p-1.5 hover:bg-blue-900/50 text-secondary hover:text-blue-400 rounded"
                        title={t('connections.edit')}
                    >
                        <Edit size={14} />
                    </button>
                    <button 
                        onClick={(e) => { e.stopPropagation(); handleDuplicate(conn.id); }}
-                       className="p-1.5 hover:bg-purple-900/50 text-slate-400 hover:text-purple-400 rounded"
+                        className="p-1.5 hover:bg-purple-900/50 text-secondary hover:text-purple-400 rounded"
                        title={t('connections.clone')}
                    >
                        <Copy size={14} />
                    </button>
-                   <button 
-                       onClick={(e) => { e.stopPropagation(); handleDelete(conn.id); }}
-                       className="p-1.5 hover:bg-red-900/50 text-slate-400 hover:text-red-400 rounded"
-                       title={t('connections.delete')}
-                   >
-                       <Trash2 size={14} />
-                   </button>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(conn.id); }}
+                        className="p-1.5 hover:bg-red-900/50 text-secondary hover:text-red-400 rounded"
+                        title={t('connections.delete')}
+                    >
+                        <Trash2 size={14} />
+                    </button>
                  </div>
                  {connectingId === conn.id && (
-                   <div className="absolute inset-0 bg-slate-900/80 rounded-lg flex items-center justify-center">
+                    <div className="absolute inset-0 bg-elevated/80 rounded-lg flex items-center justify-center">
                      <div className="flex flex-col items-center gap-2">
                        <Loader2 size={24} className="animate-spin text-blue-400" />
                        <span className="text-sm text-blue-300 font-medium">

@@ -181,18 +181,18 @@ export const NewConnectionModal = ({
   };
 
   const InputClass =
-    "w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 mt-1 text-sm";
-  const LabelClass = "block text-xs text-slate-400 font-medium mt-3";
+    "w-full bg-elevated border border-strong rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 mt-1 text-sm";
+  const LabelClass = "block text-xs text-secondary font-medium mt-3";
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-lg shadow-xl w-[500px] border border-slate-700 flex flex-col max-h-[90vh]">
+      <div className="bg-surface-secondary rounded-lg shadow-xl w-[500px] border border-strong flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+        <div className="flex items-center justify-between p-4 border-b border-strong">
           <h2 className="text-lg font-semibold text-white">
             {initialConnection ? t("newConnection.titleEdit") : t("newConnection.titleNew")}
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-secondary hover:text-white">
             <X size={20} />
           </button>
         </div>
@@ -221,7 +221,7 @@ export const NewConnectionModal = ({
                     "px-4 py-2 rounded border text-sm font-medium capitalize flex-1",
                     driver === d
                       ? "bg-blue-600 border-blue-600 text-white"
-                      : "bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500",
+                      : "bg-elevated border-strong text-secondary hover:border-strong",
                   )}
                 >
                   {d}
@@ -304,7 +304,7 @@ export const NewConnectionModal = ({
 
           {/* SSH Tunnel Section */}
           {driver !== "sqlite" && (
-            <div className="mt-6 pt-4 border-t border-slate-700">
+            <div className="mt-6 pt-4 border-t border-strong">
               <div className="flex items-center gap-2 mb-3">
                 <input
                   type="checkbox"
@@ -320,14 +320,14 @@ export const NewConnectionModal = ({
                 />
                 <label
                   htmlFor="ssh-toggle"
-                  className="text-sm font-semibold text-slate-300 cursor-pointer select-none"
+                  className="text-sm font-semibold text-secondary cursor-pointer select-none"
                 >
                   {t("newConnection.useSsh")}
                 </label>
               </div>
 
               {formData.ssh_enabled && (
-                <div className="space-y-4 pl-3 border-l-2 border-slate-800 ml-1">
+                <div className="space-y-4 pl-3 border-l-2 border-default ml-1">
                   <div className="grid grid-cols-3 gap-4">
                     <div className="col-span-2">
                       <label className={LabelClass}>{t("newConnection.sshHost")}</label>
@@ -420,7 +420,7 @@ export const NewConnectionModal = ({
             />
             <label
               htmlFor="keychain-toggle"
-              className="text-sm font-medium text-slate-300 cursor-pointer select-none"
+              className="text-sm font-medium text-secondary cursor-pointer select-none"
             >
               {t("newConnection.saveKeychain")}
             </label>
@@ -447,11 +447,11 @@ export const NewConnectionModal = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-700 bg-slate-800/50 flex justify-end gap-3 rounded-b-lg">
+        <div className="p-4 border-t border-strong bg-surface-secondary/50 flex justify-end gap-3 rounded-b-lg">
           <button
             onClick={testConnection}
             disabled={status === "testing" || status === "saving"}
-            className="px-4 py-2 text-slate-300 hover:text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2 text-secondary hover:text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50"
           >
             {status === "testing" && (
               <Loader2 size={16} className="animate-spin" />

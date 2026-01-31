@@ -7,17 +7,20 @@ import { DatabaseProvider } from './contexts/DatabaseProvider';
 import { SettingsProvider } from './contexts/SettingsProvider';
 import { SavedQueriesProvider } from './contexts/SavedQueriesProvider';
 import { EditorProvider } from './contexts/EditorProvider';
+import { ThemeProvider } from './contexts/ThemeProvider';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <SettingsProvider>
-      <DatabaseProvider>
-        <SavedQueriesProvider>
-          <EditorProvider>
-            <App />
-          </EditorProvider>
-        </SavedQueriesProvider>
-      </DatabaseProvider>
-    </SettingsProvider>
+    <ThemeProvider>
+      <SettingsProvider>
+        <DatabaseProvider>
+          <SavedQueriesProvider>
+            <EditorProvider>
+              <App />
+            </EditorProvider>
+          </SavedQueriesProvider>
+        </DatabaseProvider>
+      </SettingsProvider>
+    </ThemeProvider>
   </React.StrictMode>,
 );

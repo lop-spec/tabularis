@@ -455,13 +455,13 @@ const VisualQueryBuilderContent = () => {
           }}
         >
           <Controls 
-            className="!bg-slate-800 !border-slate-700 !shadow-xl"
+            className="!bg-surface-secondary !border-strong !shadow-xl"
             showInteractive={false}
           />
           <MiniMap 
             nodeColor={() => '#3b82f6'}
             maskColor="rgba(15, 23, 42, 0.85)"
-            className="!bg-slate-900 !border !border-slate-700 !shadow-xl"
+            className="!bg-elevated !border !border-strong !shadow-xl"
             style={{
               backgroundColor: '#0f172a',
               width: 150,
@@ -476,12 +476,12 @@ const VisualQueryBuilderContent = () => {
 
       {/* Settings Sidebar */}
       {showSettings && (
-        <div className="w-96 bg-slate-900 border-l border-slate-800 flex flex-col overflow-hidden shadow-2xl">
-          <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
-            <h3 className="font-semibold text-base text-slate-100">Query Settings</h3>
+        <div className="w-96 bg-elevated border-l border-default flex flex-col overflow-hidden shadow-2xl">
+          <div className="px-5 py-4 border-b border-default flex items-center justify-between bg-base">
+            <h3 className="font-semibold text-base text-primary">Query Settings</h3>
             <button 
               onClick={() => setShowSettings(false)} 
-              className="text-slate-500 hover:text-white transition-colors p-1.5 hover:bg-slate-800 rounded"
+              className="text-muted hover:text-white transition-colors p-1.5 hover:bg-surface-secondary rounded"
               title="Collapse Settings"
             >
               <X size={18} />
@@ -490,9 +490,9 @@ const VisualQueryBuilderContent = () => {
 
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {/* WHERE Conditions */}
-            <div className="p-5 border-b border-slate-800">
+            <div className="p-5 border-b border-default">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                   <Filter size={16} className="text-blue-400" />
                   WHERE Conditions
                 </div>
@@ -512,10 +512,10 @@ const VisualQueryBuilderContent = () => {
                 </button>
               </div>
               {whereConditions.length === 0 && (
-                <div className="text-xs text-slate-500 italic py-2">No conditions added</div>
+                <div className="text-xs text-muted italic py-2">No conditions added</div>
               )}
               {whereConditions.map((condition, idx) => (
-                <div key={condition.id} className="flex flex-col gap-2 mb-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                <div key={condition.id} className="flex flex-col gap-2 mb-3 p-3 bg-surface-secondary/50 rounded-lg border border-strong/50">
                   {/* Logical Operator (AND/OR) - only show for 2nd+ conditions */}
                   {idx > 0 && (
                     <div className="flex gap-2 mb-1">
@@ -526,7 +526,7 @@ const VisualQueryBuilderContent = () => {
                         className={`flex-1 px-3 py-1 text-xs font-medium rounded transition-colors ${
                           condition.logicalOperator === 'AND' 
                             ? 'bg-blue-500 text-white' 
-                            : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                            : 'bg-surface-tertiary text-secondary hover:bg-surface-tertiary'
                         }`}
                       >
                         AND
@@ -538,7 +538,7 @@ const VisualQueryBuilderContent = () => {
                         className={`flex-1 px-3 py-1 text-xs font-medium rounded transition-colors ${
                           condition.logicalOperator === 'OR' 
                             ? 'bg-purple-500 text-white' 
-                            : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                            : 'bg-surface-tertiary text-secondary hover:bg-surface-tertiary'
                         }`}
                       >
                         OR
@@ -550,7 +550,7 @@ const VisualQueryBuilderContent = () => {
                   <select
                     value={condition.column}
                     onChange={(e) => setWhereConditions(whereConditions.map(c => c.id === condition.id ? { ...c, column: e.target.value } : c))}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-md px-3 py-2.5 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors appearance-none cursor-pointer"
+                    className="w-full bg-surface-secondary border border-strong rounded-md px-3 py-2.5 text-sm text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors appearance-none cursor-pointer"
                     style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem' }}
                   >
                     <option value="">Select column</option>
@@ -568,9 +568,9 @@ const VisualQueryBuilderContent = () => {
                       onChange={(e) => setWhereConditions(whereConditions.map(c => 
                         c.id === condition.id ? { ...c, isAggregate: e.target.checked } : c
                       ))}
-                      className="rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-0 w-4 h-4"
+                      className="rounded border-strong bg-surface-tertiary text-purple-500 focus:ring-0 w-4 h-4"
                     />
-                    <label htmlFor={`agg-${condition.id}`} className="text-xs text-slate-400 select-none cursor-pointer">
+                    <label htmlFor={`agg-${condition.id}`} className="text-xs text-secondary select-none cursor-pointer">
                       Use aggregate function (HAVING)
                     </label>
                   </div>
@@ -580,7 +580,7 @@ const VisualQueryBuilderContent = () => {
                     <select
                       value={condition.operator}
                       onChange={(e) => setWhereConditions(whereConditions.map(c => c.id === condition.id ? { ...c, operator: e.target.value } : c))}
-                      className="bg-slate-800 border border-slate-600 rounded-md px-3 py-2.5 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors w-24 appearance-none cursor-pointer"
+                      className="bg-surface-secondary border border-strong rounded-md px-3 py-2.5 text-sm text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors w-24 appearance-none cursor-pointer"
                       style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 0.35rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25em 1.25em', paddingRight: '2rem' }}
                     >
                       <option value="=">=</option>
@@ -598,11 +598,11 @@ const VisualQueryBuilderContent = () => {
                         value={condition.value}
                         onChange={(e) => setWhereConditions(whereConditions.map(c => c.id === condition.id ? { ...c, value: e.target.value } : c))}
                         placeholder="Value"
-                        className="w-full bg-slate-800 border border-slate-600 rounded-md pl-3 pr-9 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                        className="w-full bg-surface-secondary border border-strong rounded-md pl-3 pr-9 py-2.5 text-sm text-primary placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                       />
                       <button
                         onClick={() => setWhereConditions(whereConditions.filter(c => c.id !== condition.id))}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400 transition-colors"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-red-400 transition-colors"
                         title="Remove condition"
                       >
                         <X size={16} />
@@ -614,9 +614,9 @@ const VisualQueryBuilderContent = () => {
             </div>
 
             {/* GROUP BY */}
-            <div className="p-5 border-b border-slate-800">
+            <div className="p-5 border-b border-default">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                   <Group size={16} className="text-purple-400" />
                   GROUP BY
                 </div>
@@ -629,14 +629,14 @@ const VisualQueryBuilderContent = () => {
                 </button>
               </div>
               {groupBy.length === 0 && (
-                <div className="text-xs text-slate-500 italic py-2">No grouping added</div>
+                <div className="text-xs text-muted italic py-2">No grouping added</div>
               )}
               {groupBy.map((col, idx) => (
                 <div key={idx} className="flex gap-2 mb-3 items-center">
                   <select
                     value={col}
                     onChange={(e) => setGroupBy(groupBy.map((c, i) => i === idx ? e.target.value : c))}
-                    className="flex-1 bg-slate-800 border border-slate-600 rounded-md px-3 py-2.5 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors appearance-none cursor-pointer"
+                    className="flex-1 bg-surface-secondary border border-strong rounded-md px-3 py-2.5 text-sm text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors appearance-none cursor-pointer"
                     style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem' }}
                   >
                     <option value="">Select column</option>
@@ -656,9 +656,9 @@ const VisualQueryBuilderContent = () => {
             </div>
 
             {/* ORDER BY */}
-            <div className="p-5 border-b border-slate-800">
+            <div className="p-5 border-b border-default">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                   <SortAsc size={16} className="text-green-400" />
                   ORDER BY
                 </div>
@@ -671,14 +671,14 @@ const VisualQueryBuilderContent = () => {
                 </button>
               </div>
               {orderBy.length === 0 && (
-                <div className="text-xs text-slate-500 italic py-2">No sorting added</div>
+                <div className="text-xs text-muted italic py-2">No sorting added</div>
               )}
               {orderBy.map((order) => (
                 <div key={order.id} className="flex gap-2 mb-3 items-center">
                   <select
                     value={order.column}
                     onChange={(e) => setOrderBy(orderBy.map(o => o.id === order.id ? { ...o, column: e.target.value } : o))}
-                    className="flex-1 bg-slate-800 border border-slate-600 rounded-md px-3 py-2.5 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors appearance-none cursor-pointer"
+                    className="flex-1 bg-surface-secondary border border-strong rounded-md px-3 py-2.5 text-sm text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors appearance-none cursor-pointer"
                     style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem' }}
                   >
                     <option value="">Select column</option>
@@ -689,7 +689,7 @@ const VisualQueryBuilderContent = () => {
                   <select
                     value={order.direction}
                     onChange={(e) => setOrderBy(orderBy.map(o => o.id === order.id ? { ...o, direction: e.target.value as 'ASC' | 'DESC' } : o))}
-                    className="bg-slate-800 border border-slate-600 rounded-md px-3 py-2.5 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors w-28 appearance-none cursor-pointer"
+                    className="bg-surface-secondary border border-strong rounded-md px-3 py-2.5 text-sm text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors w-28 appearance-none cursor-pointer"
                     style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 0.35rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25em 1.25em', paddingRight: '2rem' }}
                   >
                     <option value="ASC">ASC ↑</option>
@@ -708,7 +708,7 @@ const VisualQueryBuilderContent = () => {
 
             {/* LIMIT */}
             <div className="p-5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-200 mb-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-4">
                 <Hash size={16} className="text-orange-400" />
                 LIMIT
               </div>
@@ -718,7 +718,7 @@ const VisualQueryBuilderContent = () => {
                 onChange={(e) => setLimit(e.target.value)}
                 placeholder="e.g., 100"
                 min="1"
-                className="w-full bg-slate-800 border border-slate-600 rounded-md px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                className="w-full bg-surface-secondary border border-strong rounded-md px-3 py-2.5 text-sm text-primary placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
               />
             </div>
           </div>
@@ -729,7 +729,7 @@ const VisualQueryBuilderContent = () => {
       {!showSettings && (
         <button
           onClick={() => setShowSettings(true)}
-          className="absolute top-4 right-4 z-10 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 hover:text-white hover:border-slate-500 hover:bg-slate-800 transition-colors shadow-xl flex items-center gap-2"
+          className="absolute top-4 right-4 z-10 bg-elevated border border-strong rounded-lg px-3 py-2 text-secondary hover:text-white hover:border-strong hover:bg-surface-secondary transition-colors shadow-xl flex items-center gap-2"
           title="Show Query Settings"
         >
           <Filter size={16} />

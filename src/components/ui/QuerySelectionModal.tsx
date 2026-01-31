@@ -12,13 +12,13 @@ export const QuerySelectionModal = ({ isOpen, queries, onSelect, onClose }: Quer
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div className="bg-elevated border border-default rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800">
+        <div className="flex items-center justify-between p-4 border-b border-default">
           <h3 className="text-lg font-semibold text-white">Select Query to Execute</h3>
           <button 
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-secondary hover:text-white transition-colors"
           >
             <X size={20} />
           </button>
@@ -30,13 +30,13 @@ export const QuerySelectionModal = ({ isOpen, queries, onSelect, onClose }: Quer
             <div 
               key={i}
               onClick={() => onSelect(q)}
-              className="p-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-blue-500 rounded-lg cursor-pointer group transition-all"
+              className="p-3 bg-surface-secondary/50 hover:bg-surface-secondary border border-strong hover:border-blue-500 rounded-lg cursor-pointer group transition-all"
             >
               <div className="flex items-start gap-3">
                 <div className="mt-1 p-1 bg-blue-900/30 text-blue-400 rounded group-hover:bg-blue-600 group-hover:text-white transition-colors">
                     <Play size={14} fill="currentColor" />
                 </div>
-                <pre className="text-sm font-mono text-slate-300 overflow-hidden whitespace-pre-wrap break-all line-clamp-3">
+                <pre className="text-sm font-mono text-secondary overflow-hidden whitespace-pre-wrap break-all line-clamp-3">
                   {q}
                 </pre>
               </div>
@@ -45,7 +45,7 @@ export const QuerySelectionModal = ({ isOpen, queries, onSelect, onClose }: Quer
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/50 text-xs text-slate-500 flex justify-between">
+        <div className="p-4 border-t border-default bg-elevated/50 text-xs text-muted flex justify-between">
             <span>{queries.length} queries found</span>
             <span>Esc to cancel</span>
         </div>

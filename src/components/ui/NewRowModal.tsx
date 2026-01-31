@@ -221,12 +221,12 @@ export const NewRowModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-lg shadow-xl w-[600px] border border-slate-700 flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-white">
+      <div className="bg-surface-secondary rounded-lg shadow-xl w-[600px] border border-strong flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-4 border-b border-strong">
+          <h2 className="text-lg font-semibold text-primary">
             {t("newRow.title")} ({tableName})
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-secondary hover:text-primary">
             <X size={20} />
           </button>
         </div>
@@ -246,10 +246,10 @@ export const NewRowModal = ({
             columns.map((col) => {
               return (
                 <div key={col.name}>
-                  <label className="block text-xs font-medium text-slate-400 mb-1 flex justify-between">
+                  <label className="block text-xs font-medium text-secondary mb-1 flex justify-between">
                     <span>
                       {col.name}{" "}
-                      <span className="text-slate-600">({col.data_type})</span>
+                      <span className="text-surface-tertiary">({col.data_type})</span>
                     </span>
                     {col.is_pk && (
                       <span className="text-yellow-500 text-[10px] uppercase">
@@ -270,7 +270,7 @@ export const NewRowModal = ({
                         onChange={(e) =>
                           handleInputChange(col.name, e.target.value)
                         }
-                        className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 appearance-none cursor-pointer"
+                        className="w-full bg-elevated border border-strong rounded px-3 py-2 text-primary focus:outline-none focus:border-blue-500 appearance-none cursor-pointer"
                         style={{
                           backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
                           backgroundPosition: `right 0.75rem center`,
@@ -303,7 +303,7 @@ export const NewRowModal = ({
                       {loadingFk[col.name] && (
                         <Loader2
                           size={12}
-                          className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-slate-500"
+                          className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-muted"
                         />
                       )}
                     </div>
@@ -321,8 +321,8 @@ export const NewRowModal = ({
                             : t("newRow.required")
                       }
                       className={`
-                            w-full bg-slate-900 border rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500
-                            ${col.is_auto_increment ? "border-slate-800 text-slate-400 placeholder:text-slate-600" : "border-slate-700"}
+                            w-full bg-elevated border rounded px-3 py-2 text-primary focus:outline-none focus:border-blue-500
+                            ${col.is_auto_increment ? "border-default text-secondary placeholder:text-muted" : "border-strong"}
                           `}
                     />
                   )}
@@ -332,10 +332,10 @@ export const NewRowModal = ({
           )}
         </div>
 
-        <div className="p-4 border-t border-slate-700 bg-slate-800/50 flex justify-end gap-3 rounded-b-lg">
+        <div className="p-4 border-t border-strong bg-surface-secondary/50 flex justify-end gap-3 rounded-b-lg">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-slate-300 hover:text-white font-medium text-sm"
+            className="px-4 py-2 text-secondary hover:text-primary font-medium text-sm"
           >
             {t("newRow.cancel")}
           </button>

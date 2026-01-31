@@ -58,14 +58,14 @@ const QueryParamsForm: React.FC<{
   );
 
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-xl w-[500px] flex flex-col max-h-[80vh]">
-        <div className="flex items-center justify-between p-4 border-b border-slate-800">
-          <h2 className="text-lg font-semibold text-white">
+    <div className="bg-elevated border border-strong rounded-lg shadow-xl w-[500px] flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between p-4 border-b border-default">
+          <h2 className="text-lg font-semibold text-primary">
             {t("editor.queryParameters")}
           </h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-secondary hover:text-primary transition-colors"
           >
             <X size={20} />
           </button>
@@ -75,7 +75,7 @@ const QueryParamsForm: React.FC<{
           <div className="space-y-4">
             {parameters.map((param) => (
               <div key={param} className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-400 font-mono">
+                <label className="text-xs font-medium text-secondary font-mono">
                   :{param}
                 </label>
                 <input
@@ -83,7 +83,7 @@ const QueryParamsForm: React.FC<{
                   value={values[param] || ""}
                   onChange={(e) => handleChange(param, e.target.value)}
                   placeholder={t("editor.paramValuePlaceholder")}
-                  className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
+                  className="bg-base border border-strong rounded px-3 py-2 text-sm text-primary focus:outline-none focus:border-blue-500 font-mono"
                   autoFocus={parameters[0] === param}
                 />
               </div>
@@ -94,7 +94,7 @@ const QueryParamsForm: React.FC<{
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+              className="px-4 py-2 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-secondary rounded transition-colors"
             >
               {t("common.cancel")}
             </button>

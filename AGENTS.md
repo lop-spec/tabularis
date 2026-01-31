@@ -495,3 +495,39 @@ Adhere to the rules defined in the [rules directory](./.rules/):
         - `src-tauri/src/commands.rs`: Batch query implementation and window spawning.
         - `src-tauri/src/drivers/{mysql,postgres,sqlite}.rs`: Added batch query functions.
         - `src/components/layout/Sidebar.tsx`: Added ER Diagram button to Explorer header.
+
+### Session 37: Theme System Implementation
+- **Status:** Feature Complete (Core).
+- **Actions:**
+    - **Frontend Infrastructure:**
+        - Created comprehensive type definitions (`src/types/theme.ts`) for Theme system.
+        - Built theme registry (`src/themes/themeRegistry.ts`) managing 10 built-in presets.
+        - Implemented preset themes: Tabularis Dark (default), Tabularis Light, Monokai, One Dark Pro, Nord, Dracula, GitHub Dark, Solarized Dark/Light, High Contrast.
+        - Created CSS variable system (`src/index.css`) with 30+ custom properties for dynamic theming.
+        - Built ThemeContext and ThemeProvider (`src/contexts/ThemeContext.ts`, `src/contexts/ThemeProvider.tsx`) following React best practices.
+        - Added utility functions (`src/themes/themeUtils.ts`) for color manipulation and Monaco theme generation.
+    - **Backend:**
+        - Created Rust models (`src-tauri/src/theme_models.rs`) matching TypeScript interfaces.
+        - Implemented theme persistence commands (`src-tauri/src/theme_commands.rs`):
+            - `get_all_themes`, `get_theme`, `save_custom_theme`, `delete_custom_theme`
+            - `import_theme`, `export_theme` for theme sharing.
+        - Registered all commands in `lib.rs`.
+    - **UI Integration:**
+        - Integrated ThemeProvider in app root (`src/main.tsx`).
+        - Added "Appearance" tab to Settings page with theme selector grid.
+        - Theme switching applies instantly via CSS variables.
+        - Monaco Editor themes are generated dynamically for each preset.
+    - **Features:**
+        - Instant theme switching without page reload.
+        - Syntax highlighting themes matching UI themes (Monaco integration).
+        - Support for custom themes (backend infrastructure ready).
+        - Theme persistence to `~/.config/tabularis/themes/`.
+    - **Files Modified/Created:**
+        - **New:** `src/types/theme.ts`, `src/themes/themeRegistry.ts`, `src/themes/themeUtils.ts`
+        - **New:** `src/themes/presets/*.ts` (10 preset theme files)
+        - **New:** `src/contexts/ThemeContext.ts`, `src/contexts/ThemeProvider.tsx`
+        - **New:** `src/hooks/useTheme.ts`
+        - **New:** `src-tauri/src/theme_models.rs`, `src-tauri/src/theme_commands.rs`
+        - **Modified:** `src/index.css` (CSS variables system), `src/main.tsx` (ThemeProvider integration)
+        - **Modified:** `src-tauri/src/lib.rs` (command registration)
+        - **Modified:** `src/pages/Settings.tsx` (Appearance tab with theme selector)

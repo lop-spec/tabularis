@@ -44,12 +44,12 @@ export const SchemaDiagramPage = () => {
   // Show error if no connectionId
   if (!connectionId) {
     return (
-      <div className="w-screen h-screen flex items-center justify-center bg-slate-950">
+      <div className="w-screen h-screen flex items-center justify-center bg-base">
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-slate-200 mb-2">
+          <h1 className="text-xl font-semibold text-primary mb-2">
             {t('erDiagram.noConnection')}
           </h1>
-          <p className="text-slate-400">
+          <p className="text-secondary">
             {t('erDiagram.noConnectionDesc')}
           </p>
         </div>
@@ -60,16 +60,16 @@ export const SchemaDiagramPage = () => {
   return (
     <DatabaseProvider>
       <EditorProvider>
-        <div className="w-screen h-screen flex flex-col bg-slate-950">
+        <div className="w-screen h-screen flex flex-col bg-base">
           {/* Minimal Header */}
-          <div className="h-12 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 shrink-0">
-            <h1 className="text-slate-200 font-semibold">
+          <div className="h-12 bg-elevated border-b border-default flex items-center justify-between px-4 shrink-0">
+            <h1 className="text-primary font-semibold">
               {databaseName} ({connectionName})
             </h1>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleRefresh}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-colors text-sm"
+                className="flex items-center gap-2 px-3 py-1.5 bg-surface-secondary hover:bg-surface-tertiary text-primary rounded-lg border border-strong transition-colors text-sm"
                 title={t('sidebar.refresh')}
               >
                 <RefreshCw size={16} />
@@ -77,7 +77,7 @@ export const SchemaDiagramPage = () => {
               </button>
               <button
                 onClick={toggleFullscreen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-colors text-sm"
+                className="flex items-center gap-2 px-3 py-1.5 bg-surface-secondary hover:bg-surface-tertiary text-primary rounded-lg border border-strong transition-colors text-sm"
                 title={isFullscreen ? t('erDiagram.exitFullscreen') : t('erDiagram.enterFullscreen')}
               >
                 {isFullscreen ? (

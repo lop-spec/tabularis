@@ -125,10 +125,10 @@ export const CreateForeignKeyModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
-      <div className="bg-slate-900 rounded-xl shadow-2xl w-[600px] border border-slate-700 flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50 rounded-t-xl">
+      <div className="bg-elevated rounded-xl shadow-2xl w-[600px] border border-strong flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-default bg-surface-secondary/50 rounded-t-xl">
            <h2 className="text-lg font-bold text-white">{t('createFk.title')}</h2>
-           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+           <button onClick={onClose} className="text-secondary hover:text-white transition-colors">
              <X size={20} />
            </button>
         </div>
@@ -142,32 +142,32 @@ export const CreateForeignKeyModal = ({
             )}
 
             <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('createFk.name')}</label>
+                <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('createFk.name')}</label>
                 <input 
                     value={fkName}
                     onChange={(e) => setFkName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono"
+                    className="w-full bg-base border border-strong rounded p-2 text-white text-sm focus:border-blue-500 outline-none font-mono"
                 />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('createFk.column')}</label>
+                    <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('createFk.column')}</label>
                     <select 
                         value={localColumn}
                         onChange={(e) => setLocalColumn(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm outline-none"
+                        className="w-full bg-base border border-strong rounded p-2 text-white text-sm outline-none"
                     >
                         {localColumns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                     </select>
                 </div>
                 
                 <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('createFk.refTable')}</label>
+                    <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('createFk.refTable')}</label>
                     <select 
                         value={refTable}
                         onChange={(e) => setRefTable(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm outline-none"
+                        className="w-full bg-base border border-strong rounded p-2 text-white text-sm outline-none"
                     >
                         {tables.map(t_info => <option key={t_info.name} value={t_info.name}>{t_info.name}</option>)}
                     </select>
@@ -179,14 +179,14 @@ export const CreateForeignKeyModal = ({
                     {/* Empty spacer or mapping visualization */}
                 </div>
                 <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('createFk.refColumn')}</label>
+                    <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('createFk.refColumn')}</label>
                     {fetchingRefCols ? (
-                        <div className="text-xs text-slate-500 flex items-center gap-2"><Loader2 size={12} className="animate-spin"/> {t('common.loading')}</div>
+                        <div className="text-xs text-muted flex items-center gap-2"><Loader2 size={12} className="animate-spin"/> {t('common.loading')}</div>
                     ) : (
                         <select 
                             value={refColumn}
                             onChange={(e) => setRefColumn(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm outline-none"
+                            className="w-full bg-base border border-strong rounded p-2 text-white text-sm outline-none"
                         >
                             {refColumns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                         </select>
@@ -196,29 +196,29 @@ export const CreateForeignKeyModal = ({
 
             <div className="grid grid-cols-2 gap-4 mt-2">
                 <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('createFk.onUpdate')}</label>
+                    <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('createFk.onUpdate')}</label>
                     <select 
                         value={onUpdate}
                         onChange={(e) => setOnUpdate(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm outline-none"
+                        className="w-full bg-base border border-strong rounded p-2 text-white text-sm outline-none"
                     >
                         {ON_ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1 uppercase">{t('createFk.onDelete')}</label>
+                    <label className="block text-xs font-semibold text-secondary mb-1 uppercase">{t('createFk.onDelete')}</label>
                     <select 
                         value={onDelete}
                         onChange={(e) => setOnDelete(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm outline-none"
+                        className="w-full bg-base border border-strong rounded p-2 text-white text-sm outline-none"
                     >
                         {ON_ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                 </div>
             </div>
 
-            <div className="bg-slate-950 border border-slate-800 rounded p-3 mt-2">
-                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">{t('createFk.sqlPreview')}</div>
+            <div className="bg-base border border-default rounded p-3 mt-2">
+                <div className="text-[10px] text-muted mb-1 uppercase tracking-wider">{t('createFk.sqlPreview')}</div>
                 <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap break-all">{sqlPreview}</pre>
             </div>
 
@@ -229,8 +229,8 @@ export const CreateForeignKeyModal = ({
             )}
         </div>
 
-        <div className="p-4 bg-slate-800/50 border-t border-slate-800 rounded-b-xl flex justify-end gap-3">
-           <button onClick={onClose} className="px-4 py-2 text-slate-400 hover:text-white font-medium text-sm transition-colors">
+        <div className="p-4 bg-surface-secondary/50 border-t border-default rounded-b-xl flex justify-end gap-3">
+           <button onClick={onClose} className="px-4 py-2 text-secondary hover:text-white font-medium text-sm transition-colors">
              {t('createFk.cancel')}
            </button>
            <button 

@@ -203,10 +203,10 @@ export const EditRowModal = ({ isOpen, onClose, tableName, pkColumn, rowData, co
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-lg shadow-xl w-[600px] border border-slate-700 flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-white">{t('editRow.title')} ({tableName})</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+      <div className="bg-surface-secondary rounded-lg shadow-xl w-[600px] border border-strong flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-4 border-b border-strong">
+          <h2 className="text-lg font-semibold text-primary">{t('editRow.title')} ({tableName})</h2>
+          <button onClick={onClose} className="text-secondary hover:text-primary">
             <X size={20} />
           </button>
         </div>
@@ -226,8 +226,8 @@ export const EditRowModal = ({ isOpen, onClose, tableName, pkColumn, rowData, co
 
             return (
               <div key={col}>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                  {col} <span className="text-slate-600">{typeHint}</span> {isPk && <span className="text-yellow-500">(PK)</span>}
+                <label className="block text-xs font-medium text-secondary mb-1">
+                  {col} <span className="text-surface-tertiary">{typeHint}</span> {isPk && <span className="text-yellow-500">(PK)</span>}
                 </label>
                 
                 {foreignKeys.find(fk => fk.column_name === col) ? (
@@ -237,8 +237,8 @@ export const EditRowModal = ({ isOpen, onClose, tableName, pkColumn, rowData, co
                             value={String(formData[col] ?? '')}
                             onChange={(e) => handleInputChange(col, e.target.value)}
                             className={`
-                                w-full bg-slate-900 border rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 appearance-none cursor-pointer
-                                ${isPk ? 'border-slate-800 text-slate-500 cursor-not-allowed' : 'border-slate-700'}
+                                w-full bg-elevated border rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 appearance-none cursor-pointer
+                                ${isPk ? 'border-default text-muted cursor-not-allowed' : 'border-strong'}
                             `}
                             style={{
                               backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
@@ -265,7 +265,7 @@ export const EditRowModal = ({ isOpen, onClose, tableName, pkColumn, rowData, co
                                 !loadingFk[col] && <option value="" disabled>{fkErrors[col] ? `Error: ${fkErrors[col]}` : t('editRow.noOptions')}</option>
                             )}
                         </select>
-                        {loadingFk[col] && <Loader2 size={12} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-slate-500" />}
+                        {loadingFk[col] && <Loader2 size={12} className="absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-muted" />}
                     </div>
                 ) : (
                     <input
@@ -273,8 +273,8 @@ export const EditRowModal = ({ isOpen, onClose, tableName, pkColumn, rowData, co
                       value={formData[col] === null ? '' : String(formData[col])}
                       onChange={(e) => handleInputChange(col, e.target.value)}
                       className={`
-                        w-full bg-slate-900 border rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500
-                        ${isPk ? 'border-slate-800 text-slate-500 cursor-not-allowed' : 'border-slate-700'}
+                        w-full bg-elevated border rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500
+                        ${isPk ? 'border-default text-muted cursor-not-allowed' : 'border-strong'}
                       `}
                       placeholder={formData[col] === null ? 'NULL' : ''}
                     />
@@ -284,10 +284,10 @@ export const EditRowModal = ({ isOpen, onClose, tableName, pkColumn, rowData, co
           })}
         </div>
 
-        <div className="p-4 border-t border-slate-700 bg-slate-800/50 flex justify-end gap-3 rounded-b-lg">
+        <div className="p-4 border-t border-strong bg-surface-secondary/50 flex justify-end gap-3 rounded-b-lg">
           <button 
             onClick={onClose}
-            className="px-4 py-2 text-slate-300 hover:text-white font-medium text-sm"
+            className="px-4 py-2 text-secondary hover:text-white font-medium text-sm"
           >
             {t('editRow.cancel')}
           </button>

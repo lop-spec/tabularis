@@ -14,9 +14,11 @@ import {
   Sparkles,
   Key,
   Power,
+  Palette,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../hooks/useSettings";
+import { useTheme } from "../hooks/useTheme";
 import type { AppLanguage, AiProvider } from "../contexts/SettingsContext";
 import { APP_VERSION } from "../version";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -25,7 +27,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 export const Settings = () => {
   const { t } = useTranslation();
   const { settings, updateSetting } = useSettings();
-  const [activeTab, setActiveTab] = useState<"general" | "ai" | "info">(
+  const [activeTab, setActiveTab] = useState<"general" | "appearance" | "ai" | "info">(
     "general",
   );
   const [aiKeyStatus, setAiKeyStatus] = useState<Record<string, boolean>>({});
@@ -33,6 +35,7 @@ export const Settings = () => {
   const [keyInput, setKeyInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [explainPrompt, setExplainPrompt] = useState("");
+  const { currentTheme, allThemes, setTheme } = useTheme();
 
   const loadModels = async () => {
     try {
@@ -191,28 +194,40 @@ export const Settings = () => {
   ];
 
   return (
-    <div className="h-full flex flex-col bg-slate-950">
+    <div className="h-full flex flex-col bg-base">
       {/* Header Tabs */}
-      <div className="flex items-center gap-1 p-2 border-b border-slate-800 bg-slate-900">
+      <div className="flex items-center gap-1 p-2 border-b border-default bg-elevated">
         <button
           onClick={() => setActiveTab("general")}
           className={clsx(
             "px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors",
             activeTab === "general"
-              ? "bg-slate-800 text-white"
-              : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50",
+              ? "bg-surface-secondary text-primary"
+              : "text-muted hover:text-primary hover:bg-surface-secondary/50",
           )}
         >
           <SettingsIcon size={16} />
           {t("settings.general")}
         </button>
         <button
+          onClick={() => setActiveTab("appearance")}
+          className={clsx(
+            "px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors",
+            activeTab === "appearance"
+              ? "bg-surface-secondary text-primary"
+              : "text-muted hover:text-primary hover:bg-surface-secondary/50",
+          )}
+        >
+          <Palette size={16} />
+          {t("settings.appearance")}
+        </button>
+        <button
           onClick={() => setActiveTab("ai")}
           className={clsx(
             "px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors",
             activeTab === "ai"
-              ? "bg-slate-800 text-white"
-              : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50",
+              ? "bg-surface-secondary text-primary"
+              : "text-muted hover:text-primary hover:bg-surface-secondary/50",
           )}
         >
           <Sparkles size={16} />
@@ -223,8 +238,8 @@ export const Settings = () => {
           className={clsx(
             "px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors",
             activeTab === "info"
-              ? "bg-slate-800 text-white"
-              : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50",
+              ? "bg-surface-secondary text-primary"
+              : "text-muted hover:text-primary hover:bg-surface-secondary/50",
           )}
         >
           <Info size={16} />
@@ -237,18 +252,18 @@ export const Settings = () => {
           {/* General Tab */}
           {activeTab === "general" && (
             <div className="space-y-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <div className="bg-elevated border border-default rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
                   <SettingsIcon size={20} className="text-blue-400" />
                   {t("settings.dataEditor")}
                 </h3>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-secondary mb-1">
                       {t("settings.pageSize")}
                     </label>
-                    <p className="text-xs text-slate-500 mb-2">
+                    <p className="text-xs text-muted mb-2">
                       {t("settings.pageSizeDesc")}
                     </p>
                     <div className="flex items-center gap-2">
@@ -261,9 +276,9 @@ export const Settings = () => {
                             parseInt(e.target.value) || 0,
                           )
                         }
-                        className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white w-32 focus:outline-none focus:border-blue-500 transition-colors"
+                        className="bg-base border border-strong rounded px-3 py-2 text-primary w-32 focus:outline-none focus:border-blue-500 transition-colors"
                       />
-                      <span className="text-sm text-slate-500">
+                      <span className="text-sm text-muted">
                         {t("settings.rows")}
                       </span>
                     </div>
@@ -271,18 +286,18 @@ export const Settings = () => {
                 </div>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <div className="bg-elevated border border-default rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
                   <Languages size={20} className="text-purple-400" />
                   {t("settings.appearance")}
                 </h3>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-secondary mb-1">
                       {t("settings.language")}
                     </label>
-                    <p className="text-xs text-slate-500 mb-3">
+                    <p className="text-xs text-muted mb-3">
                       {t("settings.languageDesc")}
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -294,7 +309,7 @@ export const Settings = () => {
                             "px-4 py-2 rounded-lg text-sm font-medium transition-all border",
                             settings.language === lang.id
                               ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20"
-                              : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600 hover:text-slate-200",
+                              : "bg-base border-default text-muted hover:border-strong hover:text-primary",
                           )}
                         >
                           {lang.label}
@@ -307,36 +322,89 @@ export const Settings = () => {
             </div>
           )}
 
+          {/* Appearance Tab */}
+          {activeTab === "appearance" && (
+            <div className="space-y-6">
+              <div className="bg-elevated border border-default rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+                  <Palette size={20} className="text-pink-400" />
+                  {t("settings.themeSelection")}
+                </h3>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {allThemes.map((theme) => (
+                    <button
+                      key={theme.id}
+                      onClick={() => setTheme(theme.id)}
+                      className={clsx(
+                        "p-4 rounded-xl border transition-all text-left",
+                        currentTheme.id === theme.id
+                          ? "bg-surface-secondary border-blue-500 shadow-lg shadow-blue-900/20"
+                          : "bg-base border-default hover:border-strong",
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div
+                          className="w-6 h-6 rounded-full border border-strong"
+                          style={{
+                            background: `linear-gradient(135deg, ${theme.colors.accent.primary} 50%, ${theme.colors.accent.secondary} 50%)`,
+                          }}
+                        />
+                        <span className="text-sm font-medium text-primary">
+                          {theme.name}
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        <div
+                          className="w-4 h-4 rounded"
+                          style={{ backgroundColor: theme.colors.bg.base }}
+                        />
+                        <div
+                          className="w-4 h-4 rounded"
+                          style={{ backgroundColor: theme.colors.surface.primary }}
+                        />
+                        <div
+                          className="w-4 h-4 rounded"
+                          style={{ backgroundColor: theme.colors.accent.primary }}
+                        />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* AI Tab */}
           {activeTab === "ai" && (
             <div className="space-y-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <div className="bg-elevated border border-default rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
                   <Sparkles size={20} className="text-yellow-400" />
                   AI Configuration
                 </h3>
-                <p className="text-sm text-slate-400 mb-6">
+                <p className="text-sm text-secondary mb-6">
                   Configure AI providers to enable natural language to SQL
                   generation. Keys are stored securely in your system's
                   keychain.
                 </p>
 
                 {/* Enable/Disable Toggle */}
-                <div className="flex items-center justify-between bg-slate-950/50 p-4 rounded-lg border border-slate-800 mb-6">
+                <div className="flex items-center justify-between bg-base/50 p-4 rounded-lg border border-default mb-6">
                   <div className="flex items-center gap-3">
-                    <div className={clsx("p-2 rounded-full", settings.aiEnabled ? "bg-green-900/20 text-green-400" : "bg-slate-800 text-slate-500")}>
+                    <div className={clsx("p-2 rounded-full", settings.aiEnabled ? "bg-green-900/20 text-green-400" : "bg-surface-secondary text-muted")}>
                         <Power size={18} />
                     </div>
                     <div>
-                        <div className="text-sm font-medium text-white">{t("settings.ai.enable")}</div>
-                        <div className="text-xs text-slate-500">{t("settings.ai.enableDesc")}</div>
+                        <div className="text-sm font-medium text-primary">{t("settings.ai.enable")}</div>
+                        <div className="text-xs text-muted">{t("settings.ai.enableDesc")}</div>
                     </div>
                   </div>
                   <button
                     onClick={() => updateSetting("aiEnabled", !settings.aiEnabled)}
                     className={clsx(
-                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900",
-                        settings.aiEnabled ? "bg-blue-600" : "bg-slate-700"
+                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-elevated",
+                        settings.aiEnabled ? "bg-blue-600" : "bg-surface-secondary"
                     )}
                   >
                     <span
@@ -351,7 +419,7 @@ export const Settings = () => {
                 <div className={clsx("space-y-6 transition-opacity", !settings.aiEnabled && "opacity-50 pointer-events-none")}>
                   {/* Default Provider Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-secondary mb-2">
                       {t("settings.ai.defaultProvider")}
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -363,7 +431,7 @@ export const Settings = () => {
                             "px-4 py-2 rounded-lg text-sm font-medium transition-all border flex items-center gap-2",
                             settings.aiProvider === p.id
                               ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20"
-                              : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600 hover:text-slate-200",
+                              : "bg-base border-default text-muted hover:border-strong hover:text-primary",
                           )}
                         >
                           {p.label}
@@ -380,14 +448,14 @@ export const Settings = () => {
 
                   {/* Model Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-secondary mb-1">
                       {t("settings.ai.defaultModel")}
                     </label>
                     {settings.aiProvider ? (
                         <select
                             value={settings.aiModel || ""}
                             onChange={(e) => updateSetting("aiModel", e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none"
+                            className="w-full bg-base border border-strong rounded px-3 py-2 text-primary focus:outline-none focus:border-blue-500 transition-colors appearance-none"
                         >
                             <option value="" disabled>Select a model</option>
                             {(settings.aiCustomModels?.[settings.aiProvider] || availableModels[settings.aiProvider] || []).map(model => (
@@ -395,32 +463,32 @@ export const Settings = () => {
                             ))}
                         </select>
                     ) : (
-                        <div className="text-sm text-slate-500 italic px-3 py-2 border border-slate-800 rounded bg-slate-950">
+                        <div className="text-sm text-muted italic px-3 py-2 border border-default rounded bg-base">
                             {t("settings.ai.selectProviderFirst")}
                         </div>
                     )}
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-muted mt-1">
                         {t("settings.ai.modelDesc")}
                     </p>
                   </div>
 
                   {/* API Keys Management */}
-                  <div className="border-t border-slate-800 pt-6 mt-6">
-                    <h4 className="text-md font-medium text-white mb-4 flex items-center gap-2">
+                  <div className="border-t border-default pt-6 mt-6">
+                    <h4 className="text-md font-medium text-primary mb-4 flex items-center gap-2">
                       <Key size={16} /> {t("settings.ai.manageKeys")}
                     </h4>
 
                     <div className="grid gap-4">
                       {providers.map((p) => (
                         <div key={p.id} className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between text-sm text-slate-300">
+                          <div className="flex items-center justify-between text-sm text-secondary">
                             <span>{t("settings.ai.apiKey", { provider: p.label })}</span>
                             {aiKeyStatus[p.id] ? (
                               <span className="text-green-400 flex items-center gap-1 text-xs">
                                 <CheckCircle2 size={12} /> {t("settings.ai.configured")}
                               </span>
                             ) : (
-                              <span className="text-slate-500 text-xs">
+                              <span className="text-muted text-xs">
                                 {t("settings.ai.notConfigured")}
                               </span>
                             )}
@@ -429,7 +497,7 @@ export const Settings = () => {
                             <input
                               type="password"
                               placeholder={t("settings.ai.enterKey", { provider: p.label })}
-                              className="flex-1 bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                              className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500"
                               onChange={(e) => setKeyInput(e.target.value)}
                               // Only keep value in state for the active input being typed
                             />
@@ -457,11 +525,11 @@ export const Settings = () => {
                     </div>
                   </div>
                   {/* System Prompt Configuration */}
-                  <div className="border-t border-slate-800 pt-6 mt-6">
-                    <h4 className="text-md font-medium text-white mb-4 flex items-center gap-2">
+                  <div className="border-t border-default pt-6 mt-6">
+                    <h4 className="text-md font-medium text-primary mb-4 flex items-center gap-2">
                       <Code2 size={16} /> {t("settings.ai.systemPrompt")}
                     </h4>
-                    <p className="text-xs text-slate-400 mb-4">
+                    <p className="text-xs text-secondary mb-4">
                       {t("settings.ai.systemPromptDesc")}
                     </p>
 
@@ -469,13 +537,13 @@ export const Settings = () => {
                       <textarea
                         value={systemPrompt}
                         onChange={(e) => setSystemPrompt(e.target.value)}
-                        className="w-full h-40 bg-slate-950 border border-slate-700 rounded-lg p-3 text-white text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors resize-y"
+                        className="w-full h-40 bg-base border border-strong rounded-lg p-3 text-primary text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors resize-y"
                         placeholder={t("settings.ai.enterSystemPrompt")}
                       />
                         <div className="flex justify-end gap-2">
                             <button
                                 onClick={handleResetPrompt}
-                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-sm font-medium transition-colors border border-slate-700"
+                                className="px-3 py-2 bg-surface-secondary hover:bg-surface-tertiary text-secondary rounded text-sm font-medium transition-colors border border-strong"
                             >
                                 {t("settings.ai.resetDefault")}
                             </button>
@@ -490,11 +558,11 @@ export const Settings = () => {
                   </div>
 
                   {/* Explain Prompt Configuration */}
-                  <div className="border-t border-slate-800 pt-6 mt-6">
-                     <h4 className="text-md font-medium text-white mb-4 flex items-center gap-2">
+                  <div className="border-t border-default pt-6 mt-6">
+                     <h4 className="text-md font-medium text-primary mb-4 flex items-center gap-2">
                         <Code2 size={16} /> {t("settings.ai.explainPrompt")}
                      </h4>
-                     <p className="text-xs text-slate-400 mb-4">
+                     <p className="text-xs text-secondary mb-4">
                         {t("settings.ai.explainPromptDesc")}
                      </p>
                      
@@ -502,13 +570,13 @@ export const Settings = () => {
                         <textarea 
                            value={explainPrompt}
                            onChange={(e) => setExplainPrompt(e.target.value)}
-                           className="w-full h-40 bg-slate-950 border border-slate-700 rounded-lg p-3 text-white text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors resize-y"
+                           className="w-full h-40 bg-base border border-strong rounded-lg p-3 text-primary text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors resize-y"
                            placeholder={t("settings.ai.enterExplainPrompt")}
                         />
                         <div className="flex justify-end gap-2">
                             <button
                                 onClick={handleResetExplainPrompt}
-                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-sm font-medium transition-colors border border-slate-700"
+                                className="px-3 py-2 bg-surface-secondary hover:bg-surface-tertiary text-secondary rounded text-sm font-medium transition-colors border border-strong"
                             >
                                 {t("settings.ai.resetDefault")}
                             </button>
@@ -530,7 +598,7 @@ export const Settings = () => {
           {activeTab === "info" && (
             <div className="space-y-8">
               {/* Header / Hero */}
-              <div className="bg-gradient-to-br from-blue-900/20 to-slate-900 border border-blue-500/20 rounded-2xl p-8 text-center relative overflow-hidden">
+              <div className="bg-gradient-to-br from-blue-900/20 to-elevated border border-blue-500/20 rounded-2xl p-8 text-center relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                   <Code2 size={120} />
                 </div>
@@ -543,10 +611,10 @@ export const Settings = () => {
                   />
                 </div>
 
-                <h1 className="text-3xl font-bold text-white mb-2">
+                <h1 className="text-3xl font-bold text-primary mb-2">
                   tabularis
                 </h1>
-                <p className="text-slate-400 max-w-lg mx-auto mb-6">
+                <p className="text-secondary max-w-lg mx-auto mb-6">
                   A lightweight, developer-focused database manager built with
                   Tauri, Rust, and React. Born from a "vibe coding" experiment
                   to create a modern, native tool in record time.
@@ -557,7 +625,7 @@ export const Settings = () => {
                     onClick={() =>
                       openUrl("https://github.com/debba/tabularis")
                     }
-                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors border border-slate-700"
+                    className="flex items-center gap-2 bg-surface-secondary hover:bg-surface-tertiary text-primary px-4 py-2 rounded-lg font-medium transition-colors border border-strong"
                   >
                     <Github size={18} />
                     {t("settings.starOnGithub")}
@@ -575,30 +643,30 @@ export const Settings = () => {
 
               {/* Roadmap / Status */}
               <div>
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <h2 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
                   <Info size={20} className="text-blue-400" />
                   {t("settings.projectStatus")}
                 </h2>
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                  <div className="p-4 border-b border-slate-800 bg-slate-800/50">
-                    <p className="text-sm text-slate-400">
+                <div className="bg-elevated border border-default rounded-xl overflow-hidden">
+                  <div className="p-4 border-b border-default bg-surface-secondary/50">
+                    <p className="text-sm text-secondary">
                       {t("settings.roadmapDesc")}
                     </p>
                   </div>
-                  <div className="divide-y divide-slate-800">
+                  <div className="divide-y divide-default">
                     {roadmap.map((item, i) => (
                       <div
                         key={i}
-                        className="p-4 flex items-center gap-3 hover:bg-slate-800/30 transition-colors"
+                        className="p-4 flex items-center gap-3 hover:bg-surface-secondary/30 transition-colors"
                       >
                         {item.done ? (
                           <CheckCircle2 size={18} className="text-green-500" />
                         ) : (
-                          <Circle size={18} className="text-slate-600" />
+                          <Circle size={18} className="text-surface-tertiary" />
                         )}
                         <span
                           className={
-                            item.done ? "text-slate-200" : "text-slate-500"
+                            item.done ? "text-primary" : "text-muted"
                           }
                         >
                           {item.label}
@@ -611,12 +679,12 @@ export const Settings = () => {
 
               {/* Support */}
 
-              <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 flex flex-col items-center text-center">
+              <div className="bg-elevated/50 border border-default rounded-xl p-6 flex flex-col items-center text-center">
                 <Heart size={32} className="text-red-500 mb-3 animate-pulse" />
-                <h3 className="text-lg font-semibold text-white mb-2">
+                <h3 className="text-lg font-semibold text-primary mb-2">
                   {t("settings.support")}
                 </h3>
-                <p className="text-slate-400 text-sm mb-4 max-w-md">
+                <p className="text-secondary text-sm mb-4 max-w-md">
                   {t("settings.supportDesc")}
                 </p>
                 <button

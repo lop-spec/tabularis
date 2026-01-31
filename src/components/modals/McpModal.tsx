@@ -55,21 +55,21 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
+        <div className="flex items-center justify-between p-4 border-b border-default bg-base">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-purple-900/30 rounded-lg">
                 <Cpu size={20} className="text-purple-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">{t("mcp.title")}</h2>
-              <p className="text-xs text-slate-400">{t("mcp.subtitle")}</p>
+              <h2 className="text-lg font-semibold text-primary">{t("mcp.title")}</h2>
+              <p className="text-xs text-secondary">{t("mcp.subtitle")}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-secondary hover:text-primary transition-colors"
           >
             <X size={20} />
           </button>
@@ -78,22 +78,22 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
         {/* Content */}
         <div className="p-6 space-y-6 overflow-y-auto">
             
-            <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                <p className="text-sm text-slate-300 leading-relaxed">
+            <div className="bg-surface-secondary/50 p-4 rounded-lg border border-strong">
+                <p className="text-sm text-secondary leading-relaxed">
                     {t("mcp.description")}
                 </p>
             </div>
 
             {loading ? (
-                <div className="text-center py-8 text-slate-500">{t("mcp.checking")}</div>
+                <div className="text-center py-8 text-muted">{t("mcp.checking")}</div>
             ) : (
                 <div className="space-y-4">
-                    <div className="flex items-center justify-between bg-slate-950 p-4 rounded-lg border border-slate-800">
+                    <div className="flex items-center justify-between bg-base p-4 rounded-lg border border-default">
                         <div className="flex items-center gap-3">
-                            <div className={`w-3 h-3 rounded-full ${status?.installed ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-slate-600'}`} />
+                            <div className={`w-3 h-3 rounded-full ${status?.installed ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-surface-tertiary'}`} />
                             <div>
-                                <div className="font-medium text-slate-200">{t("mcp.configPath")}</div>
-                                <div className="text-xs text-slate-500 font-mono mt-1">
+                                <div className="font-medium text-primary">{t("mcp.configPath")}</div>
+                                <div className="text-xs text-muted font-mono mt-1">
                                     {status?.config_path || t("mcp.notFound")}
                                 </div>
                             </div>
@@ -116,9 +116,9 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
 
                     {!status?.installed && (
                         <div className="space-y-2">
-                             <label className="text-xs uppercase font-bold text-slate-500">{t("mcp.manualConfig")}</label>
+                             <label className="text-xs uppercase font-bold text-muted">{t("mcp.manualConfig")}</label>
                              <div className="relative group">
-                                <pre className="bg-black/80 text-slate-300 p-4 rounded-lg text-xs font-mono overflow-x-auto border border-slate-800">
+                                <pre className="bg-black/80 text-secondary p-4 rounded-lg text-xs font-mono overflow-x-auto border border-default">
 {JSON.stringify({
   "mcpServers": {
     "tabularis": {
@@ -137,12 +137,12 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
                                             }
                                         }
                                     }, null, 2))}
-                                    className="absolute top-2 right-2 p-2 bg-slate-800 text-slate-400 hover:text-white rounded opacity-0 group-hover:opacity-100 transition-all"
+                                    className="absolute top-2 right-2 p-2 bg-surface-secondary text-secondary hover:text-primary rounded opacity-0 group-hover:opacity-100 transition-all"
                                 >
                                     <Copy size={14} />
                                 </button>
                              </div>
-                             <p className="text-xs text-slate-500">
+                             <p className="text-xs text-muted">
                                 {t("mcp.manualText")}
                              </p>
                         </div>
@@ -152,10 +152,10 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex justify-end">
+        <div className="p-4 border-t border-default bg-base/50 flex justify-end">
             <button
                 onClick={onClose}
-                className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+                className="px-4 py-2 text-secondary hover:text-primary transition-colors text-sm"
             >
                 {t("common.close")}
             </button>

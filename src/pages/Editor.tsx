@@ -950,7 +950,7 @@ export const Editor = () => {
 
   if (!activeTab) {
     return (
-      <div className="flex flex-col h-full bg-slate-950 items-center justify-center text-slate-500">
+      <div className="flex flex-col h-full bg-base items-center justify-center text-muted">
         <Database size={48} className="mb-4 opacity-20" />
         {activeConnectionId ? (
           <div className="text-center">
@@ -970,9 +970,9 @@ export const Editor = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex flex-col h-full bg-base">
       {/* Tab Bar */}
-      <div className="flex items-center bg-slate-900 border-b border-slate-800 h-9 shrink-0">
+      <div className="flex items-center bg-elevated border-b border-default h-9 shrink-0">
         <div className="flex flex-1 overflow-x-auto no-scrollbar h-full">
           {tabs.map((tab) => (
             <div
@@ -980,10 +980,10 @@ export const Editor = () => {
               onClick={() => setActiveTabId(tab.id)}
               onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
               className={clsx(
-                "flex items-center gap-2 px-3 h-full border-r border-slate-800 cursor-pointer min-w-[140px] max-w-[220px] text-xs transition-all group relative select-none",
+                "flex items-center gap-2 px-3 h-full border-r border-default cursor-pointer min-w-[140px] max-w-[220px] text-xs transition-all group relative select-none",
                 activeTabId === tab.id
-                  ? "bg-slate-950 text-slate-100 font-medium"
-                  : "text-slate-500 hover:bg-slate-800 hover:text-slate-300",
+                  ? "bg-base text-primary font-medium"
+                  : "text-muted hover:bg-surface-secondary hover:text-secondary",
               )}
             >
               {activeTabId === tab.id && (
@@ -1003,7 +1003,7 @@ export const Editor = () => {
                   closeTab(tab.id);
                 }}
                 className={clsx(
-                  "p-0.5 rounded-sm hover:bg-slate-700 transition-opacity shrink-0",
+                  "p-0.5 rounded-sm hover:bg-surface-secondary transition-opacity shrink-0",
                   activeTabId === tab.id
                     ? "opacity-100"
                     : "opacity-0 group-hover:opacity-100",
@@ -1019,14 +1019,14 @@ export const Editor = () => {
         </div>
         <button
           onClick={() => addTab({ type: "console" })}
-          className="flex items-center justify-center w-9 h-full text-slate-500 hover:text-white hover:bg-slate-800 border-l border-slate-800 transition-colors shrink-0"
+          className="flex items-center justify-center w-9 h-full text-muted hover:text-white hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
           title={t("editor.newConsole")}
         >
           <Plus size={16} />
         </button>
         <button
           onClick={() => addTab({ type: "query_builder" })}
-          className="flex items-center justify-center w-9 h-full text-purple-500 hover:text-white hover:bg-slate-800 border-l border-slate-800 transition-colors shrink-0"
+          className="flex items-center justify-center w-9 h-full text-purple-500 hover:text-white hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
           title={t("editor.newVisualQuery")}
         >
           <Network size={16} />
@@ -1034,7 +1034,7 @@ export const Editor = () => {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center p-2 border-b border-slate-800 bg-slate-900 gap-2 h-[50px]">
+      <div className="flex items-center p-2 border-b border-default bg-elevated gap-2 h-[50px]">
         {activeTab.isLoading ? (
           <button
             onClick={stopQuery}
@@ -1071,23 +1071,23 @@ export const Editor = () => {
                       className="fixed inset-0 z-40"
                       onClick={() => setIsRunDropdownOpen(false)}
                     />
-                    <div className="absolute top-full left-0 mt-1 w-80 bg-slate-800 border border-slate-700 rounded shadow-xl z-50 flex flex-col py-1 max-h-80 overflow-y-auto">
+                    <div className="absolute top-full left-0 mt-1 w-80 bg-surface-secondary border border-strong rounded shadow-xl z-50 flex flex-col py-1 max-h-80 overflow-y-auto">
                       {dropdownQueries.length === 0 ? (
-                        <div className="px-4 py-2 text-xs text-slate-500 italic">
+                        <div className="px-4 py-2 text-xs text-muted italic">
                           {t("editor.noValidQueries")}
                         </div>
                       ) : (
                         dropdownQueries.map((q, i) => (
                           <div
                             key={i}
-                            className="flex items-center border-b border-slate-700/50 last:border-0 hover:bg-slate-700/50 transition-colors group"
+                            className="flex items-center border-b border-strong/50 last:border-0 hover:bg-surface-tertiary/50 transition-colors group"
                           >
                             <button
                               onClick={() => {
                                 runQuery(q, 1);
                                 setIsRunDropdownOpen(false);
                               }}
-                              className="text-left px-4 py-2 text-xs font-mono text-slate-300 hover:text-white flex-1 truncate"
+                              className="text-left px-4 py-2 text-xs font-mono text-secondary hover:text-white flex-1 truncate"
                               title={q}
                             >
                               {q}
@@ -1098,7 +1098,7 @@ export const Editor = () => {
                                 setIsRunDropdownOpen(false);
                                 setSaveQueryModal({ isOpen: true, sql: q });
                               }}
-                              className="p-2 text-slate-500 hover:text-white hover:bg-slate-600 transition-colors mr-1 rounded shrink-0 opacity-0 group-hover:opacity-100"
+                              className="p-2 text-muted hover:text-white hover:bg-surface transition-colors mr-1 rounded shrink-0 opacity-0 group-hover:opacity-100"
                               title={t("editor.saveThisQuery")}
                             >
                               <Save size={14} />
@@ -1119,10 +1119,10 @@ export const Editor = () => {
           <button
               onClick={handleEditParams}
               disabled={!activeTab?.query || extractQueryParams(activeTab.query).length === 0}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed border border-slate-700"
+              className="flex items-center gap-2 px-3 py-1.5 bg-surface-secondary hover:bg-surface text-primary rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed border border-strong"
               title={t("editor.queryParameters")}
           >
-              <span className="font-mono text-xs font-bold border border-slate-500 text-slate-400 rounded px-1.5 py-0.5">P</span>
+              <span className="font-mono text-xs font-bold border border-muted text-secondary rounded px-1.5 py-0.5">P</span>
               {t("editor.parameters")}
           </button>
         )}
@@ -1155,7 +1155,7 @@ export const Editor = () => {
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
             disabled={!activeTab.result || activeTab.result.rows.length === 0}
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-sm font-medium disabled:opacity-50 border border-slate-700"
+            className="flex items-center gap-2 px-3 py-1.5 bg-surface-secondary hover:bg-surface text-primary rounded text-sm font-medium disabled:opacity-50 border border-strong"
           >
             <Download size={16} /> {t("editor.export")}
           </button>
@@ -1165,16 +1165,16 @@ export const Editor = () => {
                 className="fixed inset-0 z-40"
                 onClick={() => setExportMenuOpen(false)}
               />
-              <div className="absolute top-full left-0 mt-1 w-40 bg-slate-800 border border-slate-700 rounded shadow-xl z-50 flex flex-col py-1">
+              <div className="absolute top-full left-0 mt-1 w-40 bg-surface-secondary border border-strong rounded shadow-xl z-50 flex flex-col py-1">
                 <button
                   onClick={handleExportCSV}
-                  className="text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                  className="text-left px-4 py-2 text-sm text-secondary hover:bg-surface"
                 >
                   CSV (.csv)
                 </button>
                 <button
                   onClick={handleExportJSON}
-                  className="text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                  className="text-left px-4 py-2 text-sm text-secondary hover:bg-surface"
                 >
                   JSON (.json)
                 </button>
@@ -1182,7 +1182,7 @@ export const Editor = () => {
             </>
           )}
         </div>
-        <span className="text-xs text-slate-500 ml-2">
+        <span className="text-xs text-muted ml-2">
           {activeConnectionId ? t("editor.connected") : t("editor.disconnected")}
         </span>
       </div>
@@ -1234,7 +1234,7 @@ export const Editor = () => {
             <div
               onMouseDown={isEditorOpen ? startResize : undefined}
               className={clsx(
-                "h-6 bg-slate-900 border-y border-slate-800 flex items-center px-2 relative",
+                "h-6 bg-elevated border-y border-default flex items-center px-2 relative",
                 isEditorOpen
                   ? "cursor-row-resize justify-between"
                   : "justify-between"
@@ -1245,7 +1245,7 @@ export const Editor = () => {
                   onClick={() =>
                     updateActiveTab({ isEditorOpen: !isEditorOpen })
                   }
-                  className="text-slate-500 hover:text-slate-300 transition-colors p-1 hover:bg-slate-800 rounded flex items-center gap-1 text-xs"
+                  className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded flex items-center gap-1 text-xs"
                   title={
                     isEditorOpen
                       ? "Maximize Results (Hide Editor)"
@@ -1267,7 +1267,7 @@ export const Editor = () => {
                     e.stopPropagation();
                     setIsResultsCollapsed(true);
                   }}
-                  className="text-slate-500 hover:text-slate-300 transition-colors p-1 hover:bg-slate-800 rounded"
+                  className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded"
                   title="Hide Results Panel (Maximize Editor)"
                 >
                   <ChevronDown size={16} />
@@ -1277,10 +1277,10 @@ export const Editor = () => {
           )}
 
           {/* Results Panel */}
-          <div className="flex-1 overflow-hidden bg-slate-900 flex flex-col min-h-0">
+          <div className="flex-1 overflow-hidden bg-elevated flex flex-col min-h-0">
             {activeTab.isLoading ? (
-              <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                <div className="w-12 h-12 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+              <div className="flex flex-col items-center justify-center h-full text-muted">
+                <div className="w-12 h-12 border-4 border-surface-secondary border-t-blue-500 rounded-full animate-spin mb-4"></div>
                 <p className="text-sm">{t("editor.executingQuery")}</p>
               </div>
             ) : activeTab.error ? (
@@ -1289,12 +1289,12 @@ export const Editor = () => {
               </div>
             ) : activeTab.result ? (
               <div className="flex-1 min-h-0 flex flex-col">
-                <div className="p-2 bg-slate-900 text-xs text-slate-400 border-b border-slate-800 flex justify-between items-center shrink-0">
+                <div className="p-2 bg-elevated text-xs text-secondary border-b border-default flex justify-between items-center shrink-0">
                   <div className="flex items-center gap-4">
                     <span>
                       {t("editor.rowsRetrieved", { count: activeTab.result.rows.length })}{" "}
                       {activeTab.executionTime !== null && (
-                        <span className="text-slate-500 ml-2 font-mono">
+                        <span className="text-muted ml-2 font-mono">
                           ({formatDuration(activeTab.executionTime)})
                         </span>
                       )}
@@ -1310,14 +1310,14 @@ export const Editor = () => {
 
                   {/* Pagination Controls */}
                   {activeTab.result.pagination && (
-                    <div className="flex items-center gap-1 bg-slate-800 rounded border border-slate-700">
+                    <div className="flex items-center gap-1 bg-surface-secondary rounded border border-strong">
                       <button
                         disabled={
                           activeTab.result.pagination.page === 1 ||
                           activeTab.isLoading
                         }
                         onClick={() => runQuery(activeTab.query, 1)}
-                        className="p-1 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
                         title="First Page"
                       >
                         <ChevronsLeft size={14} />
@@ -1333,14 +1333,14 @@ export const Editor = () => {
                             activeTab.result!.pagination!.page - 1,
                           )
                         }
-                        className="p-1 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-slate-700"
+                        className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
                         title="Previous Page"
                       >
                         <ChevronLeft size={14} />
                       </button>
 
                       <div
-                        className="px-3 text-slate-300 text-xs font-medium cursor-pointer hover:bg-slate-700 transition-colors min-w-[80px] text-center py-1"
+                        className="px-3 text-secondary text-xs font-medium cursor-pointer hover:bg-surface-tertiary transition-colors min-w-[80px] text-center py-1"
                         onClick={() => {
                           setIsEditingPage(true);
                           setTempPage(
@@ -1405,7 +1405,7 @@ export const Editor = () => {
                             activeTab.result!.pagination!.page + 1,
                           )
                         }
-                        className="p-1 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-slate-700"
+                        className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
                         title="Next Page"
                       >
                         <ChevronRight size={14} />
@@ -1426,7 +1426,7 @@ export const Editor = () => {
                             ),
                           )
                         }
-                        className="p-1 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-slate-700"
+                        className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
                         title="Last Page"
                       >
                         <ChevronsRight size={14} />
@@ -1437,11 +1437,11 @@ export const Editor = () => {
                 
                 {/* Data Manipulation Toolbar (Below Header) */}
                 {activeTab.activeTable && activeTab.pkColumn && (
-                    <div className="p-1 px-2 bg-slate-900 border-b border-slate-800 flex items-center gap-2">
+                    <div className="p-1 px-2 bg-elevated border-b border-default flex items-center gap-2">
                         <div className="flex items-center gap-1">
                             <button
                                 onClick={() => setShowNewRowModal(true)}
-                                className="flex items-center justify-center w-7 h-7 text-slate-400 hover:text-green-400 hover:bg-slate-800 rounded transition-colors"
+                                className="flex items-center justify-center w-7 h-7 text-secondary hover:text-green-400 hover:bg-surface-secondary rounded transition-colors"
                                 title={t("editor.newRow")}
                             >
                                 <Plus size={16} />
@@ -1449,7 +1449,7 @@ export const Editor = () => {
                             <button
                                 onClick={handleDeleteRows}
                                 disabled={!activeTab.selectedRows || activeTab.selectedRows.length === 0}
-                                className="flex items-center justify-center w-7 h-7 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-30"
+                                className="flex items-center justify-center w-7 h-7 text-secondary hover:text-red-400 hover:bg-surface-secondary rounded transition-colors disabled:opacity-30"
                                 title={t("dataGrid.deleteRow")}
                             >
                                 <Minus size={16} />
@@ -1458,7 +1458,7 @@ export const Editor = () => {
 
                         {/* Separator */}
                         {(hasPendingChanges) && (
-                            <div className="w-[1px] h-4 bg-slate-800 mx-1"></div>
+                            <div className="w-[1px] h-4 bg-surface-secondary mx-1"></div>
                         )}
                         
                         {hasPendingChanges && (
@@ -1475,7 +1475,7 @@ export const Editor = () => {
                                 <button 
                                     onClick={handleRollbackChanges}
                                     disabled={!selectionHasPending}
-                                    className="flex items-center gap-1.5 px-2 h-7 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded text-xs font-medium border border-transparent hover:border-slate-700 transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-transparent disabled:cursor-not-allowed"
+                                    className="flex items-center gap-1.5 px-2 h-7 text-secondary hover:bg-surface-secondary hover:text-primary rounded text-xs font-medium border border-transparent hover:border-strong transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-transparent disabled:cursor-not-allowed"
                                     title={t("editor.rollbackChanges")}
                                 >
                                     <Undo2 size={14} />
@@ -1510,7 +1510,7 @@ export const Editor = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-600 text-sm">
+              <div className="flex items-center justify-center h-full text-surface-tertiary text-sm">
                 {t("editor.executePrompt")}
               </div>
             )}
@@ -1518,10 +1518,10 @@ export const Editor = () => {
         </>
       ) : (
         // Show Results Button (when collapsed)
-        <div className="h-10 bg-slate-900 border-t border-slate-800 flex items-center justify-end px-2">
+        <div className="h-10 bg-elevated border-t border-default flex items-center justify-end px-2">
           <button
             onClick={() => setIsResultsCollapsed(false)}
-            className="text-slate-500 hover:text-slate-300 transition-colors p-1 hover:bg-slate-800 rounded"
+            className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded"
             title="Show Results Panel"
           >
             <ChevronUp size={16} />

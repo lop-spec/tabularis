@@ -32,14 +32,14 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
   const [expandedColumn, setExpandedColumn] = useState<string | null>(null);
 
   return (
-    <div className="bg-slate-800 border border-slate-600 rounded shadow-lg min-w-[200px] overflow-hidden">
-      <div className="bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-200 border-b border-slate-700 flex items-center gap-2 relative">
+    <div className="bg-surface-secondary border border-strong rounded shadow-lg min-w-[200px] overflow-hidden">
+      <div className="bg-elevated px-3 py-2 text-sm font-semibold text-primary border-b border-strong flex items-center gap-2 relative">
         <div className="w-2 h-2 rounded-full bg-blue-500" />
         {data.label}
         {data.onDelete && (
           <button
             onClick={data.onDelete}
-            className="absolute top-1.5 right-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 p-1 rounded transition-colors"
+            className="absolute top-1.5 right-1.5 text-muted hover:text-red-400 hover:bg-red-500/10 p-1 rounded transition-colors"
             title="Delete Table"
           >
             <X size={14} />
@@ -54,11 +54,11 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
           
           return (
             <div key={col.name} className="group relative">
-              <div className="flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 py-0.5 px-2">
+              <div className="flex items-center justify-between text-xs text-secondary hover:text-primary py-0.5 px-2">
                 <div className="flex items-center gap-2 flex-1 select-none">
                   <input
                     type="checkbox"
-                    className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-0 w-3 h-3 cursor-pointer"
+                    className="rounded border-strong bg-surface-tertiary text-blue-500 focus:ring-0 w-3 h-3 cursor-pointer"
                     checked={!!data.selectedColumns[col.name]}
                     onChange={(e) => data.onColumnCheck(col.name, e.target.checked)}
                     onClick={(e) => e.stopPropagation()}
@@ -79,12 +79,12 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                       as {columnAlias.alias}
                     </span>
                   )}
-                  <span className="text-slate-600 text-[10px] ml-auto font-mono">{col.type}</span>
+                  <span className="text-surface-tertiary text-[10px] ml-auto font-mono">{col.type}</span>
                 </div>
                 <button
                   onClick={() => setExpandedColumn(isExpanded ? null : col.name)}
                   className={clsx(
-                    "ml-2 text-slate-500 transition-colors p-0.5 rounded opacity-0 group-hover:opacity-100",
+                    "ml-2 text-muted transition-colors p-0.5 rounded opacity-0 group-hover:opacity-100",
                     isExpanded ? "bg-purple-500/20 text-purple-400 !opacity-100" : "hover:text-purple-400"
                   )}
                   title={isExpanded ? "Close options" : "Column options"}
@@ -95,19 +95,19 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                   type="source"
                   position={Position.Right}
                   id={col.name}
-                  className="!w-2.5 !h-2.5 !bg-purple-400 !border !border-slate-700 !right-[-5px] !opacity-0 group-hover:!opacity-80 transition-opacity"
+                  className="!w-2.5 !h-2.5 !bg-purple-400 !border !border-strong !right-[-5px] !opacity-0 group-hover:!opacity-80 transition-opacity"
                 />
                 <Handle
                   type="target"
                   position={Position.Left}
                   id={col.name}
-                  className="!w-2.5 !h-2.5 !bg-purple-400 !border !border-slate-700 !left-[-5px] !opacity-0 group-hover:!opacity-80 transition-opacity"
+                  className="!w-2.5 !h-2.5 !bg-purple-400 !border !border-strong !left-[-5px] !opacity-0 group-hover:!opacity-80 transition-opacity"
                 />
               </div>
               
               {isExpanded && (
-                <div className="ml-5 mt-1 p-2 bg-slate-900 rounded border border-slate-700 space-y-2 relative z-50 shadow-2xl">
-                  <div className="text-[10px] text-slate-400 font-semibold mb-1">AGGREGATION</div>
+                <div className="ml-5 mt-1 p-2 bg-elevated rounded border border-strong space-y-2 relative z-50 shadow-2xl">
+                  <div className="text-[10px] text-secondary font-semibold mb-1">AGGREGATION</div>
                   <select
                     value={aggregation?.function || ''}
                     onChange={(e) => {
@@ -119,7 +119,7 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                         function: func,
                       });
                     }}
-                    className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-300"
+                    className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-[10px] text-secondary"
                   >
                     <option value="">None</option>
                     <option value="COUNT">COUNT</option>
@@ -132,7 +132,7 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                   
                   {aggregation?.function && (
                     <>
-                      <div className="text-[10px] text-slate-400 font-semibold mb-1 mt-2">AGGREGATION ALIAS</div>
+                      <div className="text-[10px] text-secondary font-semibold mb-1 mt-2">AGGREGATION ALIAS</div>
                       <input
                         type="text"
                         placeholder="e.g., total_count"
@@ -143,9 +143,9 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                             alias: e.target.value,
                           });
                         }}
-                        className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-300 placeholder-slate-500"
+                        className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-[10px] text-secondary placeholder-slate-500"
                       />
-                      <div className="text-[10px] text-slate-400 font-semibold mb-1 mt-2">POSITION</div>
+                      <div className="text-[10px] text-secondary font-semibold mb-1 mt-2">POSITION</div>
                       <input
                         type="number"
                         min="1"
@@ -158,14 +158,14 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                             order,
                           });
                         }}
-                        className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-300 placeholder-slate-500"
+                        className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-[10px] text-secondary placeholder-slate-500"
                       />
                     </>
                   )}
                   
                   {!aggregation?.function && (
                     <>
-                      <div className="text-[10px] text-slate-400 font-semibold mb-1 mt-2">COLUMN ALIAS</div>
+                      <div className="text-[10px] text-secondary font-semibold mb-1 mt-2">COLUMN ALIAS</div>
                       <input
                         type="text"
                         placeholder="e.g., user_name"
@@ -173,9 +173,9 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                         onChange={(e) => {
                           data.onColumnAlias(col.name, e.target.value, columnAlias?.order);
                         }}
-                        className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-300 placeholder-slate-500"
+                        className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-[10px] text-secondary placeholder-slate-500"
                       />
-                      <div className="text-[10px] text-slate-400 font-semibold mb-1 mt-2">POSITION</div>
+                      <div className="text-[10px] text-secondary font-semibold mb-1 mt-2">POSITION</div>
                       <input
                         type="number"
                         min="1"
@@ -185,7 +185,7 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                           const order = e.target.value ? parseInt(e.target.value) : undefined;
                           data.onColumnAlias(col.name, columnAlias?.alias || '', order);
                         }}
-                        className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-300 placeholder-slate-500"
+                        className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-[10px] text-secondary placeholder-slate-500"
                       />
                     </>
                   )}

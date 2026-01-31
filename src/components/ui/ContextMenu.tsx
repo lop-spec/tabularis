@@ -89,7 +89,7 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
     <div 
       ref={menuRef}
       style={style}
-      className="fixed z-50 min-w-[160px] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-50 min-w-[160px] bg-surface-secondary border border-strong rounded-lg shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100"
     >
       {items.map((item, index) => {
         const Icon = item.icon;
@@ -101,11 +101,11 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
               onClose();
             }}
             className={`
-              w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-slate-700
-              ${item.danger ? 'text-red-400' : 'text-slate-200'}
+              w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-surface-tertiary
+              ${item.danger ? 'text-red-400' : 'text-primary'}
             `}
           >
-            {Icon && <Icon size={14} className={item.danger ? 'text-red-400' : 'text-slate-400'} />}
+            {Icon && <Icon size={14} className={item.danger ? 'text-red-400' : 'text-secondary'} />}
             {item.label}
           </button>
         );

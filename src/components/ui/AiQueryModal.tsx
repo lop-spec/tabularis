@@ -95,15 +95,15 @@ export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-[600px] shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-elevated border border-strong rounded-xl w-[600px] shadow-2xl flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800">
+        <div className="flex items-center justify-between p-4 border-b border-default">
           <div className="flex items-center gap-2 text-white font-medium">
             <Sparkles size={18} className="text-yellow-400" />
             <span>AI Query Assist</span>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-secondary hover:text-white transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -117,14 +117,14 @@ export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) =
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-secondary mb-2">
               Describe your query in natural language
             </label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="e.g. Find all users who signed up last month and ordered a 'Premium' plan..."
-              className="w-full h-32 bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors resize-none"
+              className="w-full h-32 bg-base border border-strong rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors resize-none"
               autoFocus
               onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -141,7 +141,7 @@ export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) =
           )}
 
           {isSchemaLoading && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
+            <div className="flex items-center gap-2 text-xs text-muted">
                 <Loader2 size={12} className="animate-spin" />
                 Reading database schema...
             </div>
@@ -149,10 +149,10 @@ export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) =
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-800 bg-slate-900/50 rounded-b-xl">
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-default bg-elevated/50 rounded-b-xl">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg text-sm transition-colors"
+            className="px-4 py-2 text-secondary hover:text-white hover:bg-surface-secondary rounded-lg text-sm transition-colors"
           >
             Cancel
           </button>

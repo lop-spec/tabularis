@@ -28,7 +28,7 @@ export const ExportProgressModal = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-xl w-96 p-6 animate-in fade-in zoom-in duration-200">
+      <div className="bg-elevated border border-strong rounded-lg shadow-xl w-96 p-6 animate-in fade-in zoom-in duration-200">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <FileText className="text-blue-400" />
@@ -53,7 +53,7 @@ export const ExportProgressModal = ({
 
           <div className="text-center space-y-1">
             <p
-              className="text-slate-300 font-medium truncate max-w-[300px]"
+              className="text-secondary font-medium truncate max-w-[300px]"
               title={fileName}
             >
               {fileName}
@@ -63,7 +63,7 @@ export const ExportProgressModal = ({
                 {errorMessage}
               </p>
             ) : (
-              <p className="text-slate-400 text-sm">
+              <p className="text-secondary text-sm">
                 {t("editor.rowsProcessed")}:{" "}
                 <span className="text-white font-mono font-bold">
                   {rowsProcessed.toLocaleString()}
@@ -85,7 +85,7 @@ export const ExportProgressModal = ({
           ) : (
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded flex items-center gap-2 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-surface-tertiary hover:bg-surface-tertiary text-white rounded flex items-center gap-2 transition-colors text-sm font-medium"
             >
               {t("common.close")} {/* Assicurati che "close" esista in common, altrimenti usa "cancel" o aggiungilo */}
             </button>

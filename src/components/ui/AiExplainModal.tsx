@@ -54,15 +54,15 @@ export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-[700px] shadow-2xl flex flex-col max-h-[85vh]">
+      <div className="bg-elevated border border-strong rounded-xl w-[700px] shadow-2xl flex flex-col max-h-[85vh]">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800">
+        <div className="flex items-center justify-between p-4 border-b border-default">
           <div className="flex items-center gap-2 text-white font-medium">
             <BookOpen size={18} className="text-blue-400" />
             <span>AI Query Explanation</span>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-secondary hover:text-white transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -77,10 +77,10 @@ export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) 
 
           {/* Original Query */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">
                 Query
             </label>
-            <div className="h-32 border border-slate-800 rounded-lg overflow-hidden">
+            <div className="h-32 border border-default rounded-lg overflow-hidden">
                 <MonacoEditor
                     height="100%"
                     language="sql"
@@ -99,12 +99,12 @@ export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) 
 
           {/* Explanation */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">
                 Explanation
             </label>
-            <div className="bg-slate-950 border border-slate-700 rounded-lg p-4 min-h-[150px] text-slate-300 leading-relaxed whitespace-pre-wrap">
+            <div className="bg-base border border-strong rounded-lg p-4 min-h-[150px] text-secondary leading-relaxed whitespace-pre-wrap">
                 {isLoading ? (
-                    <div className="flex items-center gap-2 text-slate-500">
+                    <div className="flex items-center gap-2 text-muted">
                         <Loader2 size={16} className="animate-spin" />
                         Generating explanation...
                     </div>
@@ -120,10 +120,10 @@ export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) 
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end p-4 border-t border-slate-800 bg-slate-900/50 rounded-b-xl">
+        <div className="flex items-center justify-end p-4 border-t border-default bg-elevated/50 rounded-b-xl">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm transition-colors"
+            className="px-4 py-2 bg-surface-secondary hover:bg-surface-tertiary text-white rounded-lg text-sm transition-colors"
           >
             Close
           </button>

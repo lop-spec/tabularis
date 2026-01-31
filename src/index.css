@@ -1,15 +1,69 @@
 @import "tailwindcss";
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--font-base, Inter, system-ui, Avenir, Helvetica, Arial, sans-serif);
   color-scheme: dark;
+  
+  /* CSS Variables - Default (Tabularis Dark) */
+  --bg-base: #020617;
+  --bg-elevated: #0f172a;
+  --bg-overlay: #1e293b;
+  --bg-input: #0f172a;
+  --bg-tooltip: #1e293b;
+  
+  --surface-primary: #1e293b;
+  --surface-secondary: #334155;
+  --surface-tertiary: #475569;
+  --surface-hover: #334155;
+  --surface-active: #3b82f6;
+  --surface-disabled: #1e293b;
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-disabled: #475569;
+  --text-accent: #3b82f6;
+  --text-inverse: #020617;
+  
+  --accent-primary: #3b82f6;
+  --accent-secondary: #8b5cf6;
+  --accent-success: #22c55e;
+  --accent-warning: #f59e0b;
+  --accent-error: #ef4444;
+  --accent-info: #06b6d4;
+  
+  --border-subtle: #1e293b;
+  --border-default: #334155;
+  --border-strong: #475569;
+  --border-focus: #3b82f6;
+  
+  --semantic-string: #f87171;
+  --semantic-number: #60a5fa;
+  --semantic-boolean: #a78bfa;
+  --semantic-date: #4ade80;
+  --semantic-null: #64748b;
+  --semantic-pk: #fbbf24;
+  --semantic-fk: #22d3ee;
+  --semantic-index: #c084fc;
+  --semantic-modified: #3b82f6;
+  --semantic-deleted: #ef4444;
+  --semantic-new: #22c55e;
+  
+  --font-base: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: JetBrains Mono, Fira Code, Monaco, Consolas, monospace;
+  
+  --radius-sm: 0.25rem;
+  --radius-base: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  @apply bg-slate-950 text-slate-100;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
 }
 
 @layer utilities {
@@ -20,6 +74,66 @@ body {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  
+  /* Theme-based utility classes */
+  .bg-base { background-color: var(--bg-base); }
+  .bg-elevated { background-color: var(--bg-elevated); }
+  .bg-overlay { background-color: var(--bg-overlay); }
+  .bg-input { background-color: var(--bg-input); }
+  .bg-tooltip { background-color: var(--bg-tooltip); }
+  
+  .bg-surface-primary { background-color: var(--surface-primary); }
+  .bg-surface-secondary { background-color: var(--surface-secondary); }
+  .bg-surface-tertiary { background-color: var(--surface-tertiary); }
+  .bg-surface-hover { background-color: var(--surface-hover); }
+  .bg-surface-active { background-color: var(--surface-active); }
+  .bg-surface-disabled { background-color: var(--surface-disabled); }
+  
+  .text-primary { color: var(--text-primary); }
+  .text-secondary { color: var(--text-secondary); }
+  .text-muted { color: var(--text-muted); }
+  .text-disabled { color: var(--text-disabled); }
+  .text-accent { color: var(--text-accent); }
+  .text-inverse { color: var(--text-inverse); }
+  
+  .text-accent-primary { color: var(--accent-primary); }
+  .text-accent-secondary { color: var(--accent-secondary); }
+  .text-accent-success { color: var(--accent-success); }
+  .text-accent-warning { color: var(--accent-warning); }
+  .text-accent-error { color: var(--accent-error); }
+  .text-accent-info { color: var(--accent-info); }
+  
+  .border-subtle { border-color: var(--border-subtle); }
+  .border-default { border-color: var(--border-default); }
+  .border-strong { border-color: var(--border-strong); }
+  .border-focus { border-color: var(--border-focus); }
+  
+  .bg-accent-primary { background-color: var(--accent-primary); }
+  .bg-accent-secondary { background-color: var(--accent-secondary); }
+  .bg-accent-success { background-color: var(--accent-success); }
+  .bg-accent-warning { background-color: var(--accent-warning); }
+  .bg-accent-error { background-color: var(--accent-error); }
+  .bg-accent-info { background-color: var(--accent-info); }
+  
+  .font-mono-theme { font-family: var(--font-mono); }
+  
+  .rounded-theme-sm { border-radius: var(--radius-sm); }
+  .rounded-theme { border-radius: var(--radius-base); }
+  .rounded-theme-lg { border-radius: var(--radius-lg); }
+  .rounded-theme-xl { border-radius: var(--radius-xl); }
+  
+  /* Semantic colors for data types */
+  .text-semantic-string { color: var(--semantic-string); }
+  .text-semantic-number { color: var(--semantic-number); }
+  .text-semantic-boolean { color: var(--semantic-boolean); }
+  .text-semantic-date { color: var(--semantic-date); }
+  .text-semantic-null { color: var(--semantic-null); }
+  .text-semantic-pk { color: var(--semantic-pk); }
+  .text-semantic-fk { color: var(--semantic-fk); }
+  .text-semantic-index { color: var(--semantic-index); }
+  .text-semantic-modified { color: var(--semantic-modified); }
+  .text-semantic-deleted { color: var(--semantic-deleted); }
+  .text-semantic-new { color: var(--semantic-new); }
 }
 
 /* Fix select dropdown options visibility - CRITICAL for dark theme */
@@ -29,19 +143,19 @@ select {
 
 select,
 select option {
-  background-color: #1e293b !important;
-  color: #e2e8f0 !important;
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
 }
 
 select:focus,
 select:active {
-  background-color: #1e293b !important;
-  color: #e2e8f0 !important;
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
 }
 
 select option {
-  background-color: #1e293b !important;
-  color: #e2e8f0 !important;
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
   padding: 8px 12px !important;
 }
 
@@ -49,39 +163,39 @@ select option:hover,
 select option:focus,
 select option:checked,
 select option:active {
-  background-color: #3b82f6 !important;
-  background: #3b82f6 !important;
-  color: #ffffff !important;
+  background-color: var(--accent-primary) !important;
+  background: var(--accent-primary) !important;
+  color: var(--text-inverse) !important;
 }
 
 /* Firefox specific */
 @-moz-document url-prefix() {
   select option {
-    background-color: #1e293b !important;
-    color: #e2e8f0 !important;
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
   }
   
   select option:checked {
-    background-color: #3b82f6 !important;
-    color: #ffffff !important;
+    background-color: var(--accent-primary) !important;
+    color: var(--text-inverse) !important;
   }
 }
 
 /* ReactFlow Dark Theme Customization */
 .react-flow__controls {
-  background-color: #1e293b !important;
-  border: 1px solid #334155 !important;
+  background-color: var(--surface-primary) !important;
+  border: 1px solid var(--border-default) !important;
 }
 
 .react-flow__controls-button {
-  background-color: #1e293b !important;
-  border-bottom: 1px solid #334155 !important;
-  color: #94a3b8 !important;
+  background-color: var(--surface-primary) !important;
+  border-bottom: 1px solid var(--border-default) !important;
+  color: var(--text-secondary) !important;
 }
 
 .react-flow__controls-button:hover {
-  background-color: #334155 !important;
-  color: #f1f5f9 !important;
+  background-color: var(--surface-secondary) !important;
+  color: var(--text-primary) !important;
 }
 
 .react-flow__controls-button svg {
@@ -89,24 +203,24 @@ select option:active {
 }
 
 .react-flow__minimap {
-  background-color: #1e293b !important;
-  border: 1px solid #334155 !important;
+  background-color: var(--surface-primary) !important;
+  border: 1px solid var(--border-default) !important;
 }
 
 .react-flow__edge-path {
-  stroke: #3b82f6 !important;
+  stroke: var(--accent-primary) !important;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #60a5fa !important;
+  stroke: var(--text-accent) !important;
 }
 
 .react-flow__edge-text {
-  fill: #f1f5f9 !important;
+  fill: var(--text-primary) !important;
 }
 
 .react-flow__edge-textbg {
-  fill: #1e293b !important;
+  fill: var(--surface-primary) !important;
 }
 
 /* Custom scrollbar styling */
@@ -115,14 +229,45 @@ select option:active {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: var(--bg-base);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--surface-secondary);
   border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: var(--surface-tertiary);
+}
+
+/* Theme transition for smooth color changes */
+.theme-transition {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Focus ring using theme colors */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--border-focus);
+}
+
+/* Monaco Editor integration - ensure proper theming */
+.monaco-editor {
+  background-color: var(--bg-base) !important;
+}
+
+.monaco-editor .overflow-guard {
+  background-color: var(--bg-base) !important;
+}
+
+/* Selection styles */
+::selection {
+  background-color: var(--surface-active);
+  color: var(--text-primary);
+}
+
+::-moz-selection {
+  background-color: var(--surface-active);
+  color: var(--text-primary);
 }
