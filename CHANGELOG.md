@@ -1,3 +1,19 @@
+## [0.8.2](https://github.com/debba/tabularis/compare/v0.8.1...v0.8.2) (2026-01-31)
+
+
+### Features
+
+* **er-diagram:** add window command and page for schema diagrams ([676b41f](https://github.com/debba/tabularis/commit/676b41f62c1a92f46dcd09905f6a0f8d78a95d4e))
+* **schema-diagram:** add refresh UI and encode ER diagram parameters ([61b8b00](https://github.com/debba/tabularis/commit/61b8b00490453c27b277a6e32298b4dfb6320776))
+* **schema:** add schema diagram UI with backend snapshot ([72849e8](https://github.com/debba/tabularis/commit/72849e8303f5c0e64517e78380941b16b2f46de4))
+
+
+### BREAKING CHANGES
+
+* **er-diagram:** remove `schema_diagram` tab type from editor tabs
+
+
+
 ## [0.8.1](https://github.com/debba/tabularis/compare/v0.8.0...v0.8.1) (2026-01-30)
 
 
