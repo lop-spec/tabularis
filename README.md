@@ -60,6 +60,11 @@ yay -S tabularis-bin
 
 - **Sidebar Navigation:** Quickly browse tables and saved queries.
 - **DataGrip-Style Tree View:** Expandable folders for Columns, Keys, Foreign Keys, and Indexes.
+- **ER Diagram Viewer:** Interactive Entity-Relationship diagram in a separate window.
+  - **Visual Schema:** Auto-generated graph showing all tables and foreign key relationships.
+  - **Interactive Navigation:** Pan, zoom, minimap, and fullscreen mode.
+  - **Optimized for Large Databases:** Batch queries ensure fast loading even for 100+ tables over SSH.
+  - **Smart Layout:** Automatic Dagre-based hierarchical positioning for clarity.
 - **Context Actions:**
   - Right-click tables to: `Show Data`, `Count Rows`, `View Schema`, `Copy Name`, `Add Column`, `Delete Table`.
   - Intelligent context menus with viewport overflow prevention.
@@ -220,9 +225,10 @@ npm run tauri build
 - [x] Internationalization (English, Italian)
 - [x] Keychain integration for secure password storage
 - [x] AI Integration (Text-to-SQL, Explain Query)
+- [x] ER Diagram / Schema Visualization
 - [ ] Database Export/Dump
 - [ ] Multi-statement execution
-- [ ] Query history and autocomplete
+- [x] Query history and autocomplete
 
 ## License
 
