@@ -189,7 +189,7 @@ export const Connections = () => {
                     : `${conn.params.host}:${conn.params.database}`}
                 </div>
 
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-elevated/80 p-1 rounded-lg backdrop-blur-sm border border-strong/50">
+                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-elevated/80 p-1 rounded-lg backdrop-blur-sm border border-white/30">
                     {isActive ? (
                       <button 
                         onClick={(e) => { e.stopPropagation(); disconnect(); }}

@@ -186,9 +186,9 @@ export const NewConnectionModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-surface-secondary rounded-lg shadow-xl w-[500px] border border-strong flex flex-col max-h-[90vh]">
+      <div className="bg-surface-secondary rounded-lg shadow-xl w-[500px] border border-white/30 flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-strong">
+        <div className="flex items-center justify-between p-4 border-b border-white/20">
           <h2 className="text-lg font-semibold text-white">
             {initialConnection ? t("newConnection.titleEdit") : t("newConnection.titleNew")}
           </h2>
@@ -304,7 +304,7 @@ export const NewConnectionModal = ({
 
           {/* SSH Tunnel Section */}
           {driver !== "sqlite" && (
-            <div className="mt-6 pt-4 border-t border-strong">
+            <div className="mt-6 pt-4 border-t border-white/20">
               <div className="flex items-center gap-2 mb-3">
                 <input
                   type="checkbox"
@@ -447,7 +447,7 @@ export const NewConnectionModal = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-strong bg-surface-secondary/50 flex justify-end gap-3 rounded-b-lg">
+        <div className="p-4 border-t border-white/20 bg-surface-secondary/50 flex justify-end gap-3 rounded-b-lg">
           <button
             onClick={testConnection}
             disabled={status === "testing" || status === "saving"}
