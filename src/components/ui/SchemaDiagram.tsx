@@ -16,7 +16,7 @@ import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import { useEditor } from '../../hooks/useEditor';
 import { SchemaTableNodeComponent } from './SchemaTableNode';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const nodeTypes = {
   schemaTable: SchemaTableNodeComponent,
@@ -65,15 +65,15 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
 
 interface SchemaDiagramContentProps {
   connectionId: string;
+  refreshTrigger: number;
 }
 
-const SchemaDiagramContent = ({ connectionId }: SchemaDiagramContentProps) => {
+const SchemaDiagramContent = ({ connectionId, refreshTrigger }: SchemaDiagramContentProps) => {
   const { getSchema } = useEditor();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { fitView, zoomIn, zoomOut } = useReactFlow();
   const [loading, setLoading] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Keyboard shortcuts for zoom
   useEffect(() => {
@@ -184,11 +184,6 @@ const SchemaDiagramContent = ({ connectionId }: SchemaDiagramContentProps) => {
     return nodeCount >= 10 && nodeCount <= 100;
   }, [nodes.length]);
 
-  // Manual refresh handler
-  const onRefresh = useCallback(() => {
-      setRefreshTrigger(prev => prev + 1);
-  }, []);
-
   return (
     <div className="w-full h-full relative bg-slate-950">
         {loading && (
@@ -220,7 +215,7 @@ const SchemaDiagramContent = ({ connectionId }: SchemaDiagramContentProps) => {
             panOnDrag={true}
         >
             <Background gap={20} size={1} color="#334155" />
-            <Controls className="!bg-slate-800 !border-slate-700 !shadow-xl" />
+            <Controls className="!bg-slate-800 !border-slate-700 !shadow-xl" showInteractive={false} />
             {shouldShowMiniMap && (
                 <MiniMap
                     nodeColor={() => '#6366f1'}
@@ -229,16 +224,6 @@ const SchemaDiagramContent = ({ connectionId }: SchemaDiagramContentProps) => {
                     style={{ height: 120, width: 200 }}
                 />
             )}
-
-            <div className="absolute top-4 right-4 z-10">
-                <button
-                    onClick={onRefresh}
-                    className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 shadow-lg transition-colors text-sm font-medium"
-                >
-                    <RefreshCw size={16} />
-                    Refresh Layout
-                </button>
-            </div>
         </ReactFlow>
     </div>
   );
@@ -246,10 +231,11 @@ const SchemaDiagramContent = ({ connectionId }: SchemaDiagramContentProps) => {
 
 interface SchemaDiagramProps {
   connectionId: string;
+  refreshTrigger: number;
 }
 
-export const SchemaDiagram = ({ connectionId }: SchemaDiagramProps) => (
+export const SchemaDiagram = ({ connectionId, refreshTrigger }: SchemaDiagramProps) => (
     <ReactFlowProvider>
-        <SchemaDiagramContent connectionId={connectionId} />
+        <SchemaDiagramContent connectionId={connectionId} refreshTrigger={refreshTrigger} />
     </ReactFlowProvider>
 );

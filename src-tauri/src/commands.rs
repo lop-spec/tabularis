@@ -697,9 +697,15 @@ pub async fn open_er_diagram_window(
     database_name: String,
 ) -> Result<(), String> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
+    use urlencoding::encode;
 
-    let title = format!("ER Diagram - {} ({})", connection_name, database_name);
-    let url = format!("/schema-diagram?connectionId={}", connection_id);
+    let title = format!("{} ({})", database_name, connection_name);
+    let url = format!(
+        "/schema-diagram?connectionId={}&connectionName={}&databaseName={}",
+        encode(&connection_id),
+        encode(&connection_name),
+        encode(&database_name)
+    );
 
     let _webview = WebviewWindowBuilder::new(
         &app,
