@@ -90,6 +90,84 @@ pub async fn get_foreign_keys(
         .collect())
 }
 
+// Batch function: Get all columns for all tables (SQLite must iterate but reuses connection)
+pub async fn get_all_columns_batch(
+    params: &ConnectionParams,
+    table_names: &[String],
+) -> Result<std::collections::HashMap<String, Vec<TableColumn>>, String> {
+    use std::collections::HashMap;
+    let pool = get_sqlite_pool(params).await?;
+    let mut result: HashMap<String, Vec<TableColumn>> = HashMap::new();
+
+    for table_name in table_names {
+        let query = format!("PRAGMA table_info('{}')", table_name);
+        let rows = sqlx::query(&query)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let columns: Vec<TableColumn> = rows
+            .iter()
+            .map(|r| {
+                let pk: i32 = r.try_get("pk").unwrap_or(0);
+                let notnull: i32 = r.try_get("notnull").unwrap_or(0);
+                TableColumn {
+                    name: r.try_get("name").unwrap_or_default(),
+                    data_type: r.try_get("type").unwrap_or_default(),
+                    is_pk: pk > 0,
+                    is_nullable: notnull == 0,
+                    is_auto_increment: false, // SQLite doesn't expose this via table_info easily, typically AUTOINCREMENT on INTEGER PRIMARY KEY
+                }
+            })
+            .collect();
+
+        result.insert(table_name.clone(), columns);
+    }
+
+    Ok(result)
+}
+
+// Batch function: Get all foreign keys for all tables (SQLite must iterate but reuses connection)
+pub async fn get_all_foreign_keys_batch(
+    params: &ConnectionParams,
+    table_names: &[String],
+) -> Result<std::collections::HashMap<String, Vec<ForeignKey>>, String> {
+    use std::collections::HashMap;
+    let pool = get_sqlite_pool(params).await?;
+    let mut result: HashMap<String, Vec<ForeignKey>> = HashMap::new();
+
+    for table_name in table_names {
+        let query = format!("PRAGMA foreign_key_list('{}')", table_name);
+        let rows = sqlx::query(&query)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let fks: Vec<ForeignKey> = rows
+            .iter()
+            .map(|r| {
+                let id: i32 = r.try_get("id").unwrap_or(0);
+                ForeignKey {
+                    name: format!(
+                        "fk_{}_{}",
+                        id,
+                        r.try_get::<String, _>("table").unwrap_or_default()
+                    ),
+                    column_name: r.try_get("from").unwrap_or_default(),
+                    ref_table: r.try_get("table").unwrap_or_default(),
+                    ref_column: r.try_get("to").unwrap_or_default(),
+                    on_update: r.try_get("on_update").ok(),
+                    on_delete: r.try_get("on_delete").ok(),
+                }
+            })
+            .collect();
+
+        result.insert(table_name.clone(), fks);
+    }
+
+    Ok(result)
+}
+
 pub async fn get_indexes(
     params: &ConnectionParams,
     table_name: &str,

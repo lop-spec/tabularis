@@ -120,6 +120,116 @@ pub async fn get_foreign_keys(
         .collect())
 }
 
+// Batch function: Get all columns for all tables in one query
+pub async fn get_all_columns_batch(
+    params: &ConnectionParams,
+) -> Result<std::collections::HashMap<String, Vec<TableColumn>>, String> {
+    use std::collections::HashMap;
+    let pool = get_postgres_pool(params).await?;
+
+    let query = r#"
+        SELECT
+            c.table_name,
+            c.column_name,
+            c.data_type,
+            c.is_nullable,
+            c.column_default,
+            c.is_identity,
+            (SELECT COUNT(*) FROM information_schema.table_constraints tc
+             JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+             WHERE tc.constraint_type = 'PRIMARY KEY'
+             AND kcu.table_name = c.table_name
+             AND kcu.column_name = c.column_name) > 0 as is_pk
+        FROM information_schema.columns c
+        WHERE c.table_schema = 'public'
+        ORDER BY c.table_name, c.ordinal_position
+    "#;
+
+    let rows = sqlx::query(query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut result: HashMap<String, Vec<TableColumn>> = HashMap::new();
+
+    for row in rows {
+        let table_name: String = row.try_get("table_name").unwrap_or_default();
+        let null_str: String = row.try_get("is_nullable").unwrap_or_default();
+        let is_pk: i64 = row.try_get("is_pk").unwrap_or(0);
+        let default_val: String = row.try_get("column_default").unwrap_or_default();
+        let is_identity: String = row.try_get("is_identity").unwrap_or_default();
+
+        let is_auto = is_identity == "YES" || default_val.contains("nextval");
+
+        let column = TableColumn {
+            name: row.try_get("column_name").unwrap_or_default(),
+            data_type: row.try_get("data_type").unwrap_or_default(),
+            is_pk: is_pk > 0,
+            is_nullable: null_str == "YES",
+            is_auto_increment: is_auto,
+        };
+
+        result.entry(table_name).or_insert_with(Vec::new).push(column);
+    }
+
+    Ok(result)
+}
+
+// Batch function: Get all foreign keys for all tables in one query
+pub async fn get_all_foreign_keys_batch(
+    params: &ConnectionParams,
+) -> Result<std::collections::HashMap<String, Vec<ForeignKey>>, String> {
+    use std::collections::HashMap;
+    let pool = get_postgres_pool(params).await?;
+
+    let query = r#"
+        SELECT
+            tc.table_name,
+            tc.constraint_name,
+            kcu.column_name,
+            ccu.table_name AS foreign_table_name,
+            ccu.column_name AS foreign_column_name,
+            rc.update_rule,
+            rc.delete_rule
+        FROM
+            information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage AS ccu
+            ON ccu.constraint_name = tc.constraint_name
+            AND ccu.table_schema = tc.table_schema
+            JOIN information_schema.referential_constraints AS rc
+            ON rc.constraint_name = tc.constraint_name
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND tc.table_schema = 'public'
+    "#;
+
+    let rows = sqlx::query(query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut result: HashMap<String, Vec<ForeignKey>> = HashMap::new();
+
+    for row in rows {
+        let table_name: String = row.try_get("table_name").unwrap_or_default();
+
+        let fk = ForeignKey {
+            name: row.try_get("constraint_name").unwrap_or_default(),
+            column_name: row.try_get("column_name").unwrap_or_default(),
+            ref_table: row.try_get("foreign_table_name").unwrap_or_default(),
+            ref_column: row.try_get("foreign_column_name").unwrap_or_default(),
+            on_update: row.try_get("update_rule").ok(),
+            on_delete: row.try_get("delete_rule").ok(),
+        };
+
+        result.entry(table_name).or_insert_with(Vec::new).push(fk);
+    }
+
+    Ok(result)
+}
+
 pub async fn get_indexes(
     params: &ConnectionParams,
     table_name: &str,

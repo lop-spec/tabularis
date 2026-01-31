@@ -100,6 +100,97 @@ pub async fn get_foreign_keys(
         .collect())
 }
 
+// Batch function: Get all columns for all tables in one query
+pub async fn get_all_columns_batch(
+    params: &ConnectionParams,
+) -> Result<std::collections::HashMap<String, Vec<TableColumn>>, String> {
+    use std::collections::HashMap;
+    let pool = get_mysql_pool(params).await?;
+
+    let query = r#"
+        SELECT table_name, column_name, data_type, column_key, is_nullable, extra
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+        ORDER BY table_name, ordinal_position
+    "#;
+
+    let rows = sqlx::query(query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut result: HashMap<String, Vec<TableColumn>> = HashMap::new();
+
+    for row in rows {
+        let table_name: String = row.try_get("table_name").unwrap_or_default();
+        let key: String = row.try_get("column_key").unwrap_or_default();
+        let null_str: String = row.try_get("is_nullable").unwrap_or_default();
+        let extra: String = row.try_get("extra").unwrap_or_default();
+
+        let column = TableColumn {
+            name: row.try_get("column_name").unwrap_or_default(),
+            data_type: row.try_get("data_type").unwrap_or_default(),
+            is_pk: key == "PRI",
+            is_nullable: null_str == "YES",
+            is_auto_increment: extra.contains("auto_increment"),
+        };
+
+        result.entry(table_name).or_insert_with(Vec::new).push(column);
+    }
+
+    Ok(result)
+}
+
+// Batch function: Get all foreign keys for all tables in one query
+pub async fn get_all_foreign_keys_batch(
+    params: &ConnectionParams,
+) -> Result<std::collections::HashMap<String, Vec<ForeignKey>>, String> {
+    use std::collections::HashMap;
+    let pool = get_mysql_pool(params).await?;
+
+    let query = r#"
+        SELECT
+            kcu.TABLE_NAME,
+            kcu.CONSTRAINT_NAME,
+            kcu.COLUMN_NAME,
+            kcu.REFERENCED_TABLE_NAME,
+            kcu.REFERENCED_COLUMN_NAME,
+            rc.UPDATE_RULE,
+            rc.DELETE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE kcu
+        JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+        ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+        AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
+        WHERE kcu.TABLE_SCHEMA = DATABASE()
+        AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
+        ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION
+    "#;
+
+    let rows = sqlx::query(query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut result: HashMap<String, Vec<ForeignKey>> = HashMap::new();
+
+    for row in rows {
+        let table_name: String = row.try_get("TABLE_NAME").unwrap_or_default();
+
+        let fk = ForeignKey {
+            name: row.try_get("CONSTRAINT_NAME").unwrap_or_default(),
+            column_name: row.try_get("COLUMN_NAME").unwrap_or_default(),
+            ref_table: row.try_get("REFERENCED_TABLE_NAME").unwrap_or_default(),
+            ref_column: row.try_get("REFERENCED_COLUMN_NAME").unwrap_or_default(),
+            on_update: row.try_get("UPDATE_RULE").ok(),
+            on_delete: row.try_get("DELETE_RULE").ok(),
+        };
+
+        result.entry(table_name).or_insert_with(Vec::new).push(fk);
+    }
+
+    Ok(result)
+}
+
 pub async fn get_indexes(
     params: &ConnectionParams,
     table_name: &str,

@@ -146,54 +146,50 @@ pub async fn get_schema_snapshot<R: Runtime>(
         _ => Err("Unsupported driver".into()),
     }?;
 
-    // 2. Parallel fetch columns and foreign keys for each table
-    let mut tasks = Vec::new();
-    let params_arc = Arc::new(params); // Share params across threads
+    // 2. Fetch ALL columns and foreign keys in batch (2 queries instead of N*2)
+    let schema = match driver.as_str() {
+        "mysql" => {
+            let mut columns_map = mysql::get_all_columns_batch(&params).await?;
+            let mut fks_map = mysql::get_all_foreign_keys_batch(&params).await?;
 
-    for table in tables {
-        let p = params_arc.clone();
-        let d = driver.clone();
-        let t_name = table.name.clone();
-
-        tasks.push(tokio::spawn(async move {
-            let cols_res = match d.as_str() {
-                "mysql" => mysql::get_columns(&p, &t_name).await,
-                "postgres" => postgres::get_columns(&p, &t_name).await,
-                "sqlite" => sqlite::get_columns(&p, &t_name).await,
-                _ => Err("Unsupported driver".into()),
-            };
-
-            let fks_res = match d.as_str() {
-                "mysql" => mysql::get_foreign_keys(&p, &t_name).await,
-                "postgres" => postgres::get_foreign_keys(&p, &t_name).await,
-                "sqlite" => sqlite::get_foreign_keys(&p, &t_name).await,
-                _ => Err("Unsupported driver".into()),
-            };
-
-            match (cols_res, fks_res) {
-                (Ok(columns), Ok(foreign_keys)) => Ok(crate::models::TableSchema {
-                    name: t_name,
-                    columns,
-                    foreign_keys,
-                }),
-                (Err(e), _) => Err(e),
-                (_, Err(e)) => Err(e),
-            }
-        }));
-    }
-
-    let results = futures::future::join_all(tasks).await;
-
-    // Collect results, filtering out failures but logging them (or just failing?)
-    // For a diagram, partial success is better than total failure, but let's be strict for now or log errors.
-    let mut schema = Vec::new();
-    for res in results {
-        match res {
-            Ok(Ok(table_schema)) => schema.push(table_schema),
-            Ok(Err(e)) => eprintln!("Failed to fetch schema for table: {}", e),
-            Err(e) => eprintln!("Task join error: {}", e),
+            tables
+                .into_iter()
+                .map(|table| crate::models::TableSchema {
+                    name: table.name.clone(),
+                    columns: columns_map.remove(&table.name).unwrap_or_default(),
+                    foreign_keys: fks_map.remove(&table.name).unwrap_or_default(),
+                })
+                .collect()
         }
-    }
+        "postgres" => {
+            let mut columns_map = postgres::get_all_columns_batch(&params).await?;
+            let mut fks_map = postgres::get_all_foreign_keys_batch(&params).await?;
+
+            tables
+                .into_iter()
+                .map(|table| crate::models::TableSchema {
+                    name: table.name.clone(),
+                    columns: columns_map.remove(&table.name).unwrap_or_default(),
+                    foreign_keys: fks_map.remove(&table.name).unwrap_or_default(),
+                })
+                .collect()
+        }
+        "sqlite" => {
+            let table_names: Vec<String> = tables.iter().map(|t| t.name.clone()).collect();
+            let mut columns_map = sqlite::get_all_columns_batch(&params, &table_names).await?;
+            let mut fks_map = sqlite::get_all_foreign_keys_batch(&params, &table_names).await?;
+
+            tables
+                .into_iter()
+                .map(|table| crate::models::TableSchema {
+                    name: table.name.clone(),
+                    columns: columns_map.remove(&table.name).unwrap_or_default(),
+                    foreign_keys: fks_map.remove(&table.name).unwrap_or_default(),
+                })
+                .collect()
+        }
+        _ => return Err("Unsupported driver".into()),
+    };
 
     Ok(schema)
 }
