@@ -607,7 +607,12 @@ export const Settings = () => {
                   <img
                     src="/logo.png"
                     alt="tabularis"
-                    className="w-16 h-16 bg-[#010101] rounded-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30"
+                    className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30"
+                    style={{
+                      backgroundColor: !currentTheme?.id?.includes('-light')
+                        ? currentTheme?.colors?.surface?.secondary || '#334155'
+                        : currentTheme?.colors?.bg?.elevated || '#f8fafc'
+                    }}
                   />
                 </div>
 

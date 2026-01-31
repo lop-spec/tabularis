@@ -33,6 +33,7 @@ import {
 import clsx from "clsx";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../../hooks/useDatabase";
+import { useTheme } from "../../hooks/useTheme";
 import { useSavedQueries } from "../../hooks/useSavedQueries";
 import type { SavedQuery } from "../../contexts/SavedQueriesContext";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -596,6 +597,8 @@ type ContextMenuData = SavedQuery | { tableName: string };
 
 export const Sidebar = () => {
   const { t } = useTranslation();
+  const { currentTheme } = useTheme();
+  const isDarkTheme = !currentTheme?.id?.includes('-light');
   const {
     activeConnectionId,
     activeDriver,
@@ -688,7 +691,12 @@ export const Sidebar = () => {
           <img
             src="/logo.png"
             alt="tabularis"
-            className="w-12 h-12 p-2 bg-[#010101] rounded-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30"
+            className="w-12 h-12 p-2 rounded-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30"
+            style={{
+              backgroundColor: isDarkTheme
+                ? currentTheme?.colors?.surface?.secondary || '#334155'
+                : currentTheme?.colors?.bg?.elevated || '#f8fafc'
+            }}
           />
         </div>
 
