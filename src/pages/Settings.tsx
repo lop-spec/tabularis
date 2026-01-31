@@ -635,7 +635,7 @@ export const Settings = () => {
                     <Github size={18} />
                     {t("settings.starOnGithub")}
                   </button>
-                  <div className="flex items-center gap-2 bg-blue-900/30 text-blue-300 px-4 py-2 rounded-lg border border-blue-500/30">
+                  <div className="flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-lg border border-accent/30">
                     <span className="text-xs font-bold uppercase tracking-wider">
                       {t("settings.version")}
                     </span>
