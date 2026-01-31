@@ -94,6 +94,14 @@
     "rows": "righe",
     "appearance": "Aspetto",
     "themeSelection": "Selezione Tema",
+    "fontFamily": "Famiglia Font",
+    "fonts": {
+      "system": "Sistema",
+      "systemDesc": "Usa il font di default del sistema",
+      "custom": "Font Personalizzato",
+      "customPlaceholder": "es. Comic Sans MS",
+      "enterFontName": "Inserisci il nome del font sopra"
+    },
     "language": "Lingua",
     "languageDesc": "Scegli la tua lingua preferita. 'Auto' userà la lingua di sistema.",
     "auto": "Auto (Sistema)",

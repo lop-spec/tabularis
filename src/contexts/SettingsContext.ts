@@ -6,6 +6,7 @@ export type AiProvider = "openai" | "anthropic" | "openrouter";
 export interface Settings {
   resultPageSize: number; // Changed from queryLimit to match backend config
   language: AppLanguage;
+  fontFamily: string;
   aiEnabled: boolean;
   aiProvider: AiProvider | null;
   aiModel: string | null;
@@ -25,6 +26,7 @@ export const SettingsContext = createContext<SettingsContextType | undefined>(
 export const DEFAULT_SETTINGS: Settings = {
   resultPageSize: 500,
   language: "auto",
+  fontFamily: "System",
   aiEnabled: true,
   aiProvider: null,
   aiModel: null,

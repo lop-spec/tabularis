@@ -95,6 +95,22 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [settings.language, i18n]);
 
+  // Apply font family
+  useEffect(() => {
+    const fontMap: Record<string, string> = {
+      'System': 'system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, sans-serif',
+      'Open Sans': 'Open Sans, system-ui, sans-serif',
+      'Roboto': 'Roboto, RobotoDraft, Helvetica, Arial, sans-serif',
+      'JetBrains Mono': 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
+      'Hack': 'Hack, Menlo, Monaco, Consolas, monospace',
+      'Menlo': 'Menlo, Monaco, Consolas, monospace',
+      'DejaVu Sans Mono': 'DejaVu Sans Mono, Menlo, Monaco, Consolas, monospace',
+    };
+    // Use mapped font if available, otherwise use custom font name directly
+    const fontFamily = fontMap[settings.fontFamily] || settings.fontFamily || fontMap['System'];
+    document.documentElement.style.setProperty('--font-base', fontFamily);
+  }, [settings.fontFamily]);
+
   const updateSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setSettings(prev => {
       const newSettings = { ...prev, [key]: value };

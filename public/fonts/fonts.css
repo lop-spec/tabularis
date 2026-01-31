@@ -1,0 +1,28 @@
+/* Font Definitions - Lazy Loaded */
+
+/* Open Sans - UI Font */
+@font-face {
+  font-family: 'Open Sans Local';
+  src: url('/fonts/open-sans-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Roboto - UI Font */
+@font-face {
+  font-family: 'Roboto Local';
+  src: url('/fonts/roboto-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* JetBrains Mono - Code Font */
+@font-face {
+  font-family: 'JetBrains Mono Local';
+  src: url('/fonts/jetbrains-mono-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

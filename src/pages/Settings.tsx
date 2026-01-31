@@ -15,6 +15,7 @@ import {
   Key,
   Power,
   Palette,
+  Type,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../hooks/useSettings";
@@ -22,6 +23,16 @@ import { useTheme } from "../hooks/useTheme";
 import type { AppLanguage, AiProvider } from "../contexts/SettingsContext";
 import { APP_VERSION } from "../version";
 import { message } from "@tauri-apps/plugin-dialog";
+
+// Available fonts from public/fonts + System option
+const AVAILABLE_FONTS = [
+  { name: "System", label: "System Default (Automatic)" },
+  { name: "DejaVu Sans Mono", label: "DejaVu Sans Mono" },
+  { name: "Hack", label: "Hack" },
+  { name: "JetBrains Mono", label: "JetBrains Mono" },
+  { name: "Open Sans", label: "Open Sans" },
+  { name: "Roboto", label: "Roboto" },
+];
 
 
 export const Settings = () => {
@@ -36,6 +47,15 @@ export const Settings = () => {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [explainPrompt, setExplainPrompt] = useState("");
   const { currentTheme, allThemes, setTheme } = useTheme();
+  const [customFont, setCustomFont] = useState("");
+
+  // Sync customFont state with settings when a custom font is selected
+  useEffect(() => {
+    const isPredefinedFont = AVAILABLE_FONTS.some(f => f.name === settings.fontFamily);
+    if (!isPredefinedFont && settings.fontFamily) {
+      setCustomFont(settings.fontFamily);
+    }
+  }, [settings.fontFamily]);
 
   const loadModels = async () => {
     try {
@@ -370,6 +390,100 @@ export const Settings = () => {
                       </div>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Font Family Selection */}
+              <div className="bg-elevated border border-default rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+                  <Type size={20} className="text-blue-400" />
+                  {t("settings.fontFamily")}
+                </h3>
+
+                {/* Font Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                  {AVAILABLE_FONTS.map((font) => (
+                    <button
+                      key={font.name}
+                      onClick={() => updateSetting("fontFamily", font.name)}
+                      className={clsx(
+                        "p-4 rounded-xl border transition-all text-left",
+                        settings.fontFamily === font.name
+                          ? "bg-surface-secondary border-blue-500 shadow-lg shadow-blue-900/20"
+                          : "bg-base border-default hover:border-strong"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-primary">
+                          {font.label}
+                        </span>
+                        {settings.fontFamily === font.name && (
+                          <CheckCircle2 size={16} className="text-blue-500" />
+                        )}
+                      </div>
+                      <p
+                        className="text-xs text-muted truncate"
+                        style={{ fontFamily: font.name === "System" ? "system-ui, -apple-system, sans-serif" : `"${font.name}", ${font.name}` }}
+                      >
+                        Aa Bb Cc 123
+                      </p>
+                    </button>
+                  ))}
+
+                  {/* Custom Font Box */}
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById("custom-font-input") as HTMLInputElement;
+                      input?.focus();
+                    }}
+                    className={clsx(
+                      "p-4 rounded-xl border transition-all text-left relative",
+                      !AVAILABLE_FONTS.some(f => f.name === settings.fontFamily)
+                        ? "bg-surface-secondary border-blue-500 shadow-lg shadow-blue-900/20"
+                        : "bg-base border-default hover:border-strong"
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-primary">
+                        {t("settings.fonts.custom")}
+                      </span>
+                      {!AVAILABLE_FONTS.some(f => f.name === settings.fontFamily) && (
+                        <CheckCircle2 size={16} className="text-blue-500" />
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        id="custom-font-input"
+                        type="text"
+                        placeholder={t("settings.fonts.customPlaceholder")}
+                        value={customFont}
+                        onChange={(e) => setCustomFont(e.target.value)}
+                        onBlur={() => {
+                          if (customFont.trim()) {
+                            updateSetting("fontFamily", customFont.trim());
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && customFont.trim()) {
+                            updateSetting("fontFamily", customFont.trim());
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        className={clsx(
+                          "w-full bg-base border rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:border-blue-500 transition-colors",
+                          !AVAILABLE_FONTS.some(f => f.name === settings.fontFamily) && customFont === settings.fontFamily
+                            ? "border-blue-500"
+                            : "border-strong"
+                        )}
+                      />
+                      <p
+                        className="text-xs text-muted truncate"
+                        style={{ fontFamily: customFont || "inherit" }}
+                      >
+                        {customFont || t("settings.fonts.enterFontName")}
+                      </p>
+                    </div>
+                  </button>
                 </div>
               </div>
             </div>
