@@ -5,8 +5,10 @@ use std::collections::HashMap;
 pub struct MonacoThemeDefinition {
     pub base: String,
     pub inherit: bool,
-    pub rules: Vec<MonacoThemeRule>,
-    pub colors: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rules: Option<Vec<MonacoThemeRule>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub colors: Option<HashMap<String, String>>,
     #[serde(rename = "themeName", skip_serializing_if = "Option::is_none")]
     pub theme_name: Option<String>,
 }

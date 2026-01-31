@@ -5,8 +5,6 @@ import { themeRegistry } from '../themes/themeRegistry';
 import { applyThemeToCSS } from '../themes/themeUtils';
 import type { Theme, ThemeSettings } from '../types/theme';
 
-const THEME_SETTINGS_KEY = 'tabularis_theme_settings';
-
 const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   activeThemeId: 'tabularis-dark',
   followSystemTheme: false,
@@ -14,6 +12,15 @@ const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   darkThemeId: 'tabularis-dark',
   customThemes: [],
 };
+
+interface AppConfig {
+  theme?: string;
+  language?: string;
+  resultPageSize?: number;
+  aiEnabled?: boolean;
+  aiProvider?: string;
+  aiModel?: string;
+}
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => themeRegistry.getDefault());
@@ -31,12 +38,40 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadThemes = async () => {
       try {
-        // Load settings from localStorage (lightweight, UI-related)
-        const savedSettings = localStorage.getItem(THEME_SETTINGS_KEY);
-        let parsedSettings = DEFAULT_THEME_SETTINGS;
-        
-        if (savedSettings) {
-          parsedSettings = { ...DEFAULT_THEME_SETTINGS, ...JSON.parse(savedSettings) };
+        // Load theme from backend config
+        const config = await invoke<AppConfig>('get_config');
+
+        // Migration: check localStorage for old theme settings
+        const oldLocalSettings = localStorage.getItem('tabularis_theme_settings');
+        let activeThemeId = config.theme;
+
+        if (oldLocalSettings && !config.theme) {
+          // Migrate from localStorage to config.json
+          try {
+            const oldSettings = JSON.parse(oldLocalSettings);
+            activeThemeId = oldSettings.activeThemeId;
+
+            // Save to backend
+            await invoke('save_config', {
+              config: { ...config, theme: activeThemeId }
+            });
+
+            // Clean up old localStorage
+            localStorage.removeItem('tabularis_theme_settings');
+          } catch (e) {
+            console.error('Failed to migrate theme settings:', e);
+          }
+        }
+
+        // If still no theme, detect from system preferences
+        if (!activeThemeId) {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          activeThemeId = prefersDark ? 'tabularis-dark' : 'tabularis-light';
+
+          // Save the detected theme
+          await invoke('save_config', {
+            config: { ...config, theme: activeThemeId }
+          });
         }
 
         // Load custom themes from backend
@@ -45,13 +80,10 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
         // Set initial theme
         const allAvailableThemes = [...themeRegistry.getAllPresets(), ...loadedCustomThemes];
-        const initialTheme = allAvailableThemes.find(t => t.id === parsedSettings.activeThemeId);
-        
-        if (initialTheme) {
-          setCurrentTheme(initialTheme);
-        }
-        
-        setSettings(parsedSettings);
+        const initialTheme = allAvailableThemes.find(t => t.id === activeThemeId) || themeRegistry.getDefault();
+
+        setCurrentTheme(initialTheme);
+        setSettings({ ...DEFAULT_THEME_SETTINGS, activeThemeId: initialTheme.id });
       } catch (error) {
         console.error('Failed to load themes:', error);
       } finally {
@@ -69,12 +101,34 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [currentTheme]);
 
-  // Save settings to localStorage when they change
+  // Save theme to config.json when it changes (not on initial load)
   useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem(THEME_SETTINGS_KEY, JSON.stringify(settings));
+    if (!isLoading && currentTheme) {
+      invoke('save_config', {
+        config: { theme: currentTheme.id }
+      }).catch((error) => {
+        console.error('Failed to save theme to config:', error);
+      });
     }
-  }, [settings, isLoading]);
+  }, [currentTheme, isLoading]);
+
+  // Optional: Listen for system theme changes and auto-switch if using system theme
+  useEffect(() => {
+    if (!settings.followSystemTheme) return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      const newThemeId = e.matches ? 'tabularis-dark' : 'tabularis-light';
+      const newTheme = allThemes.find(t => t.id === newThemeId);
+      if (newTheme) {
+        setCurrentTheme(newTheme);
+        setSettings(prev => ({ ...prev, activeThemeId: newThemeId }));
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [settings.followSystemTheme, allThemes]);
 
   const setTheme = useCallback(async (themeId: string) => {
     const theme = allThemes.find(t => t.id === themeId);

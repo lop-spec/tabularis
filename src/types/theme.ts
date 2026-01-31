@@ -1,13 +1,13 @@
 export interface MonacoThemeDefinition {
   base: 'vs' | 'vs-dark' | 'hc-black';
   inherit: boolean;
-  rules: Array<{
+  rules?: Array<{
     token: string;
     foreground?: string;
     background?: string;
     fontStyle?: string;
   }>;
-  colors: Record<string, string>;
+  colors?: Record<string, string>;
   /** Optional: Name of the monaco-themes theme to use */
   themeName?: string;
 }
