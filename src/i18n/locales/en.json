@@ -93,6 +93,7 @@
     "pageSizeDesc": "Limits the number of rows fetched per query to prevent performance issues. Set to 0 to disable (not recommended).",
     "rows": "rows",
     "appearance": "Appearance",
+    "themeSelection": "Theme Selection",
     "language": "Language",
     "languageDesc": "Choose your preferred language. 'Auto' will use your system language.",
     "auto": "Auto (System)",
