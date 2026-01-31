@@ -15,7 +15,8 @@ export interface ThemeContextType {
   importTheme: (themeJson: string) => Promise<Theme>;
   exportTheme: (themeId: string) => Promise<string>;
   updateSettings: (settings: Partial<ThemeSettings>) => Promise<void>;
-  getMonacoThemeJson: () => unknown;
 }
 
-export const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+export const ThemeContext = createContext<ThemeContextType | undefined>(
+  undefined,
+);
