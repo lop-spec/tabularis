@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { McpModal } from "../modals/McpModal";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Database,
   Terminal,
@@ -31,7 +32,6 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { ask, message } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useSavedQueries } from "../../hooks/useSavedQueries";
 import type { SavedQuery } from "../../contexts/SavedQueriesContext";
@@ -604,6 +604,8 @@ export const Sidebar = () => {
     tables,
     isLoadingTables,
     refreshTables,
+    activeConnectionName,
+    activeDatabaseName,
   } = useDatabase();
   const { queries, deleteQuery, updateQuery } = useSavedQueries();
   const navigate = useNavigate();
@@ -718,7 +720,7 @@ export const Sidebar = () => {
               MCP Server
             </span>
           </button>
-          
+
           <NavItem
             to="/settings"
             icon={Settings}
@@ -740,7 +742,17 @@ export const Sidebar = () => {
               </div>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => navigate("/editor", { state: { openTabType: 'schema_diagram' } })}
+                  onClick={async () => {
+                    try {
+                      await invoke("open_er_diagram_window", {
+                        connectionId: activeConnectionId || "",
+                        connectionName: activeConnectionName || "Unknown",
+                        databaseName: activeDatabaseName || "Unknown",
+                      });
+                    } catch (e) {
+                      console.error("Failed to open ER Diagram window:", e);
+                    }
+                  }}
                   className="text-slate-500 hover:text-orange-400 transition-colors p-1 hover:bg-slate-800 rounded"
                   title="View Schema Diagram"
                 >

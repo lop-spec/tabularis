@@ -48,7 +48,7 @@ export interface FlowState {
 export interface Tab {
   id: string;
   title: string;
-  type: 'console' | 'table' | 'query_builder' | 'schema_diagram';
+  type: 'console' | 'table' | 'query_builder';
   query: string;
   result: QueryResult | null;
   error: string;

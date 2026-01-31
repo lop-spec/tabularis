@@ -4,6 +4,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { Connections } from './pages/Connections';
 import { Editor } from './pages/Editor';
 import { Settings } from './pages/Settings';
+import { SchemaDiagramPage } from './pages/SchemaDiagramPage';
 
 function App() {
   useEffect(() => {
@@ -26,6 +27,7 @@ function App() {
           <Route path="editor" element={<Editor />} />
           <Route path="settings" element={<Settings />} />
         </Route>
+        <Route path="/schema-diagram" element={<SchemaDiagramPage />} />
       </Routes>
     </BrowserRouter>
   );

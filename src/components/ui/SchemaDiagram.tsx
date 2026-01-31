@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
@@ -14,11 +14,9 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
-import { useDatabase } from '../../hooks/useDatabase';
 import { useEditor } from '../../hooks/useEditor';
 import { SchemaTableNodeComponent } from './SchemaTableNode';
 import { Loader2, RefreshCw } from 'lucide-react';
-import type { TableSchema, TableColumn, ForeignKey } from '../../types/editor';
 
 const nodeTypes = {
   schemaTable: SchemaTableNodeComponent,
@@ -32,7 +30,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
 
   const nodeWidth = 240;
   // Node height approximation unused by dagre simple layout but good for spacing
-  // const nodeHeight = 40; 
+  // const nodeHeight = 40;
 
   dagreGraph.setGraph({ rankdir: direction, ranksep: 150, nodesep: 50 });
 
@@ -65,24 +63,43 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   return { nodes: newNodes, edges };
 };
 
-const SchemaDiagramContent = () => {
-  const { activeConnectionId } = useDatabase();
+interface SchemaDiagramContentProps {
+  connectionId: string;
+}
+
+const SchemaDiagramContent = ({ connectionId }: SchemaDiagramContentProps) => {
   const { getSchema } = useEditor();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView } = useReactFlow();
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
   const [loading, setLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Keyboard shortcuts for zoom
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        zoomOut();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [zoomIn, zoomOut]);
   // Main effect to load schema from backend
   useEffect(() => {
     let isMounted = true;
 
     const loadSchema = async () => {
-      if (!activeConnectionId) return;
+      if (!connectionId) return;
       setLoading(true);
 
       try {
-        const fetchedSchema = await getSchema(activeConnectionId);
+        const fetchedSchema = await getSchema(connectionId);
         if (!isMounted) return;
 
         // Build nodes and edges with optimizations
@@ -159,7 +176,7 @@ const SchemaDiagramContent = () => {
     return () => {
       isMounted = false;
     };
-  }, [activeConnectionId, refreshTrigger, getSchema, fitView, setNodes, setEdges]);
+  }, [connectionId, refreshTrigger, getSchema, fitView, setNodes, setEdges]);
 
   // Conditionally show MiniMap only for medium-sized schemas
   const shouldShowMiniMap = useMemo(() => {
@@ -182,7 +199,7 @@ const SchemaDiagramContent = () => {
                 </div>
             </div>
         )}
-        
+
         <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -193,6 +210,14 @@ const SchemaDiagramContent = () => {
             minZoom={0.05}
             maxZoom={2}
             defaultEdgeOptions={{ type: 'smoothstep' }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+            panOnScroll={false}
+            zoomOnScroll={true}
+            zoomOnPinch={true}
+            zoomOnDoubleClick={false}
+            panOnDrag={true}
         >
             <Background gap={20} size={1} color="#334155" />
             <Controls className="!bg-slate-800 !border-slate-700 !shadow-xl" />
@@ -204,9 +229,9 @@ const SchemaDiagramContent = () => {
                     style={{ height: 120, width: 200 }}
                 />
             )}
-            
+
             <div className="absolute top-4 right-4 z-10">
-                <button 
+                <button
                     onClick={onRefresh}
                     className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 shadow-lg transition-colors text-sm font-medium"
                 >
@@ -219,8 +244,12 @@ const SchemaDiagramContent = () => {
   );
 };
 
-export const SchemaDiagram = () => (
+interface SchemaDiagramProps {
+  connectionId: string;
+}
+
+export const SchemaDiagram = ({ connectionId }: SchemaDiagramProps) => (
     <ReactFlowProvider>
-        <SchemaDiagramContent />
+        <SchemaDiagramContent connectionId={connectionId} />
     </ReactFlowProvider>
 );

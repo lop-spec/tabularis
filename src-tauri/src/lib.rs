@@ -67,6 +67,7 @@ pub fn run() {
             commands::execute_query,
             commands::cancel_query,
             commands::set_window_title,
+            commands::open_er_diagram_window,
             export::export_query_to_file,
             export::cancel_export,
             saved_queries::get_saved_queries,

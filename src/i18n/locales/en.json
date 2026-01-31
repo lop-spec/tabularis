@@ -331,5 +331,12 @@
     "cancel": "Cancel",
     "colRequired": "Please select local and referenced columns",
     "tableRequired": "Please select a referenced table"
+  },
+  "erDiagram": {
+    "title": "ER Diagram",
+    "enterFullscreen": "Fullscreen",
+    "exitFullscreen": "Exit Fullscreen",
+    "noConnection": "No Connection ID",
+    "noConnectionDesc": "Cannot display diagram without a connection ID."
   }
 }

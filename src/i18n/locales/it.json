@@ -331,5 +331,12 @@
     "cancel": "Annulla",
     "colRequired": "Seleziona le colonne locali e riferite",
     "tableRequired": "Seleziona una tabella riferita"
+  },
+  "erDiagram": {
+    "title": "Diagramma ER",
+    "enterFullscreen": "Schermo Intero",
+    "exitFullscreen": "Esci da Schermo Intero",
+    "noConnection": "Nessun ID Connessione",
+    "noConnectionDesc": "Impossibile visualizzare il diagramma senza un ID connessione."
   }
 }

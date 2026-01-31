@@ -183,7 +183,7 @@ pub async fn get_schema_snapshot<R: Runtime>(
     }
 
     let results = futures::future::join_all(tasks).await;
-    
+
     // Collect results, filtering out failures but logging them (or just failing?)
     // For a diagram, partial success is better than total failure, but let's be strict for now or log errors.
     let mut schema = Vec::new();
@@ -685,6 +685,32 @@ pub async fn set_window_title(app: AppHandle, title: String) -> Result<(), Strin
             }
         }
     }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_er_diagram_window(
+    app: AppHandle,
+    connection_id: String,
+    connection_name: String,
+    database_name: String,
+) -> Result<(), String> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+    let title = format!("ER Diagram - {} ({})", connection_name, database_name);
+    let url = format!("/schema-diagram?connectionId={}", connection_id);
+
+    let _webview = WebviewWindowBuilder::new(
+        &app,
+        "er-diagram",
+        WebviewUrl::App(url.into()),
+    )
+    .title(&title)
+    .inner_size(1200.0, 800.0)
+    .center()
+    .build()
+    .map_err(|e| format!("Failed to create ER Diagram window: {}", e))?;
 
     Ok(())
 }
