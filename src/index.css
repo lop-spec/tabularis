@@ -377,6 +377,11 @@ select option:active {
   background-color: var(--bg-base) !important;
 }
 
+/* Add padding between line numbers and code content */
+.monaco-editor .view-lines {
+  padding-left: 12px;
+}
+
 /* Selection styles */
 ::selection {
   background-color: var(--surface-active);

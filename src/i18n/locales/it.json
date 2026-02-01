@@ -41,6 +41,7 @@
     "showData": "Mostra Dati",
     "countRows": "Conta righe",
     "viewSchema": "Vedi schema",
+    "generateSQL": "Genera SQL",
     "addColumn": "Aggiungi colonna",
     "addIndex": "Aggiungi Indice",
     "deleteIndex": "Elimina indice",
@@ -304,6 +305,12 @@
     "colKey": "Chiave",
     "yes": "SÌ",
     "no": "NO"
+  },
+  "generateSQL": {
+    "title": "SQL Generato: {{table}}",
+    "loading": "Generazione SQL in corso...",
+    "copy": "Copia SQL",
+    "copied": "Copiato!"
   },
   "modifyColumn": {
     "titleAdd": "Aggiungi Colonna",

@@ -43,6 +43,7 @@ import { QueryModal } from "../ui/QueryModal";
 import { ModifyColumnModal } from "../ui/ModifyColumnModal";
 import { CreateIndexModal } from "../ui/CreateIndexModal";
 import { CreateForeignKeyModal } from "../ui/CreateForeignKeyModal";
+import { GenerateSQLModal } from "../ui/GenerateSQLModal";
 
 interface TableColumn {
   name: string;
@@ -639,6 +640,7 @@ export const Sidebar = () => {
     isOpen: boolean;
     tableName: string;
   }>({ isOpen: false, tableName: "" });
+  const [generateSQLModal, setGenerateSQLModal] = useState<string | null>(null);
 
   const [queriesOpen, setQueriesOpen] = useState(false);
   const [tablesOpen, setTablesOpen] = useState(true);
@@ -996,6 +998,11 @@ export const Sidebar = () => {
                     action: () => setSchemaModalTable(contextMenu.id),
                   },
                   {
+                    label: t("sidebar.generateSQL"),
+                    icon: FileCode,
+                    action: () => setGenerateSQLModal(contextMenu.id),
+                  },
+                  {
                     label: t("sidebar.copyName"),
                     icon: Copy,
                     action: () => navigator.clipboard.writeText(contextMenu.id),
@@ -1313,6 +1320,14 @@ export const Sidebar = () => {
         <McpModal
           isOpen={isMcpModalOpen}
           onClose={() => setIsMcpModalOpen(false)}
+        />
+      )}
+
+      {generateSQLModal && (
+        <GenerateSQLModal
+          isOpen={true}
+          tableName={generateSQLModal}
+          onClose={() => setGenerateSQLModal(null)}
         />
       )}
     </div>

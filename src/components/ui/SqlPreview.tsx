@@ -48,7 +48,7 @@ export const SqlPreview: React.FC<SqlPreviewProps> = ({
           glyphMargin: false,
           folding: false,
           lineDecorationsWidth: 0,
-          lineNumbersMinChars: 4,
+          lineNumbersMinChars: 5,
           scrollBeyondLastLine: false,
           automaticLayout: true,
           scrollbar: {
