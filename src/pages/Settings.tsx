@@ -39,7 +39,7 @@ const AVAILABLE_FONTS = [
 export const Settings = () => {
   const { t } = useTranslation();
   const { settings, updateSetting } = useSettings();
-  const [activeTab, setActiveTab] = useState<"general" | "appearance" | "ai" | "info">(
+  const [activeTab, setActiveTab] = useState<"general" | "appearance" | "localization" | "ai" | "info">(
     "general",
   );
   const [aiKeyStatus, setAiKeyStatus] = useState<Record<string, boolean>>({});
@@ -243,6 +243,18 @@ export const Settings = () => {
           {t("settings.appearance")}
         </button>
         <button
+          onClick={() => setActiveTab("localization")}
+          className={clsx(
+            "px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors",
+            activeTab === "localization"
+              ? "bg-surface-secondary text-primary"
+              : "text-muted hover:text-primary hover:bg-surface-secondary/50",
+          )}
+        >
+          <Languages size={16} />
+          {t("settings.localization")}
+        </button>
+        <button
           onClick={() => setActiveTab("ai")}
           className={clsx(
             "px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors",
@@ -307,10 +319,16 @@ export const Settings = () => {
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {/* Localization Tab */}
+          {activeTab === "localization" && (
+            <div className="space-y-6">
               <div className="bg-elevated border border-default rounded-xl p-6">
                 <h3 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
                   <Languages size={20} className="text-purple-400" />
-                  {t("settings.appearance")}
+                  {t("settings.localization")}
                 </h3>
 
                 <div className="space-y-4">

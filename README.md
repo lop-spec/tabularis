@@ -35,6 +35,8 @@ yay -S tabularis-bin
 
 ## Gallery
 
+📸 **View the full gallery at [tabularis.dev](https://tabularis.dev)**
+
 <div align="center">
   <img src="screenshots/screenshot-1.png" width="45%" alt="Connection Manager" />
   <img src="screenshots/screenshot-2.png" width="45%" alt="SQL Editor and Data Grid" />

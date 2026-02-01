@@ -95,6 +95,7 @@
     "pageSizeDesc": "Limita il numero di righe caricate per query per prevenire problemi di performance. Imposta a 0 per disabilitare (non consigliato).",
     "rows": "righe",
     "appearance": "Aspetto",
+    "localization": "Localizzazione",
     "themeSelection": "Selezione Tema",
     "fontFamily": "Famiglia Font",
     "fonts": {

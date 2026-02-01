@@ -95,6 +95,7 @@
     "pageSizeDesc": "Limits the number of rows fetched per query to prevent performance issues. Set to 0 to disable (not recommended).",
     "rows": "rows",
     "appearance": "Appearance",
+    "localization": "Localization",
     "themeSelection": "Theme Selection",
     "fontFamily": "Font Family",
     "fonts": {
