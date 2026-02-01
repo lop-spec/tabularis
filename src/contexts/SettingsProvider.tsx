@@ -1,7 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api/core';
-import { SettingsContext, DEFAULT_SETTINGS, type Settings } from './SettingsContext';
+import { useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  SettingsContext,
+  DEFAULT_SETTINGS,
+  type Settings,
+} from "./SettingsContext";
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { i18n } = useTranslation();
@@ -12,68 +16,108 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const config = await invoke<Partial<Settings>>('get_config');
+        const config = await invoke<Partial<Settings>>("get_config");
 
         // Migration logic: Check localStorage if backend is empty/default
-        const savedLocal = localStorage.getItem('tabularis_settings');
+        const savedLocal = localStorage.getItem("tabularis_settings");
         let finalSettings = { ...DEFAULT_SETTINGS };
 
-        if (savedLocal && (!config.resultPageSize && !config.language)) {
-           // Migration needed
-           const localData = JSON.parse(savedLocal);
-           finalSettings = {
-             ...finalSettings,
-             resultPageSize: localData.queryLimit || 500,
-             language: localData.language || "auto",
-           };
-           // Save migrated data to backend
-           await invoke('save_config', { config: finalSettings });
+        if (savedLocal && !config.resultPageSize && !config.language) {
+          // Migration needed
+          const localData = JSON.parse(savedLocal);
+          finalSettings = {
+            ...finalSettings,
+            resultPageSize: localData.queryLimit || 500,
+            language: localData.language || "auto",
+          };
+          // Save migrated data to backend
+          await invoke("save_config", { config: finalSettings });
         } else {
-         // Use backend config
-           finalSettings = {
-             ...DEFAULT_SETTINGS,
-             ...config,
-           };
-           
-           // If aiEnabled is null or undefined in config, treat it as disabled (false)
-           if (config.aiEnabled === null || config.aiEnabled === undefined) {
-             finalSettings.aiEnabled = false;
-           }
+          // Use backend config
+          finalSettings = {
+            ...DEFAULT_SETTINGS,
+            ...config,
+          };
+
+          // If aiEnabled is null or undefined in config, treat it as disabled (false)
+          if (config.aiEnabled === null || config.aiEnabled === undefined) {
+            finalSettings.aiEnabled = false;
+          }
         }
 
-         // Smart detect AI Provider and Model if aiEnabled but provider/model not set
-         if (finalSettings.aiEnabled && (!finalSettings.aiProvider || !finalSettings.aiModel)) {
-             // First, detect which provider has an API key
-             let detectedProvider: string | null = null;
-             const hasOpenAI = await invoke<boolean>('check_ai_key', { provider: 'openai' });
-             if (hasOpenAI) {
-                 detectedProvider = 'openai';
-             } else {
-                 const hasAnthropic = await invoke<boolean>('check_ai_key', { provider: 'anthropic' });
-                 if (hasAnthropic) {
-                     detectedProvider = 'anthropic';
-                 } else {
-                     const hasOpenRouter = await invoke<boolean>('check_ai_key', { provider: 'openrouter' });
-                     if (hasOpenRouter) detectedProvider = 'openrouter';
-                 }
-             }
-             
-             if (detectedProvider) {
-                 // Get available models for the detected provider
-                 const models = await invoke<Record<string, string[]>>('get_ai_models');
-                 const providerModels = models[detectedProvider] || [];
-                 const firstModel = providerModels[0] || null;
-                 
-                 // Only set provider if not already set
-                 if (!finalSettings.aiProvider) {
-                     finalSettings.aiProvider = detectedProvider as any;
-                 }
-                 // Only set model if not already set AND we have a model available
-                 if (!finalSettings.aiModel && firstModel) {
-                     finalSettings.aiModel = firstModel;
-                 }
-             }
-         }
+        // Smart detect AI Provider and Model if aiEnabled but provider/model not set
+        if (
+          finalSettings.aiEnabled &&
+          (!finalSettings.aiProvider || !finalSettings.aiModel)
+        ) {
+          // First, detect which provider has an API key
+          let detectedProvider: string | null = null;
+          const hasOpenAI = await invoke<boolean>("check_ai_key", {
+            provider: "openai",
+          });
+          if (hasOpenAI) {
+            detectedProvider = "openai";
+          } else {
+            const hasAnthropic = await invoke<boolean>("check_ai_key", {
+              provider: "anthropic",
+            });
+            if (hasAnthropic) {
+              detectedProvider = "anthropic";
+            } else {
+              const hasOpenRouter = await invoke<boolean>("check_ai_key", {
+                provider: "openrouter",
+              });
+              if (hasOpenRouter) detectedProvider = "openrouter";
+            }
+          }
+
+          if (detectedProvider) {
+            // Get available models for the detected provider
+            const models =
+              await invoke<Record<string, string[]>>("get_ai_models");
+            const providerModels = models[detectedProvider] || [];
+            const firstModel = providerModels[0] || null;
+
+            // Only set provider if not already set
+            if (!finalSettings.aiProvider) {
+              finalSettings.aiProvider = detectedProvider as any;
+            }
+            // Only set model if not already set AND we have a model available
+            if (!finalSettings.aiModel && firstModel) {
+              finalSettings.aiModel = firstModel;
+            }
+          }
+        }
+
+        // IMMEDIATELY apply font settings from backend config BEFORE setting state
+        // This prevents flash if localStorage cache was stale
+        const fontMap: Record<string, string> = {
+          System:
+            "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, sans-serif",
+          "Open Sans": "Open Sans, system-ui, sans-serif",
+          Roboto: "Roboto, RobotoDraft, Helvetica, Arial, sans-serif",
+          "JetBrains Mono":
+            "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+          Hack: "Hack, Menlo, Monaco, Consolas, monospace",
+          Menlo: "Menlo, Monaco, Consolas, monospace",
+          "DejaVu Sans Mono":
+            "DejaVu Sans Mono, Menlo, Monaco, Consolas, monospace",
+        };
+
+        const fontFamily =
+          fontMap[finalSettings.fontFamily] ||
+          finalSettings.fontFamily ||
+          fontMap["System"];
+        const fontSize = finalSettings.fontSize || 14;
+
+        // Apply immediately to override any stale cache from pre-load script
+        document.documentElement.style.setProperty("--font-base", fontFamily);
+        document.documentElement.style.setProperty(
+          "--font-size-base",
+          `${fontSize}px`,
+        );
+        document.body.style.fontFamily = fontFamily;
+        document.body.style.fontSize = `${fontSize}px`;
 
         setSettings(finalSettings);
       } catch (error) {
@@ -88,7 +132,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
   // Update i18n when language changes
   useEffect(() => {
-    if (settings.language === 'auto') {
+    if (settings.language === "auto") {
       i18n.changeLanguage();
     } else {
       i18n.changeLanguage(settings.language);
@@ -98,32 +142,78 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   // Apply font family
   useEffect(() => {
     const fontMap: Record<string, string> = {
-      'System': 'system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, sans-serif',
-      'Open Sans': 'Open Sans, system-ui, sans-serif',
-      'Roboto': 'Roboto, RobotoDraft, Helvetica, Arial, sans-serif',
-      'JetBrains Mono': 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
-      'Hack': 'Hack, Menlo, Monaco, Consolas, monospace',
-      'Menlo': 'Menlo, Monaco, Consolas, monospace',
-      'DejaVu Sans Mono': 'DejaVu Sans Mono, Menlo, Monaco, Consolas, monospace',
+      System:
+        "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, sans-serif",
+      "Open Sans": "Open Sans, system-ui, sans-serif",
+      Roboto: "Roboto, RobotoDraft, Helvetica, Arial, sans-serif",
+      "JetBrains Mono": "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+      Hack: "Hack, Menlo, Monaco, Consolas, monospace",
+      Menlo: "Menlo, Monaco, Consolas, monospace",
+      "DejaVu Sans Mono":
+        "DejaVu Sans Mono, Menlo, Monaco, Consolas, monospace",
     };
-    // Use mapped font if available, otherwise use custom font name directly
-    const fontFamily = fontMap[settings.fontFamily] || settings.fontFamily || fontMap['System'];
-    document.documentElement.style.setProperty('--font-base', fontFamily);
-  }, [settings.fontFamily]);
+
+    const fontFamily =
+      fontMap[settings.fontFamily] || settings.fontFamily || fontMap["System"];
+
+    // Apply to CSS variable
+    document.documentElement.style.setProperty("--font-base", fontFamily);
+
+    // ALSO apply directly to body as fallback
+    document.body.style.fontFamily = fontFamily;
+
+    // Cache for next startup
+    try {
+      localStorage.setItem(
+        "tabularis_font_cache",
+        JSON.stringify({
+          fontFamily: settings.fontFamily,
+          fontSize: settings.fontSize,
+        }),
+      );
+    } catch (e) {
+      console.warn("Failed to cache font settings:", e);
+    }
+  }, [settings.fontFamily, settings.fontSize]);
 
   // Apply font size
   useEffect(() => {
     const size = settings.fontSize || 14;
-    document.documentElement.style.setProperty('--font-size-base', `${size}px`);
+
+    // Apply to CSS variable
+    document.documentElement.style.setProperty("--font-size-base", `${size}px`);
+
+    // ALSO apply directly to body as fallback
+    document.body.style.fontSize = `${size}px`;
   }, [settings.fontSize]);
 
-  const updateSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
-    setSettings(prev => {
+  const updateSetting = <K extends keyof Settings>(
+    key: K,
+    value: Settings[K],
+  ) => {
+    setSettings((prev) => {
       const newSettings = { ...prev, [key]: value };
+
       // Persist to backend
-      invoke('save_config', { config: newSettings }).catch(err => 
-        console.error("Failed to save settings:", err)
+      invoke("save_config", { config: newSettings }).catch((err) =>
+        console.error("Failed to save settings:", err),
       );
+
+      // If font setting changed, update cache immediately
+      if (key === "fontFamily" || key === "fontSize") {
+        try {
+          localStorage.setItem(
+            "tabularis_font_cache",
+            JSON.stringify({
+              fontFamily: newSettings.fontFamily,
+              fontSize: newSettings.fontSize,
+            }),
+          );
+        } catch (e) {
+          console.warn("Failed to update font cache:", e);
+        }
+      }
+
       return newSettings;
     });
   };

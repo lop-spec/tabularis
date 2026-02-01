@@ -48,10 +48,16 @@
 }
 
 :root {
-  font-family: var(--font-base, Inter, system-ui, Avenir, Helvetica, Arial, sans-serif);
-  font-size: var(--font-size-base, 14px);
+  /* Typography - Define BEFORE usage */
+  --font-base: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-size-base: 14px;
+  --font-mono: JetBrains Mono, Fira Code, Monaco, Consolas, monospace;
+
+  /* Apply immediately */
+  font-family: var(--font-base);
+  font-size: var(--font-size-base);
   color-scheme: dark;
-  
+
   /* CSS Variables - Default (Tabularis Dark) */
   --bg-base: #020617;
   --bg-elevated: #0f172a;
@@ -117,10 +123,7 @@
   --semantic-modified: #3b82f6;
   --semantic-deleted: #ef4444;
   --semantic-new: #22c55e;
-  
-  --font-base: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  --font-mono: JetBrains Mono, Fira Code, Monaco, Consolas, monospace;
-  
+
   --radius-sm: 0.25rem;
   --radius-base: 0.5rem;
   --radius-lg: 0.75rem;
