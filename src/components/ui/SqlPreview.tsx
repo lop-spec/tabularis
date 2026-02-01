@@ -64,7 +64,7 @@ export const SqlPreview: React.FC<SqlPreviewProps> = ({
           contextmenu: false,
           wordWrap: "on",
           wrappingIndent: "indent",
-          padding: { top: 8, bottom: 8, left: 16 },
+          padding: { top: 8, bottom: 8 },
         }}
       />
     </div>
