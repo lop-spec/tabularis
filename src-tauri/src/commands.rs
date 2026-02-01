@@ -695,7 +695,7 @@ pub async fn open_er_diagram_window(
     use tauri::{WebviewUrl, WebviewWindowBuilder};
     use urlencoding::encode;
 
-    let title = format!("{} ({})", database_name, connection_name);
+    let title = format!("tabularis - {} ({})", database_name, connection_name);
     let url = format!(
         "/schema-diagram?connectionId={}&connectionName={}&databaseName={}",
         encode(&connection_id),
@@ -703,16 +703,12 @@ pub async fn open_er_diagram_window(
         encode(&database_name)
     );
 
-    let _webview = WebviewWindowBuilder::new(
-        &app,
-        "er-diagram",
-        WebviewUrl::App(url.into()),
-    )
-    .title(&title)
-    .inner_size(1200.0, 800.0)
-    .center()
-    .build()
-    .map_err(|e| format!("Failed to create ER Diagram window: {}", e))?;
+    let _webview = WebviewWindowBuilder::new(&app, "er-diagram", WebviewUrl::App(url.into()))
+        .title(&title)
+        .inner_size(1200.0, 800.0)
+        .center()
+        .build()
+        .map_err(|e| format!("Failed to create ER Diagram window: {}", e))?;
 
     Ok(())
 }
