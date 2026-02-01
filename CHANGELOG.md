@@ -1,3 +1,21 @@
+## [0.8.4](https://github.com/debba/tabularis/compare/v0.8.3...v0.8.4) (2026-02-01)
+
+
+### Features
+
+* **i18n:** add themeSelection translation key ([43daa61](https://github.com/debba/tabularis/commit/43daa613fa6e64349373a770e715234e0a024fc6))
+* **settings:** add configurable font family and size ([7daf6ef](https://github.com/debba/tabularis/commit/7daf6efa792fd44f54d1c42bfc8214c6f8150826))
+* **settings:** add font family selection and lazy-loaded fonts ([8a0e61a](https://github.com/debba/tabularis/commit/8a0e61a23b4bb2815eacc25d8f82f25ecf7144b8))
+* **settings:** add localization tab and gallery images ([bb00a26](https://github.com/debba/tabularis/commit/bb00a26932f30c92a6d05f7791d7417f5131555e))
+* **settings:** improve AI config handling and detection ([b9d0831](https://github.com/debba/tabularis/commit/b9d08315b432550b7f48e16c0d1a3cbd743d1556))
+* **theme:** add font settings and ai custom models to app config ([8e849e2](https://github.com/debba/tabularis/commit/8e849e2fa8fe1b56f985c44f4317d0468be18cda))
+* **theme:** apply dynamic theme colors to sidebar and settings logos ([cc23fab](https://github.com/debba/tabularis/commit/cc23fabfa3c151b85beacd826ffde13e6e0209d6))
+* **theme:** implement theme system with CSS variables and provider ([55f8905](https://github.com/debba/tabularis/commit/55f89058e635dbaefc112ccb39f449a496dc962f))
+* **theme:** integrate monaco-themes and add new preset themes ([9154510](https://github.com/debba/tabularis/commit/9154510b627deafb0d9f2f903e90c39e36818920))
+* **ui:** add modal styling rules, SqlPreview component and splash ([f74f063](https://github.com/debba/tabularis/commit/f74f063ea49fc84a6bff4c8b648caa26fab736f4))
+
+
+
 ## [0.8.3](https://github.com/debba/tabularis/compare/v0.8.2...v0.8.3) (2026-01-31)
 
 
