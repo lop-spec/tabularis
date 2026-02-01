@@ -36,6 +36,48 @@ interface NewConnectionModalProps {
   initialConnection?: SavedConnection | null;
 }
 
+
+const InputClass =
+  "w-full px-3 pt-2 pb-1 bg-base border border-strong rounded-lg text-primary focus:border-blue-500 focus:outline-none leading-tight";
+const LabelClass = "block text-xs uppercase font-bold text-muted";
+
+interface ConnectionInputProps {
+  label: string;
+  value: string | number | undefined;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  error?: React.ReactNode;
+  autoFocus?: boolean;
+  className?: string;
+}
+
+const ConnectionInput = ({
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  error,
+  autoFocus,
+  className,
+}: ConnectionInputProps) => {
+  return (
+    <div className={clsx("space-y-1", className)}>
+      <label className={LabelClass}>{label}</label>
+      <input
+        type={type}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className={clsx(InputClass, error && "border-amber-500/50")}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+      />
+      {error}
+    </div>
+  );
+};
+
 export const NewConnectionModal = ({
   isOpen,
   onClose,
@@ -47,9 +89,9 @@ export const NewConnectionModal = ({
   const [name, setName] = useState("");
   const [formData, setFormData] = useState<Partial<ConnectionParams>>({
     host: "localhost",
-    port: 5432,
-    username: "postgres",
-    database: "postgres",
+    port: 3306,
+    username: "",
+    database: "",
     ssh_enabled: false,
     ssh_port: 22,
   });
@@ -70,12 +112,12 @@ export const NewConnectionModal = ({
       } else {
         // Reset to defaults
         setName("");
-        setDriver("postgres");
+        setDriver("mysql");
         setFormData({
           host: "localhost",
-          port: 5432,
-          username: "postgres",
-          database: "postgres",
+          port: 3306,
+          username: "",
+          database: "",
           ssh_enabled: false,
           ssh_port: 22,
         });
@@ -150,6 +192,7 @@ export const NewConnectionModal = ({
     }
 
     setStatus("saving");
+    setMessage("");
     try {
       const params = {
         driver,
@@ -180,10 +223,6 @@ export const NewConnectionModal = ({
     }
   };
 
-  const InputClass =
-    "w-full px-3 pt-2 pb-1 bg-base border border-strong rounded-lg text-primary focus:border-blue-500 focus:outline-none leading-tight";
-  const LabelClass = "block text-xs uppercase font-bold text-muted";
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
@@ -195,33 +234,37 @@ export const NewConnectionModal = ({
             </div>
             <div>
               <h2 className="text-lg font-semibold text-primary">
-                {initialConnection ? t("newConnection.titleEdit") : t("newConnection.titleNew")}
+                {initialConnection
+                  ? t("newConnection.titleEdit")
+                  : t("newConnection.titleNew")}
               </h2>
-              <p className="text-xs text-secondary">{t("newConnection.subtitle")}</p>
+              <p className="text-xs text-secondary">
+                {t("newConnection.subtitle")}
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-secondary hover:text-primary hover:bg-surface-tertiary rounded-lg transition-colors">
+          <button
+            onClick={onClose}
+            className="p-2 text-secondary hover:text-primary hover:bg-surface-tertiary rounded-lg transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
 
         {/* Content */}
         <div className="p-6 space-y-4 overflow-y-auto">
-          <div className="space-y-1">
-            <label className={LabelClass}>{t("newConnection.name")}</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={InputClass}
-              placeholder={t("newConnection.namePlaceholder")}
-              autoFocus
-            />
-          </div>
+          <ConnectionInput
+            label={t("newConnection.name")}
+            value={name}
+            onChange={setName}
+            placeholder={t("newConnection.namePlaceholder")}
+            autoFocus
+          />
 
           <div className="space-y-1">
             <label className={LabelClass}>{t("newConnection.dbType")}</label>
             <div className="flex gap-2 mt-1">
-              {(["postgres", "mysql", "sqlite"] as Driver[]).map((d) => (
+              {(["mysql", "postgres", "sqlite"] as Driver[]).map((d) => (
                 <button
                   key={d}
                   onClick={() => handleDriverChange(d)}
@@ -240,75 +283,63 @@ export const NewConnectionModal = ({
 
           {driver !== "sqlite" && (
             <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2">
-                <label className={LabelClass}>{t("newConnection.host")}</label>
-                <input
-                  value={formData.host}
-                  onChange={(e) => updateField("host", e.target.value)}
-                  className={InputClass}
-                />
-              </div>
-              <div>
-                <label className={LabelClass}>{t("newConnection.port")}</label>
-                <input
-                  type="number"
-                  value={formData.port}
-                  onChange={(e) => updateField("port", e.target.value)}
-                  className={InputClass}
-                />
-              </div>
+              <ConnectionInput
+                className="col-span-2"
+                label={t("newConnection.host")}
+                value={formData.host}
+                onChange={(val) => updateField("host", val)}
+                placeholder="localhost"
+              />
+              <ConnectionInput
+                label={t("newConnection.port")}
+                value={formData.port}
+                onChange={(val) => updateField("port", val)}
+                type="number"
+                placeholder={driver === "mysql" ? "3306" : "5432"}
+              />
             </div>
           )}
 
           {driver !== "sqlite" && (
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={LabelClass}>{t("newConnection.username")}</label>
-                <input
-                  value={formData.username}
-                  onChange={(e) => updateField("username", e.target.value)}
-                  className={InputClass}
-                />
-              </div>
-              <div>
-                <label className={LabelClass}>{t("newConnection.password")}</label>
-                <input
-                  type="password"
-                  value={formData.password || ""}
-                  onChange={(e) => updateField("password", e.target.value)}
-                  className={clsx(
-                    InputClass,
-                    formData.save_in_keychain &&
-                      !formData.password &&
-                      "border-amber-500/50",
-                  )}
-                  placeholder={t("newConnection.passwordPlaceholder")}
-                />
-                {formData.save_in_keychain && !formData.password && (
-                  <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
-                    <AlertCircle size={10} />
-                    {t("newConnection.passwordMissing")}
-                  </p>
-                )}
-              </div>
+              <ConnectionInput
+                label={t("newConnection.username")}
+                value={formData.username}
+                onChange={(val) => updateField("username", val)}
+                placeholder="Username"
+              />
+              <ConnectionInput
+                label={t("newConnection.password")}
+                value={formData.password}
+                onChange={(val) => updateField("password", val)}
+                type="password"
+                placeholder={t("newConnection.passwordPlaceholder")}
+                error={
+                  formData.save_in_keychain && !formData.password ? (
+                    <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {t("newConnection.passwordMissing")}
+                    </p>
+                  ) : null
+                }
+              />
             </div>
           )}
 
-          <div className="space-y-1">
-            <label className={LabelClass}>
-              {driver === "sqlite" ? t("newConnection.filePath") : t("newConnection.dbName")}
-            </label>
-            <input
-              value={formData.database}
-              onChange={(e) => updateField("database", e.target.value)}
-              className={InputClass}
-              placeholder={
-                driver === "sqlite"
-                  ? t("newConnection.filePathPlaceholder")
-                  : t("newConnection.dbNamePlaceholder")
-              }
-            />
-          </div>
+          <ConnectionInput
+            label={
+              driver === "sqlite"
+                ? t("newConnection.filePath")
+                : t("newConnection.dbName")
+            }
+            value={formData.database}
+            onChange={(val) => updateField("database", val)}
+            placeholder={
+              driver === "sqlite"
+                ? t("newConnection.filePathPlaceholder")
+                : t("newConnection.dbNamePlaceholder")
+            }
+          />
 
           {/* SSH Tunnel Section */}
           {driver !== "sqlite" && (
@@ -337,80 +368,52 @@ export const NewConnectionModal = ({
               {formData.ssh_enabled && (
                 <div className="space-y-4 pl-3 border-l-2 border-default ml-1">
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="col-span-2">
-                      <label className={LabelClass}>{t("newConnection.sshHost")}</label>
-                      <input
-                        value={formData.ssh_host || ""}
-                        onChange={(e) =>
-                          updateField("ssh_host", e.target.value)
-                        }
-                        className={InputClass}
-                        placeholder="ssh.example.com"
-                      />
-                    </div>
-                    <div>
-                      <label className={LabelClass}>{t("newConnection.sshPort")}</label>
-                      <input
-                        type="number"
-                        value={formData.ssh_port || 22}
-                        onChange={(e) =>
-                          updateField("ssh_port", Number(e.target.value))
-                        }
-                        className={InputClass}
-                      />
-                    </div>
+                    <ConnectionInput
+                      className="col-span-2"
+                      label={t("newConnection.sshHost")}
+                      value={formData.ssh_host}
+                      onChange={(val) => updateField("ssh_host", val)}
+                      placeholder="ssh.example.com"
+                    />
+                    <ConnectionInput
+                      label={t("newConnection.sshPort")}
+                      value={formData.ssh_port}
+                      onChange={(val) => updateField("ssh_port", Number(val))}
+                      type="number"
+                      placeholder="22"
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={LabelClass}>{t("newConnection.sshUser")}</label>
-                      <input
-                        value={formData.ssh_user || ""}
-                        onChange={(e) =>
-                          updateField("ssh_user", e.target.value)
-                        }
-                        className={InputClass}
-                        placeholder="root"
-                      />
-                    </div>
-                    <div>
-                      <label className={LabelClass}>{t("newConnection.sshPassword")}</label>
-                      <input
-                        type="password"
-                        value={formData.ssh_password || ""}
-                        onChange={(e) =>
-                          updateField("ssh_password", e.target.value)
-                        }
-                        className={clsx(
-                          InputClass,
-                          formData.save_in_keychain &&
-                            !formData.ssh_password &&
-                            "border-amber-500/50",
-                        )}
-                        placeholder={t("newConnection.sshPasswordPlaceholder")}
-                      />
-                      {formData.save_in_keychain && !formData.ssh_password && (
-                        <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
-                          <AlertCircle size={10} />
-                          {t("newConnection.sshPasswordMissing")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={LabelClass}>
-                      {t("newConnection.sshKeyFile")}
-                    </label>
-                    <input
-                      value={formData.ssh_key_file || ""}
-                      onChange={(e) =>
-                        updateField("ssh_key_file", e.target.value)
+                    <ConnectionInput
+                      label={t("newConnection.sshUser")}
+                      value={formData.ssh_user}
+                      onChange={(val) => updateField("ssh_user", val)}
+                      placeholder="Username"
+                    />
+                    <ConnectionInput
+                      label={t("newConnection.sshPassword")}
+                      value={formData.ssh_password}
+                      onChange={(val) => updateField("ssh_password", val)}
+                      type="password"
+                      placeholder={t("newConnection.sshPasswordPlaceholder")}
+                      error={
+                        formData.save_in_keychain && !formData.ssh_password ? (
+                          <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                            <AlertCircle size={10} />
+                            {t("newConnection.sshPasswordMissing")}
+                          </p>
+                        ) : null
                       }
-                      className={InputClass}
-                      placeholder={t("newConnection.sshKeyFilePlaceholder")}
                     />
                   </div>
+
+                  <ConnectionInput
+                    label={t("newConnection.sshKeyFile")}
+                    value={formData.ssh_key_file}
+                    onChange={(val) => updateField("ssh_key_file", val)}
+                    placeholder={t("newConnection.sshKeyFilePlaceholder")}
+                  />
                 </div>
               )}
             </div>

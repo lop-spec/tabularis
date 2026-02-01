@@ -183,7 +183,7 @@
     "passwordPlaceholder": "Inserisci password",
     "filePath": "Percorso File",
     "dbName": "Nome Database",
-    "dbNamePlaceholder": "mio_database",
+    "dbNamePlaceholder": "Nome database",
     "filePathPlaceholder": "/percorso/assoluto/db.sqlite",
     "useSsh": "Usa Tunnel SSH",
     "sshHost": "Host SSH",

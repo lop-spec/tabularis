@@ -183,7 +183,7 @@
     "passwordPlaceholder": "Enter password",
     "filePath": "File Path",
     "dbName": "Database Name",
-    "dbNamePlaceholder": "my_database",
+    "dbNamePlaceholder": "Database name",
     "filePathPlaceholder": "/absolute/path/to/db.sqlite",
     "useSsh": "Use SSH Tunnel",
     "sshHost": "SSH Host",
