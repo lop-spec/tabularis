@@ -34,7 +34,7 @@ export function getProviderLabel(id: AiProvider): string {
     case 'openrouter':
       return 'OpenRouter';
     default:
-      return id.charAt(0).toUpperCase() + id.slice(1);
+      return String(id).charAt(0).toUpperCase() + String(id).slice(1);
   }
 }
 

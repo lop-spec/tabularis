@@ -3,7 +3,7 @@
  * Extracted from Connections.tsx for testability
  */
 
-export type DatabaseDriver = 'postgres' | 'mysql' | 'sqlite';
+export type DatabaseDriver = "postgres" | "mysql" | "sqlite";
 
 export interface ConnectionParams {
   driver: DatabaseDriver;
@@ -26,11 +26,11 @@ export interface ConnectionParams {
  * @returns Formatted connection string
  */
 export function formatConnectionString(params: ConnectionParams): string {
-  if (params.driver === 'sqlite') {
+  if (params.driver === "sqlite") {
     return params.database;
   }
 
-  const host = params.host || 'localhost';
+  const host = params.host || "localhost";
   const port = params.port || getDefaultPort(params.driver);
 
   return `${host}:${port}/${params.database}`;
@@ -43,11 +43,11 @@ export function formatConnectionString(params: ConnectionParams): string {
  */
 export function getDefaultPort(driver: DatabaseDriver): number {
   switch (driver) {
-    case 'postgres':
+    case "postgres":
       return 5432;
-    case 'mysql':
+    case "mysql":
       return 3306;
-    case 'sqlite':
+    case "sqlite":
       return 0; // SQLite doesn't use ports
     default:
       return 0;
@@ -64,40 +64,50 @@ export function validateConnectionParams(params: Partial<ConnectionParams>): {
   error?: string;
 } {
   if (!params.driver) {
-    return { isValid: false, error: 'Driver is required' };
+    return { isValid: false, error: "Driver is required" };
   }
 
   if (!params.database) {
-    return { isValid: false, error: 'Database name is required' };
+    return { isValid: false, error: "Database name is required" };
   }
 
   // For non-SQLite drivers, host is required
-  if (params.driver !== 'sqlite' && !params.host) {
-    return { isValid: false, error: 'Host is required for remote databases' };
+  if (params.driver !== "sqlite" && !params.host) {
+    return { isValid: false, error: "Host is required for remote databases" };
   }
 
   // Validate port if provided
   if (params.port !== undefined) {
-    if (!Number.isInteger(params.port) || params.port < 1 || params.port > 65535) {
-      return { isValid: false, error: 'Port must be between 1 and 65535' };
+    if (
+      !Number.isInteger(params.port) ||
+      params.port < 1 ||
+      params.port > 65535
+    ) {
+      return { isValid: false, error: "Port must be between 1 and 65535" };
     }
   }
 
   // SSH validation
   if (params.ssh_enabled) {
     if (!params.ssh_host) {
-      return { isValid: false, error: 'SSH host is required when SSH is enabled' };
+      return {
+        isValid: false,
+        error: "SSH host is required when SSH is enabled",
+      };
     }
 
     if (!params.ssh_user) {
-      return { isValid: false, error: 'SSH user is required when SSH is enabled' };
+      return {
+        isValid: false,
+        error: "SSH user is required when SSH is enabled",
+      };
     }
 
     // Either password or key file must be provided
     if (!params.ssh_password && !params.ssh_key_file) {
       return {
         isValid: false,
-        error: 'SSH password or key file is required',
+        error: "SSH password or key file is required",
       };
     }
 
@@ -110,7 +120,7 @@ export function validateConnectionParams(params: Partial<ConnectionParams>): {
       ) {
         return {
           isValid: false,
-          error: 'SSH port must be between 1 and 65535',
+          error: "SSH port must be between 1 and 65535",
         };
       }
     }
@@ -126,14 +136,14 @@ export function validateConnectionParams(params: Partial<ConnectionParams>): {
  */
 export function getDriverLabel(driver: DatabaseDriver): string {
   switch (driver) {
-    case 'postgres':
-      return 'PostgreSQL';
-    case 'mysql':
-      return 'MySQL';
-    case 'sqlite':
-      return 'SQLite';
+    case "postgres":
+      return "PostgreSQL";
+    case "mysql":
+      return "MySQL";
+    case "sqlite":
+      return "SQLite";
     default:
-      return driver.toUpperCase();
+      return String(driver).toUpperCase();
   }
 }
 
@@ -153,12 +163,12 @@ export function hasSSH(params: ConnectionParams): boolean {
  * @returns Display name for the connection
  */
 export function generateConnectionName(params: ConnectionParams): string {
-  if (params.driver === 'sqlite') {
+  if (params.driver === "sqlite") {
     // Extract filename from path
-    const parts = params.database.split('/');
+    const parts = params.database.split("/");
     return parts[parts.length - 1] || params.database;
   }
 
-  const host = params.host || 'localhost';
+  const host = params.host || "localhost";
   return `${params.database}@${host}`;
 }
