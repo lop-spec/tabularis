@@ -1,39 +1,46 @@
-import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import "@testing-library/jest-dom";
+import { cleanup } from "@testing-library/react";
+import { afterEach } from "vitest";
+import { vi } from "vitest";
+
+// Cleanup after each test
+afterEach(() => {
+  cleanup();
+});
 
 // Mock browser APIs missing in JSDOM for Monaco Editor
-Object.defineProperty(document, 'queryCommandSupported', {
+Object.defineProperty(document, "queryCommandSupported", {
   value: vi.fn().mockImplementation(() => true),
 });
-Object.defineProperty(document, 'execCommand', {
+Object.defineProperty(document, "execCommand", {
   value: vi.fn(),
 });
 
 // Mock Tauri APIs
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/plugin-dialog', () => ({
+vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: vi.fn(),
   message: vi.fn(),
   open: vi.fn(),
   save: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/plugin-fs', () => ({
+vi.mock("@tauri-apps/plugin-fs", () => ({
   writeTextFile: vi.fn(),
   BaseDirectory: {
     Document: 1,
   },
 }));
 
-vi.mock('@tauri-apps/plugin-opener', () => ({
+vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(),
 }));
 
 // Mock react-i18next
-vi.mock('react-i18next', () => ({
+vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
       if (options) {
@@ -47,18 +54,18 @@ vi.mock('react-i18next', () => ({
       return key;
     },
     i18n: {
-      language: 'en',
+      language: "en",
       changeLanguage: vi.fn(),
     },
   }),
   initReactI18next: {
-    type: '3rdParty',
+    type: "3rdParty",
     init: vi.fn(),
   },
 }));
 
 // Mock Monaco Editor
-vi.mock('@monaco-editor/react', () => ({
+vi.mock("@monaco-editor/react", () => ({
   __esModule: true,
   default: vi.fn(() => null),
   loader: {
@@ -71,7 +78,7 @@ vi.mock('@monaco-editor/react', () => ({
 }));
 
 // Mock lucide-react icons
-vi.mock('lucide-react', () => ({
+vi.mock("lucide-react", () => ({
   Trash2: () => null,
   Edit: () => null,
   ArrowUp: () => null,
