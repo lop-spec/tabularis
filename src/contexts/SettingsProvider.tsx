@@ -80,7 +80,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
             // Only set provider if not already set
             if (!finalSettings.aiProvider) {
-              finalSettings.aiProvider = detectedProvider as any;
+              finalSettings.aiProvider = detectedProvider as "openai" | "anthropic" | "openrouter";
             }
             // Only set model if not already set AND we have a model available
             if (!finalSettings.aiModel && firstModel) {

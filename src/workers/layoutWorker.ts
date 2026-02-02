@@ -8,7 +8,27 @@ const Position = {
   Bottom: 'bottom'
 };
 
-self.onmessage = (e) => {
+interface WorkerNode {
+  id: string;
+  data?: {
+    columns?: unknown[];
+  };
+  [key: string]: unknown;
+}
+
+interface WorkerEdge {
+  source: string;
+  target: string;
+  [key: string]: unknown;
+}
+
+interface WorkerMessage {
+  nodes: WorkerNode[];
+  edges: WorkerEdge[];
+  direction: string;
+}
+
+self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   const { nodes, edges, direction } = e.data;
 
   const dagreGraph = new dagre.graphlib.Graph();
@@ -17,19 +37,19 @@ self.onmessage = (e) => {
 
   const nodeWidth = 240;
 
-  nodes.forEach((node: any) => {
+  nodes.forEach((node: WorkerNode) => {
     const columns = node.data?.columns?.length || 0;
     const height = 40 + (columns * 28);
     dagreGraph.setNode(node.id, { width: nodeWidth, height });
   });
 
-  edges.forEach((edge: any) => {
+  edges.forEach((edge: WorkerEdge) => {
     dagreGraph.setEdge(edge.source, edge.target);
   });
 
   dagre.layout(dagreGraph);
 
-  const layoutedNodes = nodes.map((node: any) => {
+  const layoutedNodes = nodes.map((node: WorkerNode) => {
     const nodeWithPosition = dagreGraph.node(node.id);
     return {
       ...node,

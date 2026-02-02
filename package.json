@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
+    "typecheck": "tsc --noEmit",
     "test:coverage": "vitest run --coverage",
     "test:rust": "cd src-tauri && cargo test",
     "test:all": "pnpm test:rust && pnpm test:coverage",
