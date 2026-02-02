@@ -48,15 +48,12 @@ export const Settings = () => {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [explainPrompt, setExplainPrompt] = useState("");
   const { currentTheme, allThemes, setTheme } = useTheme();
-  const [customFont, setCustomFont] = useState("");
-
-  // Sync customFont state with settings when a custom font is selected
-  useEffect(() => {
+  
+  // Initialize customFont from settings if it's a custom font
+  const [customFont, setCustomFont] = useState(() => {
     const isPredefinedFont = AVAILABLE_FONTS.some(f => f.name === settings.fontFamily);
-    if (!isPredefinedFont && settings.fontFamily) {
-      setCustomFont(settings.fontFamily);
-    }
-  }, [settings.fontFamily]);
+    return !isPredefinedFont && settings.fontFamily ? settings.fontFamily : "";
+  });
 
   const loadModels = async () => {
     try {

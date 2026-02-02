@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { TableNodeComponent, type TableNodeData, type ColumnAggregation } from './TableNode';
-import { JoinEdge, type JoinEdgeData } from './JoinEdge';
+import { JoinEdge } from './JoinEdge';
 import { useDatabase } from '../../hooks/useDatabase';
 import { invoke } from '@tauri-apps/api/core';
 import { useEditor } from '../../hooks/useEditor';
@@ -152,8 +152,15 @@ const VisualQueryBuilderContent = () => {
     if (!activeTabId) return;
 
     const sql = generateVisualQuerySQL(
-      nodes as any,
-      edges as any,
+      nodes as Node<TableNodeData>[],
+      edges.map(edge => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle ?? undefined,
+        targetHandle: edge.targetHandle ?? undefined,
+        data: edge.data as { joinType: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL OUTER' | 'CROSS' } | undefined,
+      })),
       whereConditions,
       orderBy,
       groupBy,

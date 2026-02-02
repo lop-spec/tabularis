@@ -40,7 +40,8 @@ const getLayoutedElements = (
 
   nodes.forEach((node) => {
     // Estimate height based on columns for vertical spacing
-    const columns = (node.data as any).columns?.length || 0;
+    const nodeData = node.data as { columns?: unknown[] };
+    const columns = nodeData.columns?.length || 0;
     const height = 40 + columns * 28;
     dagreGraph.setNode(node.id, { width: nodeWidth, height });
   });
