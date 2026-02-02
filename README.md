@@ -11,19 +11,17 @@
 
 A lightweight, developer-focused database management tool, built with Tauri and React.
 
-> 💡 **Origin Story:** This project was born from a **vibe coding** session — an experiment in fluid, agent-assisted development to build a functional tool from scratch in record time.
-
 ## Release Download:
 
 <!-- DOWNLOAD_SECTION_START -->
+
 [![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.6.0/tabularis_0.6.0_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.6.0/tabularis_0.6.0_x64.dmg) [![Linux](https://img.shields.io/badge/Linux-Download-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.6.0/tabularis_0.6.0_amd64.AppImage)
+
 <!-- DOWNLOAD_SECTION_END -->
 
 ## Installation
 
 ### Arch Linux (AUR)
-
-You can install `tabularis` from the AUR using your favorite AUR helper:
 
 ```bash
 yay -S tabularis-bin
@@ -35,175 +33,84 @@ yay -S tabularis-bin
 
 ## Gallery
 
-📸 **View the full gallery at [tabularis.dev](https://tabularis.dev)**
-
-<div align="center">
-  <img src="screenshots/screenshot-1.png" width="45%" alt="Connection Manager" />
-  <img src="screenshots/screenshot-2.png" width="45%" alt="SQL Editor and Data Grid" />
-</div>
-<div align="center">
-  <img src="screenshots/screenshot-3.png" width="45%" alt="Table Wizard" />
-  <img src="screenshots/screenshot-4.png" width="45%" alt="New Connection" />
-</div>
+**View the full gallery at [tabularis.dev](https://tabularis.dev)**
 
 ## [Changelog](./CHANGELOG.md)
 
 ## Features
 
-### 🔌 Connection Management
+### Connection Management
 
-- Support for **PostgreSQL**, **MySQL/MariaDB**, and **SQLite**.
-- Save and manage multiple connection profiles with clone/duplicate functionality.
-- Secure local persistence of connection settings.
-- **Keychain Integration:** Optional secure password storage in system keychain.
-- **SSH Tunneling:** Connect to remote databases securely via SSH tunnels with automatic readiness detection.
+- Support for **MySQL/MariaDB**, working on: **PostgreSQL** and **SQLite**.
+- Save, manage, and clone connection profiles with secure local persistence.
+- Optional secure password storage in system **Keychain**.
+- **SSH Tunneling** with automatic readiness detection.
 
-### 🗄️ Database Explorer
+### Database Explorer
 
-- **Sidebar Navigation:** Quickly browse tables and saved queries.
-- **DataGrip-Style Tree View:** Expandable folders for Columns, Keys, Foreign Keys, and Indexes.
-- **ER Diagram Viewer:** Interactive Entity-Relationship diagram in a separate window.
-  - **Visual Schema:** Auto-generated graph showing all tables and foreign key relationships.
-  - **Interactive Navigation:** Pan, zoom, minimap, and fullscreen mode.
-  - **Optimized for Large Databases:** Batch queries ensure fast loading even for 100+ tables over SSH.
-  - **Smart Layout:** Automatic Dagre-based hierarchical positioning for clarity.
-- **Context Actions:**
-  - Right-click tables to: `Show Data`, `Count Rows`, `View Schema`, `Copy Name`, `Add Column`, `Delete Table`.
-  - Intelligent context menus with viewport overflow prevention.
-  - Single-click on tables to select, Double-click to view data.
-- **Schema Metadata:** Parallel fetching for fast schema loading.
+- **Tree View:** Browse tables, columns, keys, foreign keys, and indexes.
+- **ER Diagram:** Interactive Entity-Relationship visualization (Pan, Zoom, Layout).
+- **Context Actions:** Show data, count rows, modify schema, duplicate/delete tables.
+- **Fast Metadata:** Parallel fetching for schema loading.
 
-### 📝 SQL Editor
+### SQL Editor
 
-- **Monaco Editor:** Industry-standard editor with syntax highlighting.
-- **Multiple Tabs:** DataGrip-style tab management with connection isolation.
-- **Typed Tabs:** Separate `console` (SQL scripts) and `table` (data view) tabs with smart re-use.
-- **Execution:** Run queries with `Ctrl+Enter` or Run button.
-- **Partial Execution:** Select specific text to run only that portion.
-- **Multi-Statement Support:** Select which query to execute when multiple statements are present.
-- **Query Cancellation:** Stop long-running queries with the Stop button.
-- **Auto-Detection:** Automatically identifies table queries vs. aggregates for appropriate editing mode.
-- **Saved Queries:** Save and organize frequently-used queries with full CRUD support.
+- **Monaco Editor:** Syntax highlighting and auto-completion.
+- **Tabbed Interface:** Isolated connections per tab.
+- **Execution:** Run full scripts, selections, or specific statements.
+- **Saved Queries:** Persist frequently used SQL.
 
-### 🎨 Visual Query Builder (Experimental)
+### Visual Query Builder
 
-- **Drag-and-Drop Interface:** Build queries visually using ReactFlow canvas.
-- **Table Nodes:** Drag tables from the sidebar to the canvas.
-- **Visual JOINs:** Connect columns between tables to create JOIN relationships.
-- **JOIN Types:** Click edge labels to cycle through INNER, LEFT, RIGHT, FULL OUTER, and CROSS joins.
-- **Column Selection:** Check columns to include in SELECT, click to configure aggregations and aliases.
-- **Aggregate Functions:** Support for COUNT, SUM, AVG, MIN, MAX, COUNT DISTINCT with auto-generated GROUP BY.
-- **Advanced Filters:** Build WHERE/HAVING conditions with AND/OR logic.
-- **Sorting & Limits:** Configure ORDER BY and LIMIT clauses.
-- **Real-time SQL Generation:** See the generated query update as you build.
+- **Drag-and-Drop:** Build queries visually with ReactFlow.
+- **Visual JOINs:** Connect tables to create relationships.
+- **Advanced Logic:** WHERE/HAVING filters, aggregates (COUNT, SUM, AVG), sorting, and limits.
+- **Real-time SQL:** Instant code generation.
 
-<div align="center">
-  <img src="screenshots/screenshot-5.png" width="80%" alt="Visual Query Builder" />
-</div>
+### Data Grid
 
-### 📊 Data Grid
+- **Inline & Batch Editing:** Modify cells and commit multiple changes at once.
+- **Row Management:** Create, delete, and select multiple rows.
+- **Export:** Save results as CSV or JSON.
+- **Smart Context:** Read-only mode for aggregates, edit mode for tables.
 
-- **Interactive Results:** Fast rendering of large result sets.
-- **Inline Editing:** Double-click any cell to edit data (requires Primary Key).
-- **Batch Editing:** DataGrip-style pending changes - modify multiple rows before committing.
-- **Row Management:** 
-  - Right-click to delete rows.
-  - Multi-row selection (Single/Multi/Range) with Ctrl/Shift.
-  - Submit/Rollback toolbar for batch operations.
-- **Create New Row:** Use "New Row" button to insert data into tables.
-- **Export Data:** Export query results to CSV or JSON formats.
-- **Smart Context Detection:** Automatically enables editing for table queries, read-only for aggregates (COUNT, SUM, etc.).
-- **Loading States:** Visual feedback during query execution with animated spinner.
+### Configuration Storage
 
+Configuration is stored in `~/.config/tabularis/` (Linux), `~/Library/Application Support/tabularis/` (macOS), or `%APPDATA%\tabularis\` (Windows).
 
-### 🤖 AI Assistance (Experimental)
+- `connections.json`: Connection profiles.
+- `saved_queries.json`: Saved SQL queries.
+- `config.json`: App settings (theme, language, page size).
+- `themes/`: Custom themes.
 
-- **Natural Language to SQL:** Generate complex SQL queries by describing them in plain English (or Italian).
-- **Explain Query:** Get natural language explanations for any SQL query to understand complex logic.
-- **Provider Support:** Integration with **OpenAI**, **Anthropic**, and **OpenRouter**.
-- **Context-Aware:** The AI is aware of your database schema (table structure) to generate accurate queries.
-- **Secure Key Storage:** API Keys are stored securely in the system Keychain, never in plain text files.
-- **Customizable Prompts:** Edit system prompts for generation and explanation in Settings to tailor the AI's behavior.
+#### `config.json` options
 
-### 🔌 Model Context Protocol (MCP) Server
+- `theme`: Theme ID (e.g., `"tabularis-dark"`, `"monokai"`).
+- `fontFamily`: Editor font family.
+- `fontSize`: Editor font size (px).
+- `language`: `"auto"`, `"en"`, `"it"`.
+- `resultPageSize`: Default rows per page.
+- `aiEnabled`: Enable/Disable AI features.
 
-Tabularis includes a built-in **MCP Server** that exposes your database connections and schemas to AI agents (like Claude or other MCP clients).
+### AI Features (Optional)
 
-- **Standard I/O:** Run `tabularis --mcp` to start the server over stdio.
-- **Resources:** Exposes database schemas as resources (`tabularis://{connection_name}/schema`).
-- **Tools:** Provides tools to execute SQL queries (`run_query`).
-- **Connection Resolution:** Supports referencing connections by **ID** or **Name** (e.g. "MyProductionDB").
-
-### 💾 Configuration Storage
-
-Configuration is stored in the application data directory:
-
-- **Linux:** `~/.config/tabularis/`
-- **macOS:** `~/Library/Application Support/tabularis/`
-- **Windows:** `%APPDATA%\tabularis\`
-
-Files:
-- `connections.json`: Stores connection profiles (passwords can be optionally stored in system Keychain).
-- `saved_queries.json` & `.sql` files: Persisted queries.
-- `config.json`: General application settings.
-
-#### The `config.json` file
-
-The `config.json` file allows advanced configuration of the application. Here are the available options:
-
-- `theme`: (String, Optional) Application theme preference (e.g., "dark", "light"). *Currently follows system preference.*
-- `language`: (String, Optional) Application language. Options: `"auto"` (System), `"en"` (English), `"it"` (Italian).
-- `resultPageSize`: (Number, Optional) Default number of rows per page in query results (e.g., `500`).
-- `aiEnabled`: (Boolean, Optional) Enable or disable AI features globally.
-- `aiProvider`: (String, Optional) Default AI provider. Options: `"openai"`, `"anthropic"`, `"openrouter"`.
-- `aiModel`: (String, Optional) Default model identifier to use (e.g., `"gpt-4o"`).
-- `aiCustomModels`: (Object, Optional) Override or extend the list of available models for each provider.
-
-#### Custom AI Models override
-You can override or add custom models for AI providers by editing `config.json` and adding the `aiCustomModels` object:
-
-```json
-{
-  "resultPageSize": 1000,
-  "language": "en",
-  "aiEnabled": true,
-  "aiProvider": "openai",
-  "aiCustomModels": {
-    "openai": ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-5-preview"],
-    "anthropic": ["claude-3-opus-20240229", "claude-3-sonnet-20240229"],
-    "openrouter": ["google/gemini-pro-1.5", "meta-llama/llama-3-70b-instruct"]
-  }
-}
-```
+Optional Text-to-SQL and query explanation (OpenAI/Anthropic). Includes a built-in **MCP Server** (`tabularis --mcp`) to expose connections to external agents.
 
 ## Tech Stack
 
-- **Frontend:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons.
-- **Backend:** Rust, Tauri v2, SQLx (Async, Type-safe).
-- **Build Tool:** Vite.
+- **Frontend:** React 19, TypeScript, Tailwind CSS v4.
+- **Backend:** Rust, Tauri v2, SQLx.
 
 ## Development
 
-### Prerequisites
-
-- Node.js (v18+)
-- Rust (Stable) & Cargo
-- Linux dependencies (if on Linux): `libwebkit2gtk-4.1-dev`, `build-essential`, `libssl-dev`.
-
 ### Setup
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Run in development mode:
-   ```bash
-   npm run tauri dev
-   ```
+```bash
+npm install
+npm run tauri dev
+```
 
-### Building for Production
-
-To build a standalone executable/installer:
+### Build
 
 ```bash
 npm run tauri build
@@ -212,27 +119,18 @@ npm run tauri build
 ## Roadmap
 
 - [x] Multi-database support
-- [x] Schema introspection with advanced metadata (Keys, FKs, Indexes)
+- [x] Schema introspection (Keys, FKs, Indexes)
 - [x] SQL Execution & Results with pagination
-- [x] Inline Editing & Batch Editing (DataGrip-style)
-- [x] Multi-row selection and deletion
-- [x] Create New Row with smart FK selectors
+- [x] Inline & Batch Editing
 - [x] Data Export (CSV/JSON)
-- [x] Saved Queries & Persistence
-- [x] Pagination & Result Limiting
-- [x] Multiple Tabs support with connection isolation
-- [x] Visual Query Builder (Experimental)
-- [x] Query cancellation
-- [x] Aggregate query detection and smart read-only mode
-- [x] Internationalization (English, Italian)
-- [x] Keychain integration for secure password storage
-- [x] AI Integration (Text-to-SQL, Explain Query)
-- [x] ER Diagram / Schema Visualization
-- [x] Theme System (10+ presets, Custom Themes support)
-- [x] Typography Customization (Font Family, Font Size)
+- [x] Saved Queries
+- [x] Visual Query Builder
+- [x] ER Diagram
+- [x] Theme System & Customization
+- [x] SSH Tunneling & Keychain Support
+- [ ] Better support for PostgreSQL & SQLite
 - [ ] Database Export/Dump
-- [ ] Multi-statement execution
-- [x] Query history and autocomplete
+- [ ] Query history
 
 ## License
 
