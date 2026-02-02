@@ -184,11 +184,15 @@ async fn handle_read_resource(params: Option<serde_json::Value>) -> Result<serde
         let connections = persistence::load_connections(&config_path)
             .map_err(|e| JsonRpcError { code: -32000, message: e, data: None })?;
 
-        let conn = connections.iter().find(|c| c.id == conn_id || c.name == conn_id).ok_or(JsonRpcError {
-            code: -32000,
-            message: format!("Connection not found: {}", conn_id),
-            data: None
-        })?;
+        // Try to find by ID or exact name (case-insensitive) first, then partial name match
+        let conn = connections.iter()
+            .find(|c| c.id == conn_id || c.name.eq_ignore_ascii_case(conn_id))
+            .or_else(|| connections.iter().find(|c| c.name.to_lowercase().contains(&conn_id.to_lowercase())))
+            .ok_or(JsonRpcError {
+                code: -32000,
+                message: format!("Connection not found: {}", conn_id),
+                data: None
+            })?;
 
         let params = commands::resolve_connection_params(&conn.params).map_err(|e| JsonRpcError {
             code: -32000,
@@ -260,11 +264,15 @@ async fn handle_call_tool(params: Option<serde_json::Value>) -> Result<serde_jso
         let connections = persistence::load_connections(&config_path)
              .map_err(|e| JsonRpcError { code: -32000, message: e, data: None })?;
 
-        let conn = connections.iter().find(|c| c.id == conn_id || c.name == conn_id).ok_or(JsonRpcError {
-            code: -32000,
-            message: format!("Connection not found: {}", conn_id),
-            data: None
-        })?;
+        // Try to find by ID or exact name (case-insensitive) first, then partial name match
+        let conn = connections.iter()
+            .find(|c| c.id == conn_id || c.name.eq_ignore_ascii_case(conn_id))
+            .or_else(|| connections.iter().find(|c| c.name.to_lowercase().contains(&conn_id.to_lowercase())))
+            .ok_or(JsonRpcError {
+                code: -32000,
+                message: format!("Connection not found: {}", conn_id),
+                data: None
+            })?;
 
         let db_params = commands::resolve_connection_params(&conn.params).map_err(|e| JsonRpcError {
             code: -32000,
