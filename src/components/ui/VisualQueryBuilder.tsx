@@ -20,6 +20,7 @@ import { useDatabase } from '../../hooks/useDatabase';
 import { invoke } from '@tauri-apps/api/core';
 import { useEditor } from '../../hooks/useEditor';
 import { Filter, SortAsc, Group, Hash, X, Plus } from 'lucide-react';
+import { generateVisualQuerySQL, type WhereCondition, type OrderByClause } from '../../utils/visualQuery';
 
 const nodeTypes = {
   table: TableNodeComponent,
@@ -34,21 +35,6 @@ interface TableColumn {
   data_type: string;
   is_pk: boolean;
   is_nullable: boolean;
-}
-
-interface WhereCondition {
-  id: string;
-  column: string;
-  operator: string;
-  value: string;
-  logicalOperator: 'AND' | 'OR';
-  isAggregate: boolean;
-}
-
-interface OrderByClause {
-  id: string;
-  column: string;
-  direction: 'ASC' | 'DESC';
 }
 
 const VisualQueryBuilderContent = () => {
@@ -165,193 +151,18 @@ const VisualQueryBuilderContent = () => {
   useEffect(() => {
     if (!activeTabId) return;
 
-    const selectedColsWithOrder: { expr: string; order: number; colName: string }[] = [];
-    const tables: string[] = [];
-    const tableAliases: Record<string, string> = {};
-    const nonAggregatedCols: string[] = []; // Track non-aggregated columns for auto GROUP BY
-    let hasAggregation = false; // Track if any column has aggregation
+    const sql = generateVisualQuerySQL(
+      nodes as any,
+      edges as any,
+      whereConditions,
+      orderBy,
+      groupBy,
+      limit
+    );
 
-    // 1. Collect Tables and Selected Columns
-    nodes.forEach((node, index) => {
-      const tableName = (node.data as TableNodeData).label;
-      const alias = `t${index + 1}`;
-      tableAliases[node.id] = alias;
-      tables.push(`${tableName} ${alias}`);
-
-      const data = node.data as TableNodeData;
-      if (data.selectedColumns) {
-        Object.entries(data.selectedColumns).forEach(([col, isChecked]) => {
-            if (isChecked) {
-              const agg = data.columnAggregations?.[col];
-              const colAlias = data.columnAliases?.[col];
-              let colExpr = `${alias}.${col}`;
-              let order = 999; // Default order for unspecified
-              
-              // Apply aggregation if present
-              if (agg?.function) {
-                hasAggregation = true;
-                if (agg.function === 'COUNT_DISTINCT') {
-                  colExpr = `COUNT(DISTINCT ${alias}.${col})`;
-                } else {
-                  colExpr = `${agg.function}(${alias}.${col})`;
-                }
-                
-                // Use aggregation alias if present
-                if (agg?.alias) {
-                  colExpr += ` AS ${agg.alias}`;
-                }
-                
-                // Get order from aggregation
-                if (agg?.order !== undefined) {
-                  order = agg.order;
-                }
-              } else {
-                // Track non-aggregated columns for auto GROUP BY
-                nonAggregatedCols.push(`${alias}.${col}`);
-                
-                // Use column alias if present (and no aggregation)
-                if (colAlias?.alias) {
-                  colExpr += ` AS ${colAlias.alias}`;
-                }
-                
-                // Get order from column alias
-                if (colAlias?.order !== undefined) {
-                  order = colAlias.order;
-                }
-              }
-              
-              selectedColsWithOrder.push({ expr: colExpr, order, colName: col });
-            }
-        });
-      }
-    });
-
-    if (nodes.length === 0) return;
-
-    // Sort columns by order
-    selectedColsWithOrder.sort((a, b) => a.order - b.order);
-    const selectedCols = selectedColsWithOrder.map(c => c.expr);
-
-    let sql = "SELECT\n";
-    sql += selectedCols.length > 0 ? "  " + selectedCols.join(",\n  ") : "  *";
-    
-    // 2. Generate Joins
-    if (edges.length === 0) {
-        sql += "\nFROM\n  " + tables.join(",\n  ");
-    } else {
-        // Find the root (first node)
-        const firstNode = nodes[0];
-        const firstData = firstNode.data as TableNodeData;
-        const processedNodes = new Set<string>([firstNode.id]);
-        
-        sql += `\nFROM\n  ${firstData.label} ${tableAliases[firstNode.id]}`;
-        
-        const edgesToProcess = [...edges];
-        let madeProgress = true;
-
-        while (edgesToProcess.length > 0 && madeProgress) {
-            madeProgress = false;
-            
-            for (let i = 0; i < edgesToProcess.length; i++) {
-                const edge = edgesToProcess[i];
-                const isSourceProcessed = processedNodes.has(edge.source);
-                const isTargetProcessed = processedNodes.has(edge.target);
-
-                if (isSourceProcessed && !isTargetProcessed) {
-                    const targetNode = nodes.find(n => n.id === edge.target);
-                    if (targetNode) {
-                         const targetData = targetNode.data as TableNodeData;
-                         const targetAlias = tableAliases[edge.target];
-                         const sourceAlias = tableAliases[edge.source];
-                         const edgeData = edge.data as JoinEdgeData | undefined;
-                         const joinType = edgeData?.joinType || 'INNER';
-                         sql += `\n${joinType} JOIN ${targetData.label} ${targetAlias} ON ${sourceAlias}.${edge.sourceHandle} = ${targetAlias}.${edge.targetHandle}`;
-                         processedNodes.add(edge.target);
-                         edgesToProcess.splice(i, 1);
-                         madeProgress = true;
-                         break;
-                    }
-                } else if (!isSourceProcessed && isTargetProcessed) {
-                    const sourceNode = nodes.find(n => n.id === edge.source);
-                    if (sourceNode) {
-                         const sourceData = sourceNode.data as TableNodeData;
-                         const sourceAlias = tableAliases[edge.source];
-                         const targetAlias = tableAliases[edge.target];
-                         const edgeData = edge.data as JoinEdgeData | undefined;
-                         const joinType = edgeData?.joinType || 'INNER';
-                         sql += `\n${joinType} JOIN ${sourceData.label} ${sourceAlias} ON ${sourceAlias}.${edge.sourceHandle} = ${targetAlias}.${edge.targetHandle}`;
-                         processedNodes.add(edge.source);
-                         edgesToProcess.splice(i, 1);
-                         madeProgress = true;
-                         break;
-                    }
-                } else if (isSourceProcessed && isTargetProcessed) {
-                    // Both processed, add as WHERE condition to avoid circular join syntax issues for now
-                    // or just ignore
-                    edgesToProcess.splice(i, 1);
-                    i--;
-                }
-            }
-        }
-        
-        // Add remaining unconnected tables as cross joins (comma separated)
-        nodes.forEach(node => {
-            if (!processedNodes.has(node.id)) {
-                 const data = node.data as TableNodeData;
-                 sql += `,\n  ${data.label} ${tableAliases[node.id]}`;
-            }
-        });
+    if (sql) {
+      updateTab(activeTabId, { query: sql });
     }
-
-    // 3. Add WHERE conditions (non-aggregate)
-    const normalWhereConditions = whereConditions.filter(c => !c.isAggregate && c.column && c.value);
-    if (normalWhereConditions.length > 0) {
-      sql += "\nWHERE\n  ";
-      sql += normalWhereConditions
-        .map((c, idx) => {
-          const condition = `${c.column} ${c.operator} ${c.value}`;
-          return idx === 0 ? condition : `${c.logicalOperator} ${condition}`;
-        })
-        .join("\n  ");
-    }
-
-    // 4. Add GROUP BY (auto-generate if there's aggregation, or use manual)
-    // Automatically add non-aggregated columns to GROUP BY if there are any aggregations
-    const finalGroupBy = hasAggregation && nonAggregatedCols.length > 0 
-      ? [...new Set([...nonAggregatedCols, ...groupBy])] // Merge auto + manual, remove duplicates
-      : (groupBy.length > 0 ? groupBy : []); // Use manual GROUP BY if no auto-generation
-    
-    if (finalGroupBy.length > 0) {
-      sql += "\nGROUP BY\n  " + finalGroupBy.join(",\n  ");
-    }
-
-    // 5. Add HAVING conditions (aggregate)
-    const aggregateConditions = whereConditions.filter(c => c.isAggregate && c.column && c.value);
-    if (aggregateConditions.length > 0) {
-      sql += "\nHAVING\n  ";
-      sql += aggregateConditions
-        .map((c, idx) => {
-          const condition = `${c.column} ${c.operator} ${c.value}`;
-          return idx === 0 ? condition : `${c.logicalOperator} ${condition}`;
-        })
-        .join("\n  ");
-    }
-
-    // 6. Add ORDER BY
-    if (orderBy.length > 0) {
-      sql += "\nORDER BY\n  ";
-      sql += orderBy
-        .map(o => `${o.column} ${o.direction}`)
-        .join(",\n  ");
-    }
-
-    // 7. Add LIMIT
-    if (limit && limit.trim()) {
-      sql += `\nLIMIT ${limit.trim()}`;
-    }
-
-    updateTab(activeTabId, { query: sql });
-
   }, [nodes, edges, activeTabId, updateTab, whereConditions, orderBy, groupBy, limit]);
 
   const onConnect = useCallback(
