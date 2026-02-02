@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useDatabase } from '../../hooks/useDatabase';
 import { SqlPreview } from './SqlPreview';
 import { message } from '@tauri-apps/plugin-dialog';
-import { generateCreateTableSQL, type TableColumn, type ForeignKey, type Index, type DatabaseDriver } from './sqlGeneratorUtils';
+import { generateCreateTableSQL, type TableColumn, type ForeignKey, type Index, type DatabaseDriver } from '../../utils/sqlGenerator';
 
 interface GenerateSQLModalProps {
   isOpen: boolean;

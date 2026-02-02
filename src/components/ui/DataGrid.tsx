@@ -12,7 +12,7 @@ import { Trash2, Edit, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { EditRowModal } from "./EditRowModal";
-import { formatCellValue, getColumnSortState, calculateSelectionRange, toggleSetValue } from "./dataGridUtils";
+import { formatCellValue, getColumnSortState, calculateSelectionRange, toggleSetValue } from "../../utils/dataGrid";
 
 interface DataGridProps {
   columns: string[];

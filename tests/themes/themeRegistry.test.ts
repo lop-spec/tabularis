@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { themeRegistry } from './themeRegistry';
+import { themeRegistry } from '../../src/themes/themeRegistry';
 
 describe('themeRegistry', () => {
   describe('getPreset', () => {

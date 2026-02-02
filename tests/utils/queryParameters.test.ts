@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractQueryParams, interpolateQueryParams } from './queryParameters';
+import { extractQueryParams, interpolateQueryParams } from '../../src/utils/queryParameters';
 
 describe('queryParameters', () => {
   describe('extractQueryParams', () => {

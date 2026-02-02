@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTablesFromQuery, getCurrentStatement } from './sqlAnalysis';
+import { parseTablesFromQuery, getCurrentStatement } from '../../src/utils/sqlAnalysis';
 
 describe('sqlAnalysis utils', () => {
   describe('parseTablesFromQuery', () => {

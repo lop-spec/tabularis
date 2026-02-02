@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hexToRgb, rgbToHex, lighten, darken, generateColorScale } from './colorUtils';
+import { hexToRgb, rgbToHex, lighten, darken, generateColorScale } from '../../src/themes/colorUtils';
 
 describe('colorUtils', () => {
   describe('hexToRgb', () => {

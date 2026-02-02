@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { calculateContextMenuPosition, type ViewportConstraints } from './contextMenuUtils';
+import { calculateContextMenuPosition, type ViewportConstraints } from '../../utils/contextMenu';
 
 interface ContextMenuItem {
   label: string;

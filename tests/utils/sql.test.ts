@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitQueries, extractTableName } from './sql';
+import { splitQueries, extractTableName } from '../../src/utils/sql';
 
 describe('sql utils', () => {
   describe('splitQueries', () => {
