@@ -1,6 +1,5 @@
 import dagre from 'dagre';
 import {
-  Position,
   NODE_WIDTH,
   calculateNodeHeight,
   getNodePositions,
