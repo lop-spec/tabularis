@@ -17,6 +17,10 @@ import {
   updateTabInList,
   shouldUseCachedSchema,
   createSchemaCacheEntry,
+  reconstructTableQuery,
+  formatExportFileName,
+  validatePageNumber,
+  calculateTotalPages,
   STORAGE_KEY,
 } from '../../src/utils/editor';
 
@@ -829,15 +833,220 @@ describe('editor', () => {
         { name: 'users', columns: [], foreign_keys: [] },
       ];
       const version = 5;
-      
+
       const before = Date.now();
       const result = createSchemaCacheEntry(data, version);
       const after = Date.now();
-      
+
       expect(result.data).toBe(data);
       expect(result.version).toBe(version);
       expect(result.timestamp).toBeGreaterThanOrEqual(before);
       expect(result.timestamp).toBeLessThanOrEqual(after);
+    });
+  });
+
+  describe('reconstructTableQuery', () => {
+    const createMockTab = (overrides: Partial<Tab> = {}): Tab => ({
+      id: 'tab-1',
+      title: 'Test',
+      type: 'table',
+      query: 'SELECT * FROM users',
+      result: null,
+      error: '',
+      executionTime: null,
+      page: 1,
+      activeTable: 'users',
+      pkColumn: null,
+      connectionId: 'conn-1',
+      ...overrides,
+    });
+
+    it('should reconstruct basic table query', () => {
+      const tab = createMockTab();
+      const result = reconstructTableQuery(tab);
+      expect(result).toBe('SELECT * FROM users');
+    });
+
+    it('should include WHERE clause when filter is present', () => {
+      const tab = createMockTab({ filterClause: 'age > 18' });
+      const result = reconstructTableQuery(tab);
+      expect(result).toBe('SELECT * FROM users WHERE age > 18');
+    });
+
+    it('should include ORDER BY clause when sort is present', () => {
+      const tab = createMockTab({ sortClause: 'created_at DESC' });
+      const result = reconstructTableQuery(tab);
+      expect(result).toBe('SELECT * FROM users ORDER BY created_at DESC');
+    });
+
+    it('should include LIMIT clause when limit is present', () => {
+      const tab = createMockTab({ limitClause: 100 });
+      const result = reconstructTableQuery(tab);
+      expect(result).toBe('SELECT * FROM users LIMIT 100');
+    });
+
+    it('should combine filter, sort, and limit', () => {
+      const tab = createMockTab({
+        filterClause: 'status = "active"',
+        sortClause: 'name ASC',
+        limitClause: 50,
+      });
+      const result = reconstructTableQuery(tab);
+      expect(result).toBe('SELECT * FROM users WHERE status = "active" ORDER BY name ASC LIMIT 50');
+    });
+
+    it('should ignore zero or negative limit', () => {
+      const tab1 = createMockTab({ limitClause: 0 });
+      const result1 = reconstructTableQuery(tab1);
+      expect(result1).toBe('SELECT * FROM users');
+
+      const tab2 = createMockTab({ limitClause: -10 });
+      const result2 = reconstructTableQuery(tab2);
+      expect(result2).toBe('SELECT * FROM users');
+    });
+
+    it('should return original query when activeTable is null', () => {
+      const tab = createMockTab({
+        activeTable: null,
+        query: 'SELECT * FROM posts',
+      });
+      const result = reconstructTableQuery(tab);
+      expect(result).toBe('SELECT * FROM posts');
+    });
+
+    it('should normalize whitespace', () => {
+      const tab = createMockTab({
+        filterClause: 'id    >   10',
+        sortClause: 'created_at    DESC',
+      });
+      const result = reconstructTableQuery(tab);
+      // Should collapse multiple spaces into single spaces
+      expect(result).toContain('WHERE');
+      expect(result).toContain('ORDER BY');
+      expect(result).not.toMatch(/\s{2,}/);
+    });
+  });
+
+  describe('formatExportFileName', () => {
+    it('should format filename with table name and timestamp', () => {
+      const result = formatExportFileName('users', 'csv');
+      expect(result).toMatch(/^users_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.csv$/);
+    });
+
+    it('should handle different file formats', () => {
+      const csvResult = formatExportFileName('orders', 'csv');
+      const jsonResult = formatExportFileName('orders', 'json');
+
+      expect(csvResult).toMatch(/\.csv$/);
+      expect(jsonResult).toMatch(/\.json$/);
+    });
+
+    it('should sanitize table names with special characters', () => {
+      const result = formatExportFileName('user-accounts!@#$', 'csv');
+      expect(result).toMatch(/^user-accounts____/);
+      expect(result).not.toContain('!');
+      expect(result).not.toContain('@');
+      expect(result).not.toContain('#');
+      expect(result).not.toContain('$');
+    });
+
+    it('should replace spaces with underscores', () => {
+      const result = formatExportFileName('user accounts', 'csv');
+      expect(result).toMatch(/^user_accounts/);
+    });
+
+    it('should handle table names with dots', () => {
+      const result = formatExportFileName('schema.users', 'csv');
+      expect(result).toMatch(/^schema_users/);
+    });
+
+    it('should preserve alphanumeric and hyphens/underscores', () => {
+      const result = formatExportFileName('user_accounts-2024', 'json');
+      expect(result).toContain('user_accounts-2024');
+    });
+  });
+
+  describe('validatePageNumber', () => {
+    it('should validate correct page numbers', () => {
+      expect(validatePageNumber('1', 10)).toBe(true);
+      expect(validatePageNumber('5', 10)).toBe(true);
+      expect(validatePageNumber('10', 10)).toBe(true);
+    });
+
+    it('should reject page numbers less than 1', () => {
+      expect(validatePageNumber('0', 10)).toBe(false);
+      expect(validatePageNumber('-1', 10)).toBe(false);
+      expect(validatePageNumber('-100', 10)).toBe(false);
+    });
+
+    it('should reject page numbers greater than totalPages', () => {
+      expect(validatePageNumber('11', 10)).toBe(false);
+      expect(validatePageNumber('100', 10)).toBe(false);
+    });
+
+    it('should reject non-numeric input', () => {
+      expect(validatePageNumber('abc', 10)).toBe(false);
+      expect(validatePageNumber('', 10)).toBe(false);
+      // parseInt('1.5') returns 1, so this would pass validation
+      // We only validate integer inputs, decimals are truncated
+      expect(validatePageNumber('1.5', 10)).toBe(true); // parseInt truncates to 1
+    });
+
+    it('should reject NaN input', () => {
+      expect(validatePageNumber('NaN', 10)).toBe(false);
+      expect(validatePageNumber('Infinity', 10)).toBe(false);
+    });
+
+    it('should handle single page', () => {
+      expect(validatePageNumber('1', 1)).toBe(true);
+      expect(validatePageNumber('2', 1)).toBe(false);
+    });
+
+    it('should handle whitespace in input', () => {
+      // parseInt handles leading whitespace
+      expect(validatePageNumber(' 5 ', 10)).toBe(true);
+    });
+  });
+
+  describe('calculateTotalPages', () => {
+    it('should calculate correct number of pages', () => {
+      expect(calculateTotalPages(100, 10)).toBe(10);
+      expect(calculateTotalPages(105, 10)).toBe(11);
+      expect(calculateTotalPages(99, 10)).toBe(10);
+    });
+
+    it('should return 1 for zero rows', () => {
+      expect(calculateTotalPages(0, 10)).toBe(1);
+    });
+
+    it('should return 1 for null rows', () => {
+      expect(calculateTotalPages(null, 10)).toBe(1);
+    });
+
+    it('should handle single row', () => {
+      expect(calculateTotalPages(1, 10)).toBe(1);
+      expect(calculateTotalPages(1, 100)).toBe(1);
+    });
+
+    it('should handle exact multiples', () => {
+      expect(calculateTotalPages(50, 10)).toBe(5);
+      expect(calculateTotalPages(1000, 100)).toBe(10);
+    });
+
+    it('should round up for partial pages', () => {
+      expect(calculateTotalPages(51, 10)).toBe(6);
+      expect(calculateTotalPages(1001, 100)).toBe(11);
+      expect(calculateTotalPages(99, 100)).toBe(1);
+    });
+
+    it('should handle large datasets', () => {
+      expect(calculateTotalPages(1000000, 500)).toBe(2000);
+      expect(calculateTotalPages(999999, 1000)).toBe(1000);
+    });
+
+    it('should handle small page sizes', () => {
+      expect(calculateTotalPages(100, 1)).toBe(100);
+      expect(calculateTotalPages(10, 3)).toBe(4);
     });
   });
 });

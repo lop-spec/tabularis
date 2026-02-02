@@ -1,12 +1,11 @@
 import dagre from 'dagre';
-
-// Position enum values (hardcoded to avoid importing from @xyflow/react in worker)
-const Position = {
-  Left: 'left',
-  Right: 'right',
-  Top: 'top',
-  Bottom: 'bottom'
-};
+import {
+  Position,
+  NODE_WIDTH,
+  calculateNodeHeight,
+  getNodePositions,
+  calculateCenteredPosition,
+} from '../utils/layoutWorker';
 
 interface WorkerNode {
   id: string;
@@ -35,12 +34,10 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({ rankdir: direction, ranksep: 150, nodesep: 50 });
 
-  const nodeWidth = 240;
-
   nodes.forEach((node: WorkerNode) => {
     const columns = node.data?.columns?.length || 0;
-    const height = 40 + (columns * 28);
-    dagreGraph.setNode(node.id, { width: nodeWidth, height });
+    const height = calculateNodeHeight(columns);
+    dagreGraph.setNode(node.id, { width: NODE_WIDTH, height });
   });
 
   edges.forEach((edge: WorkerEdge) => {
@@ -51,14 +48,19 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
 
   const layoutedNodes = nodes.map((node: WorkerNode) => {
     const nodeWithPosition = dagreGraph.node(node.id);
+    const { sourcePosition, targetPosition } = getNodePositions(direction);
+    const position = calculateCenteredPosition(
+      nodeWithPosition.x,
+      nodeWithPosition.y,
+      NODE_WIDTH,
+      dagreGraph.node(node.id).height
+    );
+
     return {
       ...node,
-      targetPosition: direction === 'LR' ? Position.Left : Position.Top,
-      sourcePosition: direction === 'LR' ? Position.Right : Position.Bottom,
-      position: {
-        x: nodeWithPosition.x - nodeWidth / 2,
-        y: nodeWithPosition.y - (dagreGraph.node(node.id).height / 2),
-      },
+      sourcePosition,
+      targetPosition,
+      position,
     };
   });
 

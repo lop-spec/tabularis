@@ -264,3 +264,59 @@ export function createSchemaCacheEntry(
     timestamp: Date.now(),
   };
 }
+
+/**
+ * Reconstruct a SELECT query for a table tab with filters, sort, and limit
+ * @param tab - Tab containing table state
+ * @returns Reconstructed SQL query
+ */
+export function reconstructTableQuery(tab: Tab): string {
+  if (!tab.activeTable) {
+    return tab.query;
+  }
+
+  const filter = tab.filterClause ? `WHERE ${tab.filterClause}` : "";
+  const sort = tab.sortClause ? `ORDER BY ${tab.sortClause}` : "";
+
+  let baseQuery = `SELECT * FROM ${tab.activeTable} ${filter} ${sort}`.trim();
+
+  if (tab.limitClause && tab.limitClause > 0) {
+    baseQuery = `${baseQuery} LIMIT ${tab.limitClause}`;
+  }
+
+  return baseQuery.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Format an export filename with timestamp and extension
+ * @param tableName - Name of the table being exported
+ * @param format - Export format (csv, json, etc.)
+ * @returns Formatted filename
+ */
+export function formatExportFileName(tableName: string, format: string): string {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const safeName = tableName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `${safeName}_${timestamp}.${format}`;
+}
+
+/**
+ * Validate a page number input
+ * @param pageInput - Page number as string
+ * @param totalPages - Total number of pages available
+ * @returns True if page number is valid
+ */
+export function validatePageNumber(pageInput: string, totalPages: number): boolean {
+  const num = parseInt(pageInput, 10);
+  return !isNaN(num) && num >= 1 && num <= totalPages;
+}
+
+/**
+ * Calculate total pages based on total rows and page size
+ * @param totalRows - Total number of rows
+ * @param pageSize - Number of rows per page
+ * @returns Total number of pages
+ */
+export function calculateTotalPages(totalRows: number | null, pageSize: number): number {
+  if (totalRows === null || totalRows === 0) return 1;
+  return Math.ceil(totalRows / pageSize);
+}
