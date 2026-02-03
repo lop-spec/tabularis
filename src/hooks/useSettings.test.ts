@@ -54,7 +54,8 @@ describe('useSettings', () => {
 
     expect(result.current.settings.resultPageSize).toBe(500);
     expect(result.current.settings.language).toBe('auto');
-    expect(result.current.settings.aiEnabled).toBe(true);
+    expect(result.current.settings.aiEnabled).toBe(false);
+    expect(result.current.settings.aiOllamaPort).toBe(11611);
     expect(result.current.isLoading).toBe(true);
   });
 });

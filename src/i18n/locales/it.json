@@ -149,7 +149,17 @@
       "promptSaved": "Prompt di sistema salvato con successo",
       "explainPromptSaved": "Prompt di spiegazione salvato con successo",
       "promptReset": "Prompt di sistema ripristinato al predefinito",
-      "explainPromptReset": "Prompt di spiegazione ripristinato al predefinito"
+      "explainPromptReset": "Prompt di spiegazione ripristinato al predefinito",
+      "modelPlaceholder": "Seleziona un modello",
+      "searchPlaceholder": "Cerca modelli...",
+      "noResults": "Nessun modello trovato",
+      "refresh": "Aggiorna Modelli",
+      "refreshSuccess": "Modelli AI aggiornati dai provider",
+      "refreshError": "Impossibile aggiornare i modelli",
+      "ollamaConnected": "Ollama connesso ({{count}} modelli trovati)",
+      "ollamaNotDetected": "Ollama non rilevato sulla porta {{port}}. È in esecuzione?",
+      "ollamaPort": "Porta Ollama",
+      "modelNotFound": "Modello <strong>{{model}}</strong> non trovato in <strong>{{provider}}</strong>. Potrebbe non funzionare correttamente."
     }
   },
   "ai": {

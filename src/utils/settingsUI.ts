@@ -33,6 +33,8 @@ export function getProviderLabel(id: AiProvider): string {
       return 'Anthropic';
     case 'openrouter':
       return 'OpenRouter';
+    case 'ollama':
+      return 'Ollama';
     default:
       return String(id).charAt(0).toUpperCase() + String(id).slice(1);
   }

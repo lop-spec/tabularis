@@ -19,6 +19,7 @@ pub struct AppConfig {
     pub ai_provider: Option<String>,
     pub ai_model: Option<String>,
     pub ai_custom_models: Option<HashMap<String, Vec<String>>>,
+    pub ai_ollama_port: Option<u16>,
 }
 
 pub fn get_config_dir(app: &AppHandle) -> Option<PathBuf> {
@@ -84,6 +85,9 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         if config.ai_custom_models.is_some() {
             existing_config.ai_custom_models = config.ai_custom_models;
         }
+        if config.ai_ollama_port.is_some() {
+            existing_config.ai_ollama_port = config.ai_ollama_port;
+        }
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;
         fs::write(config_path, content).map_err(|e| e.to_string())?;
@@ -98,10 +102,9 @@ pub fn set_ai_key(provider: String, key: String) -> Result<(), String> {
     keychain_utils::set_ai_key(&provider, &key)
 }
 
-#[tauri::command]
-pub fn check_ai_key(provider: String) -> bool {
-    // Check Env
-    let env_var = match provider.as_str() {
+pub fn get_ai_api_key(provider: &str) -> Result<String, String> {
+    // 1. Try Env Var
+    let env_var = match provider {
         "openai" => "OPENAI_API_KEY",
         "anthropic" => "ANTHROPIC_API_KEY",
         "openrouter" => "OPENROUTER_API_KEY",
@@ -111,13 +114,23 @@ pub fn check_ai_key(provider: String) -> bool {
     if !env_var.is_empty() {
         if let Ok(key) = std::env::var(env_var) {
             if !key.is_empty() {
-                return true;
+                return Ok(key);
             }
         }
     }
 
-    // Check Keychain
-    keychain_utils::get_ai_key(&provider).is_ok()
+    // 2. Try Keychain
+    keychain_utils::get_ai_key(provider).map_err(|_| {
+        format!(
+            "API Key for {} not found in Keychain or Environment",
+            provider
+        )
+    })
+}
+
+#[tauri::command]
+pub fn check_ai_key(provider: String) -> bool {
+    get_ai_api_key(&provider).is_ok()
 }
 
 const DEFAULT_SYSTEM_PROMPT: &str = "You are an expert SQL assistant. Your task is to generate a SQL query based on the user's request and the provided database schema.\nReturn ONLY the SQL query, without any markdown formatting, explanations, or code blocks.\n\nSchema:\n{{SCHEMA}}";

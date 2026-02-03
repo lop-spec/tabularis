@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
+import { useTranslation, Trans } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -17,6 +17,8 @@ import {
   Palette,
   Type,
   ZoomIn,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../hooks/useSettings";
@@ -25,6 +27,8 @@ import type { AppLanguage, AiProvider } from "../contexts/SettingsContext";
 import { APP_VERSION } from "../version";
 import { message } from "@tauri-apps/plugin-dialog";
 import { AVAILABLE_FONTS, ROADMAP } from "../utils/settings";
+import { getProviderLabel } from "../utils/settingsUI";
+import { SearchableSelect } from "../components/ui/SearchableSelect";
 
 export const Settings = () => {
   const { t } = useTranslation();
@@ -37,6 +41,7 @@ export const Settings = () => {
   const [keyInput, setKeyInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [explainPrompt, setExplainPrompt] = useState("");
+  
   const { currentTheme, allThemes, setTheme } = useTheme();
   
   // Initialize customFont from settings if it's a custom font
@@ -45,15 +50,19 @@ export const Settings = () => {
     return !isPredefinedFont && settings.fontFamily ? settings.fontFamily : "";
   });
 
-  const loadModels = async () => {
+  const loadModels = async (force: boolean = false) => {
     try {
-      const models = await invoke<Record<string, string[]>>("get_ai_models");
+      const models = await invoke<Record<string, string[]>>("get_ai_models", { forceRefresh: force });
       setAvailableModels(models);
+      if (force) {
+          await message(t("settings.ai.refreshSuccess"), { title: t("common.success"), kind: "info" });
+      }
     } catch (e) {
       console.error("Failed to load AI models", e);
+      await message(t("settings.ai.refreshError") + ": " + String(e), { title: t("common.error"), kind: "error" });
     }
   };
-
+  
   const loadSystemPrompt = async () => {
     try {
       const prompt = await invoke<string>("get_system_prompt");
@@ -133,7 +142,8 @@ export const Settings = () => {
       const openrouter = await invoke<boolean>("check_ai_key", {
         provider: "openrouter",
       });
-      setAiKeyStatus({ openai, anthropic, openrouter });
+      const ollama = true; // Ollama is always "configured" as it's local
+      setAiKeyStatus({ openai, anthropic, openrouter, ollama });
     } catch (e) {
       console.error("Failed to check keys", e);
     }
@@ -163,7 +173,7 @@ export const Settings = () => {
      
     loadExplainPrompt();
      
-    loadModels();
+    loadModels(false);
   }, []);
 
 
@@ -180,6 +190,7 @@ export const Settings = () => {
     { id: "openai", label: "OpenAI" },
     { id: "anthropic", label: "Anthropic" },
     { id: "openrouter", label: "OpenRouter" },
+    { id: "ollama", label: "Ollama" },
   ];
 
   return (
@@ -598,24 +609,55 @@ export const Settings = () => {
                       {t("settings.ai.defaultModel")}
                     </label>
                     {settings.aiProvider ? (
-                        <select
-                            value={settings.aiModel || ""}
-                            onChange={(e) => updateSetting("aiModel", e.target.value)}
-                            className="w-full bg-base border border-strong rounded px-3 py-2 text-primary focus:outline-none focus:border-blue-500 transition-colors appearance-none"
-                        >
-                            <option value="" disabled>Select a model</option>
-                            {(settings.aiCustomModels?.[settings.aiProvider] || availableModels[settings.aiProvider] || []).map(model => (
-                                <option key={model} value={model}>{model}</option>
-                            ))}
-                        </select>
+                        (() => {
+                            const currentModels = settings.aiCustomModels?.[settings.aiProvider] || availableModels[settings.aiProvider] || [];
+                            const isModelValid = !settings.aiModel || currentModels.includes(settings.aiModel);
+
+                            return (
+                                <>
+                                    <SearchableSelect
+                                        value={settings.aiModel}
+                                        onChange={(val) => updateSetting("aiModel", val)}
+                                        options={currentModels}
+                                        placeholder={t("settings.ai.modelPlaceholder")}
+                                        searchPlaceholder={t("settings.ai.searchPlaceholder")}
+                                        noResultsLabel={t("settings.ai.noResults")}
+                                        hasError={!isModelValid && !!settings.aiModel}
+                                    />
+                                    {!isModelValid && settings.aiModel && (
+                                        <div className="flex items-center gap-1.5 mt-2 text-xs text-red-400 bg-red-900/10 p-2 rounded border border-red-900/20">
+                                            <AlertTriangle size={12} className="shrink-0" />
+                                            <span>
+                                                <Trans
+                                                    i18nKey="settings.ai.modelNotFound"
+                                                    values={{ model: settings.aiModel, provider: getProviderLabel(settings.aiProvider) }}
+                                                    components={{ strong: <strong className="font-semibold" /> }}
+                                                />
+                                            </span>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()
                     ) : (
                         <div className="text-sm text-muted italic px-3 py-2 border border-default rounded bg-base">
                             {t("settings.ai.selectProviderFirst")}
                         </div>
                     )}
-                    <p className="text-xs text-muted mt-1">
-                        {t("settings.ai.modelDesc")}
-                    </p>
+                    <div className="flex justify-between items-center mt-1">
+                        <p className="text-xs text-muted">
+                            {t("settings.ai.modelDesc")}
+                        </p>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => loadModels(true)}
+                                className="p-1.5 text-secondary hover:text-primary hover:bg-surface-secondary rounded transition-colors"
+                                title={t("settings.ai.refresh")}
+                            >
+                                <RefreshCw size={14} />
+                            </button>
+                        </div>
+                    </div>
                   </div>
 
                   {/* API Keys Management */}
@@ -639,33 +681,72 @@ export const Settings = () => {
                               </span>
                             )}
                           </div>
-                          <div className="flex gap-2">
-                            <input
-                              type="password"
-                              placeholder={t("settings.ai.enterKey", { provider: p.label })}
-                              className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500"
-                              onChange={(e) => setKeyInput(e.target.value)}
-                              // Only keep value in state for the active input being typed
-                            />
-                            <button
-                              onClick={(e) => {
-                                // In a real app we'd bind input state better, here simplified for compactness
-                                // Accessing sibling input value via state or ref is safer
-                                // For now, let's assume the user types in the input and clicks save next to it.
-                                // Actually, sharing state 'keyInput' across multiple inputs is bad UX.
-                                // I will fix this logic below.
-                                const input = (
-                                  e.currentTarget
-                                    .previousElementSibling as HTMLInputElement
-                                ).value;
-                                setKeyInput(input); // Just to trigger effect if needed, but we pass to fn
-                                if (input) handleSaveKey(p.id);
-                              }}
-                              className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
-                            >
-                              {t("common.save")}
-                            </button>
-                          </div>
+                          
+                          {p.id === 'ollama' ? (
+                             <div className="space-y-3">
+                                 <div className={clsx(
+                                    "border rounded px-3 py-2 text-sm italic flex items-center gap-2",
+                                    (settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length > 0 
+                                        ? "bg-green-900/10 border-green-900/20 text-green-400" 
+                                        : "bg-red-900/10 border-red-900/20 text-red-400"
+                                 )}>
+                                    {(settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length > 0 ? (
+                                        <>
+                                            <CheckCircle2 size={14} />
+                                            <span>{t("settings.ai.ollamaConnected", { count: (settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length })}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <AlertTriangle size={14} />
+                                            <span>{t("settings.ai.ollamaNotDetected", { port: settings.aiOllamaPort || 11434 })}</span>
+                                        </>
+                                    )}
+                                 </div>
+                                 
+                                 <div className="flex items-center gap-2 pl-1">
+                                    <label className="text-sm text-secondary whitespace-nowrap">
+                                        {t("settings.ai.ollamaPort")}:
+                                    </label>
+                                    <input 
+                                        type="number" 
+                                        value={settings.aiOllamaPort || 11434}
+                                        onChange={(e) => updateSetting("aiOllamaPort", parseInt(e.target.value) || 11434)}
+                                        className="w-24 bg-base border border-strong rounded px-2 py-1.5 text-sm text-primary focus:outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                    <p className="text-xs text-muted">
+                                        (Default: 11434)
+                                    </p>
+                                 </div>
+                             </div>
+                          ) : (
+                              <div className="flex gap-2">
+                                <input
+                                  type="password"
+                                  placeholder={t("settings.ai.enterKey", { provider: p.label })}
+                                  className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500"
+                                  onChange={(e) => setKeyInput(e.target.value)}
+                                  // Only keep value in state for the active input being typed
+                                />
+                                <button
+                                  onClick={(e) => {
+                                    // In a real app we'd bind input state better, here simplified for compactness
+                                    // Accessing sibling input value via state or ref is safer
+                                    // For now, let's assume the user types in the input and clicks save next to it.
+                                    // Actually, sharing state 'keyInput' across multiple inputs is bad UX.
+                                    // I will fix this logic below.
+                                    const input = (
+                                      e.currentTarget
+                                        .previousElementSibling as HTMLInputElement
+                                    ).value;
+                                    setKeyInput(input); // Just to trigger effect if needed, but we pass to fn
+                                    if (input) handleSaveKey(p.id);
+                                  }}
+                                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
+                                >
+                                  {t("common.save")}
+                                </button>
+                              </div>
+                          )}
                         </div>
                       ))}
                     </div>

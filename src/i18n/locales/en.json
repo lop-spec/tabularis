@@ -149,7 +149,17 @@
       "promptSaved": "System prompt saved successfully",
       "explainPromptSaved": "Explain prompt saved successfully",
       "promptReset": "System prompt reset to default",
-      "explainPromptReset": "Explain prompt reset to default"
+      "explainPromptReset": "Explain prompt reset to default",
+      "modelPlaceholder": "Select a model",
+      "searchPlaceholder": "Search models...",
+      "noResults": "No models found",
+      "refresh": "Refresh Models",
+      "refreshSuccess": "AI models refreshed from providers",
+      "refreshError": "Failed to refresh models",
+      "ollamaConnected": "Ollama connected ({{count}} models found)",
+      "ollamaNotDetected": "Ollama not detected on port {{port}}. Is it running?",
+      "ollamaPort": "Ollama Port",
+      "modelNotFound": "Model <strong>{{model}}</strong> not found in <strong>{{provider}}</strong>. It may not work correctly."
     }
   },
   "ai": {
