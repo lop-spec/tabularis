@@ -11,6 +11,10 @@
 
 A lightweight, developer-focused database management tool, built with Tauri and React.
 
+<div align="center">
+  <img src="screenshots/overview.png?v" width="80%" alt="Tabularis" />
+</div>
+
 ## Release Download:
 
 [![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.8.6/tabularis_0.8.6_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.8.6/tabularis_0.8.6_x64.dmg) [![Linux](https://img.shields.io/badge/Linux-Download-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.8.6/tabularis_0.8.6_amd64.AppImage)
@@ -33,6 +37,8 @@ Then install:
 brew install --cask tabularis
 ```
 
+[![Homebrew](https://img.shields.io/badge/Homebrew-Repository-orange?logo=homebrew)](https://github.com/debba/homebrew-tabularis)
+
 #### Direct Download
 
 When you install tabularis on macOS, you need to allow accessibility access (Privacy & Security) to the tabularis app.
@@ -52,10 +58,6 @@ after copying the app to the Applications directory.
 ```bash
 yay -S tabularis-bin
 ```
-
-<div align="center">
-  <img src="screenshots/overview.png?v" width="80%" alt="Tabularis" />
-</div>
 
 ## Gallery
 
