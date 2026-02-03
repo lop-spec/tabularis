@@ -1,3 +1,13 @@
+## [0.8.7](https://github.com/debba/tabularis/compare/v0.8.6...v0.8.7) (2026-02-03)
+
+
+### Features
+
+* **ai:** add new model entries and centralize API key retrieval ([c0fdeeb](https://github.com/debba/tabularis/commit/c0fdeeba71bdacb1907a174dbe992d8956eb5d88))
+* **ai:** add Ollama provider with dynamic model fetching and caching ([fd30ab5](https://github.com/debba/tabularis/commit/fd30ab5a9a32efd5617b2773ab9b1ba4e9872cc0))
+
+
+
 ## [0.8.6](https://github.com/debba/tabularis/compare/v0.8.5...v0.8.6) (2026-02-02)
 
 
