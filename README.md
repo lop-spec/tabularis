@@ -13,13 +13,39 @@ A lightweight, developer-focused database management tool, built with Tauri and 
 
 ## Release Download:
 
-<!-- DOWNLOAD_SECTION_START -->
-
-[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.6.0/tabularis_0.6.0_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.6.0/tabularis_0.6.0_x64.dmg) [![Linux](https://img.shields.io/badge/Linux-Download-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.6.0/tabularis_0.6.0_amd64.AppImage)
-
-<!-- DOWNLOAD_SECTION_END -->
+[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.8.6/tabularis_0.8.6_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.8.6/tabularis_0.8.6_x64.dmg) [![Linux](https://img.shields.io/badge/Linux-Download-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.8.6/tabularis_0.8.6_amd64.AppImage)
 
 ## Installation
+
+### macOS
+
+#### Homebrew (Recommended)
+
+To add our tap, run:
+
+```bash
+brew tap debba/tabularis
+```
+
+Then install:
+
+```bash
+brew install --cask tabularis
+```
+
+#### Direct Download
+
+When you install tabularis on macOS, you need to allow accessibility access (Privacy & Security) to the tabularis app.
+
+If you are upgrading and you already have tabularis on the allowed list you will need to manually remove them before accessibility access can be granted to the new version.
+
+macOS users who download directly from releases may need to run:
+
+```bash
+xattr -c /Applications/tabularis.app
+```
+
+after copying the app to the Applications directory.
 
 ### Arch Linux (AUR)
 

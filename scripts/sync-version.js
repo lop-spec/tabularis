@@ -7,7 +7,8 @@ const paths = {
   tauri: resolve('src-tauri/tauri.conf.json'),
   cargo: resolve('src-tauri/Cargo.toml'),
   appVersion: resolve('src/version.ts'),
-  website: resolve('website/index.html')
+  website: resolve('website/index.html'),
+  readme: resolve('README.md')
 };
 
 // 1. Leggi la nuova versione da package.json (che è già stato aggiornato da npm version)
@@ -64,3 +65,21 @@ website = website.replace(
 
 writeFileSync(paths.website, website);
 console.log('✅ Updated website/index.html');
+
+// 6. Aggiorna README.md download badges
+let readme = readFileSync(paths.readme, 'utf-8');
+
+// Aggiorna i link di download nel README (sia il tag vX.Y.Z nell'URL che il nome file tabularis_X.Y.Z_)
+// URL: releases/download/v0.6.0/tabularis_0.6.0_...
+readme = readme.replace(
+  /releases\/download\/v.*?\//g,
+  `releases/download/v${newVersion}/`
+);
+
+readme = readme.replace(
+  /tabularis_\d+\.\d+\.\d+_/g,
+  `tabularis_${newVersion}_`
+);
+
+writeFileSync(paths.readme, readme);
+console.log('✅ Updated README.md');
