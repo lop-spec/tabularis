@@ -81,6 +81,7 @@ yay -S tabularis-bin
 - **ER Diagram:** Interactive Entity-Relationship visualization (Pan, Zoom, Layout).
 - **Context Actions:** Show data, count rows, modify schema, duplicate/delete tables.
 - **Fast Metadata:** Parallel fetching for schema loading.
+- **SQL Dump & Import:** Export and restore databases with a single flow.
 
 ### SQL Editor
 
