@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
-import { Loader2, Upload, Database, X, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Database, X, CheckCircle2, XCircle } from "lucide-react";
 import { formatElapsedTime } from "../../utils/formatTime";
 
 interface ImportProgress {
@@ -38,44 +38,7 @@ export const ImportDatabaseModal = ({
   const [elapsedTime, setElapsedTime] = useState(0); // in seconds
   const [startTime, setStartTime] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) {
-      // Reset state when modal closes
-      setIsImporting(false);
-      setProgress(null);
-      setError(null);
-      setSuccess(false);
-      setElapsedTime(0);
-      setStartTime(null);
-      return;
-    }
-
-    // Start import automatically when modal opens
-    startImport();
-
-    // Listen to progress events
-    const unlisten = listen<ImportProgress>("import_progress", (event) => {
-      setProgress(event.payload);
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [isOpen]);
-
-  // Timer for elapsed time
-  useEffect(() => {
-    if (!isImporting || !startTime) return;
-
-    const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      setElapsedTime(elapsed);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isImporting, startTime]);
-
-  const startImport = async () => {
+  const startImport = useCallback(async () => {
     setIsImporting(true);
     setError(null);
     setSuccess(false);
@@ -110,7 +73,45 @@ export const ImportDatabaseModal = ({
         });
       }
     }
-  };
+  }, [connectionId, filePath, onSuccess, onClose, t]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset state when modal closes
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsImporting(false);
+      setProgress(null);
+      setError(null);
+      setSuccess(false);
+      setElapsedTime(0);
+      setStartTime(null);
+      return;
+    }
+
+    // Start import automatically when modal opens
+    startImport();
+
+    // Listen to progress events
+    const unlisten = listen<ImportProgress>("import_progress", (event) => {
+      setProgress(event.payload);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [isOpen, startImport]);
+
+  // Timer for elapsed time
+  useEffect(() => {
+    if (!isImporting || !startTime) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedTime(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isImporting, startTime]);
 
   const handleCancel = async () => {
     if (!isImporting) {

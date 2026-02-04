@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation, Trans } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
@@ -50,7 +50,7 @@ export const Settings = () => {
     return !isPredefinedFont && settings.fontFamily ? settings.fontFamily : "";
   });
 
-  const loadModels = async (force: boolean = false) => {
+  const loadModels = useCallback(async (force: boolean = false) => {
     try {
       const models = await invoke<Record<string, string[]>>("get_ai_models", { forceRefresh: force });
       setAvailableModels(models);
@@ -61,7 +61,7 @@ export const Settings = () => {
       console.error("Failed to load AI models", e);
       await message(t("settings.ai.refreshError") + ": " + String(e), { title: t("common.error"), kind: "error" });
     }
-  };
+  }, [t]);
   
   const loadSystemPrompt = async () => {
     try {
@@ -166,15 +166,13 @@ export const Settings = () => {
 
 
   useEffect(() => {
-    // eslint-disable-next-line
+    // Initialize settings on mount
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     checkKeys();
-     
     loadSystemPrompt();
-     
     loadExplainPrompt();
-     
     loadModels(false);
-  }, []);
+  }, [loadModels]);
 
 
   const availableLanguages: Array<{
