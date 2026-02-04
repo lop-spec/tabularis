@@ -38,21 +38,23 @@ pub async fn expand_ssh_connection_params<R: Runtime>(
 ) -> Result<ConnectionParams, String> {
     let mut expanded_params = params.clone();
 
-    // If ssh_connection_id is set, load the SSH connection and merge it
-    if let Some(ssh_id) = &params.ssh_connection_id {
-        let ssh_connections = get_ssh_connections(app.clone()).await?;
-        let ssh_conn = ssh_connections
-            .iter()
-            .find(|s| &s.id == ssh_id)
-            .ok_or_else(|| format!("SSH connection with ID {} not found", ssh_id))?;
+    // If ssh_connection_id is set and SSH is enabled, load the SSH connection and merge it
+    if params.ssh_enabled.unwrap_or(false) {
+        if let Some(ssh_id) = &params.ssh_connection_id {
+            let ssh_connections = get_ssh_connections(app.clone()).await?;
+            let ssh_conn = ssh_connections
+                .iter()
+                .find(|s| &s.id == ssh_id)
+                .ok_or_else(|| format!("SSH connection with ID {} not found", ssh_id))?;
 
-        // Populate legacy SSH fields from the SSH connection
-        expanded_params.ssh_host = Some(ssh_conn.host.clone());
-        expanded_params.ssh_port = Some(ssh_conn.port);
-        expanded_params.ssh_user = Some(ssh_conn.user.clone());
-        expanded_params.ssh_password = ssh_conn.password.clone();
-        expanded_params.ssh_key_file = ssh_conn.key_file.clone();
-        expanded_params.ssh_key_passphrase = ssh_conn.key_passphrase.clone();
+            // Populate legacy SSH fields from the SSH connection
+            expanded_params.ssh_host = Some(ssh_conn.host.clone());
+            expanded_params.ssh_port = Some(ssh_conn.port);
+            expanded_params.ssh_user = Some(ssh_conn.user.clone());
+            expanded_params.ssh_password = ssh_conn.password.clone();
+            expanded_params.ssh_key_file = ssh_conn.key_file.clone();
+            expanded_params.ssh_key_passphrase = ssh_conn.key_passphrase.clone();
+        }
     }
 
     Ok(expanded_params)
@@ -151,12 +153,18 @@ pub fn find_connection_by_id<R: Runtime>(
                 conn.name, conn.id, e
             ),
         }
-        match keychain_utils::get_ssh_password(&conn.id) {
-            Ok(ssh_pwd) => conn.params.ssh_password = Some(ssh_pwd),
-            Err(e) => eprintln!(
-                "[Warning] Failed to retrieve SSH password for connection '{}' ({}): {}",
-                conn.name, conn.id, e
-            ),
+
+        if conn.params.ssh_enabled.unwrap_or(false) {
+            if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
+                if !ssh_pwd.trim().is_empty() {
+                    conn.params.ssh_password = Some(ssh_pwd);
+                }
+            }
+            if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
+                if !ssh_passphrase.trim().is_empty() {
+                    conn.params.ssh_key_passphrase = Some(ssh_passphrase);
+                }
+            }
         }
     }
 
@@ -252,12 +260,14 @@ pub async fn save_connection<R: Runtime>(
         if let Some(pwd) = &params.password {
             keychain_utils::set_db_password(&id, pwd)?;
         }
-        if let Some(ssh_pwd) = &params.ssh_password {
-            keychain_utils::set_ssh_password(&id, ssh_pwd)?;
-        }
-        if let Some(ssh_passphrase) = &params.ssh_key_passphrase {
-            if !ssh_passphrase.trim().is_empty() {
-                keychain_utils::set_ssh_key_passphrase(&id, ssh_passphrase)?;
+        if params.ssh_enabled.unwrap_or(false) {
+            if let Some(ssh_pwd) = &params.ssh_password {
+                keychain_utils::set_ssh_password(&id, ssh_pwd)?;
+            }
+            if let Some(ssh_passphrase) = &params.ssh_key_passphrase {
+                if !ssh_passphrase.trim().is_empty() {
+                    keychain_utils::set_ssh_key_passphrase(&id, ssh_passphrase)?;
+                }
             }
         }
         params_to_save.password = None;
@@ -323,13 +333,18 @@ pub async fn update_connection<R: Runtime>(
         if let Some(pwd) = &params.password {
             keychain_utils::set_db_password(&id, pwd)?;
         }
-        if let Some(ssh_pwd) = &params.ssh_password {
-            keychain_utils::set_ssh_password(&id, ssh_pwd)?;
-        }
-        if let Some(ssh_passphrase) = &params.ssh_key_passphrase {
-            if !ssh_passphrase.trim().is_empty() {
-                keychain_utils::set_ssh_key_passphrase(&id, ssh_passphrase)?;
+        if params.ssh_enabled.unwrap_or(false) {
+            if let Some(ssh_pwd) = &params.ssh_password {
+                keychain_utils::set_ssh_password(&id, ssh_pwd)?;
             }
+            if let Some(ssh_passphrase) = &params.ssh_key_passphrase {
+                if !ssh_passphrase.trim().is_empty() {
+                    keychain_utils::set_ssh_key_passphrase(&id, ssh_passphrase)?;
+                }
+            }
+        } else {
+            keychain_utils::delete_ssh_password(&id).ok();
+            keychain_utils::delete_ssh_key_passphrase(&id).ok();
         }
         params_to_save.password = None;
         params_to_save.ssh_password = None;
@@ -376,11 +391,17 @@ pub async fn duplicate_connection<R: Runtime>(
         if let Ok(pwd) = keychain_utils::get_db_password(&original.id) {
             original.params.password = Some(pwd);
         }
-        if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&original.id) {
-            original.params.ssh_password = Some(ssh_pwd);
-        }
-        if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&original.id) {
-            original.params.ssh_key_passphrase = Some(ssh_passphrase);
+        if original.params.ssh_enabled.unwrap_or(false) {
+            if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&original.id) {
+                if !ssh_pwd.trim().is_empty() {
+                    original.params.ssh_password = Some(ssh_pwd);
+                }
+            }
+            if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&original.id) {
+                if !ssh_passphrase.trim().is_empty() {
+                    original.params.ssh_key_passphrase = Some(ssh_passphrase);
+                }
+            }
         }
     }
 
@@ -392,12 +413,14 @@ pub async fn duplicate_connection<R: Runtime>(
         if let Some(pwd) = &new_params.password {
             keychain_utils::set_db_password(&new_id, pwd)?;
         }
-        if let Some(ssh_pwd) = &new_params.ssh_password {
-            keychain_utils::set_ssh_password(&new_id, ssh_pwd)?;
-        }
-        if let Some(ssh_passphrase) = &new_params.ssh_key_passphrase {
-            if !ssh_passphrase.trim().is_empty() {
-                keychain_utils::set_ssh_key_passphrase(&new_id, ssh_passphrase)?;
+        if new_params.ssh_enabled.unwrap_or(false) {
+            if let Some(ssh_pwd) = &new_params.ssh_password {
+                keychain_utils::set_ssh_password(&new_id, ssh_pwd)?;
+            }
+            if let Some(ssh_passphrase) = &new_params.ssh_key_passphrase {
+                if !ssh_passphrase.trim().is_empty() {
+                    keychain_utils::set_ssh_key_passphrase(&new_id, ssh_passphrase)?;
+                }
             }
         }
         new_params.password = None;
@@ -453,11 +476,17 @@ pub async fn get_connections<R: Runtime>(
                     conn.id, e
                 ),
             }
-            if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
-                conn.params.ssh_password = Some(ssh_pwd);
-            }
-            if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
-                conn.params.ssh_key_passphrase = Some(ssh_passphrase);
+            if conn.params.ssh_enabled.unwrap_or(false) {
+                if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
+                    if !ssh_pwd.trim().is_empty() {
+                        conn.params.ssh_password = Some(ssh_pwd);
+                    }
+                }
+                if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
+                    if !ssh_passphrase.trim().is_empty() {
+                        conn.params.ssh_key_passphrase = Some(ssh_passphrase);
+                    }
+                }
             }
         }
     }
@@ -520,10 +549,14 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
                     // Migrate credentials from connection keychain to SSH keychain
                     if conn.params.save_in_keychain.unwrap_or(false) {
                         if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
-                            keychain_utils::set_ssh_password(&new_ssh_id, &ssh_pwd).ok();
+                            if !ssh_pwd.trim().is_empty() {
+                                keychain_utils::set_ssh_password(&new_ssh_id, &ssh_pwd).ok();
+                            }
                         }
                         if let Ok(ssh_pass) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
-                            keychain_utils::set_ssh_key_passphrase(&new_ssh_id, &ssh_pass).ok();
+                            if !ssh_pass.trim().is_empty() {
+                                keychain_utils::set_ssh_key_passphrase(&new_ssh_id, &ssh_pass).ok();
+                            }
                         }
                     }
 
@@ -612,10 +645,14 @@ pub async fn get_ssh_connections<R: Runtime>(
 
         if ssh.save_in_keychain.unwrap_or(false) {
             if let Ok(pwd) = keychain_utils::get_ssh_password(&ssh.id) {
-                ssh.password = Some(pwd);
+                if !pwd.trim().is_empty() {
+                    ssh.password = Some(pwd);
+                }
             }
             if let Ok(passphrase) = keychain_utils::get_ssh_key_passphrase(&ssh.id) {
-                ssh.key_passphrase = Some(passphrase);
+                if !passphrase.trim().is_empty() {
+                    ssh.key_passphrase = Some(passphrase);
+                }
             }
         }
     }

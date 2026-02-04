@@ -21,8 +21,12 @@ pub fn load_connections(path: &Path) -> Result<Vec<SavedConnection>, String> {
                     conn.id, e
                 ),
             }
-            if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
-                conn.params.ssh_password = Some(ssh_pwd);
+            if conn.params.ssh_enabled.unwrap_or(false) {
+                if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
+                    if !ssh_pwd.trim().is_empty() {
+                        conn.params.ssh_password = Some(ssh_pwd);
+                    }
+                }
             }
         }
     }
