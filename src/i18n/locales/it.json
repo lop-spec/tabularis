@@ -250,7 +250,12 @@
     "null": "null",
     "sortByAsc": "Ordina per {{col}} ASC",
     "sortByDesc": "Ordina per {{col}} DESC",
-    "clearSort": "Rimuovi ordinamento"
+    "clearSort": "Rimuovi ordinamento",
+    "copyCell": "Copia cella",
+    "copyRow": "Copia riga",
+    "copyCells": "Copia {{count}} celle",
+    "copyRows": "Copia {{count}} righe",
+    "copied": "Copiato negli appunti"
   },
   "editRow": {
     "title": "Modifica riga",

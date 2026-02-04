@@ -8,11 +8,12 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "./ContextMenu";
-import { Trash2, Edit, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Trash2, Edit, ArrowUp, ArrowDown, ArrowUpDown, Copy } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { EditRowModal } from "./EditRowModal";
 import { formatCellValue, getColumnSortState, calculateSelectionRange, toggleSetValue } from "../../utils/dataGrid";
+import { rowToTSV, rowsToTSV, getSelectedRows, copyTextToClipboard } from "../../utils/clipboard";
 
 interface DataGridProps {
   columns: string[];
@@ -321,6 +322,57 @@ export const DataGrid = React.memo(({
     }
   }, [contextMenu, tableName, pkColumn, connectionId, pkIndexMap, onRefresh, t]);
 
+  const copyToClipboard = useCallback(async (text: string) => {
+    try {
+      await copyTextToClipboard(text);
+      // Optional: show a brief success message
+      // await message(t("dataGrid.copied"), { title: t("common.success"), kind: "info" });
+    } catch (e) {
+      console.error("Copy failed:", e);
+      await message(t("common.error") + ": " + e, {
+        title: t("common.error"),
+        kind: "error",
+      });
+    }
+  }, [t]);
+
+  const copyCellValue = useCallback(async () => {
+    if (!contextMenu) return;
+    
+    // Copy the entire row as TSV (Tab-Separated Values)
+    const rowText = rowToTSV(contextMenu.row, "null");
+    
+    await copyToClipboard(rowText);
+  }, [contextMenu, copyToClipboard]);
+
+  const copySelectedCells = useCallback(async () => {
+    if (selectedRowIndices.size === 0) return;
+
+    const selectedRows = getSelectedRows(data, selectedRowIndices);
+
+    // Format as TSV for easy pasting into spreadsheets
+    const text = rowsToTSV(selectedRows, "null");
+
+    await copyToClipboard(text);
+  }, [selectedRowIndices, data, copyToClipboard]);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // CMD/CTRL + C
+      if ((e.metaKey || e.ctrlKey) && e.key === "c") {
+        // Only handle if not editing a cell
+        if (!editingCell && selectedRowIndices.size > 0) {
+          e.preventDefault();
+          copySelectedCells();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [editingCell, selectedRowIndices, copySelectedCells]);
+
   if (columns.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-muted">
@@ -468,6 +520,11 @@ export const DataGrid = React.memo(({
           y={contextMenu.y}
           onClose={() => setContextMenu(null)}
           items={[
+            {
+              label: t("dataGrid.copyRow"),
+              icon: Copy,
+              action: copyCellValue,
+            },
             {
               label: t("dataGrid.editRow"),
               icon: Edit,

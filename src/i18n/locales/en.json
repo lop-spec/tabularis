@@ -250,7 +250,12 @@
     "null": "null",
     "sortByAsc": "Sort by {{col}} ASC",
     "sortByDesc": "Sort by {{col}} DESC",
-    "clearSort": "Clear sort"
+    "clearSort": "Clear sort",
+    "copyCell": "Copy Cell",
+    "copyRow": "Copy Row",
+    "copyCells": "Copy {{count}} Cells",
+    "copyRows": "Copy {{count}} Rows",
+    "copied": "Copied to clipboard"
   },
   "editRow": {
     "title": "Edit Row",
