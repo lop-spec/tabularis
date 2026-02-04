@@ -1,6 +1,35 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SshConnection {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_passphrase: Option<String>,
+    pub save_in_keychain: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SshTestParams {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_passphrase: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConnectionParams {
     pub driver: String,
     pub host: Option<String>,
@@ -10,11 +39,20 @@ pub struct ConnectionParams {
     pub database: String,
     // SSH Tunnel
     pub ssh_enabled: Option<bool>,
+    pub ssh_connection_id: Option<String>,
+    // Legacy SSH fields (for backward compatibility during migration)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_key_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssh_key_passphrase: Option<String>,
     pub save_in_keychain: Option<bool>,
 }
 

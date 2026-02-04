@@ -1,0 +1,376 @@
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { X, Plus, Edit2, Trash2, Check, Loader2 } from "lucide-react";
+import {
+  loadSshConnections,
+  saveSshConnection,
+  updateSshConnection,
+  deleteSshConnection,
+  testSshConnection,
+  validateSshConnection,
+  type SshConnection,
+} from "../../utils/ssh";
+
+interface SshConnectionsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const InputClass =
+  "w-full px-3 pt-2 pb-1 bg-base border border-strong rounded-lg text-primary focus:border-blue-500 focus:outline-none leading-tight";
+const LabelClass = "block text-xs uppercase font-bold text-muted";
+
+interface SshInputProps {
+  label: string;
+  value: string | number | undefined;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  error?: React.ReactNode;
+}
+
+function SshInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  error,
+}: SshInputProps) {
+  return (
+    <div className="flex flex-col">
+      <label className={LabelClass}>{label}</label>
+      <input
+        type={type}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className={InputClass}
+        placeholder={placeholder}
+      />
+      {error}
+    </div>
+  );
+}
+
+export function SshConnectionsModal({
+  isOpen,
+  onClose,
+}: SshConnectionsModalProps) {
+  const { t } = useTranslation();
+  const [connections, setConnections] = useState<SshConnection[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [formData, setFormData] = useState<Partial<SshConnection>>({
+    port: 22,
+    save_in_keychain: true,
+  });
+  const [testStatus, setTestStatus] = useState<
+    "idle" | "testing" | "success" | "error"
+  >("idle");
+  const [testMessage, setTestMessage] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      loadConnections();
+    }
+  }, [isOpen]);
+
+  const loadConnections = async () => {
+    const result = await loadSshConnections();
+    setConnections(result);
+  };
+
+  const updateField = (field: keyof SshConnection, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const resetForm = () => {
+    setFormData({
+      port: 22,
+      save_in_keychain: true,
+    });
+    setEditingId(null);
+    setIsCreating(false);
+    setTestStatus("idle");
+    setTestMessage("");
+  };
+
+  const handleTest = async () => {
+    setTestStatus("testing");
+    setTestMessage("");
+
+    try {
+      const result = await testSshConnection(formData);
+      setTestStatus("success");
+      setTestMessage(result);
+    } catch (error) {
+      console.error("SSH test failed:", error);
+      setTestStatus("error");
+      const msg =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : JSON.stringify(error);
+      setTestMessage(msg);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      // Validate connection
+      const validation = validateSshConnection(formData);
+      if (!validation.isValid) {
+        setTestStatus("error");
+        setTestMessage(validation.error || t("sshConnections.fillRequired"));
+        return;
+      }
+
+      const sshData: Partial<SshConnection> = {
+        host: formData.host,
+        port: formData.port || 22,
+        user: formData.user,
+        password: formData.password,
+        key_file: formData.key_file,
+        key_passphrase: formData.key_passphrase,
+        save_in_keychain: formData.save_in_keychain,
+      };
+
+      if (editingId) {
+        await updateSshConnection(editingId, formData.name!, sshData);
+      } else {
+        await saveSshConnection(formData.name!, sshData);
+      }
+
+      await loadConnections();
+      resetForm();
+    } catch (error) {
+      console.error("Failed to save SSH connection:", error);
+      setTestStatus("error");
+      setTestMessage(t("sshConnections.failSave"));
+    }
+  };
+
+  const handleEdit = (conn: SshConnection) => {
+    setFormData(conn);
+    setEditingId(conn.id);
+    setIsCreating(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(t("sshConnections.confirmDelete"))) {
+      return;
+    }
+
+    try {
+      await deleteSshConnection(id);
+      await loadConnections();
+    } catch (error) {
+      console.error("Failed to delete SSH connection:", error);
+      alert(t("sshConnections.failDelete"));
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-base border border-strong rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-strong bg-elevated">
+          <h2 className="text-xl font-bold text-primary flex items-center gap-2">
+            {t("sshConnections.title")}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-muted hover:text-primary transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {!isCreating ? (
+            <>
+              <div className="mb-4">
+                <button
+                  onClick={() => setIsCreating(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  <Plus size={16} />
+                  {t("sshConnections.createNew")}
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {connections.length === 0 ? (
+                  <div className="text-center py-8 text-muted">
+                    {t("sshConnections.noConnections")}
+                  </div>
+                ) : (
+                  connections.map((conn) => (
+                    <div
+                      key={conn.id}
+                      className="flex items-center justify-between p-4 bg-elevated border border-strong rounded-lg hover:border-blue-500 transition-colors"
+                    >
+                      <div>
+                        <div className="font-semibold text-primary">
+                          {conn.name}
+                        </div>
+                        <div className="text-sm text-muted">
+                          {conn.user}@{conn.host}:{conn.port}
+                        </div>
+                        {conn.key_file && (
+                          <div className="text-xs text-muted mt-1">
+                            {t("sshConnections.keyFile")}: {conn.key_file}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEdit(conn)}
+                          className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                          title={t("sshConnections.edit")}
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(conn.id)}
+                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title={t("sshConnections.delete")}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <SshInput
+                label={t("sshConnections.name")}
+                value={formData.name}
+                onChange={(val) => updateField("name", val)}
+                placeholder={t("sshConnections.namePlaceholder")}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <SshInput
+                  label={t("newConnection.sshHost")}
+                  value={formData.host}
+                  onChange={(val) => updateField("host", val)}
+                  placeholder="example.com"
+                />
+                <SshInput
+                  label={t("newConnection.sshPort")}
+                  value={formData.port}
+                  onChange={(val) => updateField("port", parseInt(val) || 22)}
+                  type="number"
+                  placeholder="22"
+                />
+              </div>
+
+              <SshInput
+                label={t("newConnection.sshUser")}
+                value={formData.user}
+                onChange={(val) => updateField("user", val)}
+                placeholder="username"
+              />
+
+              <SshInput
+                label={t("newConnection.sshPassword")}
+                value={formData.password}
+                onChange={(val) => updateField("password", val)}
+                type="password"
+                placeholder={t("newConnection.sshPasswordPlaceholder")}
+              />
+
+              <SshInput
+                label={t("newConnection.sshKeyFile")}
+                value={formData.key_file}
+                onChange={(val) => updateField("key_file", val)}
+                placeholder={t("newConnection.sshKeyFilePlaceholder")}
+              />
+
+              <SshInput
+                label={t("newConnection.sshKeyPassphrase")}
+                value={formData.key_passphrase}
+                onChange={(val) => updateField("key_passphrase", val)}
+                type="password"
+                placeholder={t("newConnection.sshKeyPassphrasePlaceholder")}
+              />
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="ssh-keychain-toggle"
+                  checked={!!formData.save_in_keychain}
+                  onChange={(e) =>
+                    updateField("save_in_keychain", e.target.checked)
+                  }
+                  className="accent-blue-500 w-4 h-4 rounded cursor-pointer"
+                />
+                <label
+                  htmlFor="ssh-keychain-toggle"
+                  className="text-sm font-medium text-secondary cursor-pointer select-none"
+                >
+                  {t("newConnection.saveKeychain")}
+                </label>
+              </div>
+
+              {/* Test Button and Status */}
+              <div className="pt-4 border-t border-strong">
+                <button
+                  onClick={handleTest}
+                  disabled={testStatus === "testing"}
+                  className="w-full px-4 py-2 border border-strong rounded-lg hover:bg-elevated transition-colors text-secondary flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {testStatus === "testing" && (
+                    <Loader2 size={16} className="animate-spin" />
+                  )}
+                  {t("newConnection.testConnection")}
+                </button>
+
+                {testMessage && (
+                  <div
+                    className={`mt-3 p-3 rounded-lg flex items-start gap-2 text-sm border ${
+                      testStatus === "success"
+                        ? "bg-green-900/20 text-green-400 border-green-900/50"
+                        : "bg-red-900/20 text-red-400 border-red-900/50"
+                    }`}
+                  >
+                    {testStatus === "success" ? (
+                      <Check size={16} className="mt-0.5" />
+                    ) : (
+                      <X size={16} className="mt-0.5" />
+                    )}
+                    <span>{testMessage}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={resetForm}
+                  className="flex-1 px-4 py-2 border border-strong rounded-lg hover:bg-elevated transition-colors text-secondary"
+                >
+                  {t("sshConnections.cancel")}
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <Check size={16} />
+                  {editingId ? t("sshConnections.update") : t("sshConnections.save")}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

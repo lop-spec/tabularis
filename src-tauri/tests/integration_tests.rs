@@ -13,11 +13,13 @@ fn get_mysql_params() -> ConnectionParams {
         password: Some("password".to_string()),
         database: "testdb".to_string(),
         ssh_enabled: None,
+        ssh_connection_id: None,
         ssh_host: None,
         ssh_port: None,
         ssh_user: None,
         ssh_password: None,
         ssh_key_file: None,
+        ssh_key_passphrase: None,
         save_in_keychain: None,
     }
 }
@@ -31,11 +33,13 @@ fn get_postgres_params() -> ConnectionParams {
         password: Some("password".to_string()),
         database: "testdb".to_string(),
         ssh_enabled: None,
+        ssh_connection_id: None,
         ssh_host: None,
         ssh_port: None,
         ssh_user: None,
         ssh_password: None,
         ssh_key_file: None,
+        ssh_key_passphrase: None,
         save_in_keychain: None,
     }
 }

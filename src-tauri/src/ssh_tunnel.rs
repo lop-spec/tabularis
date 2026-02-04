@@ -36,10 +36,12 @@ impl SshTunnel {
         ssh_user: &str,
         ssh_password: Option<&str>,
         ssh_key_file: Option<&str>,
+        ssh_key_passphrase: Option<&str>,
         remote_host: &str,
         remote_port: u16,
     ) -> Result<Self, String> {
-        let use_system_ssh = ssh_password.is_none();
+        // Treat empty password as no password
+        let use_system_ssh = ssh_password.map(|p| p.trim().is_empty()).unwrap_or(true);
         println!(
             "[SSH Tunnel] New Request: Host={}, Port={}, User={}, SystemMode={}",
             ssh_host, ssh_port, ssh_user, use_system_ssh
@@ -76,6 +78,7 @@ impl SshTunnel {
                 ssh_user,
                 ssh_password,
                 ssh_key_file,
+                ssh_key_passphrase,
                 remote_host,
                 remote_port,
                 local_port,
@@ -248,6 +251,7 @@ impl SshTunnel {
         ssh_user: &str,
         ssh_password: Option<&str>,
         ssh_key_file: Option<&str>,
+        ssh_key_passphrase: Option<&str>,
         remote_host: &str,
         remote_port: u16,
         local_port: u16,
@@ -279,11 +283,14 @@ impl SshTunnel {
         if let Some(key_path) = ssh_key_file {
             if !key_path.trim().is_empty() {
                 println!("[SSH Tunnel] Authenticating with key file: {}", key_path);
+                // When SSH key is present, use passphrase if provided (and not empty)
+                let passphrase = ssh_key_passphrase
+                    .filter(|p| !p.trim().is_empty());
                 sess.userauth_pubkey_file(
                     ssh_user,
                     None,
                     std::path::Path::new(key_path),
-                    ssh_password,
+                    passphrase,
                 )
                 .map_err(|e| {
                     let err = format!("SSH key auth failed: {}", e);
@@ -429,4 +436,183 @@ impl SshTunnel {
             }
         }
     }
+}
+
+/// Test an SSH connection without creating a tunnel
+pub fn test_ssh_connection(
+    ssh_host: &str,
+    ssh_port: u16,
+    ssh_user: &str,
+    ssh_password: Option<&str>,
+    ssh_key_file: Option<&str>,
+    ssh_key_passphrase: Option<&str>,
+) -> Result<String, String> {
+    // Treat empty password as no password
+    let use_system_ssh = ssh_password.map(|p| p.trim().is_empty()).unwrap_or(true);
+    println!(
+        "[SSH Test] Testing connection to {}:{} as {} (SystemMode={})",
+        ssh_host, ssh_port, ssh_user, use_system_ssh
+    );
+
+    if use_system_ssh {
+        test_ssh_connection_system(ssh_host, ssh_port, ssh_user, ssh_key_file)
+    } else {
+        test_ssh_connection_libssh2(
+            ssh_host,
+            ssh_port,
+            ssh_user,
+            ssh_password,
+            ssh_key_file,
+            ssh_key_passphrase,
+        )
+    }
+}
+
+/// Test SSH connection using system ssh command (supports ~/.ssh/config)
+fn test_ssh_connection_system(
+    ssh_host: &str,
+    ssh_port: u16,
+    ssh_user: &str,
+    ssh_key_file: Option<&str>,
+) -> Result<String, String> {
+    println!("[SSH Test] Using system SSH (supports ~/.ssh/config)");
+
+    // Create owned strings to avoid lifetime issues
+    let port_string = ssh_port.to_string();
+    let destination = format!("{}@{}", ssh_user, ssh_host);
+
+    let mut args = vec![
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+    ];
+
+    if ssh_port != 22 {
+        args.push("-p");
+        args.push(&port_string);
+    }
+
+    if let Some(key) = ssh_key_file {
+        if !key.trim().is_empty() {
+            args.push("-i");
+            args.push(key);
+        }
+    }
+
+    args.push(&destination);
+    args.push("exit");
+
+    println!("[SSH Test] Executing: ssh {:?}", args);
+
+    let output = Command::new("ssh")
+        .args(&args)
+        .output()
+        .map_err(|e| {
+            format!("Failed to execute ssh command: {}. Ensure 'ssh' is in PATH.", e)
+        })?;
+
+    if output.status.success() {
+        println!("[SSH Test] Connection successful!");
+        Ok(format!(
+            "SSH connection to {}@{}:{} established successfully!",
+            ssh_user, ssh_host, ssh_port
+        ))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let err = format!("SSH connection failed: {}", stderr.trim());
+        eprintln!("[SSH Test Error] {}", err);
+        Err(err)
+    }
+}
+
+/// Test SSH connection using libssh2 (for password authentication)
+fn test_ssh_connection_libssh2(
+    ssh_host: &str,
+    ssh_port: u16,
+    ssh_user: &str,
+    ssh_password: Option<&str>,
+    ssh_key_file: Option<&str>,
+    ssh_key_passphrase: Option<&str>,
+) -> Result<String, String> {
+    println!("[SSH Test] Using libssh2 for password authentication");
+
+    // Try to connect to the SSH server
+    let tcp = TcpStream::connect(format!("{}:{}", ssh_host, ssh_port)).map_err(|e| {
+        let err = format!("Failed to connect to SSH server {}:{}: {}", ssh_host, ssh_port, e);
+        eprintln!("[SSH Test Error] {}", err);
+        err
+    })?;
+
+    // Set a reasonable timeout for the test
+    tcp.set_read_timeout(Some(Duration::from_secs(10)))
+        .ok();
+    tcp.set_write_timeout(Some(Duration::from_secs(10)))
+        .ok();
+
+    // Create SSH session
+    let mut sess = Session::new().unwrap();
+    sess.set_tcp_stream(tcp);
+    sess.set_timeout(10000); // 10 second timeout
+    sess.handshake().map_err(|e| {
+        let err = format!("SSH handshake failed: {}", e);
+        eprintln!("[SSH Test Error] {}", err);
+        err
+    })?;
+
+    // Try authentication
+    if let Some(key_path) = ssh_key_file {
+        if !key_path.trim().is_empty() {
+            println!("[SSH Test] Authenticating with key file: {}", key_path);
+            let passphrase = ssh_key_passphrase.filter(|p| !p.trim().is_empty());
+            sess.userauth_pubkey_file(
+                ssh_user,
+                None,
+                std::path::Path::new(key_path),
+                passphrase,
+            )
+            .map_err(|e| {
+                let err = format!("SSH key authentication failed: {}", e);
+                eprintln!("[SSH Test Error] {}", err);
+                err
+            })?;
+        } else if let Some(pwd) = ssh_password {
+            println!("[SSH Test] Authenticating with password");
+            sess.userauth_password(ssh_user, pwd).map_err(|e| {
+                let err = format!("SSH password authentication failed: {}", e);
+                eprintln!("[SSH Test Error] {}", err);
+                err
+            })?;
+        } else {
+            let err = "No SSH credentials provided".to_string();
+            eprintln!("[SSH Test Error] {}", err);
+            return Err(err);
+        }
+    } else if let Some(pwd) = ssh_password {
+        println!("[SSH Test] Authenticating with password");
+        sess.userauth_password(ssh_user, pwd).map_err(|e| {
+            let err = format!("SSH password authentication failed: {}", e);
+            eprintln!("[SSH Test Error] {}", err);
+            err
+        })?;
+    } else {
+        let err = "No SSH credentials provided for libssh2".to_string();
+        eprintln!("[SSH Test Error] {}", err);
+        return Err(err);
+    }
+
+    // Check if authenticated
+    if !sess.authenticated() {
+        let err = "SSH authentication failed".to_string();
+        eprintln!("[SSH Test Error] {}", err);
+        return Err(err);
+    }
+
+    println!("[SSH Test] Connection successful!");
+    Ok(format!(
+        "SSH connection to {}@{}:{} established successfully!",
+        ssh_user, ssh_host, ssh_port
+    ))
 }

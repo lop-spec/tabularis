@@ -81,6 +81,12 @@ pub fn run() {
             commands::update_connection,
             commands::duplicate_connection,
             commands::get_connections,
+            // SSH Connections
+            commands::get_ssh_connections,
+            commands::save_ssh_connection,
+            commands::update_ssh_connection,
+            commands::delete_ssh_connection,
+            commands::test_ssh_connection,
             commands::get_tables,
             commands::get_columns,
             commands::get_foreign_keys,

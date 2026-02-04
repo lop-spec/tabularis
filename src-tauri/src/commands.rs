@@ -13,7 +13,8 @@ use uuid::Uuid;
 use crate::drivers::{mysql, postgres, sqlite};
 use crate::keychain_utils;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, QueryResult, SavedConnection, TableColumn, TableInfo,
+    ConnectionParams, ForeignKey, Index, QueryResult, SavedConnection, SshConnection, SshTestParams,
+    TableColumn, TableInfo,
 };
 use crate::ssh_tunnel::{get_tunnels, SshTunnel};
 
@@ -30,6 +31,32 @@ impl Default for QueryCancellationState {
 }
 
 // --- Persistence Helpers ---
+
+pub async fn expand_ssh_connection_params<R: Runtime>(
+    app: &AppHandle<R>,
+    params: &ConnectionParams,
+) -> Result<ConnectionParams, String> {
+    let mut expanded_params = params.clone();
+
+    // If ssh_connection_id is set, load the SSH connection and merge it
+    if let Some(ssh_id) = &params.ssh_connection_id {
+        let ssh_connections = get_ssh_connections(app.clone()).await?;
+        let ssh_conn = ssh_connections
+            .iter()
+            .find(|s| &s.id == ssh_id)
+            .ok_or_else(|| format!("SSH connection with ID {} not found", ssh_id))?;
+
+        // Populate legacy SSH fields from the SSH connection
+        expanded_params.ssh_host = Some(ssh_conn.host.clone());
+        expanded_params.ssh_port = Some(ssh_conn.port);
+        expanded_params.ssh_user = Some(ssh_conn.user.clone());
+        expanded_params.ssh_password = ssh_conn.password.clone();
+        expanded_params.ssh_key_file = ssh_conn.key_file.clone();
+        expanded_params.ssh_key_passphrase = ssh_conn.key_passphrase.clone();
+    }
+
+    Ok(expanded_params)
+}
 
 pub fn resolve_connection_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
     if params.ssh_enabled.unwrap_or(false) {
@@ -60,6 +87,7 @@ pub fn resolve_connection_params(params: &ConnectionParams) -> Result<Connection
             ssh_user,
             params.ssh_password.as_deref(),
             params.ssh_key_file.as_deref(),
+            params.ssh_key_passphrase.as_deref(),
             remote_host,
             remote_port,
         )
@@ -90,6 +118,14 @@ pub fn get_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String
         fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     }
     Ok(config_dir.join("connections.json"))
+}
+
+pub fn get_ssh_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    }
+    Ok(config_dir.join("ssh_connections.json"))
 }
 
 pub fn find_connection_by_id<R: Runtime>(
@@ -135,7 +171,8 @@ pub async fn get_schema_snapshot<R: Runtime>(
     connection_id: String,
 ) -> Result<Vec<crate::models::TableSchema>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
     let driver = saved_conn.params.driver.clone();
 
     // 1. Get Tables
@@ -218,8 +255,14 @@ pub async fn save_connection<R: Runtime>(
         if let Some(ssh_pwd) = &params.ssh_password {
             keychain_utils::set_ssh_password(&id, ssh_pwd)?;
         }
+        if let Some(ssh_passphrase) = &params.ssh_key_passphrase {
+            if !ssh_passphrase.trim().is_empty() {
+                keychain_utils::set_ssh_key_passphrase(&id, ssh_passphrase)?;
+            }
+        }
         params_to_save.password = None;
         params_to_save.ssh_password = None;
+        params_to_save.ssh_key_passphrase = None;
     }
 
     let new_conn = SavedConnection {
@@ -251,6 +294,7 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
     // Attempt to remove passwords from keychain (ignore if not found)
     keychain_utils::delete_db_password(&id).ok();
     keychain_utils::delete_ssh_password(&id).ok();
+    keychain_utils::delete_ssh_key_passphrase(&id).ok();
 
     let json = serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| e.to_string())?;
@@ -282,11 +326,18 @@ pub async fn update_connection<R: Runtime>(
         if let Some(ssh_pwd) = &params.ssh_password {
             keychain_utils::set_ssh_password(&id, ssh_pwd)?;
         }
+        if let Some(ssh_passphrase) = &params.ssh_key_passphrase {
+            if !ssh_passphrase.trim().is_empty() {
+                keychain_utils::set_ssh_key_passphrase(&id, ssh_passphrase)?;
+            }
+        }
         params_to_save.password = None;
         params_to_save.ssh_password = None;
+        params_to_save.ssh_key_passphrase = None;
     } else {
         keychain_utils::delete_db_password(&id).ok();
         keychain_utils::delete_ssh_password(&id).ok();
+        keychain_utils::delete_ssh_key_passphrase(&id).ok();
     }
 
     let updated = SavedConnection {
@@ -328,6 +379,9 @@ pub async fn duplicate_connection<R: Runtime>(
         if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&original.id) {
             original.params.ssh_password = Some(ssh_pwd);
         }
+        if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&original.id) {
+            original.params.ssh_key_passphrase = Some(ssh_passphrase);
+        }
     }
 
     let new_id = Uuid::new_v4().to_string();
@@ -341,8 +395,14 @@ pub async fn duplicate_connection<R: Runtime>(
         if let Some(ssh_pwd) = &new_params.ssh_password {
             keychain_utils::set_ssh_password(&new_id, ssh_pwd)?;
         }
+        if let Some(ssh_passphrase) = &new_params.ssh_key_passphrase {
+            if !ssh_passphrase.trim().is_empty() {
+                keychain_utils::set_ssh_key_passphrase(&new_id, ssh_passphrase)?;
+            }
+        }
         new_params.password = None;
         new_params.ssh_password = None;
+        new_params.ssh_key_passphrase = None;
     }
 
     let new_conn = SavedConnection {
@@ -363,6 +423,7 @@ pub async fn duplicate_connection<R: Runtime>(
         // Actually original.params holds the clear text now.
         returned_conn.params.password = original.params.password;
         returned_conn.params.ssh_password = original.params.ssh_password;
+        returned_conn.params.ssh_key_passphrase = original.params.ssh_key_passphrase;
     }
 
     Ok(returned_conn)
@@ -372,6 +433,9 @@ pub async fn duplicate_connection<R: Runtime>(
 pub async fn get_connections<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<Vec<SavedConnection>, String> {
+    // Run migration if needed
+    migrate_ssh_connections(&app).await.ok();
+
     let path = get_config_path(&app)?;
     if !path.exists() {
         return Ok(Vec::new());
@@ -392,15 +456,291 @@ pub async fn get_connections<R: Runtime>(
             if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
                 conn.params.ssh_password = Some(ssh_pwd);
             }
+            if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
+                conn.params.ssh_key_passphrase = Some(ssh_passphrase);
+            }
         }
     }
 
     Ok(connections)
 }
 
+// ==================== SSH Connection Management ====================
+
+/// Migrates old embedded SSH connections to separate SSH connection entries
+async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let conn_path = get_config_path(app)?;
+    if !conn_path.exists() {
+        return Ok(()); // Nothing to migrate
+    }
+
+    let content = fs::read_to_string(&conn_path).map_err(|e| e.to_string())?;
+    let connections: Vec<SavedConnection> = serde_json::from_str(&content).unwrap_or_default();
+
+    // Check if any connections have old embedded SSH params
+    let needs_migration = connections
+        .iter()
+        .any(|c| c.params.ssh_enabled.unwrap_or(false) && c.params.ssh_connection_id.is_none());
+
+    if !needs_migration {
+        return Ok(()); // No migration needed
+    }
+
+    println!("[Migration] Starting SSH connections migration...");
+
+    let ssh_path = get_ssh_config_path(app)?;
+    let mut ssh_connections: Vec<SshConnection> = if ssh_path.exists() {
+        let ssh_content = fs::read_to_string(&ssh_path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&ssh_content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let mut migrated_connections = Vec::new();
+    let mut ssh_connection_map: HashMap<String, String> = HashMap::new(); // (ssh_key -> ssh_id)
+
+    for mut conn in connections {
+        if conn.params.ssh_enabled.unwrap_or(false) && conn.params.ssh_connection_id.is_none() {
+            // Extract SSH params
+            if let (Some(host), Some(user)) = (&conn.params.ssh_host, &conn.params.ssh_user) {
+                let port = conn.params.ssh_port.unwrap_or(22);
+                let key_file = conn.params.ssh_key_file.clone().unwrap_or_default();
+
+                // Create unique key for this SSH config
+                let ssh_key = format!("{}:{}:{}:{}", host, port, user, key_file);
+
+                // Check if we already created an SSH connection for this config
+                let ssh_id = if let Some(existing_id) = ssh_connection_map.get(&ssh_key) {
+                    existing_id.clone()
+                } else {
+                    // Create new SSH connection
+                    let new_ssh_id = Uuid::new_v4().to_string();
+                    let ssh_name = format!("{}@{}", user, host);
+
+                    // Migrate credentials from connection keychain to SSH keychain
+                    if conn.params.save_in_keychain.unwrap_or(false) {
+                        if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
+                            keychain_utils::set_ssh_password(&new_ssh_id, &ssh_pwd).ok();
+                        }
+                        if let Ok(ssh_pass) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
+                            keychain_utils::set_ssh_key_passphrase(&new_ssh_id, &ssh_pass).ok();
+                        }
+                    }
+
+                    let new_ssh_conn = SshConnection {
+                        id: new_ssh_id.clone(),
+                        name: ssh_name,
+                        host: host.clone(),
+                        port,
+                        user: user.clone(),
+                        password: None,
+                        key_file: if key_file.is_empty() {
+                            None
+                        } else {
+                            Some(key_file.clone())
+                        },
+                        key_passphrase: None,
+                        save_in_keychain: conn.params.save_in_keychain,
+                    };
+
+                    ssh_connections.push(new_ssh_conn);
+                    ssh_connection_map.insert(ssh_key, new_ssh_id.clone());
+                    new_ssh_id
+                };
+
+                // Update connection to reference the SSH connection
+                conn.params.ssh_connection_id = Some(ssh_id);
+                // Clear old embedded SSH params
+                conn.params.ssh_host = None;
+                conn.params.ssh_port = None;
+                conn.params.ssh_user = None;
+                conn.params.ssh_password = None;
+                conn.params.ssh_key_file = None;
+                conn.params.ssh_key_passphrase = None;
+            }
+        }
+
+        migrated_connections.push(conn);
+    }
+
+    // Save migrated SSH connections
+    let ssh_json = serde_json::to_string_pretty(&ssh_connections).map_err(|e| e.to_string())?;
+    fs::write(ssh_path, ssh_json).map_err(|e| e.to_string())?;
+
+    // Save migrated connections
+    let conn_json = serde_json::to_string_pretty(&migrated_connections).map_err(|e| e.to_string())?;
+    fs::write(conn_path, conn_json).map_err(|e| e.to_string())?;
+
+    println!(
+        "[Migration] Successfully migrated {} SSH connections",
+        ssh_connections.len()
+    );
+    Ok(())
+}
+
 #[tauri::command]
-pub async fn test_connection(params: ConnectionParams) -> Result<String, String> {
-    let resolved_params = resolve_connection_params(&params)?;
+pub async fn get_ssh_connections<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Vec<SshConnection>, String> {
+    let path = get_ssh_config_path(&app)?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let mut ssh_connections: Vec<SshConnection> =
+        serde_json::from_str(&content).unwrap_or_default();
+
+    // Populate passwords from keychain if needed
+    for ssh in &mut ssh_connections {
+        if ssh.save_in_keychain.unwrap_or(false) {
+            if let Ok(pwd) = keychain_utils::get_ssh_password(&ssh.id) {
+                ssh.password = Some(pwd);
+            }
+            if let Ok(passphrase) = keychain_utils::get_ssh_key_passphrase(&ssh.id) {
+                ssh.key_passphrase = Some(passphrase);
+            }
+        }
+    }
+
+    Ok(ssh_connections)
+}
+
+#[tauri::command]
+pub async fn save_ssh_connection<R: Runtime>(
+    app: AppHandle<R>,
+    name: String,
+    ssh: SshConnection,
+) -> Result<SshConnection, String> {
+    let path = get_ssh_config_path(&app)?;
+    let mut ssh_connections: Vec<SshConnection> = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let id = Uuid::new_v4().to_string();
+    let mut ssh_to_save = ssh.clone();
+    ssh_to_save.id = id.clone();
+    ssh_to_save.name = name;
+
+    if ssh.save_in_keychain.unwrap_or(false) {
+        if let Some(pwd) = &ssh.password {
+            keychain_utils::set_ssh_password(&id, pwd)?;
+        }
+        if let Some(passphrase) = &ssh.key_passphrase {
+            if !passphrase.trim().is_empty() {
+                keychain_utils::set_ssh_key_passphrase(&id, passphrase)?;
+            }
+        }
+        ssh_to_save.password = None;
+        ssh_to_save.key_passphrase = None;
+    }
+
+    ssh_connections.push(ssh_to_save.clone());
+    let json = serde_json::to_string_pretty(&ssh_connections).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())?;
+
+    let mut returned_ssh = ssh_to_save;
+    returned_ssh.password = ssh.password;
+    returned_ssh.key_passphrase = ssh.key_passphrase;
+    Ok(returned_ssh)
+}
+
+#[tauri::command]
+pub async fn update_ssh_connection<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    name: String,
+    ssh: SshConnection,
+) -> Result<SshConnection, String> {
+    let path = get_ssh_config_path(&app)?;
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut ssh_connections: Vec<SshConnection> =
+        serde_json::from_str(&content).unwrap_or_default();
+
+    let ssh_idx = ssh_connections
+        .iter()
+        .position(|s| s.id == id)
+        .ok_or("SSH connection not found")?;
+
+    let mut ssh_to_save = ssh.clone();
+    ssh_to_save.id = id.clone();
+    ssh_to_save.name = name;
+
+    if ssh.save_in_keychain.unwrap_or(false) {
+        if let Some(pwd) = &ssh.password {
+            keychain_utils::set_ssh_password(&id, pwd)?;
+        }
+        if let Some(passphrase) = &ssh.key_passphrase {
+            if !passphrase.trim().is_empty() {
+                keychain_utils::set_ssh_key_passphrase(&id, passphrase)?;
+            }
+        }
+        ssh_to_save.password = None;
+        ssh_to_save.key_passphrase = None;
+    } else {
+        keychain_utils::delete_ssh_password(&id).ok();
+        keychain_utils::delete_ssh_key_passphrase(&id).ok();
+    }
+
+    ssh_connections[ssh_idx] = ssh_to_save.clone();
+
+    let json = serde_json::to_string_pretty(&ssh_connections).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())?;
+
+    let mut returned_ssh = ssh_to_save;
+    returned_ssh.password = ssh.password;
+    returned_ssh.key_passphrase = ssh.key_passphrase;
+    Ok(returned_ssh)
+}
+
+#[tauri::command]
+pub async fn delete_ssh_connection<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+) -> Result<(), String> {
+    let path = get_ssh_config_path(&app)?;
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut ssh_connections: Vec<SshConnection> =
+        serde_json::from_str(&content).unwrap_or_default();
+
+    ssh_connections.retain(|s| s.id != id);
+
+    // Remove credentials from keychain
+    keychain_utils::delete_ssh_password(&id).ok();
+    keychain_utils::delete_ssh_key_passphrase(&id).ok();
+
+    let json = serde_json::to_string_pretty(&ssh_connections).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn test_ssh_connection(ssh: SshTestParams) -> Result<String, String> {
+    use crate::ssh_tunnel;
+
+    ssh_tunnel::test_ssh_connection(
+        &ssh.host,
+        ssh.port,
+        &ssh.user,
+        ssh.password.as_deref(),
+        ssh.key_file.as_deref(),
+        ssh.key_passphrase.as_deref(),
+    )
+}
+
+#[tauri::command]
+pub async fn test_connection<R: Runtime>(
+    app: AppHandle<R>,
+    params: ConnectionParams,
+) -> Result<String, String> {
+    let expanded_params = expand_ssh_connection_params(&app, &params).await?;
+    let resolved_params = resolve_connection_params(&expanded_params)?;
     println!(
         "[Test Connection] Resolved Params: Host={:?}, Port={:?}",
         resolved_params.host, resolved_params.port
@@ -447,7 +787,8 @@ pub async fn get_tables<R: Runtime>(
     connection_id: String,
 ) -> Result<Vec<TableInfo>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
     match saved_conn.params.driver.as_str() {
         "mysql" => mysql::get_tables(&params).await,
         "postgres" => postgres::get_tables(&params).await,
@@ -463,7 +804,8 @@ pub async fn get_columns<R: Runtime>(
     table_name: String,
 ) -> Result<Vec<TableColumn>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
     match saved_conn.params.driver.as_str() {
         "mysql" => mysql::get_columns(&params, &table_name).await,
         "postgres" => postgres::get_columns(&params, &table_name).await,
@@ -479,7 +821,8 @@ pub async fn get_foreign_keys<R: Runtime>(
     table_name: String,
 ) -> Result<Vec<ForeignKey>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
     match saved_conn.params.driver.as_str() {
         "mysql" => mysql::get_foreign_keys(&params, &table_name).await,
         "postgres" => postgres::get_foreign_keys(&params, &table_name).await,
@@ -495,7 +838,8 @@ pub async fn get_indexes<R: Runtime>(
     table_name: String,
 ) -> Result<Vec<Index>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
     match saved_conn.params.driver.as_str() {
         "mysql" => mysql::get_indexes(&params, &table_name).await,
         "postgres" => postgres::get_indexes(&params, &table_name).await,
@@ -513,7 +857,8 @@ pub async fn delete_record<R: Runtime>(
     pk_val: serde_json::Value,
 ) -> Result<u64, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
     match saved_conn.params.driver.as_str() {
         "mysql" => mysql::delete_record(&params, &table, &pk_col, pk_val).await,
         "postgres" => postgres::delete_record(&params, &table, &pk_col, pk_val).await,
@@ -533,7 +878,8 @@ pub async fn update_record<R: Runtime>(
     new_val: serde_json::Value,
 ) -> Result<u64, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
     match saved_conn.params.driver.as_str() {
         "mysql" => mysql::update_record(&params, &table, &pk_col, pk_val, &col_name, new_val).await,
         "postgres" => {
@@ -554,7 +900,8 @@ pub async fn insert_record<R: Runtime>(
     data: std::collections::HashMap<String, serde_json::Value>,
 ) -> Result<u64, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
     match saved_conn.params.driver.as_str() {
         "mysql" => mysql::insert_record(&params, &table, data).await,
         "postgres" => postgres::insert_record(&params, &table, data).await,
@@ -590,7 +937,8 @@ pub async fn execute_query<R: Runtime>(
     let sanitized_query = query.trim().trim_end_matches(';').to_string();
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
-    let params = resolve_connection_params(&saved_conn.params)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
 
     // 2. Spawn Cancellable Task
     let task = tokio::spawn(async move {

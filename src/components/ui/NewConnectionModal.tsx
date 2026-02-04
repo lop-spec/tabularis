@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Check, AlertCircle, Loader2, Database } from "lucide-react";
+import { X, Check, AlertCircle, Loader2, Database, Settings } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import clsx from "clsx";
+import { SshConnectionsModal } from "./SshConnectionsModal";
+import { loadSshConnections, type SshConnection } from "../../utils/ssh";
 
 type Driver = "postgres" | "mysql" | "sqlite";
 
@@ -15,11 +17,14 @@ interface ConnectionParams {
   database: string;
   // SSH
   ssh_enabled?: boolean;
+  ssh_connection_id?: string;
+  // Legacy SSH fields (for backward compatibility)
   ssh_host?: string;
   ssh_port?: number;
   ssh_user?: string;
   ssh_password?: string;
   ssh_key_file?: string;
+  ssh_key_passphrase?: string;
   save_in_keychain?: boolean;
 }
 
@@ -99,16 +104,29 @@ export const NewConnectionModal = ({
     "idle" | "testing" | "saving" | "success" | "error"
   >("idle");
   const [message, setMessage] = useState("");
+  const [sshConnections, setSshConnections] = useState<SshConnection[]>([]);
+  const [isSshModalOpen, setIsSshModalOpen] = useState(false);
+  const [sshMode, setSshMode] = useState<"existing" | "inline">("existing");
+
+  // Load SSH connections
+  const loadSshConnectionsList = async () => {
+    const result = await loadSshConnections();
+    setSshConnections(result);
+  };
 
   // Populate form on open if editing
   useEffect(() => {
     if (!isOpen) return;
 
-    const initializeForm = () => {
+    const initializeForm = async () => {
       if (initialConnection) {
         setName(initialConnection.name);
         setDriver(initialConnection.params.driver);
         setFormData({ ...initialConnection.params });
+        // Set SSH mode based on whether using connection ID or inline config
+        setSshMode(
+          initialConnection.params.ssh_connection_id ? "existing" : "inline"
+        );
       } else {
         // Reset to defaults
         setName("");
@@ -121,12 +139,14 @@ export const NewConnectionModal = ({
           ssh_enabled: false,
           ssh_port: 22,
         });
+        setSshMode("existing");
       }
       setStatus("idle");
       setMessage("");
+      await loadSshConnectionsList();
     };
 
-    initializeForm();
+    void initializeForm();
   }, [isOpen, initialConnection]);
 
   if (!isOpen) return null;
@@ -367,53 +387,146 @@ export const NewConnectionModal = ({
 
               {formData.ssh_enabled && (
                 <div className="space-y-4 pl-3 border-l-2 border-default ml-1">
-                  <div className="grid grid-cols-3 gap-4">
-                    <ConnectionInput
-                      className="col-span-2"
-                      label={t("newConnection.sshHost")}
-                      value={formData.ssh_host}
-                      onChange={(val) => updateField("ssh_host", val)}
-                      placeholder="ssh.example.com"
-                    />
-                    <ConnectionInput
-                      label={t("newConnection.sshPort")}
-                      value={formData.ssh_port}
-                      onChange={(val) => updateField("ssh_port", Number(val))}
-                      type="number"
-                      placeholder="22"
-                    />
+                  {/* SSH Mode Selection */}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSshMode("existing");
+                        // Clear inline fields when switching to existing
+                        updateField("ssh_host", undefined);
+                        updateField("ssh_user", undefined);
+                        updateField("ssh_password", undefined);
+                        updateField("ssh_key_file", undefined);
+                        updateField("ssh_key_passphrase", undefined);
+                      }}
+                      className={clsx(
+                        "flex-1 px-3 py-2 rounded border text-sm font-medium transition-colors",
+                        sshMode === "existing"
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-elevated border-strong text-secondary hover:border-strong"
+                      )}
+                    >
+                      {t("newConnection.useSshConnection")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSshMode("inline");
+                        // Clear connection ID when switching to inline
+                        updateField("ssh_connection_id", undefined);
+                      }}
+                      className={clsx(
+                        "flex-1 px-3 py-2 rounded border text-sm font-medium transition-colors",
+                        sshMode === "inline"
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-elevated border-strong text-secondary hover:border-strong"
+                      )}
+                    >
+                      {t("newConnection.createInlineSsh")}
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <ConnectionInput
-                      label={t("newConnection.sshUser")}
-                      value={formData.ssh_user}
-                      onChange={(val) => updateField("ssh_user", val)}
-                      placeholder="Username"
-                    />
-                    <ConnectionInput
-                      label={t("newConnection.sshPassword")}
-                      value={formData.ssh_password}
-                      onChange={(val) => updateField("ssh_password", val)}
-                      type="password"
-                      placeholder={t("newConnection.sshPasswordPlaceholder")}
-                      error={
-                        formData.save_in_keychain && !formData.ssh_password ? (
-                          <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
-                            <AlertCircle size={10} />
-                            {t("newConnection.sshPasswordMissing")}
-                          </p>
-                        ) : null
-                      }
-                    />
-                  </div>
+                  {/* Existing SSH Connection */}
+                  {sshMode === "existing" && (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className={LabelClass}>
+                          {t("newConnection.selectSshConnection")}
+                        </label>
+                        <select
+                          value={formData.ssh_connection_id || ""}
+                          onChange={(e) =>
+                            updateField("ssh_connection_id", e.target.value)
+                          }
+                          className={clsx(
+                            InputClass,
+                            "cursor-pointer appearance-auto"
+                          )}
+                        >
+                          <option value="">
+                            {sshConnections.length === 0
+                              ? t("newConnection.noSshConnections")
+                              : "-- " + t("newConnection.selectSshConnection") + " --"}
+                          </option>
+                          {sshConnections.map((conn) => (
+                            <option key={conn.id} value={conn.id}>
+                              {conn.name} ({conn.user}@{conn.host}:{conn.port})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsSshModalOpen(true)}
+                        className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1.5 font-medium"
+                      >
+                        <Settings size={14} />
+                        {t("newConnection.manageSshConnections")}
+                      </button>
+                    </div>
+                  )}
 
-                  <ConnectionInput
-                    label={t("newConnection.sshKeyFile")}
-                    value={formData.ssh_key_file}
-                    onChange={(val) => updateField("ssh_key_file", val)}
-                    placeholder={t("newConnection.sshKeyFilePlaceholder")}
-                  />
+                  {/* Inline SSH Configuration */}
+                  {sshMode === "inline" && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <ConnectionInput
+                          className="col-span-2"
+                          label={t("newConnection.sshHost")}
+                          value={formData.ssh_host}
+                          onChange={(val) => updateField("ssh_host", val)}
+                          placeholder="ssh.example.com"
+                        />
+                        <ConnectionInput
+                          label={t("newConnection.sshPort")}
+                          value={formData.ssh_port}
+                          onChange={(val) => updateField("ssh_port", Number(val))}
+                          type="number"
+                          placeholder="22"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <ConnectionInput
+                          label={t("newConnection.sshUser")}
+                          value={formData.ssh_user}
+                          onChange={(val) => updateField("ssh_user", val)}
+                          placeholder="Username"
+                        />
+                        <ConnectionInput
+                          label={t("newConnection.sshPassword")}
+                          value={formData.ssh_password}
+                          onChange={(val) => updateField("ssh_password", val)}
+                          type="password"
+                          placeholder={t("newConnection.sshPasswordPlaceholder")}
+                          error={
+                            formData.save_in_keychain && !formData.ssh_password ? (
+                              <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                                <AlertCircle size={10} />
+                                {t("newConnection.sshPasswordMissing")}
+                              </p>
+                            ) : null
+                          }
+                        />
+                      </div>
+
+                      <ConnectionInput
+                        label={t("newConnection.sshKeyFile")}
+                        value={formData.ssh_key_file}
+                        onChange={(val) => updateField("ssh_key_file", val)}
+                        placeholder={t("newConnection.sshKeyFilePlaceholder")}
+                      />
+
+                      <ConnectionInput
+                        label={t("newConnection.sshKeyPassphrase")}
+                        value={formData.ssh_key_passphrase}
+                        onChange={(val) => updateField("ssh_key_passphrase", val)}
+                        type="password"
+                        placeholder={t("newConnection.sshKeyPassphrasePlaceholder")}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -481,6 +594,15 @@ export const NewConnectionModal = ({
           </button>
         </div>
       </div>
+
+      {/* SSH Connections Management Modal */}
+      <SshConnectionsModal
+        isOpen={isSshModalOpen}
+        onClose={async () => {
+          setIsSshModalOpen(false);
+          await loadSshConnectionsList();
+        }}
+      />
     </div>
   );
 };

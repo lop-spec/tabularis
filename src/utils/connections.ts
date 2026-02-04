@@ -5,6 +5,18 @@
 
 export type DatabaseDriver = "postgres" | "mysql" | "sqlite";
 
+export interface SshConnection {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  user: string;
+  password?: string;
+  key_file?: string;
+  key_passphrase?: string;
+  save_in_keychain?: boolean;
+}
+
 export interface ConnectionParams {
   driver: DatabaseDriver;
   host?: string;
@@ -13,11 +25,14 @@ export interface ConnectionParams {
   username?: string;
   password?: string;
   ssh_enabled?: boolean;
+  ssh_connection_id?: string;
+  // Legacy fields (for backward compatibility)
   ssh_host?: string;
   ssh_port?: number;
   ssh_user?: string;
   ssh_password?: string;
   ssh_key_file?: string;
+  ssh_key_passphrase?: string;
 }
 
 /**
