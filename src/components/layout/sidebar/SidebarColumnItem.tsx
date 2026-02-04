@@ -1,0 +1,120 @@
+import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
+import { ask, message } from "@tauri-apps/plugin-dialog";
+import { Key, Columns, Edit, Copy, Trash2 } from "lucide-react";
+import clsx from "clsx";
+import { ContextMenu } from "../../ui/ContextMenu";
+import type { TableColumn } from "../../../types/schema";
+
+interface SidebarColumnItemProps {
+  column: TableColumn;
+  tableName: string;
+  connectionId: string;
+  driver: string;
+  onRefresh: () => void;
+  onEdit: (column: TableColumn) => void;
+}
+
+export const SidebarColumnItem = ({
+  column,
+  tableName,
+  connectionId,
+  driver,
+  onRefresh,
+  onEdit,
+}: SidebarColumnItemProps) => {
+  const { t } = useTranslation();
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleDelete = async () => {
+    const confirmed = await ask(
+      t("sidebar.deleteColumnConfirm", {
+        column: column.name,
+        table: tableName,
+      }),
+      { title: t("sidebar.deleteColumn"), kind: "warning" },
+    );
+
+    if (confirmed) {
+      try {
+        const q = driver === "mysql" || driver === "mariadb" ? "`" : '"';
+        const query = `ALTER TABLE ${q}${tableName}${q} DROP COLUMN ${q}${column.name}${q}`;
+
+        await invoke("execute_query", {
+          connectionId,
+          query,
+        });
+
+        onRefresh();
+      } catch (e) {
+        console.error(e);
+        await message(t("sidebar.failDeleteColumn") + String(e), {
+          title: t("common.error"),
+          kind: "error",
+        });
+      }
+    }
+  };
+
+  return (
+    <>
+      <div
+        className="flex items-center gap-2 px-3 py-1 text-xs text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group font-mono"
+        onContextMenu={handleContextMenu}
+        onDoubleClick={() => onEdit(column)}
+      >
+        {column.is_pk ? (
+          <Key size={12} className="text-yellow-500 shrink-0" />
+        ) : (
+          <Columns size={12} className="text-muted shrink-0" />
+        )}
+        <span
+          className={clsx(
+            "truncate",
+            column.is_pk && "font-bold text-yellow-500/80",
+          )}
+        >
+          {column.name}
+        </span>
+        <span className="text-muted text-[10px] ml-auto">
+          {column.data_type}
+        </span>
+      </div>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          items={[
+            {
+              label: t("sidebar.modifyColumn"),
+              icon: Edit,
+              action: () => onEdit(column),
+            },
+            {
+              label: t("sidebar.copyName"),
+              icon: Copy,
+              action: () => navigator.clipboard.writeText(column.name),
+            },
+            {
+              label: t("sidebar.deleteColumn"),
+              icon: Trash2,
+              danger: true,
+              action: handleDelete,
+            },
+          ]}
+        />
+      )}
+    </>
+  );
+};
