@@ -22,6 +22,7 @@ import {
   Loader2,
   Download,
   Upload,
+  ChevronDown,
 } from "lucide-react";
 import { ask, message, open } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../../hooks/useDatabase";
@@ -109,6 +110,7 @@ export const Sidebar = () => {
     isOpen: boolean;
     filePath: string;
   }>({ isOpen: false, filePath: "" });
+  const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
 
   // Resize Hook
   const { sidebarWidth, startResize } = useSidebarResize();
@@ -243,37 +245,103 @@ export const Sidebar = () => {
                 <span>{t("sidebar.explorer")}</span>
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={handleImportDatabase}
-                  className="text-muted hover:text-green-400 transition-colors p-1 hover:bg-surface-secondary rounded"
-                  title={t("dump.importDatabase")}
-                >
-                  <Upload size={16} />
-                </button>
-                <button
-                  onClick={() => setIsDumpModalOpen(true)}
-                  className="text-muted hover:text-blue-400 transition-colors p-1 hover:bg-surface-secondary rounded"
-                  title={t("dump.dumpDatabase")}
-                >
-                  <Download size={16} />
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      await invoke("open_er_diagram_window", {
-                        connectionId: activeConnectionId || "",
-                        connectionName: activeConnectionName || "Unknown",
-                        databaseName: activeDatabaseName || "Unknown",
-                      });
-                    } catch (e) {
-                      console.error("Failed to open ER Diagram window:", e);
-                    }
-                  }}
-                  className="text-muted hover:text-orange-400 transition-colors p-1 hover:bg-surface-secondary rounded"
-                  title="View Schema Diagram"
-                >
-                  <Network size={16} className="rotate-90" />
-                </button>
+                {/* Show dropdown button when sidebar is narrow */}
+                {sidebarWidth < 200 ? (
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsActionsDropdownOpen(!isActionsDropdownOpen)}
+                      className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded"
+                      title={t("sidebar.actions")}
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                    {isActionsDropdownOpen && (
+                      <>
+                        {/* Backdrop to close dropdown */}
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setIsActionsDropdownOpen(false)}
+                        />
+                        {/* Dropdown menu */}
+                        <div className="absolute left-0 top-8 bg-elevated border border-default rounded-lg shadow-lg z-50 py-1 min-w-[200px]">
+                          <button
+                            onClick={() => {
+                              handleImportDatabase();
+                              setIsActionsDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-secondary hover:bg-surface-secondary hover:text-primary transition-colors text-left whitespace-nowrap"
+                          >
+                            <Upload size={16} className="text-green-400 shrink-0" />
+                            <span>{t("dump.importDatabase")}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsDumpModalOpen(true);
+                              setIsActionsDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-secondary hover:bg-surface-secondary hover:text-primary transition-colors text-left whitespace-nowrap"
+                          >
+                            <Download size={16} className="text-blue-400 shrink-0" />
+                            <span>{t("dump.dumpDatabase")}</span>
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await invoke("open_er_diagram_window", {
+                                  connectionId: activeConnectionId || "",
+                                  connectionName: activeConnectionName || "Unknown",
+                                  databaseName: activeDatabaseName || "Unknown",
+                                });
+                              } catch (e) {
+                                console.error("Failed to open ER Diagram window:", e);
+                              }
+                              setIsActionsDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-secondary hover:bg-surface-secondary hover:text-primary transition-colors text-left whitespace-nowrap"
+                          >
+                            <Network size={16} className="rotate-90 text-orange-400 shrink-0" />
+                            <span>View Schema Diagram</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Show inline icons when sidebar is wide enough */}
+                    <button
+                      onClick={handleImportDatabase}
+                      className="text-muted hover:text-green-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                      title={t("dump.importDatabase")}
+                    >
+                      <Upload size={16} />
+                    </button>
+                    <button
+                      onClick={() => setIsDumpModalOpen(true)}
+                      className="text-muted hover:text-blue-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                      title={t("dump.dumpDatabase")}
+                    >
+                      <Download size={16} />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await invoke("open_er_diagram_window", {
+                            connectionId: activeConnectionId || "",
+                            connectionName: activeConnectionName || "Unknown",
+                            databaseName: activeDatabaseName || "Unknown",
+                          });
+                        } catch (e) {
+                          console.error("Failed to open ER Diagram window:", e);
+                        }
+                      }}
+                      className="text-muted hover:text-orange-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                      title="View Schema Diagram"
+                    >
+                      <Network size={16} className="rotate-90" />
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => setIsExplorerCollapsed(true)}
                   className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded"
