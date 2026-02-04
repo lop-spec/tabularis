@@ -80,13 +80,13 @@ export const SidebarColumnItem = ({
         )}
         <span
           className={clsx(
-            "truncate",
+            "truncate flex-1 min-w-0",
             column.is_pk && "font-bold text-yellow-500/80",
           )}
         >
           {column.name}
         </span>
-        <span className="text-muted text-[10px] ml-auto">
+        <span className="text-muted text-[10px] ml-auto shrink-0">
           {column.data_type}
         </span>
       </div>

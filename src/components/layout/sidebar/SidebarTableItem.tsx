@@ -251,7 +251,7 @@ export const SidebarTableItem = ({
                               k.is_primary ? "text-yellow-500" : "text-secondary"
                             }
                           />
-                          <span className="truncate">{k.name}</span>
+                          <span className="truncate flex-1 min-w-0">{k.name}</span>
                         </div>
                       ))}
                     </div>
@@ -286,8 +286,8 @@ export const SidebarTableItem = ({
                         showContextMenu(e, "foreign_key", fk.name)
                       }
                     >
-                      <LinkIcon size={12} className="text-purple-400" />
-                      <span className="truncate">{fk.name}</span>
+                      <LinkIcon size={12} className="text-purple-400 shrink-0" />
+                      <span className="truncate flex-1 min-w-0">{fk.name}</span>
                     </div>
                   ))}
                 </div>

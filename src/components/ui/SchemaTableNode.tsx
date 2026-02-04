@@ -32,7 +32,7 @@ export const SchemaTableNodeComponent = memo(({ data }: NodeProps<SchemaTableNod
               col.isPk ? "bg-yellow-500/5 text-yellow-100" : "text-secondary"
             )}
           >
-            <div className="flex items-center gap-2 overflow-hidden">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               {col.isPk ? (
                 <Key size={10} className="text-yellow-500 shrink-0" />
               ) : col.isFk ? (
@@ -40,7 +40,7 @@ export const SchemaTableNodeComponent = memo(({ data }: NodeProps<SchemaTableNod
               ) : (
                 <Columns size={10} className="text-surface-tertiary shrink-0" />
               )}
-              <span className={clsx("truncate font-mono", col.isPk && "font-bold")}>
+              <span className={clsx("truncate font-mono flex-1 min-w-0", col.isPk && "font-bold")}>
                 {col.name}
               </span>
             </div>
