@@ -394,6 +394,21 @@ fn remove_order_by(query: &str) -> String {
     }
 }
 
+pub async fn get_table_ddl(
+    params: &ConnectionParams,
+    table_name: &str,
+) -> Result<String, String> {
+    let pool = get_mysql_pool(params).await?;
+    let query = format!("SHOW CREATE TABLE `{}`", table_name);
+    let row = sqlx::query(&query)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let create_sql: String = row.try_get(1).unwrap_or_default();
+    Ok(format!("{};", create_sql))
+}
+
 pub async fn execute_query(
     params: &ConnectionParams,
     query: &str,

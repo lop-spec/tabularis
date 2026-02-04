@@ -375,5 +375,31 @@
     "exitFullscreen": "Esci da Schermo Intero",
     "noConnection": "Nessun ID Connessione",
     "noConnectionDesc": "Impossibile visualizzare il diagramma senza un ID connessione."
+  },
+  "dump": {
+    "title": "Esporta Database",
+    "dumpDatabase": "Esporta Database",
+    "importDatabase": "Esegui File SQL...",
+    "importTitle": "Importazione Database",
+    "includeStructure": "Struttura (DDL)",
+    "includeData": "Dati (INSERT)",
+    "selectTables": "Seleziona Tabelle",
+    "selectAll": "Seleziona Tutto",
+    "deselectAll": "Deseleziona Tutto",
+    "export": "Esporta",
+    "exporting": "Esportazione...",
+    "success": "Database esportato con successo",
+    "failure": "Esportazione fallita: ",
+    "errorNoOption": "Seleziona almeno Struttura o Dati",
+    "errorNoTables": "Seleziona almeno una tabella",
+    "importStarted": "Importazione avviata...",
+    "importSuccess": "File SQL eseguito con successo",
+    "importFailure": "Importazione fallita: ",
+    "importCancelled": "Importazione annullata",
+    "importFailed": "Importazione fallita",
+    "importingFrom": "Importazione da",
+    "statementsExecuted": "{{count}} / {{total}} istruzioni",
+    "confirmImport": "Sei sicuro di voler importare \"{{file}}\"?\nQuesto potrebbe sovrascrivere i dati esistenti.",
+    "elapsedTime": "Tempo trascorso"
   }
 }

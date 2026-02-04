@@ -20,8 +20,10 @@ import {
   FileText,
   Copy,
   Loader2,
+  Download,
+  Upload,
 } from "lucide-react";
-import { ask, message } from "@tauri-apps/plugin-dialog";
+import { ask, message, open } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useTheme } from "../../hooks/useTheme";
 import { useSavedQueries } from "../../hooks/useSavedQueries";
@@ -35,6 +37,8 @@ import { CreateIndexModal } from "../ui/CreateIndexModal";
 import { CreateForeignKeyModal } from "../ui/CreateForeignKeyModal";
 import { GenerateSQLModal } from "../ui/GenerateSQLModal";
 import { McpModal } from "../modals/McpModal";
+import { DumpDatabaseModal } from "../modals/DumpDatabaseModal";
+import { ImportDatabaseModal } from "../modals/ImportDatabaseModal";
 
 // Sub-components
 import { NavItem } from "./sidebar/NavItem";
@@ -100,6 +104,11 @@ export const Sidebar = () => {
   }>({ isOpen: false });
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
+  const [isDumpModalOpen, setIsDumpModalOpen] = useState(false);
+  const [importModal, setImportModal] = useState<{
+    isOpen: boolean;
+    filePath: string;
+  }>({ isOpen: false, filePath: "" });
 
   // Resize Hook
   const { sidebarWidth, startResize } = useSidebarResize();
@@ -136,6 +145,27 @@ export const Sidebar = () => {
   ) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, type, id, label, data });
+  };
+
+  const handleImportDatabase = async () => {
+    const file = await open({
+      filters: [
+        { name: "SQL / Zip File", extensions: ["sql", "zip"] },
+      ],
+    });
+    if (file && typeof file === "string") {
+      const confirmed = await ask(
+        t("dump.confirmImport", { file: file.split(/[\\/]/).pop() }),
+        {
+          title: t("dump.importDatabase"),
+          kind: "warning",
+        },
+      );
+
+      if (!confirmed) return;
+
+      setImportModal({ isOpen: true, filePath: file });
+    }
   };
 
   return (
@@ -213,6 +243,20 @@ export const Sidebar = () => {
                 <span>{t("sidebar.explorer")}</span>
               </div>
               <div className="flex items-center gap-1">
+                <button
+                  onClick={handleImportDatabase}
+                  className="text-muted hover:text-green-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                  title={t("dump.importDatabase")}
+                >
+                  <Upload size={16} />
+                </button>
+                <button
+                  onClick={() => setIsDumpModalOpen(true)}
+                  className="text-muted hover:text-blue-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                  title={t("dump.dumpDatabase")}
+                >
+                  <Download size={16} />
+                </button>
                 <button
                   onClick={async () => {
                     try {
@@ -798,6 +842,29 @@ export const Sidebar = () => {
           isOpen={true}
           tableName={generateSQLModal}
           onClose={() => setGenerateSQLModal(null)}
+        />
+      )}
+
+      {isDumpModalOpen && activeConnectionId && (
+        <DumpDatabaseModal
+          isOpen={isDumpModalOpen}
+          onClose={() => setIsDumpModalOpen(false)}
+          connectionId={activeConnectionId}
+          databaseName={activeDatabaseName || "Database"}
+          tables={tables.map((t) => t.name)}
+        />
+      )}
+
+      {importModal.isOpen && activeConnectionId && (
+        <ImportDatabaseModal
+          isOpen={importModal.isOpen}
+          onClose={() => setImportModal({ isOpen: false, filePath: "" })}
+          connectionId={activeConnectionId}
+          databaseName={activeDatabaseName || "Database"}
+          filePath={importModal.filePath}
+          onSuccess={() => {
+            if (refreshTables) refreshTables();
+          }}
         />
       )}
     </div>

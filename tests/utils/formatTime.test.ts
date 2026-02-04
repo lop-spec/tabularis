@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDuration, parseDuration } from '../../src/utils/formatTime';
+import { formatDuration, parseDuration, formatElapsedTime } from '../../src/utils/formatTime';
 
 describe('formatTime', () => {
   describe('formatDuration', () => {
@@ -102,6 +102,53 @@ describe('formatTime', () => {
         // Allow small rounding differences (within 10ms)
         expect(Math.abs(ms - parsed)).toBeLessThanOrEqual(10);
       });
+    });
+  });
+
+  describe('formatElapsedTime', () => {
+    it('should format zero seconds', () => {
+      expect(formatElapsedTime(0)).toBe('00:00');
+    });
+
+    it('should format seconds less than 1 minute', () => {
+      expect(formatElapsedTime(1)).toBe('00:01');
+      expect(formatElapsedTime(5)).toBe('00:05');
+      expect(formatElapsedTime(30)).toBe('00:30');
+      expect(formatElapsedTime(59)).toBe('00:59');
+    });
+
+    it('should format exactly 1 minute', () => {
+      expect(formatElapsedTime(60)).toBe('01:00');
+    });
+
+    it('should format minutes and seconds', () => {
+      expect(formatElapsedTime(90)).toBe('01:30');
+      expect(formatElapsedTime(150)).toBe('02:30');
+      expect(formatElapsedTime(599)).toBe('09:59');
+    });
+
+    it('should format large durations correctly', () => {
+      expect(formatElapsedTime(600)).toBe('10:00');
+      expect(formatElapsedTime(942)).toBe('15:42');
+      expect(formatElapsedTime(3599)).toBe('59:59');
+      expect(formatElapsedTime(3600)).toBe('60:00');
+    });
+
+    it('should handle very large durations', () => {
+      expect(formatElapsedTime(7200)).toBe('120:00'); // 2 hours
+      expect(formatElapsedTime(36000)).toBe('600:00'); // 10 hours
+    });
+
+    it('should pad single digits with zeros', () => {
+      expect(formatElapsedTime(61)).toBe('01:01');
+      expect(formatElapsedTime(125)).toBe('02:05');
+      expect(formatElapsedTime(307)).toBe('05:07');
+    });
+
+    it('should handle boundary values', () => {
+      expect(formatElapsedTime(59)).toBe('00:59'); // Just before 1 minute
+      expect(formatElapsedTime(60)).toBe('01:00'); // Exactly 1 minute
+      expect(formatElapsedTime(61)).toBe('01:01'); // Just after 1 minute
     });
   });
 });

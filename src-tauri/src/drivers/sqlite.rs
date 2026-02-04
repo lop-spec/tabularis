@@ -366,6 +366,20 @@ fn remove_order_by(query: &str) -> String {
     }
 }
 
+pub async fn get_table_ddl(
+    params: &ConnectionParams,
+    table_name: &str,
+) -> Result<String, String> {
+    let pool = get_sqlite_pool(params).await?;
+    let query = "SELECT sql FROM sqlite_master WHERE type='table' AND name = ?";
+    let row: (String,) = sqlx::query_as(query)
+        .bind(table_name)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(format!("{};", row.0))
+}
+
 pub async fn execute_query(
     params: &ConnectionParams,
     query: &str,

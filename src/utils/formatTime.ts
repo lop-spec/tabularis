@@ -49,3 +49,14 @@ export function parseDuration(formatted: string): number {
   
   return 0;
 }
+
+/**
+ * Format elapsed seconds into MM:SS format
+ * @param seconds - Duration in seconds
+ * @returns Formatted string (e.g., "00:05", "02:30", "15:42")
+ */
+export function formatElapsedTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+}

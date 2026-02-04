@@ -375,5 +375,31 @@
     "exitFullscreen": "Exit Fullscreen",
     "noConnection": "No Connection ID",
     "noConnectionDesc": "Cannot display diagram without a connection ID."
+  },
+  "dump": {
+    "title": "Dump Database",
+    "dumpDatabase": "Dump Database",
+    "importDatabase": "Run SQL File...",
+    "importTitle": "Import Database",
+    "includeStructure": "Structure (DDL)",
+    "includeData": "Data (INSERT)",
+    "selectTables": "Select Tables",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "export": "Export",
+    "exporting": "Exporting...",
+    "success": "Database exported successfully",
+    "failure": "Export failed: ",
+    "errorNoOption": "Please select at least Structure or Data",
+    "errorNoTables": "Please select at least one table",
+    "importStarted": "Import started...",
+    "importSuccess": "SQL file executed successfully",
+    "importFailure": "Import failed: ",
+    "importCancelled": "Import cancelled",
+    "importFailed": "Import failed",
+    "importingFrom": "Importing from",
+    "statementsExecuted": "{{count}} / {{total}} statements",
+    "confirmImport": "Are you sure you want to import \"{{file}}\"?\nThis may overwrite existing data.",
+    "elapsedTime": "Elapsed time"
   }
 }

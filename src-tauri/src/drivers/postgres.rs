@@ -437,6 +437,42 @@ fn remove_order_by(query: &str) -> String {
     }
 }
 
+pub async fn get_table_ddl(
+    params: &ConnectionParams,
+    table_name: &str,
+) -> Result<String, String> {
+    let cols = get_columns(params, table_name).await?;
+    if cols.is_empty() {
+        return Err(format!("Table {} not found or empty", table_name));
+    }
+
+    let mut defs = Vec::new();
+    let mut pks = Vec::new();
+
+    for col in cols {
+        let mut def = format!("\"{}\" {}", col.name, col.data_type);
+        
+        if !col.is_nullable {
+            def.push_str(" NOT NULL");
+        }
+        
+        if col.is_pk {
+            pks.push(format!("\"{}\"", col.name));
+        }
+        defs.push(def);
+    }
+
+    if !pks.is_empty() {
+        defs.push(format!("PRIMARY KEY ({})", pks.join(", ")));
+    }
+
+    Ok(format!(
+        "CREATE TABLE public.\"{}\" (\n  {}\n);",
+        table_name,
+        defs.join(",\n  ")
+    ))
+}
+
 pub async fn execute_query(
     params: &ConnectionParams,
     query: &str,
