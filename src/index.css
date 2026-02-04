@@ -385,16 +385,11 @@ select option:active {
 /* Prevent black flash on tab switching */
 .monaco-editor,
 .monaco-editor-background,
-.monaco-editor .margin,
-.monaco-editor .view-lines {
+.monaco-editor .margin {
   background-color: var(--bg-base) !important;
   transition: none !important;
 }
 
-/* Add padding between line numbers and code content */
-.monaco-editor .view-lines {
-  padding-left: 12px;
-}
 
 /* Selection styles */
 ::selection {
@@ -405,4 +400,13 @@ select option:active {
 ::-moz-selection {
   background-color: var(--surface-active);
   color: var(--text-primary);
+}
+
+/* Monaco selection visibility */
+.monaco-editor .selected-text {
+  background-color: var(--surface-active) !important;
+}
+
+.monaco-editor .view-overlays .selected-text {
+  background-color: var(--surface-active) !important;
 }
