@@ -974,6 +974,12 @@ export const Editor = () => {
               key={tab.id}
               onClick={() => setActiveTabId(tab.id)}
               onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
+              onAuxClick={(e) => {
+                if (e.button === 1) {
+                  e.preventDefault();
+                  closeTab(tab.id);
+                }
+              }}
               className={clsx(
                 "flex items-center gap-2 px-3 h-full border-r border-default cursor-pointer min-w-[140px] max-w-[220px] text-xs transition-all group relative select-none",
                 activeTabId === tab.id
