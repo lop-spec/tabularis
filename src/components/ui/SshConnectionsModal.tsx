@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Plus, Edit2, Trash2, Check, Loader2 } from "lucide-react";
 import {
@@ -69,18 +69,34 @@ export function SshConnectionsModal({
   >("idle");
   const [testMessage, setTestMessage] = useState("");
 
-  useEffect(() => {
-    if (isOpen) {
-      loadConnections();
-    }
-  }, [isOpen]);
-
-  const loadConnections = async () => {
+  const loadConnections = useCallback(async () => {
     const result = await loadSshConnections();
     setConnections(result);
-  };
+  }, []);
 
-  const updateField = (field: keyof SshConnection, value: any) => {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+
+    const fetchConnections = async () => {
+      const result = await loadSshConnections();
+      if (!cancelled) {
+        setConnections(result);
+      }
+    };
+
+    fetchConnections();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  const updateField = (
+    field: keyof SshConnection,
+    value: SshConnection[keyof SshConnection],
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
