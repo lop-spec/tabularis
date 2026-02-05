@@ -44,6 +44,8 @@ pub struct SshTestParams {
     pub key_file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_passphrase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -78,6 +80,13 @@ pub struct SavedConnection {
     pub id: String,
     pub name: String,
     pub params: ConnectionParams,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TestConnectionRequest {
+    pub params: ConnectionParams,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

@@ -31,15 +31,25 @@ export async function loadSshConnections(): Promise<SshConnection[]> {
 }
 
 /**
- * Normalize SSH params: treat empty strings as undefined
+ * Normalize SSH params: normalize empty strings to undefined
  */
 function normalizeSshParams(ssh: Partial<SshConnection>): Partial<SshConnection> {
-  return {
-    ...ssh,
-    password: ssh.password?.trim() || undefined,
-    key_file: ssh.key_file?.trim() || undefined,
-    key_passphrase: ssh.key_passphrase?.trim() || undefined,
-  };
+  const result: Partial<SshConnection> = { ...ssh };
+
+  // Normalize empty strings to undefined for all optional fields
+  if (ssh.key_file !== undefined && !ssh.key_file?.trim()) {
+    result.key_file = undefined;
+  }
+
+  if (ssh.password !== undefined && !ssh.password?.trim()) {
+    result.password = undefined;
+  }
+
+  if (ssh.key_passphrase !== undefined && !ssh.key_passphrase?.trim()) {
+    result.key_passphrase = undefined;
+  }
+
+  return result;
 }
 
 /**
@@ -86,7 +96,10 @@ export async function testSshConnection(
   ssh: Partial<SshConnection>
 ): Promise<string> {
   return await invoke<string>("test_ssh_connection", {
-    ssh: normalizeSshParams(ssh)
+    ssh: {
+      ...normalizeSshParams(ssh),
+      connection_id: ssh.id
+    }
   });
 }
 
@@ -106,8 +119,10 @@ export interface SshValidationResult {
 }
 
 export function validateSshConnection(
-  ssh: Partial<SshConnection>
+  ssh: Partial<SshConnection>,
+  options: { allowEmptyPassword?: boolean } = {}
 ): SshValidationResult {
+  const { allowEmptyPassword = false } = options;
   if (!ssh.name || ssh.name.trim() === "") {
     return { isValid: false, error: "Connection name is required" };
   }
@@ -129,7 +144,7 @@ export function validateSshConnection(
   }
 
   // Validate based on auth type
-  if (ssh.auth_type === "password") {
+  if (ssh.auth_type === "password" && !allowEmptyPassword) {
     if (!ssh.password || ssh.password.trim() === "") {
       return { isValid: false, error: "Password is required for password authentication" };
     }
