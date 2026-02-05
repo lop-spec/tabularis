@@ -110,8 +110,20 @@ pub fn set_ai_key(provider: String, key: String) -> Result<(), String> {
     keychain_utils::set_ai_key(&provider, &key)
 }
 
+#[tauri::command]
+pub fn delete_ai_key(provider: String) -> Result<(), String> {
+    keychain_utils::delete_ai_key(&provider)
+}
+
 pub fn get_ai_api_key(provider: &str) -> Result<String, String> {
-    // 1. Try Env Var
+    // 1. Try Keychain First (Override)
+    if let Ok(key) = keychain_utils::get_ai_key(provider) {
+        if !key.is_empty() {
+            return Ok(key);
+        }
+    }
+
+    // 2. Try Env Var
     let env_var = match provider {
         "openai" => "OPENAI_API_KEY",
         "anthropic" => "ANTHROPIC_API_KEY",
@@ -128,18 +140,70 @@ pub fn get_ai_api_key(provider: &str) -> Result<String, String> {
         }
     }
 
-    // 2. Try Keychain
-    keychain_utils::get_ai_key(provider).map_err(|_| {
-        format!(
-            "API Key for {} not found in Keychain or Environment",
-            provider
-        )
-    })
+    Err(format!(
+        "API Key for {} not found in Keychain or Environment",
+        provider
+    ))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiKeyStatus {
+    pub configured: bool,
+    pub from_env: bool,
+}
+
+pub fn get_ai_api_key_status(provider: &str) -> AiKeyStatus {
+    // 1. Check Keychain
+    let keychain_exists = keychain_utils::get_ai_key(provider).is_ok();
+
+    // 2. Check Env Var
+    let env_var = match provider {
+        "openai" => "OPENAI_API_KEY",
+        "anthropic" => "ANTHROPIC_API_KEY",
+        "openrouter" => "OPENROUTER_API_KEY",
+        "custom-openai" => "CUSTOM_OPENAI_API_KEY",
+        _ => "",
+    };
+
+    let env_exists = if !env_var.is_empty() {
+        std::env::var(env_var)
+            .map(|k| !k.is_empty())
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    // Configured if either exists
+    // from_env is true ONLY if keychain is NOT present but env IS present
+    // because keychain overrides env now
+
+    if keychain_exists {
+        AiKeyStatus {
+            configured: true,
+            from_env: false, // Even if env exists, we are using keychain
+        }
+    } else if env_exists {
+        AiKeyStatus {
+            configured: true,
+            from_env: true,
+        }
+    } else {
+        AiKeyStatus {
+            configured: false,
+            from_env: false,
+        }
+    }
 }
 
 #[tauri::command]
 pub fn check_ai_key(provider: String) -> bool {
     get_ai_api_key(&provider).is_ok()
+}
+
+#[tauri::command]
+pub fn check_ai_key_status(provider: String) -> AiKeyStatus {
+    get_ai_api_key_status(&provider)
 }
 
 const DEFAULT_SYSTEM_PROMPT: &str = "You are an expert SQL assistant. Your task is to generate a SQL query based on the user's request and the provided database schema.\nReturn ONLY the SQL query, without any markdown formatting, explanations, or code blocks.\n\nSchema:\n{{SCHEMA}}";

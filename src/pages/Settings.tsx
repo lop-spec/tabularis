@@ -12,14 +12,12 @@ import {
   Settings as SettingsIcon,
   Languages,
   Sparkles,
-  Key,
   Power,
   Palette,
   Type,
   ZoomIn,
   RefreshCw,
   AlertTriangle,
-  Globe,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../hooks/useSettings";
@@ -31,13 +29,18 @@ import { AVAILABLE_FONTS, ROADMAP } from "../utils/settings";
 import { getProviderLabel } from "../utils/settingsUI";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
 
+interface AiKeyStatus {
+  configured: boolean;
+  fromEnv: boolean;
+}
+
 export const Settings = () => {
   const { t } = useTranslation();
   const { settings, updateSetting } = useSettings();
   const [activeTab, setActiveTab] = useState<"general" | "appearance" | "localization" | "ai" | "info">(
     "general",
   );
-  const [aiKeyStatus, setAiKeyStatus] = useState<Record<string, boolean>>({});
+  const [aiKeyStatus, setAiKeyStatus] = useState<Record<string, AiKeyStatus>>({});
   const [availableModels, setAvailableModels] = useState<Record<string, string[]>>({});
   const [keyInput, setKeyInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -134,19 +137,19 @@ export const Settings = () => {
 
   const checkKeys = async () => {
     try {
-      const openai = await invoke<boolean>("check_ai_key", {
+      const openai = await invoke<AiKeyStatus>("check_ai_key_status", {
         provider: "openai",
       });
-      const anthropic = await invoke<boolean>("check_ai_key", {
+      const anthropic = await invoke<AiKeyStatus>("check_ai_key_status", {
         provider: "anthropic",
       });
-      const openrouter = await invoke<boolean>("check_ai_key", {
+      const openrouter = await invoke<AiKeyStatus>("check_ai_key_status", {
         provider: "openrouter",
       });
-      const customOpenai = await invoke<boolean>("check_ai_key", {
+      const customOpenai = await invoke<AiKeyStatus>("check_ai_key_status", {
         provider: "custom-openai",
       });
-      const ollama = true; // Ollama is always "configured" as it's local
+      const ollama = { configured: true, fromEnv: false }; // Ollama is always "configured" as it's local
       setAiKeyStatus({ openai, anthropic, openrouter, "custom-openai": customOpenai, ollama });
     } catch (e) {
       console.error("Failed to check keys", e);
@@ -586,7 +589,10 @@ export const Settings = () => {
                       {providers.map((p) => (
                         <button
                           key={p.id}
-                          onClick={() => updateSetting("aiProvider", p.id)}
+                          onClick={() => {
+                            updateSetting("aiProvider", p.id);
+                            setKeyInput("");
+                          }}
                           className={clsx(
                             "px-4 py-2 rounded-lg text-sm font-medium transition-all border flex items-center gap-2",
                             settings.aiProvider === p.id
@@ -595,7 +601,7 @@ export const Settings = () => {
                           )}
                         >
                           {p.label}
-                          {aiKeyStatus[p.id] && (
+                          {aiKeyStatus[p.id]?.configured && (
                             <CheckCircle2
                               size={14}
                               className="text-green-400"
@@ -605,6 +611,148 @@ export const Settings = () => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Active Provider Configuration */}
+                  {settings.aiProvider && (
+                    <div className="bg-base/50 border border-default rounded-lg p-6 space-y-6">
+                      <div className="flex items-center gap-2 border-b border-default pb-4">
+                        <h4 className="font-semibold text-primary">
+                          {getProviderLabel(settings.aiProvider)}
+                        </h4>
+                        {aiKeyStatus[settings.aiProvider]?.configured ? (
+                            <div className="flex items-center gap-2">
+                                <span className="text-green-400 flex items-center gap-1 text-xs bg-green-900/10 px-2 py-0.5 rounded-full border border-green-900/20">
+                                    <CheckCircle2 size={12} /> {t("settings.ai.configured")}
+                                </span>
+                                {aiKeyStatus[settings.aiProvider]?.fromEnv && (
+                                    <span className="text-blue-400 flex items-center gap-1 text-xs bg-blue-900/10 px-2 py-0.5 rounded-full border border-blue-900/20" title={t("settings.ai.fromEnvTooltip")}>
+                                        <Code2 size={12} /> {t("settings.ai.fromEnv")}
+                                    </span>
+                                )}
+                            </div>
+                        ) : settings.aiProvider !== 'ollama' && (
+                            <span className="text-muted text-xs bg-surface-secondary px-2 py-0.5 rounded-full border border-default">
+                            {t("settings.ai.notConfigured")}
+                            </span>
+                        )}
+                      </div>
+
+                      {/* API Key Input (Non-Ollama) */}
+                      {settings.aiProvider !== 'ollama' && (
+                        <div>
+                            <label className="block text-sm font-medium text-secondary mb-1">
+                                {t("settings.ai.apiKey", { provider: getProviderLabel(settings.aiProvider) })}
+                            </label>
+                            
+                            <div className="flex gap-2">
+                                <input
+                                type="password"
+                                value={keyInput}
+                                placeholder={t("settings.ai.enterKey", { provider: getProviderLabel(settings.aiProvider) })}
+                                className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500"
+                                onChange={(e) => setKeyInput(e.target.value)}
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => handleSaveKey(settings.aiProvider!)}
+                                        disabled={!keyInput.trim()}
+                                        className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-surface-secondary disabled:text-muted text-white rounded text-sm font-medium transition-colors whitespace-nowrap"
+                                    >
+                                        {t("common.save")}
+                                    </button>
+                                    
+                                    {aiKeyStatus[settings.aiProvider]?.configured && !aiKeyStatus[settings.aiProvider]?.fromEnv && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    await invoke("delete_ai_key", { provider: settings.aiProvider });
+                                                    await checkKeys();
+                                                    await message(t("settings.ai.keyResetSuccess"), { title: t("common.success"), kind: "info" });
+                                                } catch (e) {
+                                                    await message(String(e), { title: t("common.error"), kind: "error" });
+                                                }
+                                            }}
+                                            className="px-3 py-2 bg-surface-secondary hover:bg-red-900/20 text-secondary hover:text-red-400 border border-strong hover:border-red-900/30 rounded text-sm font-medium transition-colors whitespace-nowrap"
+                                            title={t("settings.ai.resetKey")}
+                                        >
+                                            {t("settings.ai.reset")}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {aiKeyStatus[settings.aiProvider]?.fromEnv && (
+                                <p className="text-xs text-blue-400 mt-2 flex items-center gap-1.5">
+                                    <Info size={12} />
+                                    {t("settings.ai.envVariableDetected")}
+                                </p>
+                            )}
+                            
+                            <p className="text-xs text-muted mt-1">
+                                {t("settings.ai.keyStoredSecurely")}
+                            </p>
+                        </div>
+                      )}
+
+                       {/* Custom OpenAI Endpoint URL */}
+                       {settings.aiProvider === "custom-openai" && (
+                           <div>
+                               <label className="block text-sm font-medium text-secondary mb-1">
+                                   {t("settings.ai.endpointUrl")}
+                               </label>
+                               <input
+                                   type="text"
+                                   value={settings.aiCustomOpenaiUrl || ""}
+                                   onChange={(e) => updateSetting("aiCustomOpenaiUrl", e.target.value)}
+                                   placeholder="https://api.example.com/v1"
+                                   className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500 w-full"
+                               />
+                               <p className="text-xs text-muted mt-1">
+                                   {t("settings.ai.endpointUrlDesc")}
+                               </p>
+                           </div>
+                       )}
+
+                        {/* Ollama Configuration */}
+                       {settings.aiProvider === 'ollama' && (
+                            <div className="space-y-4">
+                                <div className={clsx(
+                                   "border rounded px-3 py-2 text-sm italic flex items-center gap-2",
+                                   (settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length > 0 
+                                       ? "bg-green-900/10 border-green-900/20 text-green-400" 
+                                       : "bg-red-900/10 border-red-900/20 text-red-400"
+                                )}>
+                                   {(settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length > 0 ? (
+                                       <>
+                                           <CheckCircle2 size={14} />
+                                           <span>{t("settings.ai.ollamaConnected", { count: (settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length })}</span>
+                                       </>
+                                   ) : (
+                                       <>
+                                           <AlertTriangle size={14} />
+                                           <span>{t("settings.ai.ollamaNotDetected", { port: settings.aiOllamaPort || 11434 })}</span>
+                                       </>
+                                   )}
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                   <label className="text-sm text-secondary whitespace-nowrap">
+                                       {t("settings.ai.ollamaPort")}:
+                                   </label>
+                                   <input 
+                                       type="number" 
+                                       value={settings.aiOllamaPort || 11434}
+                                       onChange={(e) => updateSetting("aiOllamaPort", parseInt(e.target.value) || 11434)}
+                                       className="w-24 bg-base border border-strong rounded px-2 py-1.5 text-sm text-primary focus:outline-none focus:border-blue-500 transition-colors"
+                                   />
+                                   <p className="text-xs text-muted">
+                                       (Default: 11434)
+                                   </p>
+                                </div>
+                            </div>
+                       )}
+                    </div>
+                  )}
 
                   {/* Model Selection */}
                   <div>
@@ -618,15 +766,26 @@ export const Settings = () => {
 
                             return (
                                 <>
-                                    <SearchableSelect
-                                        value={settings.aiModel}
-                                        onChange={(val) => updateSetting("aiModel", val)}
-                                        options={currentModels}
-                                        placeholder={t("settings.ai.modelPlaceholder")}
-                                        searchPlaceholder={t("settings.ai.searchPlaceholder")}
-                                        noResultsLabel={t("settings.ai.noResults")}
-                                        hasError={!isModelValid && !!settings.aiModel}
-                                    />
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <SearchableSelect
+                                                value={settings.aiModel}
+                                                onChange={(val) => updateSetting("aiModel", val)}
+                                                options={currentModels}
+                                                placeholder={t("settings.ai.modelPlaceholder")}
+                                                searchPlaceholder={t("settings.ai.searchPlaceholder")}
+                                                noResultsLabel={t("settings.ai.noResults")}
+                                                hasError={!isModelValid && !!settings.aiModel}
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => loadModels(true)}
+                                            className="px-3 py-2 bg-surface-secondary hover:bg-surface-tertiary border border-default text-secondary hover:text-primary rounded transition-colors"
+                                            title={t("settings.ai.refresh")}
+                                        >
+                                            <RefreshCw size={18} />
+                                        </button>
+                                    </div>
                                     {!isModelValid && settings.aiModel && (
                                         <div className="flex items-center gap-1.5 mt-2 text-xs text-red-400 bg-red-900/10 p-2 rounded border border-red-900/20">
                                             <AlertTriangle size={12} className="shrink-0" />
@@ -653,158 +812,9 @@ export const Settings = () => {
                                 ? t("settings.ai.customOpenaiModelHelp") 
                                 : t("settings.ai.modelDesc")}
                         </p>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => loadModels(true)}
-                                className="p-1.5 text-secondary hover:text-primary hover:bg-surface-secondary rounded transition-colors"
-                                title={t("settings.ai.refresh")}
-                            >
-                                <RefreshCw size={14} />
-                            </button>
-                        </div>
                     </div>
                   </div>
 
-                  {/* Custom OpenAI Endpoint URL */}
-                  {settings.aiProvider === "custom-openai" && (
-                      <div className="border-t border-default pt-6">
-                          <h4 className="text-md font-medium text-primary mb-4 flex items-center gap-2">
-                            <Globe size={16} /> {t("settings.ai.customOpenaiEndpoint")}
-                          </h4>
-                          <div className="space-y-4">
-                              <div>
-                                  <label className="block text-sm font-medium text-secondary mb-1">
-                                      {t("settings.ai.endpointUrl")}
-                                  </label>
-                                  <input
-                                      type="text"
-                                      value={settings.aiCustomOpenaiUrl || ""}
-                                      onChange={(e) => updateSetting("aiCustomOpenaiUrl", e.target.value)}
-                                      placeholder="https://api.example.com/v1"
-                                      className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500 w-full"
-                                  />
-                                  <p className="text-xs text-muted mt-1">
-                                      {t("settings.ai.endpointUrlDesc")}
-                                  </p>
-                              </div>
-                          </div>
-                      </div>
-                  )}
-
-                  {/* API Keys Management */}
-                  <div className="border-t border-default pt-6 mt-6">
-                    <h4 className="text-md font-medium text-primary mb-4 flex items-center gap-2">
-                      <Key size={16} /> {t("settings.ai.manageKeys")}
-                    </h4>
-
-                    <div className="grid gap-4">
-                      {providers.map((p) => (
-                        <div key={p.id} className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between text-sm text-secondary">
-                            <span>{t("settings.ai.apiKey", { provider: p.label })}</span>
-                            {aiKeyStatus[p.id] ? (
-                              <span className="text-green-400 flex items-center gap-1 text-xs">
-                                <CheckCircle2 size={12} /> {t("settings.ai.configured")}
-                              </span>
-                            ) : (
-                              <span className="text-muted text-xs">
-                                {t("settings.ai.notConfigured")}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {p.id === 'ollama' ? (
-                             <div className="space-y-3">
-                                 <div className={clsx(
-                                    "border rounded px-3 py-2 text-sm italic flex items-center gap-2",
-                                    (settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length > 0 
-                                        ? "bg-green-900/10 border-green-900/20 text-green-400" 
-                                        : "bg-red-900/10 border-red-900/20 text-red-400"
-                                 )}>
-                                    {(settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length > 0 ? (
-                                        <>
-                                            <CheckCircle2 size={14} />
-                                            <span>{t("settings.ai.ollamaConnected", { count: (settings.aiCustomModels?.['ollama'] || availableModels['ollama'] || []).length })}</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <AlertTriangle size={14} />
-                                            <span>{t("settings.ai.ollamaNotDetected", { port: settings.aiOllamaPort || 11434 })}</span>
-                                        </>
-                                    )}
-                                 </div>
-                                 
-                                 <div className="flex items-center gap-2 pl-1">
-                                    <label className="text-sm text-secondary whitespace-nowrap">
-                                        {t("settings.ai.ollamaPort")}:
-                                    </label>
-                                    <input 
-                                        type="number" 
-                                        value={settings.aiOllamaPort || 11434}
-                                        onChange={(e) => updateSetting("aiOllamaPort", parseInt(e.target.value) || 11434)}
-                                        className="w-24 bg-base border border-strong rounded px-2 py-1.5 text-sm text-primary focus:outline-none focus:border-blue-500 transition-colors"
-                                    />
-                                    <p className="text-xs text-muted">
-                                        (Default: 11434)
-                                    </p>
-                                 </div>
-                             </div>
-                          ) : p.id === 'custom-openai' ? (
-                              // Custom OpenAI provider - show API key input
-                              <div className="flex gap-2">
-                                <input
-                                  type="password"
-                                  placeholder={t("settings.ai.enterKey", { provider: p.label })}
-                                  className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500"
-                                  onChange={(e) => setKeyInput(e.target.value)}
-                                />
-                                <button
-                                  onClick={(e) => {
-                                    const input = (
-                                      e.currentTarget
-                                        .previousElementSibling as HTMLInputElement
-                                    ).value;
-                                    setKeyInput(input);
-                                    if (input) handleSaveKey(p.id);
-                                  }}
-                                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
-                                >
-                                  {t("common.save")}
-                                </button>
-                              </div>
-                          ) : (
-                              <div className="flex gap-2">
-                                <input
-                                  type="password"
-                                  placeholder={t("settings.ai.enterKey", { provider: p.label })}
-                                  className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500"
-                                  onChange={(e) => setKeyInput(e.target.value)}
-                                  // Only keep value in state for the active input being typed
-                                />
-                                <button
-                                  onClick={(e) => {
-                                    // In a real app we'd bind input state better, here simplified for compactness
-                                    // Accessing sibling input value via state or ref is safer
-                                    // For now, let's assume the user types in the input and clicks save next to it.
-                                    // Actually, sharing state 'keyInput' across multiple inputs is bad UX.
-                                    // I will fix this logic below.
-                                    const input = (
-                                      e.currentTarget
-                                        .previousElementSibling as HTMLInputElement
-                                    ).value;
-                                    setKeyInput(input); // Just to trigger effect if needed, but we pass to fn
-                                    if (input) handleSaveKey(p.id);
-                                  }}
-                                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
-                                >
-                                  {t("common.save")}
-                                </button>
-                              </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                   {/* System Prompt Configuration */}
                   <div className="border-t border-default pt-6 mt-6">
                     <h4 className="text-md font-medium text-primary mb-4 flex items-center gap-2">
