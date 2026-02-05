@@ -18,6 +18,10 @@ use crate::models::{
 };
 use crate::ssh_tunnel::{get_tunnels, SshTunnel};
 
+// Constants
+const DEFAULT_MYSQL_PORT: u16 = 3306;
+const DEFAULT_POSTGRES_PORT: u16 = 5432;
+
 pub struct QueryCancellationState {
     pub handles: Arc<Mutex<HashMap<String, AbortHandle>>>,
 }
@@ -66,58 +70,76 @@ pub async fn expand_ssh_connection_params<R: Runtime>(
     Ok(expanded_params)
 }
 
+/// Check if a string option is empty or contains only whitespace.
+#[inline]
+#[cfg(test)]
+fn is_empty_or_whitespace(s: &Option<String>) -> bool {
+    s.as_ref().map(|p| p.trim().is_empty()).unwrap_or(true)
+}
+
+/// Build the SSH tunnel map key for caching tunnels.
+#[inline]
+fn build_tunnel_map_key(
+    ssh_user: &str,
+    ssh_host: &str,
+    ssh_port: u16,
+    remote_host: &str,
+    remote_port: u16,
+) -> String {
+    crate::ssh_tunnel::build_tunnel_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port)
+}
+
 pub fn resolve_connection_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
-    if params.ssh_enabled.unwrap_or(false) {
-        let ssh_host = params.ssh_host.as_deref().ok_or("Missing SSH Host")?;
-        let ssh_port = params.ssh_port.unwrap_or(22);
-        let ssh_user = params.ssh_user.as_deref().ok_or("Missing SSH User")?;
-        let remote_host = params.host.as_deref().unwrap_or("localhost");
-        let remote_port = params.port.unwrap_or(3306);
-
-        let map_key = format!(
-            "{}@{}:{}:{}->{}",
-            ssh_user, ssh_host, ssh_port, remote_host, remote_port
-        );
-
-        {
-            let tunnels = get_tunnels().lock().unwrap();
-            if let Some(tunnel) = tunnels.get(&map_key) {
-                let mut new_params = params.clone();
-                new_params.host = Some("127.0.0.1".to_string());
-                new_params.port = Some(tunnel.local_port);
-                return Ok(new_params);
-            }
-        }
-
-        let tunnel = SshTunnel::new(
-            ssh_host,
-            ssh_port,
-            ssh_user,
-            params.ssh_password.as_deref(),
-            params.ssh_key_file.as_deref(),
-            params.ssh_key_passphrase.as_deref(),
-            remote_host,
-            remote_port,
-        )
-        .map_err(|e| {
-            eprintln!("[Connection Error] SSH Tunnel setup failed: {}", e);
-            e
-        })?;
-
-        let local_port = tunnel.local_port;
-
-        {
-            let mut tunnels = get_tunnels().lock().unwrap();
-            tunnels.insert(map_key, tunnel);
-        }
-
-        let mut new_params = params.clone();
-        new_params.host = Some("127.0.0.1".to_string());
-        new_params.port = Some(local_port);
-        Ok(new_params)
-    } else {
-        Ok(params.clone())
+    if !params.ssh_enabled.unwrap_or(false) {
+        return Ok(params.clone());
     }
+
+    let ssh_host = params.ssh_host.as_deref().ok_or("Missing SSH Host")?;
+    let ssh_port = params.ssh_port.unwrap_or(22);
+    let ssh_user = params.ssh_user.as_deref().ok_or("Missing SSH User")?;
+    let remote_host = params.host.as_deref().unwrap_or("localhost");
+    let remote_port = params.port.unwrap_or(DEFAULT_MYSQL_PORT);
+
+    let map_key = build_tunnel_map_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port);
+
+    // Check for existing tunnel
+    {
+        let tunnels = get_tunnels().lock().unwrap();
+        if let Some(tunnel) = tunnels.get(&map_key) {
+            let mut new_params = params.clone();
+            new_params.host = Some("127.0.0.1".to_string());
+            new_params.port = Some(tunnel.local_port);
+            return Ok(new_params);
+        }
+    }
+
+    // Create new tunnel
+    let tunnel = SshTunnel::new(
+        ssh_host,
+        ssh_port,
+        ssh_user,
+        params.ssh_password.as_deref(),
+        params.ssh_key_file.as_deref(),
+        params.ssh_key_passphrase.as_deref(),
+        remote_host,
+        remote_port,
+    )
+    .map_err(|e| {
+        eprintln!("[Connection Error] SSH Tunnel setup failed: {}", e);
+        e
+    })?;
+
+    let local_port = tunnel.local_port;
+
+    {
+        let mut tunnels = get_tunnels().lock().unwrap();
+        tunnels.insert(map_key, tunnel);
+    }
+
+    let mut new_params = params.clone();
+    new_params.host = Some("127.0.0.1".to_string());
+    new_params.port = Some(local_port);
+    Ok(new_params)
 }
 
 pub fn get_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -1192,6 +1214,151 @@ mod tests {
             assert_eq!(result, None);
         }
     }
+
+    mod is_empty_or_whitespace_tests {
+        use super::*;
+
+        #[test]
+        fn test_none_is_empty() {
+            assert!(is_empty_or_whitespace(&None));
+        }
+
+        #[test]
+        fn test_empty_string_is_empty() {
+            assert!(is_empty_or_whitespace(&Some("".to_string())));
+        }
+
+        #[test]
+        fn test_whitespace_only_is_empty() {
+            assert!(is_empty_or_whitespace(&Some("   ".to_string())));
+        }
+
+        #[test]
+        fn test_tab_newline_is_empty() {
+            assert!(is_empty_or_whitespace(&Some("\t\n  ".to_string())));
+        }
+
+        #[test]
+        fn test_content_is_not_empty() {
+            assert!(!is_empty_or_whitespace(&Some("content".to_string())));
+        }
+
+        #[test]
+        fn test_content_with_whitespace_is_not_empty() {
+            assert!(!is_empty_or_whitespace(&Some("  content  ".to_string())));
+        }
+    }
+
+    mod resolve_connection_params_tests {
+        use super::*;
+
+        fn create_ssh_params(
+            ssh_host: &str,
+            ssh_port: u16,
+            ssh_user: &str,
+            remote_host: &str,
+            remote_port: u16,
+        ) -> ConnectionParams {
+            ConnectionParams {
+                driver: "mysql".to_string(),
+                host: Some(remote_host.to_string()),
+                port: Some(remote_port),
+                username: Some("dbuser".to_string()),
+                password: Some("dbpass".to_string()),
+                database: "testdb".to_string(),
+                ssh_enabled: Some(true),
+                ssh_connection_id: None,
+                ssh_host: Some(ssh_host.to_string()),
+                ssh_port: Some(ssh_port),
+                ssh_user: Some(ssh_user.to_string()),
+                ssh_password: None,
+                ssh_key_file: Some("/home/user/.ssh/id_rsa".to_string()),
+                ssh_key_passphrase: None,
+                save_in_keychain: None,
+            }
+        }
+
+        #[test]
+        fn test_non_ssh_params_unchanged() {
+            let params = base_params();
+            let result = resolve_connection_params(&params).unwrap();
+            assert_eq!(result.host, Some("localhost".to_string()));
+            assert_eq!(result.port, Some(3306));
+        }
+
+        #[test]
+        fn test_ssh_params_require_host() {
+            let mut params = create_ssh_params("jump.server", 22, "admin", "db.internal", 3306);
+            params.ssh_host = None;
+            let result = resolve_connection_params(&params);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("SSH Host"));
+        }
+
+        #[test]
+        fn test_ssh_params_require_user() {
+            let mut params = create_ssh_params("jump.server", 22, "admin", "db.internal", 3306);
+            params.ssh_user = None;
+            let result = resolve_connection_params(&params);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("SSH User"));
+        }
+    }
+
+    mod url_encoding_edge_cases {
+        use super::*;
+
+        #[test]
+        fn test_unicode_username() {
+            let mut params = base_params();
+            params.username = Some("用户".to_string());
+            let url = build_connection_url(&params).unwrap();
+            // URL should contain percent-encoded UTF-8
+            assert!(url.contains("%E7%94%A8%E6%88%B7"));
+        }
+
+        #[test]
+        fn test_password_with_colon() {
+            let mut params = base_params();
+            params.password = Some("pass:word".to_string());
+            let url = build_connection_url(&params).unwrap();
+            assert!(url.contains("pass%3Aword"));
+        }
+
+        #[test]
+        fn test_password_with_at_sign() {
+            let mut params = base_params();
+            params.password = Some("pass@word".to_string());
+            let url = build_connection_url(&params).unwrap();
+            assert!(url.contains("pass%40word"));
+        }
+
+        #[test]
+        fn test_password_with_slash() {
+            let mut params = base_params();
+            params.password = Some("pass/word".to_string());
+            let url = build_connection_url(&params).unwrap();
+            assert!(url.contains("pass%2Fword"));
+        }
+
+        #[test]
+        fn test_empty_username_and_password() {
+            let mut params = base_params();
+            params.username = None;
+            params.password = None;
+            let url = build_connection_url(&params).unwrap();
+            assert!(url.contains(":@localhost"));
+        }
+
+        #[test]
+        fn test_host_with_port_in_url() {
+            let mut params = base_params();
+            params.host = Some("192.168.1.100".to_string());
+            params.port = Some(33060);
+            let url = build_connection_url(&params).unwrap();
+            assert!(url.contains("192.168.1.100:33060"));
+        }
+    }
 }
 
 #[tauri::command]
@@ -1548,6 +1715,7 @@ pub async fn open_er_diagram_window(
 
 /// Builds a connection URL for a database driver.
 /// This is a pure function that can be tested without a database connection.
+#[inline]
 pub fn build_connection_url(params: &ConnectionParams) -> Result<String, String> {
     let user = encode(params.username.as_deref().unwrap_or_default());
     let pass = encode(params.password.as_deref().unwrap_or_default());
@@ -1560,7 +1728,7 @@ pub fn build_connection_url(params: &ConnectionParams) -> Result<String, String>
             user,
             pass,
             host,
-            params.port.unwrap_or(5432),
+            params.port.unwrap_or(DEFAULT_POSTGRES_PORT),
             params.database
         )),
         "mysql" => Ok(format!(
@@ -1568,7 +1736,7 @@ pub fn build_connection_url(params: &ConnectionParams) -> Result<String, String>
             user,
             pass,
             host,
-            params.port.unwrap_or(3306),
+            params.port.unwrap_or(DEFAULT_MYSQL_PORT),
             params.database
         )),
         _ => Err("Unsupported driver".into()),
