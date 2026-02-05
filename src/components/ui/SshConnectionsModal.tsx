@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Plus, Edit2, Trash2, Check, Loader2, Zap, XCircle } from "lucide-react";
+import {
+  X,
+  Plus,
+  Edit2,
+  Trash2,
+  Check,
+  Loader2,
+  Zap,
+  XCircle,
+} from "lucide-react";
 import {
   loadSshConnections,
   saveSshConnection,
@@ -69,8 +78,14 @@ export function SshConnectionsModal({
     "idle" | "testing" | "success" | "error"
   >("idle");
   const [testMessage, setTestMessage] = useState("");
-  const [testingConnectionId, setTestingConnectionId] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, "success" | "error">>({});
+  const [testingConnectionId, setTestingConnectionId] = useState<string | null>(
+    null,
+  );
+  const [testResults, setTestResults] = useState<
+    Record<string, "success" | "error">
+  >({});
+  const [passwordDirty, setPasswordDirty] = useState(false);
+  const [passphraseDirty, setPassphraseDirty] = useState(false);
 
   const loadConnections = useCallback(async () => {
     const result = await loadSshConnections();
@@ -113,6 +128,8 @@ export function SshConnectionsModal({
     setIsCreating(false);
     setTestStatus("idle");
     setTestMessage("");
+    setPasswordDirty(false);
+    setPassphraseDirty(false);
   };
 
   const handleTest = async () => {
@@ -120,7 +137,36 @@ export function SshConnectionsModal({
     setTestMessage("");
 
     try {
-      const result = await testSshConnection(formData);
+      // If editing and password wasn't modified, don't send empty password
+      // so backend will retrieve it from keychain
+      const testData: Partial<SshConnection> = { ...formData };
+
+      // Ensure connection_id is set when editing
+      if (editingId) {
+        testData.id = editingId;
+      }
+
+      if (editingId && testData.auth_type === "password") {
+        if (!passwordDirty) {
+          // Don't send password - backend will use keychain
+          delete testData.password;
+        } else if (!testData.password) {
+          // Password is dirty but empty/undefined - send empty string to force test with it
+          testData.password = "";
+        }
+      }
+
+      if (editingId && testData.auth_type === "ssh_key") {
+        if (!passphraseDirty) {
+          // Don't send passphrase - backend will use keychain
+          delete testData.key_passphrase;
+        } else if (!testData.key_passphrase) {
+          // Passphrase is dirty but empty/undefined - send empty string to force test with it
+          testData.key_passphrase = "";
+        }
+      }
+
+      const result = await testSshConnection(testData);
       setTestStatus("success");
       setTestMessage(result);
     } catch (error) {
@@ -139,7 +185,10 @@ export function SshConnectionsModal({
   const handleSave = async () => {
     try {
       // Validate connection
-      const validation = validateSshConnection(formData);
+      const validation = validateSshConnection(formData, {
+        allowEmptyPassword:
+          !!editingId && !passwordDirty && !formData.password?.trim(),
+      });
       if (!validation.isValid) {
         setTestStatus("error");
         setTestMessage(validation.error || t("sshConnections.fillRequired"));
@@ -158,6 +207,21 @@ export function SshConnectionsModal({
       };
 
       if (editingId) {
+        // Apply same logic as handleTest: only delete password if not dirty
+        if (sshData.auth_type === "password") {
+          if (!passwordDirty) {
+            delete sshData.password;
+          } else if (!sshData.password) {
+            sshData.password = "";
+          }
+        }
+        if (sshData.auth_type === "ssh_key") {
+          if (!passphraseDirty) {
+            delete sshData.key_passphrase;
+          } else if (!sshData.key_passphrase) {
+            sshData.key_passphrase = "";
+          }
+        }
         await updateSshConnection(editingId, formData.name!, sshData);
       } else {
         await saveSshConnection(formData.name!, sshData);
@@ -174,13 +238,20 @@ export function SshConnectionsModal({
 
   const handleEdit = (conn: SshConnection) => {
     // Determine auth_type for backward compatibility
-    const auth_type = conn.auth_type ||
+    const auth_type =
+      conn.auth_type ||
       (conn.key_file && conn.key_file.trim() !== "" ? "ssh_key" : "password");
 
+    // Don't load password/key_passphrase into form when editing
+    // They will be retrieved from keychain by the backend when needed
     setFormData({
       ...conn,
+      password: undefined,
+      key_passphrase: undefined,
       auth_type,
     });
+    setPasswordDirty(false);
+    setPassphraseDirty(false);
     setEditingId(conn.id);
     setIsCreating(true);
   };
@@ -207,7 +278,7 @@ export function SshConnectionsModal({
       // Test successful - show success feedback
       setTestResults((prev) => ({ ...prev, [conn.id]: "success" }));
       console.log(`Connection test successful for ${conn.name}`);
-      
+
       // Clear the success indicator after 3 seconds
       setTimeout(() => {
         setTestResults((prev) => {
@@ -224,11 +295,11 @@ export function SshConnectionsModal({
           : error instanceof Error
             ? error.message
             : JSON.stringify(error);
-      
+
       // Show error feedback
       setTestResults((prev) => ({ ...prev, [conn.id]: "error" }));
       alert(`${t("sshConnections.testFailed")}: ${msg}`);
-      
+
       // Clear the error indicator after 3 seconds
       setTimeout(() => {
         setTestResults((prev) => {
@@ -374,25 +445,50 @@ export function SshConnectionsModal({
               />
 
               <div className="flex flex-col">
-                <label className={LabelClass}>{t("sshConnections.authType")}</label>
+                <label className={LabelClass}>
+                  {t("sshConnections.authType")}
+                </label>
                 <select
                   value={formData.auth_type || "password"}
-                  onChange={(e) => updateField("auth_type", e.target.value as "password" | "ssh_key")}
+                  onChange={(e) =>
+                    updateField(
+                      "auth_type",
+                      e.target.value as "password" | "ssh_key",
+                    )
+                  }
                   className={InputClass}
                 >
-                  <option value="password">{t("sshConnections.authTypePassword")}</option>
-                  <option value="ssh_key">{t("sshConnections.authTypeSshKey")}</option>
+                  <option value="password">
+                    {t("sshConnections.authTypePassword")}
+                  </option>
+                  <option value="ssh_key">
+                    {t("sshConnections.authTypeSshKey")}
+                  </option>
                 </select>
               </div>
 
               {formData.auth_type === "password" && (
-                <SshInput
-                  label={t("newConnection.sshPassword")}
-                  value={formData.password}
-                  onChange={(val) => updateField("password", val)}
-                  type="password"
-                  placeholder={t("newConnection.sshPasswordPlaceholder")}
-                />
+                <div className="flex flex-col">
+                  <SshInput
+                    label={t("newConnection.sshPassword")}
+                    value={formData.password}
+                    onChange={(val) => {
+                      setPasswordDirty(true);
+                      updateField("password", val);
+                    }}
+                    type="password"
+                    placeholder={
+                      editingId && !passwordDirty && !formData.password
+                        ? "<hidden>"
+                        : t("newConnection.sshPasswordPlaceholder")
+                    }
+                  />
+                  {editingId && !passwordDirty && formData.save_in_keychain && (
+                    <span className="text-xs text-muted mt-1">
+                      {t("sshConnections.savedInKeychain")}
+                    </span>
+                  )}
+                </div>
               )}
 
               {formData.auth_type === "ssh_key" && (
@@ -404,13 +500,31 @@ export function SshConnectionsModal({
                     placeholder={t("newConnection.sshKeyFilePlaceholder")}
                   />
 
-                  <SshInput
-                    label={t("newConnection.sshKeyPassphrase")}
-                    value={formData.key_passphrase}
-                    onChange={(val) => updateField("key_passphrase", val)}
-                    type="password"
-                    placeholder={t("newConnection.sshKeyPassphrasePlaceholder")}
-                  />
+                  <div className="flex flex-col">
+                    <SshInput
+                      label={t("newConnection.sshKeyPassphrase")}
+                      value={formData.key_passphrase}
+                      onChange={(val) => {
+                        setPassphraseDirty(true);
+                        updateField("key_passphrase", val);
+                      }}
+                      type="password"
+                      placeholder={
+                        editingId &&
+                        !passphraseDirty &&
+                        !formData.key_passphrase
+                          ? "<hidden>"
+                          : t("newConnection.sshKeyPassphrasePlaceholder")
+                      }
+                    />
+                    {editingId &&
+                      !passphraseDirty &&
+                      formData.save_in_keychain && (
+                        <span className="text-xs text-muted mt-1">
+                          {t("sshConnections.savedInKeychain")}
+                        </span>
+                      )}
+                  </div>
                 </>
               )}
 
@@ -419,9 +533,18 @@ export function SshConnectionsModal({
                   type="checkbox"
                   id="ssh-keychain-toggle"
                   checked={!!formData.save_in_keychain}
-                  onChange={(e) =>
-                    updateField("save_in_keychain", e.target.checked)
-                  }
+                  onChange={(e) => {
+                    setPasswordDirty(true);
+                    setPassphraseDirty(true);
+                    updateField("save_in_keychain", e.target.checked);
+                    // If password/passphrase is undefined/empty, set to empty string so it gets sent
+                    if (formData.auth_type === "password" && !formData.password) {
+                      updateField("password", "");
+                    }
+                    if (formData.auth_type === "ssh_key" && !formData.key_passphrase) {
+                      updateField("key_passphrase", "");
+                    }
+                  }}
                   className="accent-blue-500 w-4 h-4 rounded cursor-pointer"
                 />
                 <label
@@ -475,7 +598,9 @@ export function SshConnectionsModal({
                   className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   <Check size={16} />
-                  {editingId ? t("sshConnections.update") : t("sshConnections.save")}
+                  {editingId
+                    ? t("sshConnections.update")
+                    : t("sshConnections.save")}
                 </button>
               </div>
             </div>

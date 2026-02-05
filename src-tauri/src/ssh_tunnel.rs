@@ -61,10 +61,11 @@ impl SshTunnel {
         remote_host: &str,
         remote_port: u16,
     ) -> Result<Self, String> {
-        let ssh_password = ssh_password.filter(|p| !p.trim().is_empty());
-        let use_system_ssh = system_ssh_available();
+        // Use system SSH when password is absent or empty (like v0.8.8)
+        // System SSH with BatchMode=yes can't handle interactive password auth
+        let use_system_ssh = ssh_password.map(|p| p.trim().is_empty()).unwrap_or(true);
         println!(
-            "[SSH Tunnel] New Request: Host={}, Port={}, User={}, SystemAvailable={}",
+            "[SSH Tunnel] New Request: Host={}, Port={}, User={}, UseSystemSSH={}",
             ssh_host, ssh_port, ssh_user, use_system_ssh
         );
 
@@ -332,16 +333,27 @@ impl SshTunnel {
                         .filter(|p| !p.trim().is_empty());
                     let key = russh_keys::load_secret_key(Path::new(key_path), passphrase)
                         .map_err(|e| format!("SSH key auth failed: {}", e))?;
-                    handle
-                        .authenticate_publickey(&ssh_user, Arc::new(key))
-                        .await
-                        .map_err(|e| format!("SSH key auth failed: {}", e))?
-                } else if let Some(pwd) = ssh_password.as_deref().filter(|p| !p.trim().is_empty()) {
-                    println!("[SSH Tunnel] Authenticating with password");
-                    handle
-                        .authenticate_password(&ssh_user, pwd)
-                        .await
-                        .map_err(|e| format!("SSH password auth failed: {}", e))?
+
+                    tokio::time::timeout(
+                        Duration::from_secs(30),
+                        handle.authenticate_publickey(&ssh_user, Arc::new(key))
+                    )
+                    .await
+                    .map_err(|_| "SSH key authentication timed out after 30 seconds".to_string())?
+                    .map_err(|e| format!("SSH key auth failed: {}", e))?
+                } else if let Some(pwd) = ssh_password.as_deref() {
+                    println!("[SSH Tunnel] Authenticating with password (length: {})", pwd.len());
+
+                    let auth_result = tokio::time::timeout(
+                        Duration::from_secs(30),
+                        handle.authenticate_password(&ssh_user, pwd)
+                    )
+                    .await
+                    .map_err(|_| "SSH password authentication timed out after 30 seconds".to_string())?
+                    .map_err(|e| format!("SSH password auth failed: {}", e))?;
+
+                    println!("[SSH Tunnel] Password authentication result: {}", auth_result);
+                    auth_result
                 } else {
                     let err = "No SSH credentials provided for russh".to_string();
                     eprintln!("[SSH Tunnel Error] {}", err);
@@ -350,19 +362,23 @@ impl SshTunnel {
                 };
 
                 if !authenticated {
-                    let err = "SSH authentication failed".to_string();
+                    let err = "SSH authentication failed (authenticated=false)".to_string();
                     eprintln!("[SSH Tunnel Error] {}", err);
                     let _ = ready_tx_inner.send(Err(err.clone()));
                     return Err(err);
                 }
+
+                println!("[SSH Tunnel] Authentication successful! Setting up tunnel listener...");
 
                 let listener = tokio::net::TcpListener::from_std(listener)
                     .map_err(|e| format!("Failed to configure async listener: {}", e))?;
 
                 let handle = Arc::new(TokioMutex::new(handle));
 
+                println!("[SSH Tunnel] Tunnel is ready, sending success signal");
                 let _ = ready_tx_inner.send(Ok(()));
 
+                println!("[SSH Tunnel] Starting tunnel forwarding loop");
                 while running_clone.load(Ordering::Relaxed) {
                     let accept =
                         tokio::time::timeout(Duration::from_millis(200), listener.accept()).await;
@@ -449,10 +465,10 @@ pub fn test_ssh_connection(
     ssh_key_file: Option<&str>,
     ssh_key_passphrase: Option<&str>,
 ) -> Result<String, String> {
-    let ssh_password = ssh_password.filter(|p| !p.trim().is_empty());
-    let use_system_ssh = system_ssh_available();
+    // Use system SSH when password is absent or empty (like v0.8.8)
+    let use_system_ssh = ssh_password.map(|p| p.trim().is_empty()).unwrap_or(true);
     println!(
-        "[SSH Test] Testing connection to {}:{} as {} (SystemAvailable={})",
+        "[SSH Test] Testing connection to {}:{} as {} (UseSystemSSH={})",
         ssh_host, ssh_port, ssh_user, use_system_ssh
     );
 
@@ -530,6 +546,60 @@ fn test_ssh_connection_system(
     }
 }
 
+/// Async helper for testing SSH connection
+async fn test_ssh_connection_russh_async(
+    ssh_host: &str,
+    ssh_port: u16,
+    ssh_user: &str,
+    ssh_password: Option<&str>,
+    ssh_key_file: Option<&str>,
+    ssh_key_passphrase: Option<&str>,
+) -> Result<String, String> {
+    let config = Arc::new(client::Config::default());
+    let addr = format!("{}:{}", ssh_host, ssh_port);
+    let mut handle = client::connect(config, addr, RusshClientHandler)
+        .await
+        .map_err(|e| {
+            format!(
+                "Failed to connect to SSH server {}:{}: {}",
+                ssh_host, ssh_port, e
+            )
+        })?;
+
+    let authenticated = if let Some(key_path) = ssh_key_file.filter(|p| !p.trim().is_empty()) {
+        println!("[SSH Test] Authenticating with key file: {}", key_path);
+        // Don't filter empty passphrase - if provided, use it even if empty
+        let key = russh_keys::load_secret_key(Path::new(key_path), ssh_key_passphrase)
+            .map_err(|e| format!("SSH key authentication failed: {}", e))?;
+        handle
+            .authenticate_publickey(ssh_user, Arc::new(key))
+            .await
+            .map_err(|e| format!("SSH key authentication failed: {}", e))?
+    } else if let Some(pwd) = ssh_password {
+        println!("[SSH Test] Authenticating with password");
+        handle
+            .authenticate_password(ssh_user, pwd)
+            .await
+            .map_err(|e| format!("SSH password authentication failed: {}", e))?
+    } else {
+        let err = "No SSH credentials provided for russh".to_string();
+        eprintln!("[SSH Test Error] {}", err);
+        return Err(err);
+    };
+
+    if !authenticated {
+        let err = "SSH authentication failed".to_string();
+        eprintln!("[SSH Test Error] {}", err);
+        return Err(err);
+    }
+
+    println!("[SSH Test] Connection successful!");
+    Ok(format!(
+        "SSH connection to {}@{}:{} established successfully!",
+        ssh_user, ssh_host, ssh_port
+    ))
+}
+
 /// Test SSH connection using russh (for password authentication)
 fn test_ssh_connection_russh(
     ssh_host: &str,
@@ -541,55 +611,29 @@ fn test_ssh_connection_russh(
 ) -> Result<String, String> {
     println!("[SSH Test] Using russh for authentication");
 
-    let runtime = Runtime::new().map_err(|e| format!("Failed to start Tokio runtime: {}", e))?;
+    // Convert parameters to owned strings for the thread
+    let ssh_host = ssh_host.to_string();
+    let ssh_user = ssh_user.to_string();
+    let ssh_password = ssh_password.map(|s| s.to_string());
+    let ssh_key_file = ssh_key_file.map(|s| s.to_string());
+    let ssh_key_passphrase = ssh_key_passphrase.map(|s| s.to_string());
 
-    let result = runtime.block_on(async {
-        let config = Arc::new(client::Config::default());
-        let addr = format!("{}:{}", ssh_host, ssh_port);
-        let mut handle = client::connect(config, addr, RusshClientHandler)
-            .await
-            .map_err(|e| {
-                format!(
-                    "Failed to connect to SSH server {}:{}: {}",
-                    ssh_host, ssh_port, e
-                )
-            })?;
-
-        let authenticated = if let Some(key_path) = ssh_key_file.filter(|p| !p.trim().is_empty()) {
-            println!("[SSH Test] Authenticating with key file: {}", key_path);
-            let passphrase = ssh_key_passphrase.filter(|p| !p.trim().is_empty());
-            let key = russh_keys::load_secret_key(Path::new(key_path), passphrase)
-                .map_err(|e| format!("SSH key authentication failed: {}", e))?;
-            handle
-                .authenticate_publickey(ssh_user, Arc::new(key))
-                .await
-                .map_err(|e| format!("SSH key authentication failed: {}", e))?
-        } else if let Some(pwd) = ssh_password {
-            println!("[SSH Test] Authenticating with password");
-            handle
-                .authenticate_password(ssh_user, pwd)
-                .await
-                .map_err(|e| format!("SSH password authentication failed: {}", e))?
-        } else {
-            let err = "No SSH credentials provided for russh".to_string();
-            eprintln!("[SSH Test Error] {}", err);
-            return Err(err);
-        };
-
-        if !authenticated {
-            let err = "SSH authentication failed".to_string();
-            eprintln!("[SSH Test Error] {}", err);
-            return Err(err);
-        }
-
-        println!("[SSH Test] Connection successful!");
-        Ok(format!(
-            "SSH connection to {}@{}:{} established successfully!",
-            ssh_user, ssh_host, ssh_port
+    // Use std::thread::spawn to run in a completely separate OS thread
+    // This avoids any Tokio runtime nesting issues
+    std::thread::spawn(move || {
+        let runtime = Runtime::new()
+            .map_err(|e| format!("Failed to start Tokio runtime: {}", e))?;
+        runtime.block_on(test_ssh_connection_russh_async(
+            &ssh_host,
+            ssh_port,
+            &ssh_user,
+            ssh_password.as_deref(),
+            ssh_key_file.as_deref(),
+            ssh_key_passphrase.as_deref(),
         ))
-    });
-
-    result
+    })
+    .join()
+    .map_err(|e| format!("Thread panicked: {:?}", e))?
 }
 
 fn system_ssh_available() -> bool {

@@ -65,8 +65,10 @@ export const Connections = () => {
       await connect(conn.id);
       navigate('/editor');
     } catch (e) {
-      console.error(e);
-      setError(t('connections.failConnect', { name: conn.name }));
+      console.error('Connection error:', e);
+      // Show actual error message from backend
+      const errorMsg = typeof e === 'string' ? e : (e as Error).message || String(e);
+      setError(`${t('connections.failConnect', { name: conn.name })}\n\nError: ${errorMsg}`);
     } finally {
       setConnectingId(null);
     }

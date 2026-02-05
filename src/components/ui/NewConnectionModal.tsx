@@ -112,13 +112,19 @@ export const NewConnectionModal = ({
     "idle" | "testing" | "saving" | "success" | "error"
   >("idle");
   const [message, setMessage] = useState("");
-  const [testResult, setTestResult] = useState<"success" | "error" | null>(null);
+  const [testResult, setTestResult] = useState<"success" | "error" | null>(
+    null,
+  );
   const [sshConnections, setSshConnections] = useState<SshConnection[]>([]);
   const [isSshModalOpen, setIsSshModalOpen] = useState(false);
   const [sshMode, setSshMode] = useState<"existing" | "inline">("existing");
   const [availableDatabases, setAvailableDatabases] = useState<string[]>([]);
   const [loadingDatabases, setLoadingDatabases] = useState(false);
-  const [databaseLoadError, setDatabaseLoadError] = useState<string | null>(null);
+  const [databaseLoadError, setDatabaseLoadError] = useState<string | null>(
+    null,
+  );
+  const [passwordDirty, setPasswordDirty] = useState(false);
+  const [sshPasswordDirty, setSshPasswordDirty] = useState(false);
 
   // Load SSH connections
   const loadSshConnectionsList = async () => {
@@ -136,11 +142,29 @@ export const NewConnectionModal = ({
     setLoadingDatabases(true);
     setDatabaseLoadError(null);
     try {
+      const listParams: Partial<ConnectionParams> = {
+        driver,
+        ...formData,
+        port: Number(formData.port),
+      };
+
+      // In edit mode: only send password if it was modified (dirty)
+      // If not dirty, don't send it (backend will use saved password)
+      if (initialConnection) {
+        if (!passwordDirty) {
+          delete listParams.password;
+        }
+        if (!sshPasswordDirty) {
+          delete listParams.ssh_password;
+        }
+      }
+
       const databases = await invoke<string[]>("list_databases", {
-        params: {
-          driver,
-          ...formData,
-          port: Number(formData.port),
+        request: {
+          params: {
+            ...listParams,
+          },
+          connection_id: initialConnection?.id,
         },
       });
       setAvailableDatabases(databases);
@@ -168,6 +192,8 @@ export const NewConnectionModal = ({
         setName(initialConnection.name);
         setDriver(initialConnection.params.driver);
         setFormData({ ...initialConnection.params });
+        setPasswordDirty(false);
+        setSshPasswordDirty(false);
         // Set SSH mode based on whether using connection ID or inline config
         setSshMode(
           initialConnection.params.ssh_connection_id ? "existing" : "inline",
@@ -184,6 +210,8 @@ export const NewConnectionModal = ({
           ssh_enabled: false,
           ssh_port: 22,
         });
+        setPasswordDirty(false);
+        setSshPasswordDirty(false);
         setSshMode("existing");
       }
       setStatus("idle");
@@ -227,24 +255,42 @@ export const NewConnectionModal = ({
     setMessage("");
     setTestResult(null);
     try {
+      const testParams: Partial<ConnectionParams> = {
+        driver,
+        ...formData,
+        port: Number(formData.port),
+      };
+
+      if (initialConnection) {
+        // Only send password if it was modified (dirty)
+        // If not dirty, don't send it (backend will use saved password)
+        if (!passwordDirty) {
+          delete testParams.password;
+        }
+        if (!sshPasswordDirty) {
+          delete testParams.ssh_password;
+        }
+      }
+
       const result = await invoke<string>("test_connection", {
-        params: {
-          driver,
-          ...formData,
-          port: Number(formData.port),
+        request: {
+          params: {
+            ...testParams,
+          },
+          connection_id: initialConnection?.id,
         },
       });
       setStatus("success");
       setMessage(result);
       setTestResult("success");
-      
+
       // Clear the success indicator and message after 3 seconds
       setTimeout(() => {
         setTestResult(null);
         setStatus("idle");
         setMessage("");
       }, 3000);
-      
+
       return true;
     } catch (err) {
       console.error("Connection test error:", err);
@@ -257,13 +303,13 @@ export const NewConnectionModal = ({
             : JSON.stringify(err);
       setMessage(msg);
       setTestResult("error");
-      
+
       // Clear only the error icon after 3 seconds, keep the message
       setTimeout(() => {
         setTestResult(null);
         setStatus("idle");
       }, 3000);
-      
+
       return false;
     }
   };
@@ -287,13 +333,19 @@ export const NewConnectionModal = ({
     setMessage("");
     setTestResult(null);
     try {
-      const params = {
+      const params: Partial<ConnectionParams> = {
         driver,
         ...formData,
         port: Number(formData.port),
       };
 
       if (initialConnection) {
+        if (!params.password?.trim()) {
+          delete params.password;
+        }
+        if (!params.ssh_password?.trim()) {
+          delete params.ssh_password;
+        }
         // Update
         await invoke("update_connection", {
           id: initialConnection.id,
@@ -406,16 +458,15 @@ export const NewConnectionModal = ({
               <ConnectionInput
                 label={t("newConnection.password")}
                 value={formData.password}
-                onChange={(val) => updateField("password", val)}
+                onChange={(val) => {
+                  setPasswordDirty(true);
+                  updateField("password", val);
+                }}
                 type="password"
-                placeholder={t("newConnection.passwordPlaceholder")}
-                error={
-                  formData.save_in_keychain && !formData.password ? (
-                    <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
-                      <AlertCircle size={10} />
-                      {t("newConnection.passwordMissing")}
-                    </p>
-                  ) : null
+                placeholder={
+                  initialConnection && !passwordDirty && !formData.password
+                    ? "<hidden>"
+                    : t("newConnection.passwordPlaceholder")
                 }
               />
             </div>
@@ -439,10 +490,7 @@ export const NewConnectionModal = ({
                   type="button"
                   onClick={loadDatabases}
                   disabled={
-                    loadingDatabases ||
-                    !formData.host ||
-                    !formData.username ||
-                    !formData.password
+                    loadingDatabases || !formData.host || !formData.username
                   }
                   className="text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed flex items-center gap-1"
                 >
@@ -459,7 +507,12 @@ export const NewConnectionModal = ({
                   )}
                 </button>
               </div>
-              {availableDatabases.length > 0 ? (
+              {databaseLoadError ? (
+                <div className="text-xs text-red-400 flex items-center gap-1 mt-1">
+                  <AlertCircle size={12} />
+                  {databaseLoadError}
+                </div>
+              ) : availableDatabases.length > 0 ? (
                 <SearchableSelect
                   value={formData.database || null}
                   options={availableDatabases}
@@ -467,7 +520,6 @@ export const NewConnectionModal = ({
                   placeholder={t("newConnection.selectDatabase")}
                   searchPlaceholder={t("common.search")}
                   noResultsLabel={t("newConnection.noDatabasesFound")}
-                  hasError={!!databaseLoadError}
                 />
               ) : (
                 <input
@@ -477,12 +529,6 @@ export const NewConnectionModal = ({
                   className={InputClass}
                   placeholder={t("newConnection.dbNamePlaceholder")}
                 />
-              )}
-              {databaseLoadError && (
-                <p className="text-xs text-red-400 flex items-center gap-1 mt-1">
-                  <AlertCircle size={12} />
-                  {databaseLoadError}
-                </p>
               )}
             </div>
           )}
@@ -525,6 +571,7 @@ export const NewConnectionModal = ({
                         updateField("ssh_password", undefined);
                         updateField("ssh_key_file", undefined);
                         updateField("ssh_key_passphrase", undefined);
+                        setSshPasswordDirty(false);
                       }}
                       className={clsx(
                         "flex-1 px-3 py-2 rounded border text-sm font-medium transition-colors",
@@ -627,13 +674,21 @@ export const NewConnectionModal = ({
                         <ConnectionInput
                           label={t("newConnection.sshPassword")}
                           value={formData.ssh_password}
-                          onChange={(val) => updateField("ssh_password", val)}
+                          onChange={(val) => {
+                            setSshPasswordDirty(true);
+                            updateField("ssh_password", val);
+                          }}
                           type="password"
-                          placeholder={t(
-                            "newConnection.sshPasswordPlaceholder",
-                          )}
+                          placeholder={
+                            initialConnection &&
+                            !sshPasswordDirty &&
+                            !formData.ssh_password
+                              ? "<hidden>"
+                              : t("newConnection.sshPasswordPlaceholder")
+                          }
                           error={
                             formData.save_in_keychain &&
+                            sshPasswordDirty &&
                             !formData.ssh_password ? (
                               <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
                                 <AlertCircle size={10} />
@@ -674,9 +729,12 @@ export const NewConnectionModal = ({
               type="checkbox"
               id="keychain-toggle"
               checked={!!formData.save_in_keychain}
-              onChange={(e) =>
-                updateField("save_in_keychain", e.target.checked)
-              }
+              onChange={(e) => {
+                updateField("password", "");
+                setPasswordDirty(true);
+                setSshPasswordDirty(true);
+                updateField("save_in_keychain", e.target.checked);
+              }}
               className="accent-blue-500 w-4 h-4 rounded cursor-pointer"
             />
             <label
@@ -691,13 +749,15 @@ export const NewConnectionModal = ({
         {/* Footer */}
         <div className="p-4 border-t border-default bg-base/50 space-y-3">
           {/* Error Message Only */}
-          {message && (status === "error" || (status === "idle" && testResult !== "success")) && (
-            <div className="text-sm text-red-500 flex items-start gap-2">
-              <XCircle size={16} className="mt-0.5 flex-shrink-0" />
-              <span>{message}</span>
-            </div>
-          )}
-          
+          {message &&
+            (status === "error" ||
+              (status === "idle" && testResult !== "success")) && (
+              <div className="text-sm text-red-500 flex items-start gap-2">
+                <XCircle size={16} className="mt-0.5 flex-shrink-0" />
+                <span>{message}</span>
+              </div>
+            )}
+
           <div className="flex justify-end gap-3">
             <button
               onClick={testConnection}

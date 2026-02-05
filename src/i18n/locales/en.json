@@ -243,7 +243,8 @@
     "fillRequired": "Please fill in all required fields",
     "keyFile": "Key file",
     "quickTest": "Quick connection test",
-    "testFailed": "Connection test failed"
+    "testFailed": "Connection test failed",
+    "savedInKeychain": "Password saved in system keychain"
   },
   "dataGrid": {
     "noData": "No data to display",

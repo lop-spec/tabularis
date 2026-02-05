@@ -243,7 +243,8 @@
     "fillRequired": "Per favore compila tutti i campi obbligatori",
     "keyFile": "File chiave",
     "quickTest": "Test connessione rapido",
-    "testFailed": "Test connessione fallito"
+    "testFailed": "Test connessione fallito",
+    "savedInKeychain": "Password salvata nel portachiavi di sistema"
   },
   "dataGrid": {
     "noData": "Nessun dato da visualizzare",

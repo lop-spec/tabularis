@@ -13,8 +13,8 @@ use uuid::Uuid;
 use crate::drivers::{mysql, postgres, sqlite};
 use crate::keychain_utils;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, QueryResult, SavedConnection, SshConnection, SshConnectionInput, SshTestParams,
-    TableColumn, TableInfo,
+    ConnectionParams, ForeignKey, Index, QueryResult, SavedConnection, SshConnection,
+    SshConnectionInput, SshTestParams, TableColumn, TableInfo, TestConnectionRequest,
 };
 use crate::ssh_tunnel::{get_tunnels, SshTunnel};
 
@@ -40,7 +40,12 @@ pub async fn expand_ssh_connection_params<R: Runtime>(
 
     // If ssh_connection_id is set and SSH is enabled, load the SSH connection and merge it
     if params.ssh_enabled.unwrap_or(false) {
+        println!("[expand_ssh_connection_params] SSH is enabled");
         if let Some(ssh_id) = &params.ssh_connection_id {
+            println!(
+                "[expand_ssh_connection_params] Loading SSH connection: {}",
+                ssh_id
+            );
             let ssh_connections = get_ssh_connections(app.clone()).await?;
             let ssh_conn = ssh_connections
                 .iter()
@@ -48,6 +53,7 @@ pub async fn expand_ssh_connection_params<R: Runtime>(
                 .ok_or_else(|| format!("SSH connection with ID {} not found", ssh_id))?;
 
             // Populate legacy SSH fields from the SSH connection
+            // Passwords are already loaded by get_ssh_connections
             expanded_params.ssh_host = Some(ssh_conn.host.clone());
             expanded_params.ssh_port = Some(ssh_conn.port);
             expanded_params.ssh_user = Some(ssh_conn.user.clone());
@@ -145,15 +151,15 @@ pub fn find_connection_by_id<R: Runtime>(
         .find(|c| c.id == id)
         .ok_or_else(|| "Connection not found".to_string())?;
 
+    // Load passwords from keychain if needed (like get_connections in v0.8.8)
     if conn.params.save_in_keychain.unwrap_or(false) {
         match keychain_utils::get_db_password(&conn.id) {
             Ok(pwd) => conn.params.password = Some(pwd),
             Err(e) => eprintln!(
-                "[Warning] Failed to retrieve DB password for connection '{}' ({}): {}",
-                conn.name, conn.id, e
+                "[Keyring Error] Failed to get DB password for {}: {}",
+                conn.id, e
             ),
         }
-
         if conn.params.ssh_enabled.unwrap_or(false) {
             if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
                 if !ssh_pwd.trim().is_empty() {
@@ -464,32 +470,7 @@ pub async fn get_connections<R: Runtime>(
         return Ok(Vec::new());
     }
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let mut connections: Vec<SavedConnection> = serde_json::from_str(&content).unwrap_or_default();
-
-    // Populate passwords from keychain if needed
-    for conn in &mut connections {
-        if conn.params.save_in_keychain.unwrap_or(false) {
-            match keychain_utils::get_db_password(&conn.id) {
-                Ok(pwd) => conn.params.password = Some(pwd),
-                Err(e) => eprintln!(
-                    "[Keyring Error] Failed to get DB password for {}: {}",
-                    conn.id, e
-                ),
-            }
-            if conn.params.ssh_enabled.unwrap_or(false) {
-                if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
-                    if !ssh_pwd.trim().is_empty() {
-                        conn.params.ssh_password = Some(ssh_pwd);
-                    }
-                }
-                if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
-                    if !ssh_passphrase.trim().is_empty() {
-                        conn.params.ssh_key_passphrase = Some(ssh_passphrase);
-                    }
-                }
-            }
-        }
-    }
+    let connections: Vec<SavedConnection> = serde_json::from_str(&content).unwrap_or_default();
 
     Ok(connections)
 }
@@ -566,13 +547,11 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
                         host: host.clone(),
                         port,
                         user: user.clone(),
-                        auth_type: Some(
-                            if !key_file.is_empty() {
-                                "ssh_key".to_string()
-                            } else {
-                                "password".to_string()
-                            }
-                        ),
+                        auth_type: Some(if !key_file.is_empty() {
+                            "ssh_key".to_string()
+                        } else {
+                            "password".to_string()
+                        }),
                         password: None,
                         key_file: if key_file.is_empty() {
                             None
@@ -608,7 +587,8 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
     fs::write(ssh_path, ssh_json).map_err(|e| e.to_string())?;
 
     // Save migrated connections
-    let conn_json = serde_json::to_string_pretty(&migrated_connections).map_err(|e| e.to_string())?;
+    let conn_json =
+        serde_json::to_string_pretty(&migrated_connections).map_err(|e| e.to_string())?;
     fs::write(conn_path, conn_json).map_err(|e| e.to_string())?;
 
     println!(
@@ -635,11 +615,16 @@ pub async fn get_ssh_connections<R: Runtime>(
         // Backward compatibility: determine auth_type if missing
         if ssh.auth_type.is_none() {
             ssh.auth_type = Some(
-                if ssh.key_file.is_some() && ssh.key_file.as_ref().map_or(false, |k| !k.trim().is_empty()) {
+                if ssh.key_file.is_some()
+                    && ssh
+                        .key_file
+                        .as_ref()
+                        .map_or(false, |k| !k.trim().is_empty())
+                {
                     "ssh_key".to_string()
                 } else {
                     "password".to_string()
-                }
+                },
             );
         }
 
@@ -803,56 +788,87 @@ pub async fn delete_ssh_connection<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn test_ssh_connection(ssh: SshTestParams) -> Result<String, String> {
+pub async fn test_ssh_connection<R: Runtime>(
+    app: AppHandle<R>,
+    ssh: SshTestParams,
+) -> Result<String, String> {
     use crate::ssh_tunnel;
+
+    // Resolve password using same logic as database connections
+    let resolved_password = resolve_ssh_test_password(
+        ssh.password.as_deref(),
+        ssh.connection_id.as_deref(),
+        |conn_id| {
+            let path = get_ssh_config_path(&app).ok()?;
+            if !path.exists() {
+                return None;
+            }
+            let content = fs::read_to_string(path).ok()?;
+            let connections: Vec<SshConnection> =
+                serde_json::from_str(&content).unwrap_or_default();
+            connections.into_iter().find(|c| c.id == conn_id)
+        },
+        |conn_id| keychain_utils::get_ssh_password(conn_id),
+    );
+
+    // Resolve passphrase using same logic
+    let resolved_passphrase = resolve_ssh_test_credential(
+        ssh.key_passphrase.as_deref(),
+        ssh.connection_id.as_deref(),
+        |conn_id| {
+            let path = get_ssh_config_path(&app).ok()?;
+            if !path.exists() {
+                return None;
+            }
+            let content = fs::read_to_string(path).ok()?;
+            let connections: Vec<SshConnection> =
+                serde_json::from_str(&content).unwrap_or_default();
+            connections.into_iter().find(|c| c.id == conn_id)
+        },
+        |conn_id| keychain_utils::get_ssh_key_passphrase(conn_id),
+        |conn| {
+            conn.key_passphrase
+                .as_ref()
+                .filter(|p| !p.trim().is_empty())
+                .cloned()
+        },
+    );
 
     ssh_tunnel::test_ssh_connection(
         &ssh.host,
         ssh.port,
         &ssh.user,
-        ssh.password.as_deref(),
+        resolved_password.as_deref(),
         ssh.key_file.as_deref(),
-        ssh.key_passphrase.as_deref(),
+        resolved_passphrase.as_deref(),
     )
 }
 
 #[tauri::command]
 pub async fn test_connection<R: Runtime>(
     app: AppHandle<R>,
-    params: ConnectionParams,
+    request: TestConnectionRequest,
 ) -> Result<String, String> {
-    let expanded_params = expand_ssh_connection_params(&app, &params).await?;
+    let mut expanded_params = expand_ssh_connection_params(&app, &request.params).await?;
+
+    if request.params.password.is_none() && expanded_params.password.is_none() {
+        let saved_conn = match &request.connection_id {
+            Some(id) => find_connection_by_id(&app, id).ok(),
+            None => None,
+        };
+        expanded_params.password =
+            resolve_test_connection_password(&request.params, saved_conn.as_ref(), |conn_id| {
+                keychain_utils::get_db_password(conn_id)
+            });
+    }
+
     let resolved_params = resolve_connection_params(&expanded_params)?;
     println!(
         "[Test Connection] Resolved Params: Host={:?}, Port={:?}",
         resolved_params.host, resolved_params.port
     );
 
-    let user = encode(resolved_params.username.as_deref().unwrap_or_default());
-    let pass = encode(resolved_params.password.as_deref().unwrap_or_default());
-    let host = resolved_params.host.as_deref().unwrap_or("localhost");
-
-    let url = match resolved_params.driver.as_str() {
-        "sqlite" => format!("sqlite://{}", resolved_params.database),
-        "postgres" => format!(
-            "postgres://{}:{}@{}:{}/{}",
-            user,
-            pass,
-            host,
-            resolved_params.port.unwrap_or(5432),
-            resolved_params.database
-        ),
-        "mysql" => format!(
-            "mysql://{}:{}@{}:{}/{}",
-            user,
-            pass,
-            host,
-            resolved_params.port.unwrap_or(3306),
-            resolved_params.database
-        ),
-        _ => return Err("Unsupported driver".into()),
-    };
-
+    let url = build_connection_url(&resolved_params)?;
     println!("[Test Connection] URL: {}", url);
 
     let options = AnyConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
@@ -863,20 +879,391 @@ pub async fn test_connection<R: Runtime>(
     Ok("Connection successful!".to_string())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_params() -> ConnectionParams {
+        ConnectionParams {
+            driver: "mysql".to_string(),
+            host: Some("localhost".to_string()),
+            port: Some(3306),
+            username: Some("root".to_string()),
+            password: None,
+            database: "testdb".to_string(),
+            ssh_enabled: None,
+            ssh_connection_id: None,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_file: None,
+            ssh_key_passphrase: None,
+            save_in_keychain: None,
+        }
+    }
+
+    fn saved_conn(id: &str, password: Option<&str>, save_in_keychain: bool) -> SavedConnection {
+        SavedConnection {
+            id: id.to_string(),
+            name: "Test".to_string(),
+            params: ConnectionParams {
+                password: password.map(|p| p.to_string()),
+                save_in_keychain: Some(save_in_keychain),
+                ..base_params()
+            },
+        }
+    }
+
+    #[test]
+    fn test_resolve_password_prefers_request() {
+        let mut params = base_params();
+        params.password = Some("from_request".to_string());
+        let result = resolve_test_connection_password(&params, None, |_| Ok("kc".to_string()));
+        assert_eq!(result, Some("from_request".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_password_from_keychain() {
+        let params = base_params();
+        let saved = saved_conn("id1", None, true);
+        let result =
+            resolve_test_connection_password(&params, Some(&saved), |_| Ok("kc".to_string()));
+        assert_eq!(result, Some("kc".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_password_from_saved_when_not_keychain() {
+        let params = base_params();
+        let saved = saved_conn("id1", Some("stored"), false);
+        let result =
+            resolve_test_connection_password(&params, Some(&saved), |_| Ok("kc".to_string()));
+        assert_eq!(result, Some("stored".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_password_fallback_to_saved_when_keychain_empty() {
+        let params = base_params();
+        let saved = saved_conn("id1", Some("stored"), true);
+        let result =
+            resolve_test_connection_password(&params, Some(&saved), |_| Ok("  ".to_string()));
+        assert_eq!(result, Some("stored".to_string()));
+    }
+
+    mod build_connection_url_tests {
+        use super::*;
+
+        fn create_params(
+            driver: &str,
+            host: &str,
+            port: Option<u16>,
+            username: &str,
+            password: Option<&str>,
+            database: &str,
+        ) -> ConnectionParams {
+            ConnectionParams {
+                driver: driver.to_string(),
+                host: Some(host.to_string()),
+                port,
+                username: Some(username.to_string()),
+                password: password.map(|p| p.to_string()),
+                database: database.to_string(),
+                ssh_enabled: None,
+                ssh_connection_id: None,
+                ssh_host: None,
+                ssh_port: None,
+                ssh_user: None,
+                ssh_password: None,
+                ssh_key_file: None,
+                ssh_key_passphrase: None,
+                save_in_keychain: None,
+            }
+        }
+
+        #[test]
+        fn test_mysql_url_basic() {
+            let params = create_params(
+                "mysql",
+                "localhost",
+                Some(3306),
+                "root",
+                Some("secret"),
+                "testdb",
+            );
+            let url = build_connection_url(&params).unwrap();
+            assert_eq!(url, "mysql://root:secret@localhost:3306/testdb");
+        }
+
+        #[test]
+        fn test_postgres_url_basic() {
+            let params = create_params(
+                "postgres",
+                "localhost",
+                Some(5432),
+                "postgres",
+                Some("secret"),
+                "testdb",
+            );
+            let url = build_connection_url(&params).unwrap();
+            assert_eq!(url, "postgres://postgres:secret@localhost:5432/testdb");
+        }
+
+        #[test]
+        fn test_sqlite_url() {
+            let params = create_params("sqlite", "", None, "", None, "/path/to/db.sqlite");
+            let url = build_connection_url(&params).unwrap();
+            assert_eq!(url, "sqlite:///path/to/db.sqlite");
+        }
+
+        #[test]
+        fn test_url_encoding_special_chars() {
+            let params = create_params(
+                "mysql",
+                "localhost",
+                Some(3306),
+                "user@domain",
+                Some("pass#word"),
+                "mydb",
+            );
+            let url = build_connection_url(&params).unwrap();
+            assert!(url.contains("user%40domain"));
+            assert!(url.contains("pass%23word"));
+        }
+
+        #[test]
+        fn test_default_ports() {
+            let mysql_params = create_params("mysql", "localhost", None, "root", None, "testdb");
+            let pg_params =
+                create_params("postgres", "localhost", None, "postgres", None, "testdb");
+
+            let mysql_url = build_connection_url(&mysql_params).unwrap();
+            let pg_url = build_connection_url(&pg_params).unwrap();
+
+            assert!(mysql_url.contains(":3306/"));
+            assert!(pg_url.contains(":5432/"));
+        }
+
+        #[test]
+        fn test_no_password() {
+            let params = create_params("mysql", "localhost", Some(3306), "root", None, "testdb");
+            let url = build_connection_url(&params).unwrap();
+            assert_eq!(url, "mysql://root:@localhost:3306/testdb");
+        }
+
+        #[test]
+        fn test_unsupported_driver() {
+            let params = create_params("mongodb", "localhost", Some(27017), "user", None, "testdb");
+            let result = build_connection_url(&params);
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err(), "Unsupported driver");
+        }
+
+        #[test]
+        fn test_remote_host() {
+            let params = create_params(
+                "postgres",
+                "db.example.com",
+                Some(5432),
+                "admin",
+                Some("pass"),
+                "production",
+            );
+            let url = build_connection_url(&params).unwrap();
+            assert!(url.contains("db.example.com"));
+            assert!(!url.contains("localhost"));
+        }
+    }
+
+    mod resolve_ssh_password_tests {
+        use super::*;
+        use crate::models::SshConnection;
+
+        fn create_ssh_conn(
+            id: &str,
+            password: Option<&str>,
+            save_in_keychain: bool,
+        ) -> SshConnection {
+            SshConnection {
+                id: id.to_string(),
+                name: "Test".to_string(),
+                host: "localhost".to_string(),
+                port: 22,
+                user: "root".to_string(),
+                auth_type: Some("password".to_string()),
+                password: password.map(|p| p.to_string()),
+                key_file: None,
+                key_passphrase: None,
+                save_in_keychain: Some(save_in_keychain),
+            }
+        }
+
+        #[test]
+        fn test_ssh_password_prefers_request() {
+            let result = resolve_ssh_test_password(
+                Some("from_request"),
+                Some("conn_id"),
+                |_| None,
+                |_| Ok("kc".to_string()),
+            );
+            assert_eq!(result, Some("from_request".to_string()));
+        }
+
+        #[test]
+        fn test_ssh_password_from_keychain() {
+            let saved = create_ssh_conn("id1", None, true);
+            let result = resolve_ssh_test_password(
+                None,
+                Some("id1"),
+                |_| Some(saved.clone()),
+                |_| Ok("kc".to_string()),
+            );
+            assert_eq!(result, Some("kc".to_string()));
+        }
+
+        #[test]
+        fn test_ssh_password_from_saved_when_not_keychain() {
+            let saved = create_ssh_conn("id1", Some("stored"), false);
+            let result = resolve_ssh_test_password(
+                None,
+                Some("id1"),
+                |_| Some(saved.clone()),
+                |_| Ok("kc".to_string()),
+            );
+            assert_eq!(result, Some("stored".to_string()));
+        }
+
+        #[test]
+        fn test_ssh_password_fallback_to_saved_when_keychain_empty() {
+            let saved = create_ssh_conn("id1", Some("stored"), true);
+            let result = resolve_ssh_test_password(
+                None,
+                Some("id1"),
+                |_| Some(saved.clone()),
+                |_| Ok("  ".to_string()),
+            );
+            assert_eq!(result, Some("stored".to_string()));
+        }
+
+        #[test]
+        fn test_ssh_password_returns_none_when_no_id() {
+            let result = resolve_ssh_test_password(
+                None,
+                None,
+                |_| panic!("should not be called"),
+                |_| panic!("should not be called"),
+            );
+            assert_eq!(result, None);
+        }
+
+        #[test]
+        fn test_ssh_password_prefers_request_over_keychain() {
+            let saved = create_ssh_conn("id1", None, true);
+            let result = resolve_ssh_test_password(
+                Some("request_pwd"),
+                Some("id1"),
+                |_| Some(saved.clone()),
+                |_| Ok("kc".to_string()),
+            );
+            assert_eq!(result, Some("request_pwd".to_string()));
+        }
+
+        #[test]
+        fn test_ssh_empty_request_password_is_used() {
+            let saved = create_ssh_conn("id1", None, true);
+            let result = resolve_ssh_test_password(
+                Some("   "),
+                Some("id1"),
+                |_| Some(saved.clone()),
+                |_| Ok("kc".to_string()),
+            );
+            // Empty password from request should be used, not keychain
+            assert_eq!(result, Some("   ".to_string()));
+        }
+
+        #[test]
+        fn test_ssh_returns_none_when_no_password_anywhere() {
+            let saved = create_ssh_conn("id1", None, false);
+            let result = resolve_ssh_test_password(
+                None,
+                Some("id1"),
+                |_| Some(saved.clone()),
+                |_| Ok("".to_string()),
+            );
+            assert_eq!(result, None);
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn list_databases<R: Runtime>(
     app: AppHandle<R>,
-    params: ConnectionParams,
+    request: TestConnectionRequest,
 ) -> Result<Vec<String>, String> {
-    let expanded_params = expand_ssh_connection_params(&app, &params).await?;
-    let resolved_params = resolve_connection_params(&expanded_params)?;
-    
-    match resolved_params.driver.as_str() {
-        "mysql" => mysql::get_databases(&resolved_params).await,
-        "postgres" => postgres::get_databases(&resolved_params).await,
-        "sqlite" => sqlite::get_databases(&resolved_params).await,
-        _ => Err("Unsupported driver".into()),
+    use sqlx::any::AnyConnectOptions;
+    use sqlx::{AnyConnection, Connection, Row};
+    use std::str::FromStr;
+
+    let mut expanded_params = expand_ssh_connection_params(&app, &request.params).await?;
+
+    if request.params.password.is_none() && expanded_params.password.is_none() {
+        let saved_conn = match &request.connection_id {
+            Some(id) => find_connection_by_id(&app, id).ok(),
+            None => None,
+        };
+        expanded_params.password =
+            resolve_test_connection_password(&request.params, saved_conn.as_ref(), |conn_id| {
+                keychain_utils::get_db_password(conn_id)
+            });
     }
+
+    let resolved_params = resolve_connection_params(&expanded_params)?;
+
+    println!(
+        "[List Databases] Resolved Params: Host={:?}, Port={:?}, Username={:?}, Password={:?}",
+        resolved_params.host,
+        resolved_params.port,
+        resolved_params.username,
+        resolved_params.password
+    );
+
+    let (url, query) = match resolved_params.driver.as_str() {
+        "sqlite" => {
+            return Ok(vec![]);
+        }
+        "postgres" => {
+            let mut params = resolved_params.clone();
+            params.database = "postgres".to_string();
+            let url = build_connection_url(&params)?;
+            let query =
+                "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname";
+            (url, query)
+        }
+        "mysql" => {
+            let mut params = resolved_params.clone();
+            params.database = "information_schema".to_string();
+            let url = build_connection_url(&params)?;
+            let query = "SHOW DATABASES";
+            (url, query)
+        }
+        _ => return Err("Unsupported driver".into()),
+    };
+
+    let options = AnyConnectOptions::from_str(&url).map_err(|e| e.to_string())?;
+    let mut conn = AnyConnection::connect_with(&options)
+        .await
+        .map_err(|e: sqlx::Error| e.to_string())?;
+
+    let rows = sqlx::query(query)
+        .fetch_all(&mut conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let databases: Vec<String> = rows
+        .iter()
+        .map(|r| r.try_get(0).unwrap_or_default())
+        .collect();
+
+    Ok(databases)
 }
 
 #[tauri::command]
@@ -1157,4 +1544,114 @@ pub async fn open_er_diagram_window(
         .map_err(|e| format!("Failed to create ER Diagram window: {}", e))?;
 
     Ok(())
+}
+
+/// Builds a connection URL for a database driver.
+/// This is a pure function that can be tested without a database connection.
+pub fn build_connection_url(params: &ConnectionParams) -> Result<String, String> {
+    let user = encode(params.username.as_deref().unwrap_or_default());
+    let pass = encode(params.password.as_deref().unwrap_or_default());
+    let host = params.host.as_deref().unwrap_or("localhost");
+
+    match params.driver.as_str() {
+        "sqlite" => Ok(format!("sqlite://{}", params.database)),
+        "postgres" => Ok(format!(
+            "postgres://{}:{}@{}:{}/{}",
+            user,
+            pass,
+            host,
+            params.port.unwrap_or(5432),
+            params.database
+        )),
+        "mysql" => Ok(format!(
+            "mysql://{}:{}@{}:{}/{}",
+            user,
+            pass,
+            host,
+            params.port.unwrap_or(3306),
+            params.database
+        )),
+        _ => Err("Unsupported driver".into()),
+    }
+}
+
+fn resolve_test_connection_password(
+    params: &ConnectionParams,
+    saved_conn: Option<&SavedConnection>,
+    get_keychain_password: impl Fn(&str) -> Result<String, String>,
+) -> Option<String> {
+    if let Some(pwd) = &params.password {
+        return Some(pwd.clone());
+    }
+
+    let saved = saved_conn?;
+
+    if saved.params.save_in_keychain.unwrap_or(false) {
+        if let Ok(pwd) = get_keychain_password(&saved.id) {
+            if !pwd.trim().is_empty() {
+                return Some(pwd);
+            }
+        }
+    }
+
+    match &saved.params.password {
+        Some(pwd) if !pwd.trim().is_empty() => Some(pwd.clone()),
+        _ => None,
+    }
+}
+
+/// Resolves SSH credential (password or passphrase) for testing
+/// 1. Credential from request params (if provided, even if empty)
+/// 2. Credential from keychain (if save_in_keychain is enabled)
+/// 3. Credential from saved connection (as fallback)
+fn resolve_ssh_test_credential(
+    request_credential: Option<&str>,
+    connection_id: Option<&str>,
+    get_ssh_connection: impl Fn(&str) -> Option<SshConnection>,
+    get_keychain_credential: impl Fn(&str) -> Result<String, String>,
+    extract_saved_credential: impl Fn(&SshConnection) -> Option<String>,
+) -> Option<String> {
+    // Priority 1: Credential from request
+    // If credential field is present in request, use it even if empty
+    // Empty string means "use empty credential", not "fallback to keychain"
+    if let Some(cred) = request_credential {
+        return Some(cred.to_string());
+    }
+
+    // If no connection_id, we can't look up saved credentials
+    let conn_id = connection_id?;
+    let saved = get_ssh_connection(conn_id)?;
+
+    // Priority 2: Credential from keychain
+    if saved.save_in_keychain.unwrap_or(false) {
+        if let Ok(cred) = get_keychain_credential(conn_id) {
+            if !cred.trim().is_empty() {
+                return Some(cred);
+            }
+        }
+    }
+
+    // Priority 3: Credential from saved connection
+    extract_saved_credential(&saved)
+}
+
+/// Helper for backward compatibility - resolves SSH password
+fn resolve_ssh_test_password(
+    request_password: Option<&str>,
+    connection_id: Option<&str>,
+    get_ssh_connection: impl Fn(&str) -> Option<SshConnection>,
+    get_keychain_password: impl Fn(&str) -> Result<String, String>,
+) -> Option<String> {
+    resolve_ssh_test_credential(
+        request_password,
+        connection_id,
+        get_ssh_connection,
+        get_keychain_password,
+        |conn| {
+            conn.password
+                .as_ref()
+                .filter(|p| !p.trim().is_empty())
+                .cloned()
+        },
+    )
 }
