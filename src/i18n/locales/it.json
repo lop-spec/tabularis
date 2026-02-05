@@ -159,7 +159,13 @@
       "ollamaConnected": "Ollama connesso ({{count}} modelli trovati)",
       "ollamaNotDetected": "Ollama non rilevato sulla porta {{port}}. È in esecuzione?",
       "ollamaPort": "Porta Ollama",
-      "modelNotFound": "Modello <strong>{{model}}</strong> non trovato in <strong>{{provider}}</strong>. Potrebbe non funzionare correttamente."
+      "modelNotFound": "Modello <strong>{{model}}</strong> non trovato in <strong>{{provider}}</strong>. Potrebbe non funzionare correttamente.",
+      "customOpenaiEndpoint": "Endpoint Personalizzato",
+      "endpointUrl": "URL Endpoint",
+      "endpointUrlDesc": "L'URL base della tua API compatibile OpenAI. Esempi: https://api.groq.com/openai/v1, http://localhost:8000/v1",
+      "customOpenaiModelPlaceholder": "es., llama3-70b-8192, mixtral-8x7b",
+      "customOpenaiModelDesc": "Inserisci il nome del modello fornito dal tuo servizio compatibile OpenAI.",
+      "customOpenaiModelHelp": "Inserisci il nome esatto del modello per il tuo provider compatibile OpenAI."
     }
   },
   "ai": {

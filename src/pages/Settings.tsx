@@ -19,6 +19,7 @@ import {
   ZoomIn,
   RefreshCw,
   AlertTriangle,
+  Globe,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../hooks/useSettings";
@@ -142,8 +143,11 @@ export const Settings = () => {
       const openrouter = await invoke<boolean>("check_ai_key", {
         provider: "openrouter",
       });
+      const customOpenai = await invoke<boolean>("check_ai_key", {
+        provider: "custom-openai",
+      });
       const ollama = true; // Ollama is always "configured" as it's local
-      setAiKeyStatus({ openai, anthropic, openrouter, ollama });
+      setAiKeyStatus({ openai, anthropic, openrouter, "custom-openai": customOpenai, ollama });
     } catch (e) {
       console.error("Failed to check keys", e);
     }
@@ -189,6 +193,7 @@ export const Settings = () => {
     { id: "anthropic", label: "Anthropic" },
     { id: "openrouter", label: "OpenRouter" },
     { id: "ollama", label: "Ollama" },
+    { id: "custom-openai", label: "OpenAI Compatible" },
   ];
 
   return (
@@ -644,7 +649,9 @@ export const Settings = () => {
                     )}
                     <div className="flex justify-between items-center mt-1">
                         <p className="text-xs text-muted">
-                            {t("settings.ai.modelDesc")}
+                            {settings.aiProvider === "custom-openai" 
+                                ? t("settings.ai.customOpenaiModelHelp") 
+                                : t("settings.ai.modelDesc")}
                         </p>
                         <div className="flex gap-2">
                             <button
@@ -657,6 +664,32 @@ export const Settings = () => {
                         </div>
                     </div>
                   </div>
+
+                  {/* Custom OpenAI Endpoint URL */}
+                  {settings.aiProvider === "custom-openai" && (
+                      <div className="border-t border-default pt-6">
+                          <h4 className="text-md font-medium text-primary mb-4 flex items-center gap-2">
+                            <Globe size={16} /> {t("settings.ai.customOpenaiEndpoint")}
+                          </h4>
+                          <div className="space-y-4">
+                              <div>
+                                  <label className="block text-sm font-medium text-secondary mb-1">
+                                      {t("settings.ai.endpointUrl")}
+                                  </label>
+                                  <input
+                                      type="text"
+                                      value={settings.aiCustomOpenaiUrl || ""}
+                                      onChange={(e) => updateSetting("aiCustomOpenaiUrl", e.target.value)}
+                                      placeholder="https://api.example.com/v1"
+                                      className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500 w-full"
+                                  />
+                                  <p className="text-xs text-muted mt-1">
+                                      {t("settings.ai.endpointUrlDesc")}
+                                  </p>
+                              </div>
+                          </div>
+                      </div>
+                  )}
 
                   {/* API Keys Management */}
                   <div className="border-t border-default pt-6 mt-6">
@@ -716,6 +749,29 @@ export const Settings = () => {
                                     </p>
                                  </div>
                              </div>
+                          ) : p.id === 'custom-openai' ? (
+                              // Custom OpenAI provider - show API key input
+                              <div className="flex gap-2">
+                                <input
+                                  type="password"
+                                  placeholder={t("settings.ai.enterKey", { provider: p.label })}
+                                  className="flex-1 bg-base border border-strong rounded px-3 py-2 text-primary text-sm focus:outline-none focus:border-blue-500"
+                                  onChange={(e) => setKeyInput(e.target.value)}
+                                />
+                                <button
+                                  onClick={(e) => {
+                                    const input = (
+                                      e.currentTarget
+                                        .previousElementSibling as HTMLInputElement
+                                    ).value;
+                                    setKeyInput(input);
+                                    if (input) handleSaveKey(p.id);
+                                  }}
+                                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
+                                >
+                                  {t("common.save")}
+                                </button>
+                              </div>
                           ) : (
                               <div className="flex gap-2">
                                 <input

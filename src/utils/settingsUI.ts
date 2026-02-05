@@ -35,6 +35,8 @@ export function getProviderLabel(id: AiProvider): string {
       return 'OpenRouter';
     case 'ollama':
       return 'Ollama';
+    case 'custom-openai':
+      return 'OpenAI Compatible';
     default:
       return String(id).charAt(0).toUpperCase() + String(id).slice(1);
   }

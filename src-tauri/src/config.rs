@@ -20,6 +20,8 @@ pub struct AppConfig {
     pub ai_model: Option<String>,
     pub ai_custom_models: Option<HashMap<String, Vec<String>>>,
     pub ai_ollama_port: Option<u16>,
+    pub ai_custom_openai_url: Option<String>,
+    pub ai_custom_openai_model: Option<String>,
 }
 
 pub fn get_config_dir(app: &AppHandle) -> Option<PathBuf> {
@@ -88,6 +90,12 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         if config.ai_ollama_port.is_some() {
             existing_config.ai_ollama_port = config.ai_ollama_port;
         }
+        if config.ai_custom_openai_url.is_some() {
+            existing_config.ai_custom_openai_url = config.ai_custom_openai_url;
+        }
+        if config.ai_custom_openai_model.is_some() {
+            existing_config.ai_custom_openai_model = config.ai_custom_openai_model;
+        }
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;
         fs::write(config_path, content).map_err(|e| e.to_string())?;
@@ -108,6 +116,7 @@ pub fn get_ai_api_key(provider: &str) -> Result<String, String> {
         "openai" => "OPENAI_API_KEY",
         "anthropic" => "ANTHROPIC_API_KEY",
         "openrouter" => "OPENROUTER_API_KEY",
+        "custom-openai" => "CUSTOM_OPENAI_API_KEY",
         _ => "",
     };
 

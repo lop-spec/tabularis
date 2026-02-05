@@ -1,7 +1,7 @@
 import { createContext } from "react";
 
 export type AppLanguage = "auto" | "en" | "it";
-export type AiProvider = "openai" | "anthropic" | "openrouter" | "ollama";
+export type AiProvider = "openai" | "anthropic" | "openrouter" | "ollama" | "custom-openai";
 
 export interface Settings {
   resultPageSize: number; // Changed from queryLimit to match backend config
@@ -13,6 +13,8 @@ export interface Settings {
   aiModel: string | null;
   aiCustomModels?: Record<string, string[]>;
   aiOllamaPort?: number;
+  aiCustomOpenaiUrl?: string;
+  aiCustomOpenaiModel?: string;
 }
 
 export interface SettingsContextType {
@@ -35,4 +37,6 @@ export const DEFAULT_SETTINGS: Settings = {
   aiModel: null,
   aiCustomModels: undefined,
   aiOllamaPort: 11434,
+  aiCustomOpenaiUrl: "",
+  aiCustomOpenaiModel: "",
 };
