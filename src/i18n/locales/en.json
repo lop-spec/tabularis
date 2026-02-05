@@ -131,6 +131,7 @@
       "enableDesc": "Show AI Assist and Explain buttons in the editor",
       "defaultProvider": "Default Provider",
       "defaultModel": "Default Model",
+      "configuration": "Configuration",
       "selectProviderFirst": "Select a provider first",
       "modelDesc": "Select the model to be used for generation and explanation.",
       "manageKeys": "Manage API Keys",
@@ -138,6 +139,13 @@
       "configured": "Configured",
       "notConfigured": "Not configured",
       "enterKey": "Enter {{provider}} Key",
+      "keyStoredSecurely": "API Key is stored securely in your system keychain. Setting a key here overrides the environment variable.",
+      "fromEnv": "Environment",
+      "fromEnvTooltip": "This key is loaded from an environment variable",
+      "envVariableDetected": "An environment variable is present, but you can override it by setting a key above.",
+      "reset": "Reset",
+      "resetKey": "Delete custom key and revert to environment variable (if present)",
+      "keyResetSuccess": "Custom key deleted successfully",
       "systemPrompt": "System Prompt",
       "systemPromptDesc": "Customize the instructions given to the AI. Use {{SCHEMA}} as a placeholder for the database structure.",
       "enterSystemPrompt": "Enter system prompt...",
@@ -160,7 +168,13 @@
       "ollamaConnected": "Ollama connected ({{count}} models found)",
       "ollamaNotDetected": "Ollama not detected on port {{port}}. Is it running?",
       "ollamaPort": "Ollama Port",
-      "modelNotFound": "Model <strong>{{model}}</strong> not found in <strong>{{provider}}</strong>. It may not work correctly."
+      "modelNotFound": "Model <strong>{{model}}</strong> not found in <strong>{{provider}}</strong>. It may not work correctly.",
+      "customOpenaiEndpoint": "Custom Endpoint",
+      "endpointUrl": "Endpoint URL",
+      "endpointUrlDesc": "The base URL of your OpenAI-compatible API. Examples: https://api.groq.com/openai/v1, http://localhost:8000/v1",
+      "customOpenaiModelPlaceholder": "e.g., llama3-70b-8192, mixtral-8x7b",
+      "customOpenaiModelDesc": "Enter the model name provided by your OpenAI-compatible service.",
+      "customOpenaiModelHelp": "Enter the exact model name for your OpenAI-compatible provider."
     }
   },
   "ai": {

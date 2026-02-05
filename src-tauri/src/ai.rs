@@ -161,6 +161,42 @@ async fn fetch_openrouter_models() -> Vec<String> {
     }
 }
 
+async fn fetch_custom_openai_models(base_url: &str, api_key: &str) -> Vec<String> {
+    if base_url.is_empty() || api_key.is_empty() {
+        return Vec::new();
+    }
+    
+    let client = Client::new();
+    
+    // Build the /models endpoint URL
+    let url = if base_url.ends_with("/models") {
+        base_url.to_string()
+    } else if base_url.ends_with("/") {
+        format!("{}models", base_url)
+    } else if base_url.ends_with("/v1") {
+        format!("{}/models", base_url)
+    } else {
+        format!("{}/v1/models", base_url)
+    };
+    
+    match client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .send()
+        .await 
+    {
+        Ok(res) => {
+            if res.status().is_success() {
+                if let Ok(json) = res.json::<OpenAiModelList>().await {
+                    return json.data.into_iter().map(|m| m.id).collect();
+                }
+            }
+            Vec::new()
+        }
+        Err(_) => Vec::new(),
+    }
+}
+
 // --- Commands ---
 
 #[tauri::command]
@@ -194,6 +230,18 @@ pub async fn get_ai_models(app: AppHandle, force_refresh: bool) -> Result<HashMa
                     cached_models.insert("ollama".to_string(), ollama_models);
                 } else {
                      cached_models.insert("ollama".to_string(), vec![]);
+                }
+
+                // Always refresh custom-openai as it depends on user configuration
+                if let (Some(base_url), Ok(api_key)) = (app_config.ai_custom_openai_url.clone(), config::get_ai_api_key("custom-openai")) {
+                    if !base_url.is_empty() && !api_key.is_empty() {
+                        let custom_models = fetch_custom_openai_models(&base_url, &api_key).await;
+                        if !custom_models.is_empty() {
+                            cached_models.insert("custom-openai".to_string(), custom_models);
+                        } else {
+                            cached_models.insert("custom-openai".to_string(), vec![]);
+                        }
+                    }
                 }
                 
                 return Ok(cached_models);
@@ -237,6 +285,22 @@ pub async fn get_ai_models(app: AppHandle, force_refresh: bool) -> Result<HashMa
              *static_list = new_list;
         }
     }
+
+    // 4. Custom OpenAI (Dynamic if configured)
+    if let (Some(base_url), Ok(api_key)) = (app_config.ai_custom_openai_url, config::get_ai_api_key("custom-openai")) {
+        if !base_url.is_empty() && !api_key.is_empty() {
+            let custom_models = fetch_custom_openai_models(&base_url, &api_key).await;
+            if !custom_models.is_empty() {
+                models.insert("custom-openai".to_string(), custom_models);
+            } else {
+                models.insert("custom-openai".to_string(), vec![]);
+            }
+        } else {
+            models.insert("custom-openai".to_string(), vec![]);
+        }
+    } else {
+        models.insert("custom-openai".to_string(), vec![]);
+    }
     
     // Save to Cache
     save_cache(&app, &models);
@@ -257,7 +321,7 @@ pub async fn explain_ai_query(app: AppHandle, req: AiExplainRequest) -> Result<S
 // --- Logic Implementation ---
 
 pub async fn generate_query(app: AppHandle, mut req: AiGenerateRequest) -> Result<String, String> {
-    // Load config to get Ollama port
+    // Load config to get Ollama port and custom OpenAI settings
     let app_config = config::load_config_internal(&app);
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
 
@@ -267,6 +331,17 @@ pub async fn generate_query(app: AppHandle, mut req: AiGenerateRequest) -> Resul
              let ollama_models = fetch_ollama_models(ollama_port).await;
              let default = ollama_models.first().ok_or("No Ollama models found. Is Ollama running?")?;
              req.model = default.clone();
+        } else if req.provider == "custom-openai" {
+            // Use configured custom OpenAI model or require user to set one
+            if let Some(ref custom_model) = app_config.ai_custom_openai_model {
+                if !custom_model.is_empty() {
+                    req.model = custom_model.clone();
+                } else {
+                    return Err("No model specified for custom OpenAI provider. Please configure a model in Settings.".to_string());
+                }
+            } else {
+                return Err("No model specified for custom OpenAI provider. Please configure a model in Settings.".to_string());
+            }
         } else {
             let models = load_default_models(); // Use hardcoded defaults for fallback logic
             let default_model = models.get(&req.provider)
@@ -292,12 +367,20 @@ pub async fn generate_query(app: AppHandle, mut req: AiGenerateRequest) -> Resul
         "anthropic" => generate_anthropic(&client, &api_key, &req, &system_prompt).await,
         "openrouter" => generate_openrouter(&client, &api_key, &req, &system_prompt).await,
         "ollama" => generate_ollama(&client, &req, &system_prompt, ollama_port).await,
+        "custom-openai" => {
+            let base_url = app_config.ai_custom_openai_url
+                .ok_or("Custom OpenAI URL not configured. Please set it in Settings.")?;
+            if base_url.is_empty() {
+                return Err("Custom OpenAI URL not configured. Please set it in Settings.".to_string());
+            }
+            generate_custom_openai(&client, &api_key, &req, &system_prompt, &base_url).await
+        }
         _ => Err(format!("Unsupported provider: {}", req.provider)),
     }
 }
 
 pub async fn explain_query(app: AppHandle, mut req: AiExplainRequest) -> Result<String, String> {
-    // Load config to get Ollama port
+    // Load config to get Ollama port and custom OpenAI settings
     let app_config = config::load_config_internal(&app);
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
 
@@ -306,6 +389,17 @@ pub async fn explain_query(app: AppHandle, mut req: AiExplainRequest) -> Result<
              let ollama_models = fetch_ollama_models(ollama_port).await;
              let default = ollama_models.first().ok_or("No Ollama models found. Is Ollama running?")?;
              req.model = default.clone();
+        } else if req.provider == "custom-openai" {
+            // Use configured custom OpenAI model or require user to set one
+            if let Some(ref custom_model) = app_config.ai_custom_openai_model {
+                if !custom_model.is_empty() {
+                    req.model = custom_model.clone();
+                } else {
+                    return Err("No model specified for custom OpenAI provider. Please configure a model in Settings.".to_string());
+                }
+            } else {
+                return Err("No model specified for custom OpenAI provider. Please configure a model in Settings.".to_string());
+            }
         } else {
             let models = load_default_models();
             let default_model = models.get(&req.provider)
@@ -344,6 +438,14 @@ pub async fn explain_query(app: AppHandle, mut req: AiExplainRequest) -> Result<
         "anthropic" => generate_anthropic(&client, &api_key, &gen_req, &system_prompt).await,
         "openrouter" => generate_openrouter(&client, &api_key, &gen_req, &system_prompt).await,
         "ollama" => generate_ollama(&client, &gen_req, &system_prompt, ollama_port).await,
+        "custom-openai" => {
+            let base_url = app_config.ai_custom_openai_url
+                .ok_or("Custom OpenAI URL not configured. Please set it in Settings.")?;
+            if base_url.is_empty() {
+                return Err("Custom OpenAI URL not configured. Please set it in Settings.".to_string());
+            }
+            generate_custom_openai(&client, &api_key, &gen_req, &system_prompt, &base_url).await
+        }
         _ => Err(format!("Unsupported provider: {}", req.provider)),
     }
 }
@@ -377,6 +479,49 @@ async fn generate_openai(client: &Client, api_key: &str, req: &AiGenerateRequest
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .ok_or("Invalid response format from OpenAI")?;
+
+    Ok(clean_response(content))
+}
+
+async fn generate_custom_openai(client: &Client, api_key: &str, req: &AiGenerateRequest, system_prompt: &str, base_url: &str) -> Result<String, String> {
+    let body = json!({
+        "model": req.model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": req.prompt}
+        ],
+        "temperature": 0.0
+    });
+
+    // Ensure base_url ends with /v1/chat/completions or append it
+    let url = if base_url.ends_with("/v1/chat/completions") {
+        base_url.to_string()
+    } else if base_url.ends_with("/") {
+        format!("{}v1/chat/completions", base_url)
+    } else if base_url.ends_with("/v1") {
+        format!("{}/chat/completions", base_url)
+    } else {
+        format!("{}/v1/chat/completions", base_url)
+    };
+
+    let res = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !res.status().is_success() {
+        let error_text = res.text().await.unwrap_or_default();
+        return Err(format!("Custom OpenAI Error: {}", error_text));
+    }
+
+    let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    let content = json["choices"][0]["message"]["content"]
+        .as_str()
+        .ok_or("Invalid response format from custom OpenAI-compatible provider")?;
 
     Ok(clean_response(content))
 }
