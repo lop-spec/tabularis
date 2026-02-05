@@ -1,7 +1,12 @@
 import { createContext } from "react";
 
 export type AppLanguage = "auto" | "en" | "it";
-export type AiProvider = "openai" | "anthropic" | "openrouter" | "ollama" | "custom-openai";
+export type AiProvider =
+  | "openai"
+  | "anthropic"
+  | "openrouter"
+  | "ollama"
+  | "custom-openai";
 
 export interface Settings {
   resultPageSize: number; // Changed from queryLimit to match backend config
@@ -15,6 +20,7 @@ export interface Settings {
   aiOllamaPort?: number;
   aiCustomOpenaiUrl?: string;
   aiCustomOpenaiModel?: string;
+  autoCheckUpdatesOnStartup?: boolean;
 }
 
 export interface SettingsContextType {

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { NavItem } from "./NavItem";
+import { NavItem } from "../../../../src/components/layout/sidebar/NavItem";
 import { Database } from "lucide-react";
 
 describe("NavItem", () => {
@@ -9,7 +9,7 @@ describe("NavItem", () => {
     render(
       <MemoryRouter>
         <NavItem to="/test" icon={Database} label="Test Label" />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     expect(screen.getByText("Test Label")).toBeInTheDocument();
@@ -19,8 +19,13 @@ describe("NavItem", () => {
   it("shows connection indicator when isConnected is true", () => {
     const { container } = render(
       <MemoryRouter>
-        <NavItem to="/test" icon={Database} label="Test Label" isConnected={true} />
-      </MemoryRouter>
+        <NavItem
+          to="/test"
+          icon={Database}
+          label="Test Label"
+          isConnected={true}
+        />
+      </MemoryRouter>,
     );
 
     // Check for the green dot (bg-green-500)
@@ -32,8 +37,13 @@ describe("NavItem", () => {
   it("does not show connection indicator when isConnected is false", () => {
     const { container } = render(
       <MemoryRouter>
-        <NavItem to="/test" icon={Database} label="Test Label" isConnected={false} />
-      </MemoryRouter>
+        <NavItem
+          to="/test"
+          icon={Database}
+          label="Test Label"
+          isConnected={false}
+        />
+      </MemoryRouter>,
     );
 
     const indicator = container.querySelector(".bg-green-500");

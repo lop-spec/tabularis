@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { useSettings } from './useSettings';
-import { SettingsContext, DEFAULT_SETTINGS, type Settings } from '../contexts/SettingsContext';
+import { useSettings } from '../../src/hooks/useSettings';
+import { SettingsContext, DEFAULT_SETTINGS, type Settings } from '../../src/contexts/SettingsContext';
 import { renderHook } from '@testing-library/react';
 import React, { type ReactNode } from 'react';
-import type { SettingsContextType } from '../contexts/SettingsContext';
+import type { SettingsContextType } from '../../src/contexts/SettingsContext';
 
 describe('useSettings', () => {
   it('should throw error when used outside SettingsProvider', () => {

@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { useSidebarResize } from "./useSidebarResize";
+import { useSidebarResize } from "../../src/hooks/useSidebarResize";
 
 describe("useSidebarResize", () => {
   beforeEach(() => {

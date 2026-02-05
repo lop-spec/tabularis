@@ -13,6 +13,7 @@ pub mod ssh_tunnel;
 pub mod mcp;
 pub mod theme_commands;
 pub mod theme_models;
+pub mod updater;
 #[cfg(test)]
 pub mod dump_commands_tests;
 pub mod drivers {
@@ -71,6 +72,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(commands::QueryCancellationState::default())
         .manage(export::ExportCancellationState::default())
         .manage(dump_commands::DumpCancellationState::default())
@@ -139,6 +141,9 @@ pub fn run() {
             dump_commands::import_database,
             dump_commands::cancel_import,
             dump_commands::cancel_dump,
+            // Updater
+            updater::check_for_updates,
+            updater::download_and_install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

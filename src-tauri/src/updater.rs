@@ -1,0 +1,356 @@
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::Emitter;
+use tauri::{AppHandle, Manager};
+
+// Strutture dati
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheckResult {
+    pub has_update: bool,
+    pub current_version: String,
+    pub latest_version: String,
+    pub release_notes: String,
+    pub release_url: String,
+    pub published_at: String,
+    pub download_urls: Vec<DownloadAsset>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadAsset {
+    pub name: String,
+    pub url: String,
+    pub size: u64,
+    pub platform: String,
+}
+
+// Cache structure
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct UpdateCheckCache {
+    last_checked: u64,
+    last_result: Option<UpdateCheckResult>,
+}
+
+// GitHub API response
+#[derive(Deserialize, Debug)]
+struct GitHubRelease {
+    tag_name: String,
+    name: String,
+    body: String,
+    html_url: String,
+    published_at: String,
+    assets: Vec<GitHubAsset>,
+}
+
+#[derive(Deserialize, Debug)]
+struct GitHubAsset {
+    name: String,
+    browser_download_url: String,
+    size: u64,
+}
+
+// Constants
+const GITHUB_REPO: &str = "debba/tabularis";
+const CACHE_DURATION_SECS: u64 = 43200; // 12 hours
+
+// Helper functions
+fn get_cache_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|p| p.join("update_check_cache.json"))
+}
+
+fn parse_version(version: &str) -> Option<(u32, u32, u32)> {
+    let clean = version.trim_start_matches('v');
+    let parts: Vec<&str> = clean.split('.').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+
+    let major = parts[0].parse().ok()?;
+    let minor = parts[1].parse().ok()?;
+    let patch = parts[2].parse().ok()?;
+
+    Some((major, minor, patch))
+}
+
+fn is_newer_version(current: &str, latest: &str) -> bool {
+    match (parse_version(current), parse_version(latest)) {
+        (Some(c), Some(l)) => l > c,
+        _ => false,
+    }
+}
+
+async fn fetch_latest_release() -> Result<GitHubRelease, String> {
+    let client = Client::new();
+    let url = format!(
+        "https://api.github.com/repos/{}/releases/latest",
+        GITHUB_REPO
+    );
+
+    let res = client
+        .get(&url)
+        .header("User-Agent", "Tabularis")
+        .header("Accept", "application/vnd.github.v3+json")
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("GitHub API error: {}", res.status()));
+    }
+
+    res.json::<GitHubRelease>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
+}
+
+fn categorize_asset(name: &str) -> String {
+    if name.ends_with(".dmg") || name.contains("darwin") || name.contains("macos") {
+        "macos".to_string()
+    } else if name.ends_with(".exe") || name.ends_with(".msi") || name.contains("windows") {
+        "windows".to_string()
+    } else if name.ends_with(".AppImage") || name.ends_with(".deb") || name.ends_with(".rpm") {
+        "linux".to_string()
+    } else {
+        "other".to_string()
+    }
+}
+
+// Tauri commands
+#[tauri::command]
+pub async fn check_for_updates(app: AppHandle, force: bool) -> Result<UpdateCheckResult, String> {
+    let config = crate::config::load_config_internal(&app);
+
+    // Check if updates are disabled
+    if !force && config.check_for_updates == Some(false) {
+        return Err("Update checks disabled".to_string());
+    }
+
+    // Check cache if not forced
+    if !force {
+        if let Some(cache_path) = get_cache_path(&app) {
+            if cache_path.exists() {
+                if let Ok(content) = fs::read_to_string(&cache_path) {
+                    if let Ok(cache) = serde_json::from_str::<UpdateCheckCache>(&content) {
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
+
+                        if now - cache.last_checked < CACHE_DURATION_SECS {
+                            if let Some(result) = cache.last_result {
+                                return Ok(result);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fetch latest release from GitHub
+    let release = fetch_latest_release().await?;
+
+    let current_version = env!("CARGO_PKG_VERSION");
+    let latest_version = release.tag_name.trim_start_matches('v');
+
+    let download_urls = release
+        .assets
+        .into_iter()
+        .map(|asset| DownloadAsset {
+            name: asset.name.clone(),
+            url: asset.browser_download_url,
+            size: asset.size,
+            platform: categorize_asset(&asset.name),
+        })
+        .collect();
+
+    let result = UpdateCheckResult {
+        has_update: is_newer_version(current_version, &release.tag_name),
+        current_version: current_version.to_string(),
+        latest_version: latest_version.to_string(),
+        release_notes: release.body,
+        release_url: release.html_url,
+        published_at: release.published_at,
+        download_urls,
+    };
+
+    // Save to cache
+    if let Some(cache_path) = get_cache_path(&app) {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let cache = UpdateCheckCache {
+            last_checked: timestamp,
+            last_result: Some(result.clone()),
+        };
+
+        if let Ok(content) = serde_json::to_string(&cache) {
+            let _ = fs::write(cache_path, content);
+        }
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn download_and_install_update(app: AppHandle) -> Result<(), String> {
+    // Usa tauri-plugin-updater per gestire il download e installazione
+    use tauri_plugin_updater::UpdaterExt;
+
+    let updater = app.updater_builder().build().map_err(|e| e.to_string())?;
+
+    if let Some(update) = updater.check().await.map_err(|e| e.to_string())? {
+        // Emetti eventi per aggiornare la UI sul progresso
+        let mut downloaded = 0;
+
+        update
+            .download_and_install(
+                |chunk_length, content_length| {
+                    downloaded += chunk_length;
+                    let progress = if let Some(total) = content_length {
+                        (downloaded as f64 / total as f64 * 100.0) as u32
+                    } else {
+                        0
+                    };
+
+                    let _ = app.emit("update-progress", progress);
+                },
+                || {
+                    // Pre-installazione: salva stato, chiudi connessioni, etc.
+                    let _ = app.emit("update-installing", ());
+                },
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Dopo l'installazione, l'app si riavvierà automaticamente
+        Ok(())
+    } else {
+        Err("No update available".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Version parsing tests
+    #[test]
+    fn test_version_parsing_standard() {
+        assert_eq!(parse_version("0.8.8"), Some((0, 8, 8)));
+        assert_eq!(parse_version("1.2.3"), Some((1, 2, 3)));
+        assert_eq!(parse_version("10.20.30"), Some((10, 20, 30)));
+    }
+
+    #[test]
+    fn test_version_parsing_with_v_prefix() {
+        assert_eq!(parse_version("v0.8.8"), Some((0, 8, 8)));
+        assert_eq!(parse_version("v1.0.0"), Some((1, 0, 0)));
+    }
+
+    #[test]
+    fn test_version_parsing_invalid() {
+        assert_eq!(parse_version("invalid"), None);
+        assert_eq!(parse_version("1.2"), None);
+        assert_eq!(parse_version("1.2.3.4"), None);
+        assert_eq!(parse_version("a.b.c"), None);
+        assert_eq!(parse_version(""), None);
+    }
+
+    #[test]
+    fn test_version_parsing_edge_cases() {
+        assert_eq!(parse_version("0.0.0"), Some((0, 0, 0)));
+        assert_eq!(parse_version("999.999.999"), Some((999, 999, 999)));
+    }
+
+    // Version comparison tests
+    #[test]
+    fn test_version_comparison_newer() {
+        assert!(is_newer_version("0.8.8", "0.9.0"));
+        assert!(is_newer_version("0.8.8", "0.8.9"));
+        assert!(is_newer_version("0.8.8", "1.0.0"));
+        assert!(is_newer_version("1.0.0", "2.0.0"));
+    }
+
+    #[test]
+    fn test_version_comparison_not_newer() {
+        assert!(!is_newer_version("0.8.8", "0.8.8"));
+        assert!(!is_newer_version("0.8.8", "0.8.7"));
+        assert!(!is_newer_version("0.8.8", "0.7.9"));
+        assert!(!is_newer_version("1.0.0", "0.9.9"));
+    }
+
+    #[test]
+    fn test_version_comparison_with_v_prefix() {
+        assert!(is_newer_version("0.8.8", "v0.9.0"));
+        assert!(is_newer_version("v0.8.8", "0.9.0"));
+        assert!(is_newer_version("v0.8.8", "v0.9.0"));
+    }
+
+    #[test]
+    fn test_version_comparison_invalid() {
+        assert!(!is_newer_version("invalid", "0.9.0"));
+        assert!(!is_newer_version("0.8.8", "invalid"));
+        assert!(!is_newer_version("invalid", "invalid"));
+    }
+
+    // Asset categorization tests
+    #[test]
+    fn test_categorize_asset_macos() {
+        assert_eq!(categorize_asset("Tabularis_0.8.8_x64.dmg"), "macos");
+        assert_eq!(categorize_asset("Tabularis_0.8.8_aarch64.dmg"), "macos");
+        assert_eq!(categorize_asset("tabularis-darwin.zip"), "macos");
+        assert_eq!(categorize_asset("app-macos-universal.tar.gz"), "macos");
+    }
+
+    #[test]
+    fn test_categorize_asset_windows() {
+        assert_eq!(categorize_asset("Tabularis_0.8.8_x64_setup.exe"), "windows");
+        assert_eq!(categorize_asset("tabularis.msi"), "windows");
+        assert_eq!(categorize_asset("app-windows-x86_64.zip"), "windows");
+    }
+
+    #[test]
+    fn test_categorize_asset_linux() {
+        assert_eq!(categorize_asset("tabularis_0.8.8_amd64.AppImage"), "linux");
+        assert_eq!(categorize_asset("tabularis_0.8.8_amd64.deb"), "linux");
+        assert_eq!(categorize_asset("tabularis-0.8.8-1.x86_64.rpm"), "linux");
+    }
+
+    #[test]
+    fn test_categorize_asset_other() {
+        assert_eq!(categorize_asset("README.txt"), "other");
+        assert_eq!(categorize_asset("checksums.sha256"), "other");
+        assert_eq!(categorize_asset("unknown-file"), "other");
+    }
+
+    // Cache path tests
+    #[test]
+    fn test_cache_filename() {
+        let expected = "update_check_cache.json";
+        assert!(expected.ends_with(".json"));
+        assert!(expected.contains("cache"));
+    }
+
+    // GitHub repo constant test
+    #[test]
+    fn test_github_repo_constant() {
+        assert_eq!(GITHUB_REPO, "debba/tabularis");
+    }
+
+    // Cache duration test
+    #[test]
+    fn test_cache_duration() {
+        assert_eq!(CACHE_DURATION_SECS, 43200); // 12 hours in seconds
+        assert_eq!(CACHE_DURATION_SECS / 3600, 12); // Verify it's 12 hours
+    }
+}

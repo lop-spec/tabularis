@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { useEditor } from './useEditor';
-import { EditorContext, type EditorContextType } from '../contexts/EditorContext';
+import { useEditor } from '../../src/hooks/useEditor';
+import { EditorContext, type EditorContextType } from '../../src/contexts/EditorContext';
 import { renderHook } from '@testing-library/react';
 import React, { type ReactNode } from 'react';
-import type { Tab } from '../types/editor';
+import type { Tab } from '../../src/types/editor';
 
 describe('useEditor', () => {
   it('should throw error when used outside EditorProvider', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { useSavedQueries } from './useSavedQueries';
-import { SavedQueriesContext, type SavedQueriesContextType, type SavedQuery } from '../contexts/SavedQueriesContext';
+import { useSavedQueries } from '../../src/hooks/useSavedQueries';
+import { SavedQueriesContext, type SavedQueriesContextType, type SavedQuery } from '../../src/contexts/SavedQueriesContext';
 import { renderHook } from '@testing-library/react';
 import React, { type ReactNode } from 'react';
 

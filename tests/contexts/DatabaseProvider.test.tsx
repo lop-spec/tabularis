@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { DatabaseProvider } from './DatabaseProvider';
-import { useDatabase } from '../hooks/useDatabase';
+import { DatabaseProvider } from '../../src/contexts/DatabaseProvider';
+import { useDatabase } from '../../src/hooks/useDatabase';
 import { invoke } from '@tauri-apps/api/core';
 import React from 'react';
 
@@ -9,7 +9,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('../utils/autocomplete', () => ({
+vi.mock('../../src/utils/autocomplete', () => ({
   clearAutocompleteCache: vi.fn(),
 }));
 

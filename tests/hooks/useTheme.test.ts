@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { useTheme } from './useTheme';
-import { ThemeContext } from '../contexts/ThemeContext';
+import { useTheme } from '../../src/hooks/useTheme';
+import { ThemeContext } from '../../src/contexts/ThemeContext';
 import { renderHook } from '@testing-library/react';
 import React, { type ReactNode } from 'react';
-import type { Theme, ThemeSettings } from '../types/theme';
-import type { ThemeContextType } from '../contexts/ThemeContext';
+import type { Theme, ThemeSettings } from '../../src/types/theme';
+import type { ThemeContextType } from '../../src/contexts/ThemeContext';
 
 describe('useTheme', () => {
   it('should throw error when used outside ThemeProvider', () => {

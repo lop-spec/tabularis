@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { useDatabase } from './useDatabase';
-import { DatabaseContext, type DatabaseContextType } from '../contexts/DatabaseContext';
+import { useDatabase } from '../../src/hooks/useDatabase';
+import { DatabaseContext, type DatabaseContextType } from '../../src/contexts/DatabaseContext';
 import { renderHook } from '@testing-library/react';
 import React, { type ReactNode } from 'react';
 

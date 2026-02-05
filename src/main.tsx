@@ -8,19 +8,22 @@ import { SettingsProvider } from './contexts/SettingsProvider';
 import { SavedQueriesProvider } from './contexts/SavedQueriesProvider';
 import { EditorProvider } from './contexts/EditorProvider';
 import { ThemeProvider } from './contexts/ThemeProvider';
+import { UpdateProvider } from './contexts/UpdateProvider';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <SettingsProvider>
-        <DatabaseProvider>
-          <SavedQueriesProvider>
-            <EditorProvider>
-              <App />
-            </EditorProvider>
-          </SavedQueriesProvider>
-        </DatabaseProvider>
-      </SettingsProvider>
-    </ThemeProvider>
+    <UpdateProvider>
+      <ThemeProvider>
+        <SettingsProvider>
+          <DatabaseProvider>
+            <SavedQueriesProvider>
+              <EditorProvider>
+                <App />
+              </EditorProvider>
+            </SavedQueriesProvider>
+          </DatabaseProvider>
+        </SettingsProvider>
+      </ThemeProvider>
+    </UpdateProvider>
   </React.StrictMode>,
 );

@@ -175,7 +175,32 @@
       "customOpenaiModelPlaceholder": "e.g., llama3-70b-8192, mixtral-8x7b",
       "customOpenaiModelDesc": "Enter the model name provided by your OpenAI-compatible service.",
       "customOpenaiModelHelp": "Enter the exact model name for your OpenAI-compatible provider."
-    }
+    },
+    "updates": "Updates",
+    "autoCheckUpdates": "Check for updates on startup",
+    "autoCheckUpdatesDesc": "Automatically check for new versions when the app launches",
+    "checkNow": "Check for Updates Now",
+    "checking": "Checking...",
+    "currentVersion": "Current Version"
+  },
+  "update": {
+    "newVersionAvailable": "New Version Available",
+    "version": "Version",
+    "releaseNotes": "Release Notes",
+    "downloads": "Downloads",
+    "download": "Download",
+    "downloadAndInstall": "Download & Install",
+    "downloading": "Downloading...",
+    "installing": "Installing...",
+    "installingMessage": "The app will restart automatically after installation",
+    "viewOnGitHub": "View on GitHub",
+    "remindLater": "Remind Me Later",
+    "skipVersion": "Skip This Version",
+    "checkingForUpdates": "Checking for updates...",
+    "upToDate": "You're up to date",
+    "updateAvailable": "Version {{version}} is available",
+    "error": "Update Error",
+    "currentVersion": "Current version"
   },
   "ai": {
     "assist": "AI Assist",
