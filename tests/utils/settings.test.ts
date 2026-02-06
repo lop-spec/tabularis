@@ -513,7 +513,8 @@ describe('settings', () => {
       expect(pendingFeatures.length).toBeGreaterThan(0);
       
       const labels = pendingFeatures.map(f => f.label);
-      expect(labels).toContain('Database Export/Dump');
+      expect(labels).toContain('Better support for PostgreSQL & SQLite');
+      expect(labels).toContain('Query history');
     });
 
     it('should have label and done properties for all items', () => {

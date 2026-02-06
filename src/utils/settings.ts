@@ -1,19 +1,24 @@
-import type { Settings, AppLanguage, AiProvider } from '../contexts/SettingsContext';
+import type {
+  Settings,
+  AppLanguage,
+  AiProvider,
+} from "../contexts/SettingsContext";
 
 export const FONT_MAP: Record<string, string> = {
-  System: 'system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, sans-serif',
-  'Open Sans': 'Open Sans, system-ui, sans-serif',
-  Roboto: 'Roboto, RobotoDraft, Helvetica, Arial, sans-serif',
-  'JetBrains Mono': 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
-  Hack: 'Hack, Menlo, Monaco, Consolas, monospace',
-  Menlo: 'Menlo, Monaco, Consolas, monospace',
-  'DejaVu Sans Mono': 'DejaVu Sans Mono, Menlo, Monaco, Consolas, monospace',
+  System:
+    "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, sans-serif",
+  "Open Sans": "Open Sans, system-ui, sans-serif",
+  Roboto: "Roboto, RobotoDraft, Helvetica, Arial, sans-serif",
+  "JetBrains Mono": "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+  Hack: "Hack, Menlo, Monaco, Consolas, monospace",
+  Menlo: "Menlo, Monaco, Consolas, monospace",
+  "DejaVu Sans Mono": "DejaVu Sans Mono, Menlo, Monaco, Consolas, monospace",
 };
 
 export const DEFAULT_FONT_SIZE = 14;
-export const DEFAULT_FONT_FAMILY = 'System';
-export const FONT_CACHE_KEY = 'tabularis_font_cache';
-export const OLD_SETTINGS_KEY = 'tabularis_settings';
+export const DEFAULT_FONT_FAMILY = "System";
+export const FONT_CACHE_KEY = "tabularis_font_cache";
+export const OLD_SETTINGS_KEY = "tabularis_settings";
 
 export interface FontCache {
   fontFamily: string;
@@ -26,16 +31,16 @@ export interface MigrationResult {
 }
 
 export function getFontCSS(fontFamily: string): string {
-  return FONT_MAP[fontFamily] || fontFamily || FONT_MAP['System'];
+  return FONT_MAP[fontFamily] || fontFamily || FONT_MAP["System"];
 }
 
 export function createFontCSSVariables(
   fontFamily: string,
-  fontSize: number
+  fontSize: number,
 ): Record<string, string> {
   return {
-    '--font-base': getFontCSS(fontFamily),
-    '--font-size-base': `${fontSize || DEFAULT_FONT_SIZE}px`,
+    "--font-base": getFontCSS(fontFamily),
+    "--font-size-base": `${fontSize || DEFAULT_FONT_SIZE}px`,
   };
 }
 
@@ -46,7 +51,7 @@ export function loadFontCache(): FontCache | null {
       return JSON.parse(cached) as FontCache;
     }
   } catch (e) {
-    console.warn('Failed to load font cache:', e);
+    console.warn("Failed to load font cache:", e);
   }
   return null;
 }
@@ -55,19 +60,20 @@ export function saveFontCache(fontFamily: string, fontSize: number): void {
   try {
     localStorage.setItem(
       FONT_CACHE_KEY,
-      JSON.stringify({ fontFamily, fontSize })
+      JSON.stringify({ fontFamily, fontSize }),
     );
   } catch (e) {
-    console.warn('Failed to save font cache:', e);
+    console.warn("Failed to save font cache:", e);
   }
 }
 
 export function migrateFromLocalStorage(
-  backendConfig: Partial<Settings>
+  backendConfig: Partial<Settings>,
 ): MigrationResult {
   // Check if migration is needed (backend is empty/default)
-  const needsMigration = !backendConfig.resultPageSize && !backendConfig.language;
-  
+  const needsMigration =
+    !backendConfig.resultPageSize && !backendConfig.language;
+
   if (!needsMigration) {
     return { settings: backendConfig, migrated: false };
   }
@@ -81,12 +87,12 @@ export function migrateFromLocalStorage(
     const localData = JSON.parse(savedLocal);
     const migratedSettings: Partial<Settings> = {
       resultPageSize: localData.queryLimit || 500,
-      language: localData.language || 'auto',
+      language: localData.language || "auto",
     };
 
     return { settings: migratedSettings, migrated: true };
   } catch (e) {
-    console.error('Failed to migrate settings from localStorage:', e);
+    console.error("Failed to migrate settings from localStorage:", e);
     return { settings: backendConfig, migrated: false };
   }
 }
@@ -95,10 +101,10 @@ export function mergeSettings(
   defaults: Settings,
   backendConfig: Partial<Settings>,
   migratedSettings: Partial<Settings>,
-  wasMigrated: boolean
+  wasMigrated: boolean,
 ): Settings {
   const baseSettings = wasMigrated ? migratedSettings : backendConfig;
-  
+
   const merged: Settings = {
     ...defaults,
     ...baseSettings,
@@ -120,10 +126,10 @@ export interface DetectedAIConfig {
 
 export function detectAIProviderFromKeys(
   keyStatus: Record<AiProvider, boolean>,
-  availableModels: Record<string, string[]>
+  availableModels: Record<string, string[]>,
 ): DetectedAIConfig {
-  const providers: AiProvider[] = ['openai', 'anthropic', 'openrouter'];
-  
+  const providers: AiProvider[] = ["openai", "anthropic", "openrouter"];
+
   for (const provider of providers) {
     if (keyStatus[provider]) {
       const models = availableModels[provider] || [];
@@ -133,7 +139,7 @@ export function detectAIProviderFromKeys(
       };
     }
   }
-  
+
   return { provider: null, model: null };
 }
 
@@ -143,24 +149,24 @@ export function shouldDetectAIProvider(settings: Settings): boolean {
 
 export function applyFontToDocument(
   fontFamily: string,
-  fontSize: number
+  fontSize: number,
 ): void {
-  if (typeof document === 'undefined') return;
-  
+  if (typeof document === "undefined") return;
+
   const cssFont = getFontCSS(fontFamily);
   const size = fontSize || DEFAULT_FONT_SIZE;
-  
-  document.documentElement.style.setProperty('--font-base', cssFont);
-  document.documentElement.style.setProperty('--font-size-base', `${size}px`);
+
+  document.documentElement.style.setProperty("--font-base", cssFont);
+  document.documentElement.style.setProperty("--font-size-base", `${size}px`);
   document.body.style.fontFamily = cssFont;
   document.body.style.fontSize = `${size}px`;
 }
 
 export function getLanguageForI18n(
   language: AppLanguage,
-  systemLanguage?: string
+  systemLanguage?: string,
 ): string | undefined {
-  if (language === 'auto') {
+  if (language === "auto") {
     return systemLanguage;
   }
   return language;
@@ -177,21 +183,10 @@ export const AVAILABLE_FONTS = [
 ] as const;
 
 // Project roadmap - feature status tracking
-export const ROADMAP = [
-  { label: "Multi-database support (MySQL, Postgres, SQLite)", done: true },
-  { label: "SSH Tunneling", done: true },
-  { label: "Schema Introspection", done: true },
-  { label: "SQL Execution & Results Grid", done: true },
-  { label: "Inline Editing & Deletion", done: true },
-  { label: "Create New Table Wizard", done: true },
-  { label: "Data Export (CSV/JSON)", done: true },
-  { label: "Result Limiting & Pagination", done: true },
-  { label: "Multiple Query Tabs", done: true },
-  { label: "Saved Queries & Persistence", done: true },
-  { label: "Visual Query Builder (Experimental)", done: true },
-  { label: "Secure Keychain Storage", done: true },
-  { label: "Internationalization (i18n)", done: true },
-  { label: "AI Integration", done: true },
-  { label: "Dark/Light Theme Toggle", done: false },
-  { label: "Database Export/Dump", done: false },
-] as const;
+export interface RoadmapItem {
+  label: string;
+  done: boolean;
+}
+
+import roadmapData from '../../roadmap.json';
+export const ROADMAP: readonly RoadmapItem[] = roadmapData;

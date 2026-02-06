@@ -147,9 +147,16 @@ Optional Text-to-SQL and query explanation powered by:
 - **Anthropic**
 - **OpenRouter** (access to Gemini, Llama, DeepSeek, etc.)
 - **Ollama** (Local LLM support for total privacy)
+- **OpenAI-Compatible APIs** (Groq, Perplexity, Azure OpenAI, LocalAI, and more)
 
 #### Local AI (Ollama)
 Select "Ollama" as your provider in Settings. Tabularis will automatically detect your local models running on port `11434` (configurable). No API key required.
+
+#### OpenAI-Compatible APIs
+Select "OpenAI Compatible" as your provider to connect to any service that implements the OpenAI API format. Configure your custom endpoint URL and model name in Settings. Examples:
+- **Groq**: `https://api.groq.com/openai/v1`
+- **Perplexity**: `https://api.perplexity.ai`
+- **Local servers**: `http://localhost:8000/v1`
 
 #### Dynamic Model Fetching
 Tabularis automatically fetches the latest available models from your configured provider.
@@ -181,20 +188,24 @@ npm run tauri build
 
 ## Roadmap
 
-- [x] Multi-database support
-- [x] Schema introspection (Keys, FKs, Indexes)
-- [x] SQL Execution & Results with pagination
-- [x] Inline & Batch Editing
+- [x] Multi-database support (MySQL, Postgres, SQLite)
+- [x] SSH Tunneling
+- [x] Schema Introspection
+- [x] SQL Execution & Results Grid
+- [x] Inline Editing & Deletion
+- [x] Create New Table Wizard
 - [x] Data Export (CSV/JSON)
-- [x] Saved Queries
-- [x] Visual Query Builder
-- [x] ER Diagram
-- [x] Theme System & Customization
-- [x] SSH Tunneling & Keychain Support
+- [x] Result Limiting & Pagination
+- [x] Multiple Query Tabs
+- [x] Saved Queries & Persistence
+- [x] Visual Query Builder (Experimental)
+- [x] Secure Keychain Storage
+- [x] Internationalization (i18n)
+- [x] AI Integration
+- [x] Theme Customization
 - [x] Database Export/Dump
 - [ ] Better support for PostgreSQL & SQLite
 - [ ] Query history
-
 ## License
 
 Apache License 2.0

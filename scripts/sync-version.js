@@ -8,7 +8,8 @@ const paths = {
   cargo: resolve('src-tauri/Cargo.toml'),
   appVersion: resolve('src/version.ts'),
   website: resolve('website/index.html'),
-  readme: resolve('README.md')
+  readme: resolve('README.md'),
+  roadmap: resolve('roadmap.json')
 };
 
 // 1. Leggi la nuova versione da package.json (che è già stato aggiornato da npm version)
@@ -66,7 +67,7 @@ website = website.replace(
 writeFileSync(paths.website, website);
 console.log('✅ Updated website/index.html');
 
-// 6. Aggiorna README.md download badges
+// 6. Aggiorna README.md download badges e roadmap
 let readme = readFileSync(paths.readme, 'utf-8');
 
 // Aggiorna i link di download nel README (sia il tag vX.Y.Z nell'URL che il nome file tabularis_X.Y.Z_)
@@ -80,6 +81,19 @@ readme = readme.replace(
   /tabularis_\d+\.\d+\.\d+_/g,
   `tabularis_${newVersion}_`
 );
+
+// Leggi e aggiorna la roadmap da roadmap.json
+const roadmapData = JSON.parse(readFileSync(paths.roadmap, 'utf-8'));
+const roadmapMarkdown = roadmapData
+  .map(item => `- [${item.done ? 'x' : ' '}] ${item.label}`)
+  .join('\n');
+
+// Sostituisci la sezione roadmap nel README
+readme = readme.replace(
+  /(## Roadmap\n\n)([\s\S]*?)(\n## \w)/,
+  `$1${roadmapMarkdown}$3`
+);
+console.log('✅ Updated README.md roadmap');
 
 writeFileSync(paths.readme, readme);
 console.log('✅ Updated README.md');
