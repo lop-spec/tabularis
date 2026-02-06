@@ -1,3 +1,26 @@
+## [0.8.9](https://github.com/debba/tabularis/compare/v0.8.8...v0.8.9) (2026-02-06)
+
+
+### Bug Fixes
+
+* **keychain:** log errors to stderr in get_ai_key ([a4ad95a](https://github.com/debba/tabularis/commit/a4ad95ae20ccd9a57d59ca4ca00ba55ab674c6b8))
+* **mcp:** update cross-platform directory handling for project paths ([3ae677c](https://github.com/debba/tabularis/commit/3ae677c513591723688398fbc19ed76314bc6fee))
+
+
+### Features
+
+* **ai:** add delete AI key command and status API ([ce295bd](https://github.com/debba/tabularis/commit/ce295bdae780c9a4f1b6f69837b567de3f13672a))
+* **connection:** add list databases feature for MySQL, PostgreSQL, ([64816a8](https://github.com/debba/tabularis/commit/64816a84640e6bebbe3b79247f3cf2e7b40369a9))
+* **custom-openai:** add support for custom OpenAI-compatible API configuration ([3e80a07](https://github.com/debba/tabularis/commit/3e80a07d9bf8324cb3bd659342555fb593c39672))
+* **logger:** add in-memory log capture and log commands for management ([e551749](https://github.com/debba/tabularis/commit/e5517499a27dc6173ae8adcb63702baad446321d))
+* **modal:** update driver reset logic in connection form ([0e47969](https://github.com/debba/tabularis/commit/0e4796906775c2756f3b7f0aa9da094ca70ba0e6))
+* **readme:** add OpenAI-compatible APIs section and sync roadmap ([651de87](https://github.com/debba/tabularis/commit/651de87eb44c1b09bd3600b63ea6e235288fc944))
+* **sidebar:** add refresh tables button ([21c6c6f](https://github.com/debba/tabularis/commit/21c6c6ffa7912456e545410b578eb54200eee0f5))
+* **tauri:** add debug mode flag with is_debug_mode command ([c814a66](https://github.com/debba/tabularis/commit/c814a66569ab527d7b6d2d16c531e2ec84534f16))
+* **updater:** add automatic update checking and install support ([0bd16ad](https://github.com/debba/tabularis/commit/0bd16ad719073925dc4663fe839ed5cd0f4145de))
+
+
+
 ## [0.8.8](https://github.com/debba/tabularis/compare/v0.8.7...v0.8.8) (2026-02-04)
 
 
