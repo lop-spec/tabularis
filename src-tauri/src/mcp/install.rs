@@ -1,4 +1,9 @@
+#[cfg(target_os = "windows")]
+use directories::ProjectDirs;
+
+#[cfg(not(target_os = "windows"))]
 use directories::BaseDirs;
+
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
