@@ -76,11 +76,7 @@ pub fn run() {
 
     // Configure log level based on debug flag
     // Default to Info level so users can see application logs
-    let log_level = if args.debug {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Info
-    };
+    let log_level = log::LevelFilter::Info;
 
     // Store debug flag in global state
     DEBUG_MODE.store(args.debug, Ordering::Relaxed);

@@ -121,6 +121,7 @@ You can also manually check for updates or download the latest version directly 
 - **Query Expansion:** Automatically expand and inspect SQL queries in logs.
 - **Export Logs:** Save logs to `.log` files for debugging or audit trails.
 - **Toggle Control:** Enable/disable logging and adjust buffer size without restart.
+- **CLI Debug Mode:** Start with `tabularis --debug` to enable verbose logging (including internal SQLx queries) from launch.
 
 ### Configuration Storage
 
