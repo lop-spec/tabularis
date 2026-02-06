@@ -1,5 +1,6 @@
 use crate::logger::{LogEntry, SharedLogBuffer};
 use serde::Deserialize;
+use std::path::PathBuf;
 use tauri::State;
 
 #[derive(Debug, Deserialize)]
@@ -63,7 +64,7 @@ pub struct LogSettings {
 }
 
 #[tauri::command]
-pub fn export_logs(log_buffer: State<SharedLogBuffer>) -> Result<String, String> {
+pub fn export_logs(log_buffer: State<SharedLogBuffer>, file_path: String) -> Result<(), String> {
     let buffer = log_buffer.lock().unwrap();
     let entries = buffer.get_entries(None, None);
 
@@ -82,13 +83,21 @@ pub fn export_logs(log_buffer: State<SharedLogBuffer>) -> Result<String, String>
             entry.level.to_uppercase(),
             entry.message
         ));
-        if let Some(target) = entry.target {
+        if let Some(target) = &entry.target {
             content.push_str(&format!(" (target: {})", target));
         }
         content.push('\n');
     }
 
-    Ok(content)
+    // Release the lock before writing
+    drop(buffer);
+
+    // Write to file synchronously
+    let path = PathBuf::from(file_path);
+    std::fs::write(&path, content).map_err(|e| format!("Failed to write log file: {}", e))?;
+
+    log::info!("Logs exported to: {:?}", path);
+    Ok(())
 }
 
 #[tauri::command]

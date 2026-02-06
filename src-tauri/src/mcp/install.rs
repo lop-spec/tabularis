@@ -1,8 +1,8 @@
-use tauri::{AppHandle, Runtime};
+use directories::BaseDirs;
+use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
-use directories::{ProjectDirs, BaseDirs};
-use serde_json::json;
+use tauri::{AppHandle, Runtime};
 
 #[derive(serde::Serialize)]
 pub struct McpInstallStatus {
@@ -13,29 +13,32 @@ pub struct McpInstallStatus {
 
 fn get_claude_config_path() -> Option<PathBuf> {
     // Attempt to find standard Claude Desktop config paths
-    
+
     // MacOS: ~/Library/Application Support/Claude/claude_desktop_config.json
     #[cfg(target_os = "macos")]
     {
         if let Some(base) = BaseDirs::new() {
-            return Some(base.home_dir().join("Library/Application Support/Claude/claude_desktop_config.json"));
+            return Some(
+                base.home_dir()
+                    .join("Library/Application Support/Claude/claude_desktop_config.json"),
+            );
         }
     }
-    
+
     // Windows: %APPDATA%\Claude\claude_desktop_config.json
     #[cfg(target_os = "windows")]
     {
         if let Some(proj) = ProjectDirs::from("", "", "Claude") {
-             return Some(proj.config_dir().join("claude_desktop_config.json"));
+            return Some(proj.config_dir().join("claude_desktop_config.json"));
         }
     }
-    
+
     // Linux/Fallback (Unofficial but standard if it existed)
     // ~/.config/Claude/claude_desktop_config.json
     #[cfg(target_os = "linux")]
     {
         if let Some(base) = BaseDirs::new() {
-             return Some(base.config_dir().join("Claude/claude_desktop_config.json"));
+            return Some(base.config_dir().join("Claude/claude_desktop_config.json"));
         }
     }
 
@@ -57,9 +60,9 @@ pub async fn get_mcp_status<R: Runtime>(_app: AppHandle<R>) -> Result<McpInstall
             if let Ok(content) = fs::read_to_string(path) {
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(servers) = json.get("mcpServers") {
-                         if servers.get("tabularis").is_some() {
-                             installed = true;
-                         }
+                        if servers.get("tabularis").is_some() {
+                            installed = true;
+                        }
                     }
                 }
             }
@@ -75,11 +78,11 @@ pub async fn get_mcp_status<R: Runtime>(_app: AppHandle<R>) -> Result<McpInstall
 
 #[tauri::command]
 pub async fn install_mcp_config<R: Runtime>(_app: AppHandle<R>) -> Result<String, String> {
-    let config_path = get_claude_config_path()
-        .ok_or("Could not determine Claude config path for this OS")?;
+    let config_path =
+        get_claude_config_path().ok_or("Could not determine Claude config path for this OS")?;
 
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Failed to get executable path: {}", e))?;
+    let exe_path =
+        std::env::current_exe().map_err(|e| format!("Failed to get executable path: {}", e))?;
 
     // Ensure directory exists
     if let Some(parent) = config_path.parent() {
@@ -104,7 +107,7 @@ pub async fn install_mcp_config<R: Runtime>(_app: AppHandle<R>) -> Result<String
     if !config.get("mcpServers").is_some() {
         config["mcpServers"] = json!({});
     }
-    
+
     config["mcpServers"]["tabularis"] = tabularis_config;
 
     // Write back

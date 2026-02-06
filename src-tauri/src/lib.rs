@@ -1,23 +1,23 @@
+pub mod ai;
 pub mod commands;
 pub mod config;
-pub mod ai;
 pub mod dump_commands; // Added
+#[cfg(test)]
+pub mod dump_commands_tests;
 pub mod export;
 pub mod keychain_utils;
+pub mod log_commands;
+pub mod logger;
+pub mod mcp;
 pub mod models;
-pub mod persistence;
 pub mod paths; // Added
+pub mod persistence;
 pub mod pool_manager;
 pub mod saved_queries;
 pub mod ssh_tunnel;
-pub mod mcp;
 pub mod theme_commands;
 pub mod theme_models;
 pub mod updater;
-pub mod logger;
-pub mod log_commands;
-#[cfg(test)]
-pub mod dump_commands_tests;
 pub mod drivers {
     pub mod common;
     pub mod mysql;
@@ -26,8 +26,8 @@ pub mod drivers {
 }
 
 use clap::Parser;
+use logger::{create_log_buffer, init_logger, SharedLogBuffer};
 use std::sync::atomic::{AtomicBool, Ordering};
-use logger::{create_log_buffer, format_timestamp, SharedLogBuffer, LogEntry, init_logger};
 
 static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
 
@@ -35,7 +35,10 @@ static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
 static LOG_BUFFER: std::sync::OnceLock<SharedLogBuffer> = std::sync::OnceLock::new();
 
 pub fn get_log_buffer() -> SharedLogBuffer {
-    LOG_BUFFER.get().expect("Log buffer not initialized").clone()
+    LOG_BUFFER
+        .get()
+        .expect("Log buffer not initialized")
+        .clone()
 }
 
 #[tauri::command]
@@ -60,7 +63,10 @@ pub fn run() {
     // Check for CLI args first
     // We use try_parse because on some platforms (like GUI launch) args might be weird
     // or Tauri might want to handle them. But for --mcp we need priority.
-    let args = Args::try_parse().unwrap_or_else(|_| Args { mcp: false, debug: false });
+    let args = Args::try_parse().unwrap_or_else(|_| Args {
+        mcp: false,
+        debug: false,
+    });
 
     if args.mcp {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
@@ -81,14 +87,20 @@ pub fn run() {
 
     // Create and initialize log buffer - MUST be before sqlx to capture all logs
     let log_buffer = create_log_buffer(1000);
-    LOG_BUFFER.set(log_buffer.clone()).expect("Failed to initialize log buffer");
-    
+    LOG_BUFFER
+        .set(log_buffer.clone())
+        .expect("Failed to initialize log buffer");
+
     // Initialize custom logger that captures logs to buffer and prints to stderr
     init_logger(log_buffer.clone(), log_level);
-    
+
     // Log startup message
     log::info!("Tabularis application starting...");
-    log::debug!("Debug mode: {}", args.debug);
+    if args.debug {
+        log::info!("Debug mode enabled - verbose logging active");
+    } else {
+        log::info!("Debug mode disabled - standard logging active");
+    }
 
     // Install default drivers for sqlx::Any
     sqlx::any::install_default_drivers();

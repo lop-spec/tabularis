@@ -39,7 +39,6 @@ struct UpdateCheckCache {
 #[derive(Deserialize, Debug)]
 struct GitHubRelease {
     tag_name: String,
-    name: String,
     body: String,
     html_url: String,
     published_at: String,

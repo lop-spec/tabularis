@@ -32,7 +32,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import type { AppLanguage, AiProvider } from "../contexts/SettingsContext";
 import { APP_VERSION } from "../version";
-import { message, ask } from "@tauri-apps/plugin-dialog";
+import { message, ask, save } from "@tauri-apps/plugin-dialog";
 import { AVAILABLE_FONTS, ROADMAP } from "../utils/settings";
 import { getProviderLabel } from "../utils/settingsUI";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
@@ -94,8 +94,14 @@ const LogsTab = () => {
 
   const handleExportLogs = async () => {
     try {
-      const content = await invoke<string>("export_logs");
-      await navigator.clipboard.writeText(content);
+      const filePath = await save({
+        filters: [{ name: "Log Files", extensions: ["log"] }],
+        defaultPath: `tabularis_logs_${new Date().toISOString().split("T")[0]}.log`,
+      });
+
+      if (!filePath) return;
+
+      await invoke("export_logs", { filePath });
       await message(t("settings.exportLogsSuccess"), { title: t("common.success"), kind: "info" });
     } catch (e) {
       console.error("Failed to export logs", e);
@@ -236,15 +242,6 @@ const LogsTab = () => {
             >
               <RotateCcw size={16} className={isLoading ? "animate-spin" : ""} />
               {t("settings.refreshLogs")}
-            </button>
-            <button
-              onClick={async () => {
-                await invoke("test_log");
-                await loadLogs();
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              <span>Test</span>
             </button>
           </div>
         </div>
