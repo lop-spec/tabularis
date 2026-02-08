@@ -168,7 +168,7 @@ export const Editor = () => {
         connectionId: tab.connectionId,
       });
     },
-    [addTab],
+    [addTab, activeDriver],
   );
 
   const [saveQueryModal, setSaveQueryModal] = useState<{
@@ -462,7 +462,7 @@ export const Editor = () => {
         });
       }
     },
-    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t],
+    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t, activeDriver],
   );
 
   const handleRunButton = useCallback(() => {

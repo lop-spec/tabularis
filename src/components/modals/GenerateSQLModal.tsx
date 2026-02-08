@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { X, Loader2, Copy, Check, FileCode } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
-import { useDatabase } from '../../hooks/useDatabase';
-import { SqlPreview } from './SqlPreview';
-import { message } from '@tauri-apps/plugin-dialog';
-import { generateCreateTableSQL, type TableColumn, type ForeignKey, type Index, type DatabaseDriver } from '../../utils/sqlGenerator';
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { X, Loader2, Copy, Check, FileCode } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { useDatabase } from "../../hooks/useDatabase";
+import { SqlPreview } from "../ui/SqlPreview";
+import { message } from "@tauri-apps/plugin-dialog";
+import {
+  generateCreateTableSQL,
+  type TableColumn,
+  type ForeignKey,
+  type Index,
+  type DatabaseDriver,
+} from "../../utils/sqlGenerator";
 
 interface GenerateSQLModalProps {
   isOpen: boolean;
@@ -13,10 +19,14 @@ interface GenerateSQLModalProps {
   tableName: string;
 }
 
-export const GenerateSQLModal = ({ isOpen, onClose, tableName }: GenerateSQLModalProps) => {
+export const GenerateSQLModal = ({
+  isOpen,
+  onClose,
+  tableName,
+}: GenerateSQLModalProps) => {
   const { t } = useTranslation();
   const { activeConnectionId, activeDriver } = useDatabase();
-  const [sql, setSql] = useState<string>('');
+  const [sql, setSql] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -27,15 +37,18 @@ export const GenerateSQLModal = ({ isOpen, onClose, tableName }: GenerateSQLModa
       setLoading(true);
       try {
         const [columns, foreignKeys, indexes] = await Promise.all([
-          invoke<TableColumn[]>('get_columns', {
+          invoke<TableColumn[]>("get_columns", {
             connectionId: activeConnectionId,
-            tableName
+            tableName,
           }),
-          invoke<ForeignKey[]>('get_foreign_keys', {
+          invoke<ForeignKey[]>("get_foreign_keys", {
             connectionId: activeConnectionId,
-            tableName
+            tableName,
           }),
-          invoke<Index[]>('get_indexes', { connectionId: activeConnectionId, tableName }),
+          invoke<Index[]>("get_indexes", {
+            connectionId: activeConnectionId,
+            tableName,
+          }),
         ]);
 
         const generatedSQL = generateCreateTableSQL(
@@ -43,12 +56,12 @@ export const GenerateSQLModal = ({ isOpen, onClose, tableName }: GenerateSQLModa
           columns,
           foreignKeys,
           indexes,
-          activeDriver as DatabaseDriver
+          activeDriver as DatabaseDriver,
         );
         setSql(generatedSQL);
       } catch (err) {
         console.error(err);
-        await message(String(err), { title: t('common.error'), kind: 'error' });
+        await message(String(err), { title: t("common.error"), kind: "error" });
       } finally {
         setLoading(false);
       }
@@ -75,10 +88,15 @@ export const GenerateSQLModal = ({ isOpen, onClose, tableName }: GenerateSQLModa
               <FileCode size={20} className="text-blue-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-primary">{t('generateSQL.title', { table: tableName })}</h2>
+              <h2 className="text-lg font-semibold text-primary">
+                {t("generateSQL.title", { table: tableName })}
+              </h2>
             </div>
           </div>
-          <button onClick={onClose} className="text-secondary hover:text-primary transition-colors">
+          <button
+            onClick={onClose}
+            className="text-secondary hover:text-primary transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
@@ -88,7 +106,7 @@ export const GenerateSQLModal = ({ isOpen, onClose, tableName }: GenerateSQLModa
           {loading ? (
             <div className="text-center py-8 text-muted">
               <Loader2 size={24} className="animate-spin mx-auto mb-2" />
-              <span>{t('generateSQL.loading')}</span>
+              <span>{t("generateSQL.loading")}</span>
             </div>
           ) : (
             <div className="flex-1 flex flex-col gap-4">
@@ -112,7 +130,7 @@ export const GenerateSQLModal = ({ isOpen, onClose, tableName }: GenerateSQLModa
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
             >
               {copied ? <Check size={16} /> : <Copy size={16} />}
-              {copied ? t('generateSQL.copied') : t('generateSQL.copy')}
+              {copied ? t("generateSQL.copied") : t("generateSQL.copy")}
             </button>
           </div>
         )}

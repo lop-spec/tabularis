@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Loader2, Eye, AlertCircle, Play } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
@@ -35,22 +35,7 @@ export const ViewEditorModal = ({
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      if (isNewView) {
-        setName("");
-        setDefinition("SELECT * FROM ");
-        setOriginalDefinition("");
-        setError(null);
-        setPreviewResult(null);
-      } else if (viewName) {
-        setName(viewName);
-        loadViewDefinition(viewName);
-      }
-    }
-  }, [isOpen, viewName, isNewView]);
-
-  const loadViewDefinition = async (vName: string) => {
+  const loadViewDefinition = useCallback(async (vName: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -71,7 +56,22 @@ export const ViewEditorModal = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [connectionId, t]);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (isNewView) {
+        setName("");
+        setDefinition("SELECT * FROM ");
+        setOriginalDefinition("");
+        setError(null);
+        setPreviewResult(null);
+      } else if (viewName) {
+        setName(viewName);
+        loadViewDefinition(viewName);
+      }
+    }
+  }, [isOpen, viewName, isNewView, loadViewDefinition]);
 
   const handlePreview = async () => {
     if (!definition.trim()) return;

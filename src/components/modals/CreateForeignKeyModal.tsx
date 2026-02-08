@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Save, Loader2, AlertTriangle } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { SqlPreview } from './SqlPreview';
+import { SqlPreview } from '../ui/SqlPreview';
 
 interface CreateForeignKeyModalProps {
   isOpen: boolean;
