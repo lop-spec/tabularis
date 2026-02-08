@@ -73,6 +73,7 @@ interface EditorState {
   initialQuery?: string;
   tableName?: string;
   queryName?: string;
+  preventAutoRun?: boolean;
 }
 
 interface ExportProgress {
@@ -912,7 +913,7 @@ export const Editor = () => {
         if (processingRef.current === queryKey) return;
         processingRef.current = queryKey;
 
-        const { initialQuery: sql, tableName: table, queryName } = state;
+        const { initialQuery: sql, tableName: table, queryName, preventAutoRun } = state;
         const tabId = addTab({
           type: table ? "table" : "console",
           title:
@@ -921,8 +922,8 @@ export const Editor = () => {
           activeTable: table,
         });
 
-        if (tabId) {
-          // Queue execution
+        if (tabId && !preventAutoRun) {
+          // Queue execution only if not prevented
           pendingExecutionsRef.current[tabId] = { sql: sql || "", page: 1 };
 
           // Try immediate execution if tab exists (reused)

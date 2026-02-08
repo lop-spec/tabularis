@@ -63,7 +63,13 @@
     "deleteFk": "Delete FK",
     "deleteFkConfirm": "Delete foreign key \"{{name}}\"?",
     "sqliteFkError": "SQLite does not support dropping FKs via ALTER TABLE.",
-    "mcpServer": "MCP Server"
+    "mcpServer": "MCP Server",
+    "routines": "Routines",
+    "functions": "Functions",
+    "procedures": "Procedures",
+    "noRoutines": "No routines found",
+    "refreshRoutines": "Refresh Routines",
+    "failGetRoutineDefinition": "Failed to get routine definition: "
   },
   "mcp": {
     "title": "MCP Server Integration",

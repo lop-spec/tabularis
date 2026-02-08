@@ -147,6 +147,21 @@ pub struct TableSchema {
 }
 
 #[derive(Debug, Serialize)]
+pub struct RoutineInfo {
+    pub name: String,
+    pub routine_type: String, // "PROCEDURE" | "FUNCTION"
+    pub definition: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RoutineParameter {
+    pub name: String,
+    pub data_type: String,
+    pub mode: String, // "IN", "OUT", "INOUT"
+    pub ordinal_position: i32,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ViewInfo {
     pub name: String,
     pub definition: Option<String>,

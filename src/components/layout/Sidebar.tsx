@@ -25,6 +25,7 @@ import {
   Upload,
   ChevronDown,
   RefreshCw,
+  ChevronRight,
 } from "lucide-react";
 import { ask, message, open } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../../hooks/useDatabase";
@@ -49,11 +50,14 @@ import { NavItem } from "./sidebar/NavItem";
 import { Accordion } from "./sidebar/Accordion";
 import { SidebarTableItem } from "./sidebar/SidebarTableItem";
 import { SidebarViewItem } from "./sidebar/SidebarViewItem";
+import { SidebarRoutineItem } from "./sidebar/SidebarRoutineItem";
 
 // Hooks & Types
 import { useSidebarResize } from "../../hooks/useSidebarResize";
 import type { TableColumn } from "../../types/schema";
 import type { ContextMenuData } from "../../types/sidebar";
+import type { RoutineInfo } from "../../contexts/DatabaseContext";
+import { groupRoutinesByType } from "../../utils/routines";
 
 export const Sidebar = () => {
   const { t } = useTranslation();
@@ -66,9 +70,11 @@ export const Sidebar = () => {
     setActiveTable,
     tables,
     views,
+    routines,
     isLoadingTables,
     refreshTables,
     refreshViews,
+    refreshRoutines,
     activeConnectionName,
     activeDatabaseName,
   } = useDatabase();
@@ -106,6 +112,9 @@ export const Sidebar = () => {
   const [queriesOpen, setQueriesOpen] = useState(false);
   const [tablesOpen, setTablesOpen] = useState(true);
   const [viewsOpen, setViewsOpen] = useState(true);
+  const [routinesOpen, setRoutinesOpen] = useState(false);
+  const [functionsOpen, setFunctionsOpen] = useState(true);
+  const [proceduresOpen, setProceduresOpen] = useState(true);
   const [activeView, setActiveView] = useState<string | null>(null);
   const [queryModal, setQueryModal] = useState<{
     isOpen: boolean;
@@ -128,9 +137,11 @@ export const Sidebar = () => {
   // Resize Hook
   const { sidebarWidth, startResize } = useSidebarResize();
 
-  const runQuery = (sql: string, queryName?: string, tableName?: string) => {
+  const groupedRoutines = routines ? groupRoutinesByType(routines) : { procedures: [], functions: [] };
+
+  const runQuery = (sql: string, queryName?: string, tableName?: string, preventAutoRun: boolean = false) => {
     navigate("/editor", {
-      state: { initialQuery: sql, queryName, tableName },
+      state: { initialQuery: sql, queryName, tableName, preventAutoRun },
     });
   };
 
@@ -160,6 +171,25 @@ export const Sidebar = () => {
         tableName: viewName,
       },
     });
+  };
+
+  const handleRoutineDoubleClick = async (routine: RoutineInfo) => {
+    try {
+      const definition = await invoke<string>("get_routine_definition", {
+        connectionId: activeConnectionId,
+        routineName: routine.name,
+        routineType: routine.routine_type,
+      });
+      runQuery(definition, `${routine.name} Definition`, undefined, true);
+    } catch (e) {
+      console.error(e);
+      await message(
+        t("sidebar.failGetRoutineDefinition") + String(e),
+        {
+          kind: "error",
+        }
+      );
+    }
   };
 
   const handleContextMenu = (
@@ -613,6 +643,85 @@ export const Sidebar = () => {
                       </div>
                     )}
                   </Accordion>
+
+                  {/* Routines */}
+                  {activeDriver !== "sqlite" && (
+                    <Accordion
+                      title={`${t("sidebar.routines")} (${routines.length})`}
+                      isOpen={routinesOpen}
+                      onToggle={() => setRoutinesOpen(!routinesOpen)}
+                      actions={
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (refreshRoutines) refreshRoutines();
+                            }}
+                            className="p-1 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
+                            title={t("sidebar.refreshRoutines") || "Refresh Routines"}
+                          >
+                            <RefreshCw size={14} />
+                          </button>
+                        </div>
+                      }
+                    >
+                      {routines.length === 0 ? (
+                        <div className="text-center p-2 text-xs text-muted italic">
+                          {t("sidebar.noRoutines")}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col">
+                          {/* Functions */}
+                          {groupedRoutines.functions.length > 0 && (
+                            <div className="mb-2">
+                              <button 
+                                onClick={() => setFunctionsOpen(!functionsOpen)}
+                                className="flex items-center gap-1 px-2 py-1 w-full text-left text-xs font-semibold text-muted uppercase tracking-wider hover:text-secondary transition-colors"
+                              >
+                                {functionsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                <span>{t("sidebar.functions")}</span>
+                                <span className="ml-auto text-[10px] opacity-50">{groupedRoutines.functions.length}</span>
+                              </button>
+                              
+                              {functionsOpen && groupedRoutines.functions.map((routine) => (
+                                <SidebarRoutineItem
+                                  key={routine.name}
+                                  routine={routine}
+                                  connectionId={activeConnectionId!}
+                                  onContextMenu={handleContextMenu}
+                                  onDoubleClick={handleRoutineDoubleClick}
+                                />
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Procedures */}
+                          {groupedRoutines.procedures.length > 0 && (
+                            <div>
+                              <button 
+                                onClick={() => setProceduresOpen(!proceduresOpen)}
+                                className="flex items-center gap-1 px-2 py-1 w-full text-left text-xs font-semibold text-muted uppercase tracking-wider hover:text-secondary transition-colors"
+                              >
+                                {proceduresOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                <span>{t("sidebar.procedures")}</span>
+                                <span className="ml-auto text-[10px] opacity-50">{groupedRoutines.procedures.length}</span>
+                              </button>
+                              
+                              {proceduresOpen && groupedRoutines.procedures.map((routine) => (
+                                <SidebarRoutineItem
+                                  key={routine.name}
+                                  routine={routine}
+                                  connectionId={activeConnectionId!}
+                                  onContextMenu={handleContextMenu}
+                                  onDoubleClick={handleRoutineDoubleClick}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </Accordion>
+                  )}
                 </>
               )}
             </div>
@@ -961,6 +1070,43 @@ export const Sidebar = () => {
                               },
                             },
                           ]
+                        : contextMenu.type === "routine"
+                          ? [
+                              {
+                                label: t("sidebar.viewDefinition"),
+                                icon: FileText,
+                                action: async () => {
+                                  try {
+                                    const routineType = (contextMenu.data && 'routine_type' in contextMenu.data) 
+                                      ? (contextMenu.data).routine_type 
+                                      : "PROCEDURE";
+                                      
+                                    const definition = await invoke<string>("get_routine_definition", {
+                                      connectionId: activeConnectionId,
+                                      routineName: contextMenu.id,
+                                      routineType: routineType,
+                                    });
+                                    // Show definition in modal or editor?
+                                    // For now, let's open in editor as comment or just text
+                                    runQuery(definition, `${contextMenu.id} Definition`, undefined, true);
+                                  } catch (e) {
+                                    console.error(e);
+                                    await message(
+                                      t("sidebar.failGetRoutineDefinition") + String(e),
+                                      {
+                                        kind: "error",
+                                      }
+                                    );
+                                  }
+                                },
+                              },
+                              {
+                                label: t("sidebar.copyName"),
+                                icon: Copy,
+                                action: () =>
+                                  navigator.clipboard.writeText(contextMenu.id),
+                              },
+                            ]
                         : [
                             // Saved Query Actions (Default fallback)
                             {

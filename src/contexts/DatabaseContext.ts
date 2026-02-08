@@ -9,6 +9,12 @@ export interface ViewInfo {
   definition?: string;
 }
 
+export interface RoutineInfo {
+  name: string;
+  routine_type: string; // "PROCEDURE" | "FUNCTION"
+  definition?: string;
+}
+
 export interface SavedConnection {
   id: string;
   name: string;
@@ -27,13 +33,16 @@ export interface DatabaseContextType {
   activeDatabaseName: string | null;
   tables: TableInfo[];
   views: ViewInfo[];
+  routines: RoutineInfo[];
   isLoadingTables: boolean;
   isLoadingViews: boolean;
+  isLoadingRoutines: boolean;
   connect: (connectionId: string) => Promise<void>;
   disconnect: () => void;
   setActiveTable: (table: string | null) => void;
   refreshTables: () => Promise<void>;
   refreshViews: () => Promise<void>;
+  refreshRoutines: () => Promise<void>;
 }
 
 export const DatabaseContext = createContext<DatabaseContextType | undefined>(undefined);

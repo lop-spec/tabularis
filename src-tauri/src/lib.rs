@@ -191,6 +191,10 @@ pub fn run() {
             ai::explain_ai_query,
             ai::get_ai_models,
             commands::get_schema_snapshot,
+            // Routines
+            commands::get_routines,
+            commands::get_routine_parameters,
+            commands::get_routine_definition,
             // MCP
             mcp::install::get_mcp_status,
             mcp::install::install_mcp_config,

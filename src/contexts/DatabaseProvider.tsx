@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { DatabaseContext, type TableInfo, type ViewInfo, type SavedConnection } from './DatabaseContext';
+import { DatabaseContext, type TableInfo, type ViewInfo, type RoutineInfo, type SavedConnection } from './DatabaseContext';
 import type { ReactNode } from 'react';
 import { clearAutocompleteCache } from '../utils/autocomplete';
 
@@ -12,8 +12,10 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   const [activeDatabaseName, setActiveDatabaseName] = useState<string | null>(null);
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [views, setViews] = useState<ViewInfo[]>([]);
+  const [routines, setRoutines] = useState<RoutineInfo[]>([]);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [isLoadingViews, setIsLoadingViews] = useState(false);
+  const [isLoadingRoutines, setIsLoadingRoutines] = useState(false);
 
   // Sync Window Title with active connection
   // WORKAROUND: Using custom Tauri command instead of window.setTitle() for Wayland support
@@ -58,12 +60,27 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       }
   };
 
+  const refreshRoutines = async () => {
+    if (!activeConnectionId) return;
+    setIsLoadingRoutines(true);
+    try {
+      const result = await invoke<RoutineInfo[]>('get_routines', { connectionId: activeConnectionId });
+      setRoutines(result);
+    } catch (e) {
+      console.error('Failed to refresh routines:', e);
+    } finally {
+      setIsLoadingRoutines(false);
+    }
+  };
+
   const connect = async (connectionId: string) => {
     setActiveConnectionId(connectionId);
     setIsLoadingTables(true);
     setIsLoadingViews(true);
+    setIsLoadingRoutines(true);
     setTables([]);
     setViews([]);
+    setRoutines([]);
     setActiveDriver(null);
     setActiveTable(null);
     setActiveConnectionName(null);
@@ -80,14 +97,16 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // 2. Get tables and views in parallel
-      const [tablesResult, viewsResult] = await Promise.all([
+      const [tablesResult, viewsResult, routinesResult] = await Promise.all([
         invoke<TableInfo[]>('get_tables', { connectionId }),
-        invoke<ViewInfo[]>('get_views', { connectionId })
+        invoke<ViewInfo[]>('get_views', { connectionId }),
+        invoke<RoutineInfo[]>('get_routines', { connectionId })
       ]);
       setTables(tablesResult);
       setViews(viewsResult);
+      setRoutines(routinesResult);
     } catch (error) {
-      console.error('Failed to fetch tables/views:', error);
+      console.error('Failed to fetch tables/views/routines:', error);
       setActiveConnectionId(null);
       setActiveDriver(null);
       setActiveConnectionName(null);
@@ -96,6 +115,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoadingTables(false);
       setIsLoadingViews(false);
+      setIsLoadingRoutines(false);
     }
   };
 
@@ -112,6 +132,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     setActiveDatabaseName(null);
     setTables([]);
     setViews([]);
+    setRoutines([]);
   };
 
   return (
@@ -123,13 +144,16 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       activeDatabaseName,
       tables,
       views,
+      routines,
       isLoadingTables,
       isLoadingViews,
+      isLoadingRoutines,
       connect,
       disconnect,
       setActiveTable,
       refreshTables,
-      refreshViews
+      refreshViews,
+      refreshRoutines
     }}>
       {children}
     </DatabaseContext.Provider>

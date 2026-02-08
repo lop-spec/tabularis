@@ -1,6 +1,7 @@
 use crate::drivers::common::extract_mysql_value;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo, ViewInfo,
+    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, RoutineInfo, RoutineParameter,
+    TableColumn, TableInfo, ViewInfo,
 };
 use crate::pool_manager::get_mysql_pool;
 use sqlx::{Column, Row};
@@ -550,6 +551,108 @@ fn remove_order_by(query: &str) -> String {
                 }
             })
             .collect())
+    }
+
+    pub async fn get_routines(params: &ConnectionParams) -> Result<Vec<RoutineInfo>, String> {
+        let pool = get_mysql_pool(params).await?;
+        let query = r#"
+            SELECT routine_name, routine_type, routine_definition 
+            FROM information_schema.routines 
+            WHERE routine_schema = DATABASE()
+            ORDER BY routine_name
+        "#;
+        
+        let rows = sqlx::query(query)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            
+        Ok(rows.iter().map(|r| RoutineInfo {
+            name: r.try_get("routine_name").unwrap_or_default(),
+            routine_type: r.try_get("routine_type").unwrap_or_default(),
+            definition: r.try_get("routine_definition").ok(),
+        }).collect())
+    }
+
+    pub async fn get_routine_parameters(
+        params: &ConnectionParams,
+        routine_name: &str,
+    ) -> Result<Vec<RoutineParameter>, String> {
+        let pool = get_mysql_pool(params).await?;
+
+        // 1. Get return type for functions from routines table
+        let return_type_query = r#"
+            SELECT DATA_TYPE, ROUTINE_TYPE
+            FROM information_schema.routines
+            WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_NAME = ?
+        "#;
+
+        let routine_info = sqlx::query(return_type_query)
+            .bind(routine_name)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let mut parameters = Vec::new();
+
+        if let Some(info) = routine_info {
+            let routine_type: String = info.try_get("ROUTINE_TYPE").unwrap_or_default();
+            if routine_type == "FUNCTION" {
+                let data_type: String = info.try_get("DATA_TYPE").unwrap_or_default();
+                if !data_type.is_empty() {
+                    parameters.push(RoutineParameter {
+                        name: "".to_string(), // Empty name for return value
+                        data_type,
+                        mode: "OUT".to_string(),
+                        ordinal_position: 0,
+                    });
+                }
+            }
+        }
+
+        // 2. Get parameters
+        let query = r#"
+            SELECT parameter_name, data_type, parameter_mode, ordinal_position
+            FROM information_schema.parameters
+            WHERE specific_schema = DATABASE() AND specific_name = ?
+            ORDER BY ordinal_position
+        "#;
+        
+        let rows = sqlx::query(query)
+            .bind(routine_name)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            
+        parameters.extend(rows.iter().map(|r| RoutineParameter {
+            name: r.try_get("parameter_name").unwrap_or_default(),
+            data_type: r.try_get("data_type").unwrap_or_default(),
+            mode: r.try_get("parameter_mode").unwrap_or_default(),
+            ordinal_position: r.try_get("ordinal_position").unwrap_or(0),
+        }));
+
+        Ok(parameters)
+    }
+
+    pub async fn get_routine_definition(
+        params: &ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+    ) -> Result<String, String> {
+        let pool = get_mysql_pool(params).await?;
+        let query = format!("SHOW CREATE {} `{}`", routine_type, escape_identifier(routine_name));
+        
+        let row = sqlx::query(&query)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            
+        // The column name is "Create Procedure" or "Create Function" or retrieved by index 2
+        let definition: String = row.try_get(2).unwrap_or_else(|_| {
+             row.try_get(format!("Create {}", routine_type).as_str()).unwrap_or_default()
+        });
+        
+        Ok(definition)
     }
 
 pub async fn execute_query(

@@ -1,6 +1,7 @@
 use crate::drivers::common::extract_postgres_value;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo, ViewInfo,
+    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, RoutineInfo, RoutineParameter,
+    TableColumn, TableInfo, ViewInfo,
 };
 use crate::pool_manager::get_postgres_pool;
 use sqlx::{Column, Row};
@@ -709,23 +710,141 @@ pub async fn get_view_columns(
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(rows
-        .iter()
-        .map(|r| {
-            let null_str: String = r.try_get("is_nullable").unwrap_or_default();
-            let is_pk: i64 = r.try_get("is_pk").unwrap_or(0);
-            let default_val: String = r.try_get("column_default").unwrap_or_default();
-            let is_identity: String = r.try_get("is_identity").unwrap_or_default();
+        Ok(rows
+            .iter()
+            .map(|r| {
+                let null_str: String = r.try_get("is_nullable").unwrap_or_default();
+                let is_pk: i64 = r.try_get("is_pk").unwrap_or(0);
+                let default_val: String = r.try_get("column_default").unwrap_or_default();
+                let is_identity: String = r.try_get("is_identity").unwrap_or_default();
 
-            let is_auto = is_identity == "YES" || default_val.contains("nextval");
+                let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
-            TableColumn {
-                name: r.try_get("column_name").unwrap_or_default(),
-                data_type: r.try_get("data_type").unwrap_or_default(),
-                is_pk: is_pk > 0,
-                is_nullable: null_str == "YES",
-                is_auto_increment: is_auto,
+                TableColumn {
+                    name: r.try_get("column_name").unwrap_or_default(),
+                    data_type: r.try_get("data_type").unwrap_or_default(),
+                    is_pk: is_pk > 0,
+                    is_nullable: null_str == "YES",
+                    is_auto_increment: is_auto,
+                }
+            })
+            .collect())
+    }
+
+    pub async fn get_routines(params: &ConnectionParams) -> Result<Vec<RoutineInfo>, String> {
+        let pool = get_postgres_pool(params).await?;
+        let query = r#"
+            SELECT proname, prokind 
+            FROM pg_proc 
+            WHERE pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+            AND prokind IN ('f', 'p')
+            ORDER BY proname
+        "#;
+        
+        let rows = sqlx::query(query)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            
+        Ok(rows.iter().map(|r| {
+            let prokind: i8 = r.try_get("prokind").unwrap_or(b'f' as i8); // f=function, p=procedure
+            let routine_type = match prokind as u8 as char {
+                'p' => "PROCEDURE",
+                _ => "FUNCTION",
+            };
+            
+            RoutineInfo {
+                name: r.try_get("proname").unwrap_or_default(),
+                routine_type: routine_type.to_string(),
+                definition: None, 
             }
-        })
-        .collect())
-}
+        }).collect())
+    }
+
+    pub async fn get_routine_parameters(
+        params: &ConnectionParams,
+        routine_name: &str,
+    ) -> Result<Vec<RoutineParameter>, String> {
+        let pool = get_postgres_pool(params).await?;
+
+        // 1. Get return type for functions
+        let return_type_query = r#"
+            SELECT data_type, routine_type
+            FROM information_schema.routines
+            WHERE routine_schema = 'public' AND routine_name = $1
+            LIMIT 1
+        "#;
+        
+        let routine_info = sqlx::query(return_type_query)
+            .bind(routine_name)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let mut parameters = Vec::new();
+
+        if let Some(info) = routine_info {
+            let routine_type: String = info.try_get("routine_type").unwrap_or_default();
+            if routine_type == "FUNCTION" {
+                let data_type: String = info.try_get("data_type").unwrap_or_default();
+                // Exclude void or trigger returns if not relevant
+                if !data_type.eq_ignore_ascii_case("void") && !data_type.eq_ignore_ascii_case("trigger") {
+                    parameters.push(RoutineParameter {
+                        name: "".to_string(), // Empty name for return value
+                        data_type,
+                        mode: "OUT".to_string(),
+                        ordinal_position: 0,
+                    });
+                }
+            }
+        }
+        
+        // 2. Get parameters
+        let query = r#"
+            SELECT p.parameter_name, p.data_type, p.parameter_mode, p.ordinal_position
+            FROM information_schema.parameters p
+            JOIN information_schema.routines r ON p.specific_name = r.specific_name
+            WHERE r.routine_schema = 'public' AND r.routine_name = $1
+            ORDER BY p.ordinal_position
+        "#;
+        
+        let rows = sqlx::query(query)
+            .bind(routine_name)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            
+        parameters.extend(rows.iter().map(|r| RoutineParameter {
+            name: r.try_get("parameter_name").unwrap_or_default(),
+            data_type: r.try_get("data_type").unwrap_or_default(),
+            mode: r.try_get("parameter_mode").unwrap_or_default(),
+            ordinal_position: r.try_get("ordinal_position").unwrap_or(0),
+        }));
+
+        Ok(parameters)
+    }
+
+    pub async fn get_routine_definition(
+        params: &ConnectionParams,
+        routine_name: &str,
+        _routine_type: &str, 
+    ) -> Result<String, String> {
+        let pool = get_postgres_pool(params).await?;
+        
+        let query = r#"
+            SELECT pg_get_functiondef(p.oid) as definition
+            FROM pg_proc p
+            JOIN pg_namespace n ON p.pronamespace = n.oid
+            WHERE n.nspname = 'public' AND p.proname = $1
+            LIMIT 1
+        "#;
+        
+        let row = sqlx::query(query)
+            .bind(routine_name)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            
+        let definition: String = row.try_get("definition").unwrap_or_default();
+        Ok(definition)
+    }

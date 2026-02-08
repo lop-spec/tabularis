@@ -63,7 +63,13 @@
     "deleteFk": "Elimina FK",
     "deleteFkConfirm": "Eliminare la chiave esterna \"{{name}}\"?",
     "sqliteFkError": "SQLite non supporta l'eliminazione di FK tramite ALTER TABLE.",
-    "mcpServer": "Server MCP"
+    "mcpServer": "Server MCP",
+    "routines": "Routine",
+    "functions": "Funzioni",
+    "procedures": "Procedure",
+    "noRoutines": "Nessuna routine trovata",
+    "refreshRoutines": "Aggiorna Routine",
+    "failGetRoutineDefinition": "Impossibile recuperare la definizione della routine: "
   },
   "mcp": {
     "title": "Integrazione Server MCP",

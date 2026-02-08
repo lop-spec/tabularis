@@ -1,6 +1,7 @@
 use crate::drivers::common::extract_sqlite_value;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo, ViewInfo,
+    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, RoutineInfo, RoutineParameter,
+    TableColumn, TableInfo, ViewInfo,
 };
 use sqlx::{Column, Row};
 use crate::pool_manager::get_sqlite_pool;
@@ -61,13 +62,33 @@ pub async fn get_columns(
 
             TableColumn {
                 name: r.try_get("name").unwrap_or_default(),
-                data_type: dtype,
+                data_type: r.try_get("type").unwrap_or_default(),
                 is_pk: pk > 0,
                 is_nullable: notnull == 0,
-                is_auto_increment: is_auto,
+                is_auto_increment: false,
             }
         })
         .collect())
+}
+
+pub async fn get_routines(_params: &ConnectionParams) -> Result<Vec<RoutineInfo>, String> {
+    // SQLite does not support stored procedures
+    Ok(vec![])
+}
+
+pub async fn get_routine_parameters(
+    _params: &ConnectionParams,
+    _routine_name: &str,
+) -> Result<Vec<RoutineParameter>, String> {
+    Ok(vec![])
+}
+
+pub async fn get_routine_definition(
+    _params: &ConnectionParams,
+    _routine_name: &str,
+    _routine_type: &str,
+) -> Result<String, String> {
+    Err("SQLite does not support stored procedures".to_string())
 }
 
 pub async fn get_foreign_keys(

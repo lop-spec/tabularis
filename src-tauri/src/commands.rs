@@ -13,8 +13,9 @@ use uuid::Uuid;
 use crate::drivers::{mysql, postgres, sqlite};
 use crate::keychain_utils;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, QueryResult, SavedConnection, SshConnection,
-    SshConnectionInput, SshTestParams, TableColumn, TableInfo, TestConnectionRequest,
+    ConnectionParams, ForeignKey, Index, QueryResult, RoutineInfo, RoutineParameter,
+    SavedConnection, SshConnection, SshConnectionInput, SshTestParams, TableColumn, TableInfo,
+    TestConnectionRequest,
 };
 use crate::ssh_tunnel::{get_tunnels, SshTunnel};
 
@@ -200,6 +201,66 @@ pub fn find_connection_by_id<R: Runtime>(
 }
 
 // --- Commands ---
+
+#[tauri::command]
+pub async fn get_routines<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+) -> Result<Vec<RoutineInfo>, String> {
+    log::info!("Fetching routines for connection: {}", connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::get_routines(&params).await,
+        "postgres" => postgres::get_routines(&params).await,
+        "sqlite" => sqlite::get_routines(&params).await,
+        _ => Err("Unsupported driver".into()),
+    }
+}
+
+#[tauri::command]
+pub async fn get_routine_parameters<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    routine_name: String,
+) -> Result<Vec<RoutineParameter>, String> {
+    log::info!("Fetching routine parameters for: {} on connection: {}", routine_name, connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::get_routine_parameters(&params, &routine_name).await,
+        "postgres" => postgres::get_routine_parameters(&params, &routine_name).await,
+        "sqlite" => sqlite::get_routine_parameters(&params, &routine_name).await,
+        _ => Err("Unsupported driver".into()),
+    }
+}
+
+#[tauri::command]
+pub async fn get_routine_definition<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    routine_name: String,
+    routine_type: String, // "PROCEDURE" or "FUNCTION" - mainly for MySQL SHOW CREATE
+) -> Result<String, String> {
+    log::info!("Fetching routine definition for: {} ({}) on connection: {}", routine_name, routine_type, connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::get_routine_definition(&params, &routine_name, &routine_type).await,
+        "postgres" => postgres::get_routine_definition(&params, &routine_name, &routine_type).await,
+        "sqlite" => sqlite::get_routine_definition(&params, &routine_name, &routine_type).await,
+        _ => Err("Unsupported driver".into()),
+    }
+}
 
 #[tauri::command]
 pub async fn get_schema_snapshot<R: Runtime>(
