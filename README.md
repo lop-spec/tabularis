@@ -85,9 +85,11 @@ You can also manually check for updates or download the latest version directly 
 
 ### Database Explorer
 
-- **Tree View:** Browse tables, columns, keys, foreign keys, and indexes.
-- **ER Diagram:** Interactive Entity-Relationship visualization (Pan, Zoom, Layout).
+- **Tree View:** Browse tables, columns, keys, foreign keys, indexes, views, and stored routines.
+- **ER Diagram:** Interactive Entity-Relationship visualization (Pan, Zoom, Layout) with selective table diagram generation.
 - **Context Actions:** Show data, count rows, modify schema, duplicate/delete tables.
+- **Views Support:** Browse, inspect, and query database views with full metadata.
+- **Stored Routines:** View and manage stored procedures and functions with parameter details.
 - **Fast Metadata:** Parallel fetching for schema loading.
 - **SQL Dump & Import:** Export and restore databases with a single flow.
 
@@ -222,6 +224,7 @@ npm run tauri build
 - [x] AI Integration
 - [x] Theme Customization
 - [x] Database Export/Dump
+- [x] Views and Stored Routines Support
 - [ ] Better support for PostgreSQL & SQLite
 - [ ] Query history
 ## License
