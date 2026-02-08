@@ -37,6 +37,11 @@ describe('DatabaseProvider', () => {
     { name: 'user_posts_summary' },
   ];
 
+  const mockRoutines = [
+    { name: 'calculate_total', type: 'FUNCTION' },
+    { name: 'update_user', type: 'PROCEDURE' },
+  ];
+
   beforeEach(() => {
     vi.resetAllMocks();
     // Default mock implementation that handles all invoke calls
@@ -44,6 +49,7 @@ describe('DatabaseProvider', () => {
       if (cmd === 'get_connections') return Promise.resolve(mockConnections);
       if (cmd === 'get_tables') return Promise.resolve(mockTables);
       if (cmd === 'get_views') return Promise.resolve(mockViews);
+      if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
       if (cmd === 'set_window_title') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
@@ -102,7 +108,9 @@ describe('DatabaseProvider', () => {
 
     const { result } = renderHook(() => useDatabase(), { wrapper });
 
-    await expect(result.current.connect('conn-123')).rejects.toThrow('Connection failed');
+    await act(async () => {
+      await expect(result.current.connect('conn-123')).rejects.toThrow('Connection failed');
+    });
 
     await waitFor(() => {
       expect(result.current.activeConnectionId).toBeNull();
@@ -151,6 +159,8 @@ describe('DatabaseProvider', () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === 'get_connections') return Promise.resolve(mockConnections);
       if (cmd === 'get_tables') return Promise.resolve(updatedTables);
+      if (cmd === 'get_views') return Promise.resolve(mockViews);
+      if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
       if (cmd === 'set_window_title') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
@@ -258,6 +268,7 @@ describe('DatabaseProvider', () => {
         if (cmd === 'get_connections') return Promise.resolve(mockConnections);
         if (cmd === 'get_tables') return Promise.resolve(mockTables);
         if (cmd === 'get_views') return Promise.resolve(updatedViews);
+        if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
         if (cmd === 'set_window_title') return Promise.resolve(undefined);
         return Promise.reject(new Error(`Unexpected command: ${cmd}`));
       });
