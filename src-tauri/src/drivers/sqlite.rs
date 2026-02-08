@@ -1,6 +1,6 @@
 use crate::drivers::common::extract_sqlite_value;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo,
+    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo, ViewInfo,
 };
 use sqlx::{Column, Row};
 use crate::pool_manager::get_sqlite_pool;
@@ -481,4 +481,232 @@ pub async fn execute_query(
         truncated,
         pagination,
     })
+}
+
+pub async fn get_views(params: &ConnectionParams) -> Result<Vec<ViewInfo>, String> {
+    log::debug!("SQLite: Fetching views for database: {}", params.database);
+    let pool = get_sqlite_pool(params).await?;
+    let rows = sqlx::query(
+        "SELECT name FROM sqlite_master WHERE type='view' ORDER BY name ASC",
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    let views: Vec<ViewInfo> = rows
+        .iter()
+        .map(|r| ViewInfo {
+            name: r.try_get("name").unwrap_or_default(),
+            definition: None,
+        })
+        .collect();
+    log::debug!("SQLite: Found {} views in {}", views.len(), params.database);
+    Ok(views)
+}
+
+pub async fn get_view_definition(
+    params: &ConnectionParams,
+    view_name: &str,
+) -> Result<String, String> {
+    let pool = get_sqlite_pool(params).await?;
+    let query = "SELECT sql FROM sqlite_master WHERE type='view' AND name = ?";
+    let row = sqlx::query(query)
+        .bind(view_name)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| format!("Failed to get view definition: {}", e))?;
+
+    let definition: String = row.try_get("sql").unwrap_or_default();
+    Ok(definition)
+}
+
+pub async fn create_view(
+    params: &ConnectionParams,
+    view_name: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let pool = get_sqlite_pool(params).await?;
+    let query = format!(
+        "CREATE VIEW \"{}\" AS {}",
+        view_name, definition
+    );
+    sqlx::query(&query)
+        .execute(&pool)
+        .await
+        .map_err(|e| format!("Failed to create view: {}", e))?;
+    Ok(())
+}
+
+pub async fn alter_view(
+    params: &ConnectionParams,
+    view_name: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let pool = get_sqlite_pool(params).await?;
+    // SQLite does not support ALTER VIEW, so we must drop and recreate
+    let drop_query = format!("DROP VIEW IF EXISTS \"{}\"", view_name);
+    sqlx::query(&drop_query)
+        .execute(&pool)
+        .await
+        .map_err(|e| format!("Failed to drop view: {}", e))?;
+
+    let create_query = format!(
+        "CREATE VIEW \"{}\" AS {}",
+        view_name, definition
+    );
+    sqlx::query(&create_query)
+        .execute(&pool)
+        .await
+        .map_err(|e| format!("Failed to recreate view: {}", e))?;
+    Ok(())
+}
+
+pub async fn drop_view(
+    params: &ConnectionParams,
+    view_name: &str,
+) -> Result<(), String> {
+    let pool = get_sqlite_pool(params).await?;
+    let query = format!("DROP VIEW IF EXISTS \"{}\"", view_name);
+    sqlx::query(&query)
+        .execute(&pool)
+        .await
+        .map_err(|e| format!("Failed to drop view: {}", e))?;
+    Ok(())
+}
+
+pub async fn get_view_columns(
+    params: &ConnectionParams,
+    view_name: &str,
+) -> Result<Vec<TableColumn>, String> {
+    let pool = get_sqlite_pool(params).await?;
+
+    let query = format!("PRAGMA table_info('{}')", view_name);
+
+    let rows = sqlx::query(&query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows
+        .iter()
+        .map(|r| {
+            let pk: i32 = r.try_get("pk").unwrap_or(0);
+            let notnull: i32 = r.try_get("notnull").unwrap_or(0);
+            TableColumn {
+                name: r.try_get("name").unwrap_or_default(),
+                data_type: r.try_get("type").unwrap_or_default(),
+                is_pk: pk > 0,
+                is_nullable: notnull == 0,
+                is_auto_increment: false,
+            }
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::ConnectionParams;
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    use std::str::FromStr;
+    use tempfile::NamedTempFile;
+
+    async fn setup_test_db() -> (ConnectionParams, NamedTempFile) {
+        let file = NamedTempFile::new().expect("Failed to create temp file");
+        let path = file.path().to_str().unwrap().to_string();
+
+        let params = ConnectionParams {
+            driver: "sqlite".to_string(),
+            database: path.clone(),
+            host: None,
+            port: None,
+            username: None,
+            password: None,
+            ssh_enabled: None,
+            ssh_connection_id: None,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_file: None,
+            ssh_key_passphrase: None,
+            save_in_keychain: None,
+        };
+
+        // Initialize DB with a table
+        // We use create_if_missing=true to ensure it works even if tempfile behavior varies
+        let url = format!("sqlite://{}", path);
+        let options = SqliteConnectOptions::from_str(&url)
+            .unwrap()
+            .create_if_missing(true);
+            
+        let pool = SqlitePoolOptions::new()
+            .connect_with(options)
+            .await
+            .expect("Failed to connect to test DB");
+
+        sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+            .execute(&pool)
+            .await
+            .expect("Failed to create table");
+            
+        sqlx::query("INSERT INTO users (name) VALUES ('Alice'), ('Bob')")
+            .execute(&pool)
+            .await
+            .expect("Failed to insert data");
+            
+        // Close this pool so the file isn't locked (though SQLite handles concurrent reads usually)
+        pool.close().await;
+
+        // We return the file handle too so it doesn't get deleted until the test ends
+        (params, file)
+    }
+
+    #[tokio::test]
+    async fn test_view_lifecycle() {
+        let (params, _file) = setup_test_db().await;
+
+        // 1. Create View
+        let view_name = "view_users";
+        // Note: SQLite view definitions are stored as written
+        let definition = "SELECT name FROM users";
+        create_view(&params, view_name, definition)
+            .await
+            .expect("Failed to create view");
+
+        // 2. Get Views
+        let views = get_views(&params).await.expect("Failed to get views");
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].name, view_name);
+
+        // 3. Get View Definition
+        let def = get_view_definition(&params, view_name)
+            .await
+            .expect("Failed to get definition");
+        // SQLite stores the full "CREATE VIEW ..." statement in 'sql' column usually, 
+        // OR just the definition depending on normalization. 
+        // The get_view_definition implementation returns 'sql' column from sqlite_master.
+        // It usually is "CREATE VIEW view_users AS SELECT name FROM users"
+        assert!(def.to_uppercase().contains("CREATE VIEW"));
+        assert!(def.to_uppercase().contains("SELECT NAME FROM USERS"));
+
+        // 4. Get View Columns
+        let cols = get_view_columns(&params, view_name).await.expect("Failed to get columns");
+        assert_eq!(cols.len(), 1);
+        assert_eq!(cols[0].name, "name");
+
+        // 5. Alter View (Drop & Recreate)
+        let new_def = "SELECT id, name FROM users";
+        alter_view(&params, view_name, new_def).await.expect("Failed to alter view");
+        
+        let cols_after = get_view_columns(&params, view_name).await.expect("Failed to get columns after alter");
+        assert_eq!(cols_after.len(), 2);
+
+        // 6. Drop View
+        drop_view(&params, view_name).await.expect("Failed to drop view");
+        let views_final = get_views(&params).await.expect("Failed to get views final");
+        assert_eq!(views_final.len(), 0);
+        
+        // Cleanup: Close the pool created by the functions (via pool_manager)
+        crate::pool_manager::close_pool(&params).await;
+    }
 }

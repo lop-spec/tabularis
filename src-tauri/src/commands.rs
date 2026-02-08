@@ -1867,3 +1867,170 @@ fn resolve_ssh_test_password(
         },
     )
 }
+
+// ==================== View Management Commands ====================
+
+#[tauri::command]
+pub async fn get_views<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+) -> Result<Vec<crate::models::ViewInfo>, String> {
+    log::info!("Fetching views for connection: {}", connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    log::debug!("Getting views from {} database: {}", saved_conn.params.driver, params.database);
+
+    let result = match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::get_views(&params).await,
+        "postgres" => postgres::get_views(&params).await,
+        "sqlite" => sqlite::get_views(&params).await,
+        _ => Err("Unsupported driver".into()),
+    };
+
+    match &result {
+        Ok(views) => log::info!("Retrieved {} views from {}", views.len(), params.database),
+        Err(e) => log::error!("Failed to get views from {}: {}", params.database, e),
+    }
+
+    result
+}
+
+#[tauri::command]
+pub async fn get_view_definition<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    view_name: String,
+) -> Result<String, String> {
+    log::info!("Fetching view definition for: {} on connection: {}", view_name, connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    let result = match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::get_view_definition(&params, &view_name).await,
+        "postgres" => postgres::get_view_definition(&params, &view_name).await,
+        "sqlite" => sqlite::get_view_definition(&params, &view_name).await,
+        _ => Err("Unsupported driver".into()),
+    };
+
+    match &result {
+        Ok(_) => log::info!("Successfully retrieved view definition for {}", view_name),
+        Err(e) => log::error!("Failed to get view definition for {}: {}", view_name, e),
+    }
+
+    result
+}
+
+#[tauri::command]
+pub async fn create_view<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    view_name: String,
+    definition: String,
+) -> Result<(), String> {
+    log::info!("Creating view: {} on connection: {}", view_name, connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    let result = match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::create_view(&params, &view_name, &definition).await,
+        "postgres" => postgres::create_view(&params, &view_name, &definition).await,
+        "sqlite" => sqlite::create_view(&params, &view_name, &definition).await,
+        _ => Err("Unsupported driver".into()),
+    };
+
+    match &result {
+        Ok(_) => log::info!("Successfully created view: {}", view_name),
+        Err(e) => log::error!("Failed to create view {}: {}", view_name, e),
+    }
+
+    result
+}
+
+#[tauri::command]
+pub async fn alter_view<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    view_name: String,
+    definition: String,
+) -> Result<(), String> {
+    log::info!("Altering view: {} on connection: {}", view_name, connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    let result = match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::alter_view(&params, &view_name, &definition).await,
+        "postgres" => postgres::alter_view(&params, &view_name, &definition).await,
+        "sqlite" => sqlite::alter_view(&params, &view_name, &definition).await,
+        _ => Err("Unsupported driver".into()),
+    };
+
+    match &result {
+        Ok(_) => log::info!("Successfully altered view: {}", view_name),
+        Err(e) => log::error!("Failed to alter view {}: {}", view_name, e),
+    }
+
+    result
+}
+
+#[tauri::command]
+pub async fn drop_view<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    view_name: String,
+) -> Result<(), String> {
+    log::info!("Dropping view: {} on connection: {}", view_name, connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    let result = match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::drop_view(&params, &view_name).await,
+        "postgres" => postgres::drop_view(&params, &view_name).await,
+        "sqlite" => sqlite::drop_view(&params, &view_name).await,
+        _ => Err("Unsupported driver".into()),
+    };
+
+    match &result {
+        Ok(_) => log::info!("Successfully dropped view: {}", view_name),
+        Err(e) => log::error!("Failed to drop view {}: {}", view_name, e),
+    }
+
+    result
+}
+
+#[tauri::command]
+pub async fn get_view_columns<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    view_name: String,
+) -> Result<Vec<TableColumn>, String> {
+    log::info!("Fetching view columns for: {} on connection: {}", view_name, connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params(&expanded_params)?;
+
+    let result = match saved_conn.params.driver.as_str() {
+        "mysql" => mysql::get_view_columns(&params, &view_name).await,
+        "postgres" => postgres::get_view_columns(&params, &view_name).await,
+        "sqlite" => sqlite::get_view_columns(&params, &view_name).await,
+        _ => Err("Unsupported driver".into()),
+    };
+
+    match &result {
+        Ok(columns) => log::info!("Retrieved {} columns for view {}", columns.len(), view_name),
+        Err(e) => log::error!("Failed to get view columns for {}: {}", view_name, e),
+    }
+
+    result
+}

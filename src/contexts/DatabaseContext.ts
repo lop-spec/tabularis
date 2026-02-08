@@ -4,6 +4,11 @@ export interface TableInfo {
   name: string;
 }
 
+export interface ViewInfo {
+  name: string;
+  definition?: string;
+}
+
 export interface SavedConnection {
   id: string;
   name: string;
@@ -21,11 +26,14 @@ export interface DatabaseContextType {
   activeConnectionName: string | null;
   activeDatabaseName: string | null;
   tables: TableInfo[];
+  views: ViewInfo[];
   isLoadingTables: boolean;
+  isLoadingViews: boolean;
   connect: (connectionId: string) => Promise<void>;
   disconnect: () => void;
   setActiveTable: (table: string | null) => void;
   refreshTables: () => Promise<void>;
+  refreshViews: () => Promise<void>;
 }
 
 export const DatabaseContext = createContext<DatabaseContextType | undefined>(undefined);

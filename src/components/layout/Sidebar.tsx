@@ -41,11 +41,13 @@ import { GenerateSQLModal } from "../ui/GenerateSQLModal";
 import { McpModal } from "../modals/McpModal";
 import { DumpDatabaseModal } from "../modals/DumpDatabaseModal";
 import { ImportDatabaseModal } from "../modals/ImportDatabaseModal";
+import { ViewEditorModal } from "../modals/ViewEditorModal";
 
 // Sub-components
 import { NavItem } from "./sidebar/NavItem";
 import { Accordion } from "./sidebar/Accordion";
 import { SidebarTableItem } from "./sidebar/SidebarTableItem";
+import { SidebarViewItem } from "./sidebar/SidebarViewItem";
 
 // Hooks & Types
 import { useSidebarResize } from "../../hooks/useSidebarResize";
@@ -62,8 +64,10 @@ export const Sidebar = () => {
     activeTable,
     setActiveTable,
     tables,
+    views,
     isLoadingTables,
     refreshTables,
+    refreshViews,
     activeConnectionName,
     activeDatabaseName,
   } = useDatabase();
@@ -100,6 +104,8 @@ export const Sidebar = () => {
 
   const [queriesOpen, setQueriesOpen] = useState(false);
   const [tablesOpen, setTablesOpen] = useState(true);
+  const [viewsOpen, setViewsOpen] = useState(true);
+  const [activeView, setActiveView] = useState<string | null>(null);
   const [queryModal, setQueryModal] = useState<{
     isOpen: boolean;
     query?: SavedQuery;
@@ -112,6 +118,11 @@ export const Sidebar = () => {
     filePath: string;
   }>({ isOpen: false, filePath: "" });
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
+  const [viewEditorModal, setViewEditorModal] = useState<{
+    isOpen: boolean;
+    viewName?: string;
+    isNewView?: boolean;
+  }>({ isOpen: false });
 
   // Resize Hook
   const { sidebarWidth, startResize } = useSidebarResize();
@@ -135,6 +146,20 @@ export const Sidebar = () => {
       state: {
         initialQuery: `SELECT * FROM ${q}${tableName}${q}`,
         tableName: tableName,
+      },
+    });
+  };
+
+  const handleViewClick = (viewName: string) => {
+    setActiveView(viewName);
+  };
+
+  const handleOpenView = (viewName: string) => {
+    const q = getQuote();
+    navigate("/editor", {
+      state: {
+        initialQuery: `SELECT * FROM ${q}${viewName}${q}`,
+        tableName: viewName,
       },
     });
   };
@@ -522,6 +547,58 @@ export const Sidebar = () => {
                       </div>
                     )}
                   </Accordion>
+
+                  {/* Views */}
+                  <Accordion
+                    title={`${t("sidebar.views")} (${views.length})`}
+                    isOpen={viewsOpen}
+                    onToggle={() => setViewsOpen(!viewsOpen)}
+                    actions={
+                      <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (refreshViews) refreshViews();
+                      }}
+                      className="p-1 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
+                      title={t("sidebar.refreshViews") || "Refresh Views"}
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewEditorModal({ isOpen: true, isNewView: true });
+                      }}
+                      className="p-1 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
+                      title={t("sidebar.createView") || "Create New View"}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                }
+              >
+                    {views.length === 0 ? (
+                      <div className="text-center p-2 text-xs text-muted italic">
+                        {t("sidebar.noViews")}
+                      </div>
+                    ) : (
+                      <div>
+                        {views.map((view) => (
+                          <SidebarViewItem
+                            key={view.name}
+                            view={view}
+                            activeView={activeView}
+                            onViewClick={handleViewClick}
+                            onViewDoubleClick={handleOpenView}
+                            onContextMenu={handleContextMenu}
+                            connectionId={activeConnectionId!}
+                            driver={activeDriver!}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </Accordion>
                 </>
               )}
             </div>
@@ -757,7 +834,7 @@ export const Sidebar = () => {
                           },
                         },
                       ]
-                    : contextMenu.type === "folder_fks"
+                      : contextMenu.type === "folder_fks"
                       ? [
                           {
                             label: t("sidebar.addFk"),
@@ -771,6 +848,102 @@ export const Sidebar = () => {
                                   isOpen: true,
                                   tableName: contextMenu.data.tableName,
                                 });
+                              }
+                            },
+                          },
+                        ]
+                      : contextMenu.type === "view"
+                      ? [
+                          {
+                            label: t("sidebar.showData"),
+                            icon: PlaySquare,
+                            action: () => {
+                              const q = getQuote();
+                              runQuery(
+                                `SELECT * FROM ${q}${contextMenu.id}${q}`,
+                                undefined,
+                                contextMenu.id,
+                              );
+                            },
+                          },
+                          {
+                            label: t("sidebar.countRows"),
+                            icon: Hash,
+                            action: () => {
+                              const q = getQuote();
+                              runQuery(
+                                `SELECT COUNT(*) as count FROM ${q}${contextMenu.id}${q}`,
+                              );
+                            },
+                          },
+                          {
+                            label: t("sidebar.viewDefinition"),
+                            icon: FileText,
+                            action: async () => {
+                              try {
+                                const definition = await invoke<string>(
+                                  "get_view_definition",
+                                  {
+                                    connectionId: activeConnectionId,
+                                    viewName: contextMenu.id,
+                                  },
+                                );
+                                runQuery(definition, undefined, contextMenu.id);
+                              } catch (e) {
+                                console.error(e);
+                                await message(
+                                  t("sidebar.failGetViewDefinition") + String(e),
+                                  {
+                                    kind: "error",
+                                  },
+                                );
+                              }
+                            },
+                          },
+                          {
+                            label: t("sidebar.editView"),
+                            icon: Edit,
+                            action: () => {
+                              setViewEditorModal({
+                                isOpen: true,
+                                viewName: contextMenu.id,
+                                isNewView: false,
+                              });
+                            },
+                          },
+                          {
+                            label: t("sidebar.copyName"),
+                            icon: Copy,
+                            action: () => navigator.clipboard.writeText(contextMenu.id),
+                          },
+                          {
+                            label: t("sidebar.dropView"),
+                            icon: Trash2,
+                            danger: true,
+                            action: async () => {
+                              if (
+                                await ask(
+                                  t("sidebar.dropViewConfirm", {
+                                    view: contextMenu.id,
+                                  }),
+                                  { title: t("sidebar.dropView"), kind: "warning" },
+                                )
+                              ) {
+                                try {
+                                  await invoke("drop_view", {
+                                    connectionId: activeConnectionId,
+                                    viewName: contextMenu.id,
+                                  });
+                                  if (refreshViews) refreshViews();
+                                } catch (e) {
+                                  console.error(e);
+                                  await message(
+                                    t("sidebar.failDropView") + String(e),
+                                    {
+                                      kind: "error",
+                                    },
+                                  );
+                                }
                               }
                             },
                           },
@@ -945,6 +1118,19 @@ export const Sidebar = () => {
           filePath={importModal.filePath}
           onSuccess={() => {
             if (refreshTables) refreshTables();
+          }}
+        />
+      )}
+
+      {viewEditorModal.isOpen && activeConnectionId && (
+        <ViewEditorModal
+          isOpen={viewEditorModal.isOpen}
+          onClose={() => setViewEditorModal({ isOpen: false })}
+          connectionId={activeConnectionId}
+          viewName={viewEditorModal.viewName}
+          isNewView={viewEditorModal.isNewView}
+          onSuccess={() => {
+            if (refreshViews) refreshViews();
           }}
         />
       )}

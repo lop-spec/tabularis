@@ -1,6 +1,6 @@
 use crate::drivers::common::extract_postgres_value;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo,
+    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo, ViewInfo,
 };
 use crate::pool_manager::get_postgres_pool;
 use sqlx::{Column, Row};
@@ -587,4 +587,137 @@ pub async fn execute_query(
         truncated,
         pagination,
     })
+}
+
+pub async fn get_views(params: &ConnectionParams) -> Result<Vec<ViewInfo>, String> {
+    log::debug!("PostgreSQL: Fetching views for database: {}", params.database);
+    let pool = get_postgres_pool(params).await?;
+    let rows = sqlx::query(
+        "SELECT viewname as name FROM pg_views WHERE schemaname = 'public' ORDER BY viewname ASC",
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    let views: Vec<ViewInfo> = rows
+        .iter()
+        .map(|r| ViewInfo {
+            name: r.try_get("name").unwrap_or_default(),
+            definition: None,
+        })
+        .collect();
+    log::debug!("PostgreSQL: Found {} views in {}", views.len(), params.database);
+    Ok(views)
+}
+
+pub async fn get_view_definition(
+    params: &ConnectionParams,
+    view_name: &str,
+) -> Result<String, String> {
+    let pool = get_postgres_pool(params).await?;
+    let query = "SELECT pg_get_viewdef($1, true) as definition";
+    let row = sqlx::query(query)
+        .bind(view_name)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| format!("Failed to get view definition: {}", e))?;
+
+    let definition: String = row.try_get("definition").unwrap_or_default();
+    Ok(format!("CREATE OR REPLACE VIEW {} AS\n{}", view_name, definition))
+}
+
+pub async fn create_view(
+    params: &ConnectionParams,
+    view_name: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let pool = get_postgres_pool(params).await?;
+    let query = format!(
+        "CREATE VIEW \"{}\" AS {}",
+        view_name, definition
+    );
+    sqlx::query(&query)
+        .execute(&pool)
+        .await
+        .map_err(|e| format!("Failed to create view: {}", e))?;
+    Ok(())
+}
+
+pub async fn alter_view(
+    params: &ConnectionParams,
+    view_name: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let pool = get_postgres_pool(params).await?;
+    let query = format!(
+        "CREATE OR REPLACE VIEW \"{}\" AS {}",
+        view_name, definition
+    );
+    sqlx::query(&query)
+        .execute(&pool)
+        .await
+        .map_err(|e| format!("Failed to alter view: {}", e))?;
+    Ok(())
+}
+
+pub async fn drop_view(
+    params: &ConnectionParams,
+    view_name: &str,
+) -> Result<(), String> {
+    let pool = get_postgres_pool(params).await?;
+    let query = format!("DROP VIEW IF EXISTS \"{}\"", view_name);
+    sqlx::query(&query)
+        .execute(&pool)
+        .await
+        .map_err(|e| format!("Failed to drop view: {}", e))?;
+    Ok(())
+}
+
+pub async fn get_view_columns(
+    params: &ConnectionParams,
+    view_name: &str,
+) -> Result<Vec<TableColumn>, String> {
+    let pool = get_postgres_pool(params).await?;
+
+    let query = r#"
+        SELECT
+            c.column_name,
+            c.data_type,
+            c.is_nullable,
+            c.column_default,
+            c.is_identity,
+            (SELECT COUNT(*) FROM information_schema.table_constraints tc
+             JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+             WHERE tc.constraint_type = 'PRIMARY KEY'
+             AND kcu.table_name = c.table_name
+             AND kcu.column_name = c.column_name) > 0 as is_pk
+        FROM information_schema.columns c
+        WHERE c.table_schema = 'public' AND c.table_name = $1
+        ORDER BY c.ordinal_position
+    "#;
+
+    let rows = sqlx::query(query)
+        .bind(view_name)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows
+        .iter()
+        .map(|r| {
+            let null_str: String = r.try_get("is_nullable").unwrap_or_default();
+            let is_pk: i64 = r.try_get("is_pk").unwrap_or(0);
+            let default_val: String = r.try_get("column_default").unwrap_or_default();
+            let is_identity: String = r.try_get("is_identity").unwrap_or_default();
+
+            let is_auto = is_identity == "YES" || default_val.contains("nextval");
+
+            TableColumn {
+                name: r.try_get("column_name").unwrap_or_default(),
+                data_type: r.try_get("data_type").unwrap_or_default(),
+                is_pk: is_pk > 0,
+                is_nullable: null_str == "YES",
+                is_auto_increment: is_auto,
+            }
+        })
+        .collect())
 }

@@ -32,12 +32,18 @@ describe('DatabaseProvider', () => {
     { name: 'comments' },
   ];
 
+  const mockViews = [
+    { name: 'active_users' },
+    { name: 'user_posts_summary' },
+  ];
+
   beforeEach(() => {
     vi.resetAllMocks();
     // Default mock implementation that handles all invoke calls
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === 'get_connections') return Promise.resolve(mockConnections);
       if (cmd === 'get_tables') return Promise.resolve(mockTables);
+      if (cmd === 'get_views') return Promise.resolve(mockViews);
       if (cmd === 'set_window_title') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
@@ -57,7 +63,9 @@ describe('DatabaseProvider', () => {
     expect(result.current.activeDriver).toBeNull();
     expect(result.current.activeTable).toBeNull();
     expect(result.current.tables).toHaveLength(0);
+    expect(result.current.views).toHaveLength(0);
     expect(result.current.isLoadingTables).toBe(false);
+    expect(result.current.isLoadingViews).toBe(false);
   });
 
   it('should connect and load tables', async () => {
@@ -76,11 +84,14 @@ describe('DatabaseProvider', () => {
       expect(result.current.activeConnectionName).toBe('Local MySQL');
       expect(result.current.activeDatabaseName).toBe('testdb');
       expect(result.current.tables).toHaveLength(3);
+      expect(result.current.views).toHaveLength(2);
       expect(result.current.isLoadingTables).toBe(false);
+      expect(result.current.isLoadingViews).toBe(false);
     });
 
     expect(invoke).toHaveBeenCalledWith('get_connections');
     expect(invoke).toHaveBeenCalledWith('get_tables', { connectionId: 'conn-123' });
+    expect(invoke).toHaveBeenCalledWith('get_views', { connectionId: 'conn-123' });
   });
 
   it('should handle connection failure', async () => {
@@ -120,6 +131,7 @@ describe('DatabaseProvider', () => {
     expect(result.current.activeDriver).toBeNull();
     expect(result.current.activeTable).toBeNull();
     expect(result.current.tables).toHaveLength(0);
+    expect(result.current.views).toHaveLength(0);
   });
 
   it('should refresh tables', async () => {
@@ -206,6 +218,110 @@ describe('DatabaseProvider', () => {
       expect(invoke).toHaveBeenCalledWith('set_window_title', {
         title: 'tabularis - Local MySQL (testdb)',
       });
+    });
+  });
+
+  describe('Views Management', () => {
+    it('should load views on connection', async () => {
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(DatabaseProvider, null, children);
+
+      const { result } = renderHook(() => useDatabase(), { wrapper });
+
+      await act(async () => {
+        await result.current.connect('conn-123');
+      });
+
+      await waitFor(() => {
+        expect(result.current.views).toHaveLength(2);
+        expect(result.current.views[0].name).toBe('active_users');
+        expect(result.current.views[1].name).toBe('user_posts_summary');
+        expect(result.current.isLoadingViews).toBe(false);
+      });
+    });
+
+    it('should refresh views', async () => {
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(DatabaseProvider, null, children);
+
+      const { result } = renderHook(() => useDatabase(), { wrapper });
+
+      await act(async () => {
+        await result.current.connect('conn-123');
+      });
+
+      await waitFor(() => expect(result.current.views).toHaveLength(2));
+
+      // Update mock to return additional view
+      const updatedViews = [...mockViews, { name: 'new_view' }];
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === 'get_connections') return Promise.resolve(mockConnections);
+        if (cmd === 'get_tables') return Promise.resolve(mockTables);
+        if (cmd === 'get_views') return Promise.resolve(updatedViews);
+        if (cmd === 'set_window_title') return Promise.resolve(undefined);
+        return Promise.reject(new Error(`Unexpected command: ${cmd}`));
+      });
+
+      await act(async () => {
+        await result.current.refreshViews();
+      });
+
+      await waitFor(() => {
+        expect(result.current.views).toHaveLength(3);
+      });
+      expect(result.current.views.map((v) => v.name)).toContain('new_view');
+    });
+
+    it('should not refresh views when disconnected', async () => {
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(DatabaseProvider, null, children);
+
+      const { result } = renderHook(() => useDatabase(), { wrapper });
+
+      await act(async () => {
+        await result.current.refreshViews();
+      });
+
+      // Should not invoke get_views when disconnected
+      expect(invoke).not.toHaveBeenCalledWith('get_views', expect.anything());
+    });
+
+    it('should handle views loading state during connection', async () => {
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(DatabaseProvider, null, children);
+
+      const { result } = renderHook(() => useDatabase(), { wrapper });
+
+      // Start connection
+      act(() => {
+        result.current.connect('conn-123');
+      });
+
+      // Should be loading immediately after starting connection
+      expect(result.current.isLoadingViews).toBe(true);
+
+      await waitFor(() => {
+        expect(result.current.isLoadingViews).toBe(false);
+      });
+    });
+
+    it('should clear views on disconnect', async () => {
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(DatabaseProvider, null, children);
+
+      const { result } = renderHook(() => useDatabase(), { wrapper });
+
+      await act(async () => {
+        await result.current.connect('conn-123');
+      });
+
+      await waitFor(() => expect(result.current.views).toHaveLength(2));
+
+      act(() => {
+        result.current.disconnect();
+      });
+
+      expect(result.current.views).toHaveLength(0);
     });
   });
 });

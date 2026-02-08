@@ -1,6 +1,6 @@
 use crate::drivers::common::extract_mysql_value;
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo,
+    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, TableColumn, TableInfo, ViewInfo,
 };
 use crate::pool_manager::get_mysql_pool;
 use sqlx::{Column, Row};
@@ -409,20 +409,139 @@ fn remove_order_by(query: &str) -> String {
     }
 }
 
-pub async fn get_table_ddl(
-    params: &ConnectionParams,
-    table_name: &str,
-) -> Result<String, String> {
-    let pool = get_mysql_pool(params).await?;
-    let query = format!("SHOW CREATE TABLE `{}`", table_name);
-    let row = sqlx::query(&query)
-        .fetch_one(&pool)
+    pub async fn get_table_ddl(
+        params: &ConnectionParams,
+        table_name: &str,
+    ) -> Result<String, String> {
+        let pool = get_mysql_pool(params).await?;
+        let query = format!("SHOW CREATE TABLE `{}`", table_name);
+        let row = sqlx::query(&query)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let create_sql: String = row.try_get(1).unwrap_or_default();
+        Ok(format!("{};", create_sql))
+    }
+
+    pub async fn get_views(params: &ConnectionParams) -> Result<Vec<ViewInfo>, String> {
+        log::debug!("MySQL: Fetching views for database: {}", params.database);
+        let pool = get_mysql_pool(params).await?;
+        let rows = sqlx::query(
+            "SELECT table_name as name FROM information_schema.views WHERE table_schema = DATABASE() ORDER BY table_name ASC",
+        )
+        .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
+        let views: Vec<ViewInfo> = rows
+            .iter()
+            .map(|r| ViewInfo {
+                name: r.try_get("name").unwrap_or_default(),
+                definition: None,
+            })
+            .collect();
+        log::debug!("MySQL: Found {} views in {}", views.len(), params.database);
+        Ok(views)
+    }
 
-    let create_sql: String = row.try_get(1).unwrap_or_default();
-    Ok(format!("{};", create_sql))
-}
+    pub async fn get_view_definition(
+        params: &ConnectionParams,
+        view_name: &str,
+    ) -> Result<String, String> {
+        let pool = get_mysql_pool(params).await?;
+        let query = format!("SHOW CREATE VIEW `{}`", view_name);
+        let row = sqlx::query(&query)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| format!("Failed to get view definition: {}", e))?;
+
+        let definition: String = row.try_get("Create View").unwrap_or_default();
+        Ok(definition)
+    }
+
+    pub async fn create_view(
+        params: &ConnectionParams,
+        view_name: &str,
+        definition: &str,
+    ) -> Result<(), String> {
+        let pool = get_mysql_pool(params).await?;
+        let query = format!(
+            "CREATE VIEW `{}` AS {}",
+            view_name, definition
+        );
+        sqlx::query(&query)
+            .execute(&pool)
+            .await
+            .map_err(|e| format!("Failed to create view: {}", e))?;
+        Ok(())
+    }
+
+    pub async fn alter_view(
+        params: &ConnectionParams,
+        view_name: &str,
+        definition: &str,
+    ) -> Result<(), String> {
+        let pool = get_mysql_pool(params).await?;
+        let query = format!(
+            "ALTER VIEW `{}` AS {}",
+            view_name, definition
+        );
+        sqlx::query(&query)
+            .execute(&pool)
+            .await
+            .map_err(|e| format!("Failed to alter view: {}", e))?;
+        Ok(())
+    }
+
+    pub async fn drop_view(
+        params: &ConnectionParams,
+        view_name: &str,
+    ) -> Result<(), String> {
+        let pool = get_mysql_pool(params).await?;
+        let query = format!("DROP VIEW IF EXISTS `{}`", view_name);
+        sqlx::query(&query)
+            .execute(&pool)
+            .await
+            .map_err(|e| format!("Failed to drop view: {}", e))?;
+        Ok(())
+    }
+
+    pub async fn get_view_columns(
+        params: &ConnectionParams,
+        view_name: &str,
+    ) -> Result<Vec<TableColumn>, String> {
+        // Views in MySQL can be queried like tables for column info
+        let pool = get_mysql_pool(params).await?;
+
+        let query = r#"
+            SELECT column_name, data_type, column_key, is_nullable, extra
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE() AND table_name = ?
+            ORDER BY ordinal_position
+        "#;
+
+        let rows = sqlx::query(query)
+            .bind(view_name)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(rows
+            .iter()
+            .map(|r| {
+                let key: String = r.try_get("column_key").unwrap_or_default();
+                let null_str: String = r.try_get("is_nullable").unwrap_or_default();
+                let extra: String = r.try_get("extra").unwrap_or_default();
+                TableColumn {
+                    name: r.try_get("column_name").unwrap_or_default(),
+                    data_type: r.try_get("data_type").unwrap_or_default(),
+                    is_pk: key == "PRI",
+                    is_nullable: null_str == "YES",
+                    is_auto_increment: extra.contains("auto_increment"),
+                }
+            })
+            .collect())
+    }
 
 pub async fn execute_query(
     params: &ConnectionParams,

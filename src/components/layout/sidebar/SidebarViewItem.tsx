@@ -1,0 +1,153 @@
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  Eye,
+  Loader2,
+  Folder,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
+import clsx from "clsx";
+import { SidebarColumnItem } from "./SidebarColumnItem";
+import type { TableColumn } from "../../../types/schema";
+
+interface SidebarViewItemProps {
+  view: { name: string };
+  activeView: string | null;
+  onViewClick: (name: string) => void;
+  onViewDoubleClick: (name: string) => void;
+  onContextMenu: (
+    e: React.MouseEvent,
+    type: string,
+    id: string,
+    label: string,
+  ) => void;
+  connectionId: string;
+  driver: string;
+}
+
+export const SidebarViewItem = ({
+  view,
+  activeView,
+  onViewClick,
+  onViewDoubleClick,
+  onContextMenu,
+  connectionId,
+  driver,
+}: SidebarViewItemProps) => {
+  const { t } = useTranslation();
+
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [columns, setColumns] = useState<TableColumn[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refreshColumns = React.useCallback(async () => {
+    if (!connectionId) return;
+    setIsLoading(true);
+    try {
+      const cols = await invoke<TableColumn[]>("get_view_columns", {
+        connectionId,
+        viewName: view.name,
+      });
+      setColumns(cols);
+    } catch (err) {
+      console.error("Failed to load view columns:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [connectionId, view.name]);
+
+  useEffect(() => {
+    if (isExpanded) {
+      refreshColumns();
+    }
+  }, [isExpanded, refreshColumns]);
+
+  const handleExpand = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isExpanded) {
+      setIsExpanded(false);
+      return;
+    }
+
+    setIsExpanded(true);
+    refreshColumns();
+  };
+
+  const showContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onContextMenu(e, "view", view.name, view.name);
+  };
+
+  return (
+    <div className="flex flex-col">
+      <div
+        onClick={() => onViewClick(view.name)}
+        onDoubleClick={() => onViewDoubleClick(view.name)}
+        onContextMenu={showContextMenu}
+        className={clsx(
+          "flex items-center gap-1 pl-1 pr-3 py-1.5 text-sm cursor-pointer group select-none transition-colors border-l-2",
+          activeView === view.name
+            ? "bg-purple-900/40 text-purple-200 border-purple-500"
+            : "text-secondary hover:bg-surface-secondary border-transparent hover:text-primary",
+        )}
+      >
+        <button
+          onClick={handleExpand}
+          className="p-0.5 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
+        >
+          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+        <Eye
+          size={14}
+          className={
+            activeView === view.name
+              ? "text-purple-400"
+              : "text-muted group-hover:text-purple-400"
+          }
+        />
+        <span className="truncate flex-1">{view.name}</span>
+      </div>
+      {isExpanded && (
+        <div className="ml-[22px] border-l border-default">
+          {isLoading ? (
+            <div className="flex items-center gap-2 p-2 text-xs text-muted">
+              <Loader2 size={12} className="animate-spin" />
+              {t("sidebar.loadingSchema")}
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              <div
+                className="flex items-center gap-2 px-2 py-1 text-xs text-muted hover:text-secondary cursor-pointer select-none"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+              >
+                <Folder size={12} className="text-blue-400/70" />
+                <span>{t("sidebar.columns")}</span>
+                <span className="ml-auto text-[10px] opacity-50">
+                  {columns.length}
+                </span>
+              </div>
+              <div className="ml-4 border-l border-default/50">
+                {columns.map((col) => (
+                  <SidebarColumnItem
+                    key={col.name}
+                    column={col}
+                    tableName={view.name}
+                    connectionId={connectionId}
+                    driver={driver}
+                    onRefresh={refreshColumns}
+                    onEdit={() => {}}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

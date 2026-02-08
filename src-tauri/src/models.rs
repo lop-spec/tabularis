@@ -145,3 +145,9 @@ pub struct TableSchema {
     pub columns: Vec<TableColumn>,
     pub foreign_keys: Vec<ForeignKey>,
 }
+
+#[derive(Debug, Serialize)]
+pub struct ViewInfo {
+    pub name: String,
+    pub definition: Option<String>,
+}

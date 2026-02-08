@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { DatabaseContext, type TableInfo, type SavedConnection } from './DatabaseContext';
+import { DatabaseContext, type TableInfo, type ViewInfo, type SavedConnection } from './DatabaseContext';
 import type { ReactNode } from 'react';
 import { clearAutocompleteCache } from '../utils/autocomplete';
 
@@ -11,7 +11,9 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   const [activeConnectionName, setActiveConnectionName] = useState<string | null>(null);
   const [activeDatabaseName, setActiveDatabaseName] = useState<string | null>(null);
   const [tables, setTables] = useState<TableInfo[]>([]);
+  const [views, setViews] = useState<ViewInfo[]>([]);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
+  const [isLoadingViews, setIsLoadingViews] = useState(false);
 
   // Sync Window Title with active connection
   // WORKAROUND: Using custom Tauri command instead of window.setTitle() for Wayland support
@@ -43,10 +45,25 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       }
   };
 
+  const refreshViews = async () => {
+      if (!activeConnectionId) return;
+      setIsLoadingViews(true);
+      try {
+          const result = await invoke<ViewInfo[]>('get_views', { connectionId: activeConnectionId });
+          setViews(result);
+      } catch (e) {
+          console.error('Failed to refresh views:', e);
+      } finally {
+          setIsLoadingViews(false);
+      }
+  };
+
   const connect = async (connectionId: string) => {
     setActiveConnectionId(connectionId);
     setIsLoadingTables(true);
+    setIsLoadingViews(true);
     setTables([]);
+    setViews([]);
     setActiveDriver(null);
     setActiveTable(null);
     setActiveConnectionName(null);
@@ -62,11 +79,15 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         setActiveDatabaseName(conn.params.database);
       }
 
-      // 2. Get tables
-      const result = await invoke<TableInfo[]>('get_tables', { connectionId });
-      setTables(result);
+      // 2. Get tables and views in parallel
+      const [tablesResult, viewsResult] = await Promise.all([
+        invoke<TableInfo[]>('get_tables', { connectionId }),
+        invoke<ViewInfo[]>('get_views', { connectionId })
+      ]);
+      setTables(tablesResult);
+      setViews(viewsResult);
     } catch (error) {
-      console.error('Failed to fetch tables:', error);
+      console.error('Failed to fetch tables/views:', error);
       setActiveConnectionId(null);
       setActiveDriver(null);
       setActiveConnectionName(null);
@@ -74,6 +95,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       throw error;
     } finally {
       setIsLoadingTables(false);
+      setIsLoadingViews(false);
     }
   };
 
@@ -82,28 +104,32 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     if (activeConnectionId) {
       clearAutocompleteCache(activeConnectionId);
     }
-    
+
     setActiveConnectionId(null);
     setActiveDriver(null);
     setActiveTable(null);
     setActiveConnectionName(null);
     setActiveDatabaseName(null);
     setTables([]);
+    setViews([]);
   };
 
   return (
-    <DatabaseContext.Provider value={{ 
-      activeConnectionId, 
-      activeDriver, 
-      activeTable, 
+    <DatabaseContext.Provider value={{
+      activeConnectionId,
+      activeDriver,
+      activeTable,
       activeConnectionName,
       activeDatabaseName,
-      tables, 
-      isLoadingTables, 
-      connect, 
+      tables,
+      views,
+      isLoadingTables,
+      isLoadingViews,
+      connect,
       disconnect,
       setActiveTable,
-      refreshTables
+      refreshTables,
+      refreshViews
     }}>
       {children}
     </DatabaseContext.Provider>
