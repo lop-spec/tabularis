@@ -186,6 +186,7 @@ export const AVAILABLE_FONTS = [
 export interface RoadmapItem {
   label: string;
   done: boolean;
+  url?: string;
 }
 
 import roadmapData from '../../roadmap.json';

@@ -26,6 +26,7 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../hooks/useSettings";
@@ -1418,25 +1419,49 @@ export const Settings = () => {
                     </p>
                   </div>
                   <div className="divide-y divide-default">
-                    {ROADMAP.map((item, i) => (
-                      <div
-                        key={i}
-                        className="p-4 flex items-center gap-3 hover:bg-surface-secondary/30 transition-colors"
-                      >
-                        {item.done ? (
-                          <CheckCircle2 size={18} className="text-green-500" />
-                        ) : (
-                          <Circle size={18} className="text-surface-tertiary" />
-                        )}
-                        <span
-                          className={
-                            item.done ? "text-primary" : "text-muted"
-                          }
+                    {ROADMAP.map((item, i) => {
+                      const content = (
+                        <>
+                          {item.done ? (
+                            <CheckCircle2 size={18} className="text-green-500 shrink-0" />
+                          ) : (
+                            <Circle size={18} className="text-surface-tertiary shrink-0" />
+                          )}
+                          <span
+                            className={clsx(
+                              "flex-1 text-left",
+                              item.done ? "text-primary" : "text-muted"
+                            )}
+                          >
+                            {item.label}
+                          </span>
+                          {item.url && (
+                            <ExternalLink size={14} className="text-surface-tertiary opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </>
+                      );
+
+                      if (item.url) {
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => openUrl(item.url!)}
+                            className="w-full p-4 flex items-center gap-3 hover:bg-surface-secondary/30 transition-colors group cursor-pointer"
+                          >
+                            {content}
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={i}
+                          className="p-4 flex items-center gap-3 hover:bg-surface-secondary/30 transition-colors group"
                         >
-                          {item.label}
-                        </span>
-                      </div>
-                    ))}
+                          {content}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

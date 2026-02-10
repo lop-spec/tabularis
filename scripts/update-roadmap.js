@@ -35,7 +35,7 @@ async function updateRoadmap() {
     let readme = fs.readFileSync(readmePath, 'utf-8');
 
     const roadmapMarkdown = githubItems
-      .map(item => `- [${item.done ? 'x' : ' '}] ${item.label}`)
+      .map(item => `- [${item.done ? 'x' : ' '}] [${item.label}](${item.url})`)
       .join('\n');
 
     // Replace roadmap section in README
