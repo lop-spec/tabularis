@@ -507,29 +507,32 @@ export const NewConnectionModal = ({
                   )}
                 </button>
               </div>
-              {databaseLoadError ? (
-                <div className="text-xs text-red-400 flex items-center gap-1 mt-1">
-                  <AlertCircle size={12} />
-                  {databaseLoadError}
-                </div>
-              ) : availableDatabases.length > 0 ? (
-                <SearchableSelect
-                  value={formData.database || null}
-                  options={availableDatabases}
-                  onChange={(val) => updateField("database", val)}
-                  placeholder={t("newConnection.selectDatabase")}
-                  searchPlaceholder={t("common.search")}
-                  noResultsLabel={t("newConnection.noDatabasesFound")}
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={formData.database ?? ""}
-                  onChange={(e) => updateField("database", e.target.value)}
-                  className={InputClass}
-                  placeholder={t("newConnection.dbNamePlaceholder")}
-                />
-              )}
+              <div className="space-y-2">
+                {databaseLoadError && (
+                  <div className="text-xs text-red-400 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {databaseLoadError}
+                  </div>
+                )}
+                {availableDatabases.length > 0 ? (
+                  <SearchableSelect
+                    value={formData.database || null}
+                    options={availableDatabases}
+                    onChange={(val) => updateField("database", val)}
+                    placeholder={t("newConnection.selectDatabase")}
+                    searchPlaceholder={t("common.search")}
+                    noResultsLabel={t("newConnection.noDatabasesFound")}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.database ?? ""}
+                    onChange={(e) => updateField("database", e.target.value)}
+                    className={InputClass}
+                    placeholder={t("newConnection.dbNamePlaceholder")}
+                  />
+                )}
+              </div>
             </div>
           )}
 
