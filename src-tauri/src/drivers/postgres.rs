@@ -85,7 +85,7 @@ pub async fn get_columns(
         .iter()
         .map(|r| {
             let null_str: String = r.try_get("is_nullable").unwrap_or_default();
-            let is_pk: i64 = r.try_get("is_pk").unwrap_or(0);
+            let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
             let default_val: String = r.try_get("column_default").unwrap_or_default();
             let is_identity: String = r.try_get("is_identity").unwrap_or_default(); // YES/NO
 
@@ -94,7 +94,7 @@ pub async fn get_columns(
             TableColumn {
                 name: r.try_get("column_name").unwrap_or_default(),
                 data_type: r.try_get("data_type").unwrap_or_default(),
-                is_pk: is_pk > 0,
+                is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
             }
@@ -184,7 +184,7 @@ pub async fn get_all_columns_batch(
     for row in rows {
         let table_name: String = row.try_get("table_name").unwrap_or_default();
         let null_str: String = row.try_get("is_nullable").unwrap_or_default();
-        let is_pk: i64 = row.try_get("is_pk").unwrap_or(0);
+        let is_pk: bool = row.try_get("is_pk").unwrap_or(false);
         let default_val: String = row.try_get("column_default").unwrap_or_default();
         let is_identity: String = row.try_get("is_identity").unwrap_or_default();
 
@@ -193,7 +193,7 @@ pub async fn get_all_columns_batch(
         let column = TableColumn {
             name: row.try_get("column_name").unwrap_or_default(),
             data_type: row.try_get("data_type").unwrap_or_default(),
-            is_pk: is_pk > 0,
+            is_pk,
             is_nullable: null_str == "YES",
             is_auto_increment: is_auto,
         };
@@ -720,7 +720,7 @@ pub async fn get_view_columns(
         .iter()
         .map(|r| {
             let null_str: String = r.try_get("is_nullable").unwrap_or_default();
-            let is_pk: i64 = r.try_get("is_pk").unwrap_or(0);
+            let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
             let default_val: String = r.try_get("column_default").unwrap_or_default();
             let is_identity: String = r.try_get("is_identity").unwrap_or_default();
 
@@ -729,7 +729,7 @@ pub async fn get_view_columns(
             TableColumn {
                 name: r.try_get("column_name").unwrap_or_default(),
                 data_type: r.try_get("data_type").unwrap_or_default(),
-                is_pk: is_pk > 0,
+                is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
             }
