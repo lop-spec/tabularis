@@ -208,26 +208,17 @@ npm run tauri build
 
 ## Roadmap
 
-- [x] Multi-database support (MySQL, Postgres, SQLite)
-- [x] SSH Tunneling
-- [x] Schema Introspection
-- [x] SQL Execution & Results Grid
-- [x] Inline Editing & Deletion
-- [x] Create New Table Wizard
-- [x] Data Export (CSV/JSON)
-- [x] Result Limiting & Pagination
-- [x] Multiple Query Tabs
-- [x] Saved Queries & Persistence
-- [x] Visual Query Builder (Experimental)
-- [x] Secure Keychain Storage
-- [x] Internationalization (i18n)
-- [x] AI Integration
-- [x] Theme Customization
-- [x] Database Export/Dump
-- [x] Support for Views
-- [x] Support for Functions and Stored Procedures
-- [ ] Better support for PostgreSQL & SQLite
-- [ ] Query history
+- [ ] [Feat]: test roadmap
+- [ ] Command Palette
+- [ ] JSON/JSONB Editor & Viewer
+- [ ] SQL Formatting / Prettier
+- [ ] Visual Explain Analyze
+- [ ] Data Compare / Diff Tool
+- [ ] Team Collaboration
+- [ ] Plugin System
+- [ ] Query History
+- [ ] Better SQLite Support
+- [ ] Better PostgreSQL Support
 ## License
 
 Apache License 2.0
