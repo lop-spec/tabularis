@@ -517,7 +517,18 @@ export const Editor = () => {
     }
 
     // Monaco Editor: handle selection and multi-query
-    if (!editorRef.current) return;
+    if (!editorRef.current) {
+      // Fallback: use saved query when editor ref is not available (e.g. after tab restore)
+      if (activeTab.query?.trim()) {
+        const queries = splitQueries(activeTab.query);
+        if (queries.length <= 1) runQuery(queries[0] || activeTab.query, 1);
+        else {
+          setSelectableQueries(queries);
+          setIsQuerySelectionModalOpen(true);
+        }
+      }
+      return;
+    }
     const editor = editorRef.current;
     const selection = editor.getSelection();
     const selectedText = selection
@@ -1804,7 +1815,7 @@ export const Editor = () => {
               <div className="p-4 text-red-400 font-mono text-sm bg-red-900/10 h-full overflow-auto whitespace-pre-wrap">
                 Error: {activeTab.error}
               </div>
-            ) : activeTab.result || (activeTab.activeTable && activeTab.pkColumn) || (activeTab.pendingInsertions && Object.keys(activeTab.pendingInsertions).length > 0) ? (
+            ) : activeTab.result || (activeTab.pendingInsertions && Object.keys(activeTab.pendingInsertions).length > 0) ? (
               <div className="flex-1 min-h-0 flex flex-col">
                 {activeTab.result && (
                   <div className="p-2 bg-elevated text-xs text-secondary border-b border-default flex justify-between items-center shrink-0">
@@ -1957,7 +1968,7 @@ export const Editor = () => {
                 )}
 
                 {/* Data Manipulation Toolbar (Below Header) */}
-                {activeTab.activeTable && (
+                {activeTab.activeTable && activeTab.result && (
                   <div className="p-1 px-2 bg-elevated border-b border-default flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <button
@@ -2058,7 +2069,9 @@ export const Editor = () => {
               </div>
             ) : (
               <div className="flex items-center justify-center h-full text-surface-tertiary text-sm">
-                {t("editor.executePrompt")}
+                {activeTab.type === "table"
+                  ? t("editor.tableRunPrompt")
+                  : t("editor.executePrompt")}
               </div>
             )}
           </div>
