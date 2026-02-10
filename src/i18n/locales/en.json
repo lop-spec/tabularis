@@ -344,7 +344,8 @@
     "copyRow": "Copy Row",
     "copyCells": "Copy {{count}} Cells",
     "copyRows": "Copy {{count}} Rows",
-    "copied": "Copied to clipboard"
+    "copied": "Copied to clipboard",
+    "discardInsertion": "Click to discard this row (rollback)"
   },
   "editRow": {
     "title": "Edit Row",

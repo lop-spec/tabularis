@@ -104,6 +104,8 @@ pub struct TableColumn {
     pub is_pk: bool,
     pub is_nullable: bool,
     pub is_auto_increment: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_value: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

@@ -86,7 +86,7 @@ const SqlEditorInternal: React.FC<SqlEditorWrapperProps & { editorKey: string }>
         options={{
           minimap: { enabled: false },
           fontSize: 14,
-          padding: { top: 16 },
+          padding: { top: 16, bottom: 32 },
           scrollBeyondLastLine: false,
           automaticLayout: true,
           wordWrap: 'on',

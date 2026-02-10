@@ -21,6 +21,7 @@ interface DataGridProps {
   data: unknown[][];
   tableName?: string | null;
   pkColumn?: string | null;
+  autoIncrementColumns?: string[];
   connectionId?: string | null;
   onRefresh?: () => void;
   pendingChanges?: Record<
@@ -35,6 +36,7 @@ interface DataGridProps {
     colName: string,
     value: unknown
   ) => void;
+  onDiscardInsertion?: (tempId: string) => void;
   selectedRows?: Set<number>;
   onSelectionChange?: (indices: Set<number>) => void;
   sortClause?: string;
@@ -46,6 +48,7 @@ export const DataGrid = React.memo(({
   data,
   tableName,
   pkColumn,
+  autoIncrementColumns,
   connectionId,
   onRefresh,
   pendingChanges,
@@ -53,6 +56,7 @@ export const DataGrid = React.memo(({
   pendingInsertions,
   onPendingChange,
   onPendingInsertionChange,
+  onDiscardInsertion,
   selectedRows: externalSelectedRows,
   onSelectionChange,
   sortClause,
@@ -303,6 +307,8 @@ export const DataGrid = React.memo(({
 
   const columnHelper = useMemo(() => createColumnHelper<unknown[]>(), []);
 
+  const coreRowModel = useMemo(() => getCoreRowModel(), []);
+
   const tableColumns = React.useMemo(
     () =>
       columns.map((colName, index) =>
@@ -345,7 +351,29 @@ export const DataGrid = React.memo(({
           cell: (info) => {
             const val = info.getValue();
             const formatted = formatCellValue(val, t("dataGrid.null"));
-            
+
+            // Check if this is an auto-increment column
+            const isAutoIncrement = autoIncrementColumns?.includes(colName);
+
+            // For new rows (insertions), show <default> for auto-increment columns if value is null/empty
+            const rowData = info.row.original;
+            // Need a way to check if this is an insertion row inside cell render
+            // Since we can't easily access mergedRows logic here without context,
+            // we rely on the value being null/undefined for auto-increment columns in new rows.
+            // However, existing rows might also have nulls.
+
+            // Actually, the cell value for new rows is initialized to null for auto-increment in initializeNewRow.
+            // But we need to distinguish between "existing null" and "new row auto-increment placeholder".
+            // The row object passed to accessor is the raw data array.
+            // We can't easily know if it's an insertion row just from the row array here unless we add metadata.
+
+            // BUT: The formatting logic in the main render loop (where we map over rows) has access to `isInsertion`.
+            // We can override the display there?
+            // Wait, `flexRender` calls this cell function.
+
+            // Let's keep the standard formatting here, and handle the <default> placeholder in the main render loop
+            // where we have full context (isInsertion, etc).
+
             // Apply styling for null values
             if (val === null || val === undefined) {
               return (
@@ -354,27 +382,30 @@ export const DataGrid = React.memo(({
                 </span>
               );
             }
-            
+
             return formatted;
           },
         }),
       ),
-    [columns, columnHelper, t, sortClause, onSort],
+    [columns, columnHelper, t, sortClause, onSort, autoIncrementColumns],
   );
 
   const parentRef = useRef<HTMLDivElement>(null);
 
+  // Memoize table data to prevent unnecessary re-renders
+  const tableData = useMemo(() => mergedRows.map((r) => r.rowData), [mergedRows]);
+
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    data: mergedRows.map((r) => r.rowData),
+    data: tableData,
     columns: tableColumns,
-    getCoreRowModel: getCoreRowModel(),
+    getCoreRowModel: coreRowModel,
   });
 
-  const { rows } = table.getRowModel();
+  const { rows: tableRows } = table.getRowModel();
 
   const rowVirtualizer = useVirtualizer({
-    count: rows.length,
+    count: tableRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 35,
     overscan: 10,
@@ -384,21 +415,47 @@ export const DataGrid = React.memo(({
   const prevInsertionCountRef = useRef(0);
   useEffect(() => {
     const insertionCount = pendingInsertions ? Object.keys(pendingInsertions).length : 0;
-    if (insertionCount > prevInsertionCountRef.current && rows.length > 0) {
-      rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
+    if (insertionCount > prevInsertionCountRef.current && tableRows.length > 0) {
+      rowVirtualizer.scrollToIndex(tableRows.length - 1, { align: "end" });
     }
     prevInsertionCountRef.current = insertionCount;
-  }, [pendingInsertions, rows.length, rowVirtualizer]);
+  }, [pendingInsertions, tableRows.length, rowVirtualizer]);
+
+  const discardInsertion = useCallback((mergedRow: any) => {
+    if (mergedRow.type === "insertion" && mergedRow.tempId && onDiscardInsertion) {
+        onDiscardInsertion(mergedRow.tempId);
+    }
+  }, [onDiscardInsertion]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, row: unknown[]) => {
-    if (tableName && pkColumn) {
+    if (tableName) {
       e.preventDefault();
-      setContextMenu({ x: e.clientX, y: e.clientY, row });
+      // Find the merged row corresponding to this DOM element (using data attribute or similar would be better, but we have row object)
+      // Since `row` is just the data array, we can find it in mergedRows.
+      // BUT `mergedRows` contains `rowData` which is the same reference.
+      const mergedRow = mergedRows.find(mr => mr.rowData === row);
+      setContextMenu({ x: e.clientX, y: e.clientY, row, mergedRow });
     }
-  }, [tableName, pkColumn]);
+  }, [tableName, mergedRows]); // Removed pkColumn dependency to allow context menu on new tables/views
 
   const deleteRow = useCallback(async () => {
-    if (!contextMenu || !tableName || !pkColumn || !connectionId || pkIndexMap === null) return;
+    if (!contextMenu || !tableName) return;
+
+    // Check if this is an insertion
+    // @ts-ignore
+    const isInsertion = contextMenu.mergedRow?.type === "insertion";
+    // @ts-ignore
+    const tempId = contextMenu.mergedRow?.tempId;
+
+    if (isInsertion && tempId) {
+        if (onDiscardInsertion) {
+            onDiscardInsertion(tempId);
+        }
+        setContextMenu(null);
+        return;
+    }
+
+    if (!pkColumn || !connectionId || pkIndexMap === null) return;
 
     const pkVal = contextMenu.row[pkIndexMap];
 
@@ -423,7 +480,7 @@ export const DataGrid = React.memo(({
         });
       }
     }
-  }, [contextMenu, tableName, pkColumn, connectionId, pkIndexMap, onRefresh, t]);
+  }, [contextMenu, tableName, pkColumn, connectionId, pkIndexMap, onRefresh, t, onDiscardInsertion]);
 
   const copyToClipboard = useCallback(async (text: string) => {
     try {
@@ -516,7 +573,7 @@ export const DataGrid = React.memo(({
           </thead>
           <tbody>
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const row = rows[virtualRow.index];
+              const row = tableRows[virtualRow.index];
               const rowIndex = virtualRow.index;
               const isSelected = selectedRowIndices.has(rowIndex);
 
@@ -536,12 +593,12 @@ export const DataGrid = React.memo(({
                   data-index={virtualRow.index}
                   ref={rowVirtualizer.measureElement}
                   className={`transition-colors group ${
-                    isInsertion
-                      ? "bg-green-500/8 border-l-4 border-green-400"
-                      : isPendingDelete
-                        ? "bg-red-900/20 opacity-60"
-                        : isSelected
-                          ? "bg-blue-900/20"
+                    isSelected
+                      ? "bg-blue-900/20 border-l-4 border-blue-400"
+                      : isInsertion
+                        ? "bg-green-500/8 border-l-4 border-green-400"
+                        : isPendingDelete
+                          ? "bg-red-900/20 opacity-60"
                           : "hover:bg-surface-secondary/50"
                   }`}
                   onContextMenu={(e) => handleContextMenu(e, row.original)}
@@ -550,7 +607,9 @@ export const DataGrid = React.memo(({
                     onClick={(e) => handleRowClick(rowIndex, e)}
                     className={`px-2 py-1.5 text-xs text-center border-b border-r border-default sticky left-0 z-10 cursor-pointer select-none w-[50px] min-w-[50px] ${
                       isInsertion
-                        ? "bg-green-950/30 text-green-300 font-bold"
+                        ? isSelected
+                          ? "bg-blue-900/40 text-blue-200 font-bold"
+                          : "bg-green-950/30 text-green-300 font-bold"
                         : isPendingDelete
                           ? "bg-red-950/50 text-red-500 line-through"
                           : isSelected
@@ -572,12 +631,23 @@ export const DataGrid = React.memo(({
                     let displayValue: unknown;
                     let hasPendingChange = false;
                     let isModified = false;
+                    let isAutoIncrementPlaceholder = false;
 
                     if (isInsertion) {
                       // Insertion cell - show data from pendingInsertions
                       displayValue = cell.getValue();
                       hasPendingChange = true; // All insertion cells are "pending"
                       isModified = displayValue !== null && displayValue !== "";
+
+                      // Check for auto-increment
+                      if (
+                        autoIncrementColumns?.includes(colName) &&
+                        (displayValue === null || displayValue === "")
+                      ) {
+                        displayValue = "<generated>";
+                        isAutoIncrementPlaceholder = true;
+                      }
+                      // TODO: Add support for <default> placeholder when column has default_value
                     } else {
                       // Existing row - check for pending changes
                       const pendingVal =
@@ -595,18 +665,27 @@ export const DataGrid = React.memo(({
                         onClick={(e) => handleRowClick(rowIndex, e)}
                         onDoubleClick={() =>
                           !isPendingDelete &&
+                          !isAutoIncrementPlaceholder &&
                           handleCellDoubleClick(rowIndex, colIndex, displayValue)
                         }
                         className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text ${
                           isPendingDelete
                             ? "text-red-400/60 line-through decoration-red-500/30"
-                            : isInsertion
-                              ? isModified
-                                ? "bg-green-500/15 text-green-200 italic"
-                                : "bg-green-500/5 text-secondary italic"
-                              : isModified
-                                ? "bg-blue-600/30 text-blue-100 italic font-medium"
-                                : "text-secondary"
+                            : isSelected && isInsertion
+                              ? isAutoIncrementPlaceholder
+                                ? "text-muted italic select-none"
+                                : isModified
+                                  ? "bg-blue-600/20 text-blue-200 italic font-medium"
+                                  : "bg-blue-900/20 text-secondary italic"
+                              : isInsertion
+                                ? isAutoIncrementPlaceholder
+                                  ? "text-muted italic select-none"
+                                  : isModified
+                                    ? "bg-green-500/15 text-green-200 italic"
+                                    : "bg-green-500/5 text-secondary italic"
+                                : isModified
+                                  ? "bg-blue-600/30 text-blue-100 italic font-medium"
+                                  : "text-secondary"
                         }`}
                         title={!isEditing ? String(displayValue) : ""}
                       >

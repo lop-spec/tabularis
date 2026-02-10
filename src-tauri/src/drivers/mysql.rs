@@ -77,6 +77,7 @@ pub async fn get_columns(
                 is_pk: key == "PRI",
                 is_nullable: null_str == "YES",
                 is_auto_increment: extra.contains("auto_increment"),
+                default_value: None, // TODO: Implement default value retrieval for MySQL
             }
         })
         .collect())
@@ -158,6 +159,7 @@ pub async fn get_all_columns_batch(
             is_pk: key == "PRI",
             is_nullable: null_str == "YES",
             is_auto_increment: extra.contains("auto_increment"),
+            default_value: None, // TODO: Implement default value retrieval for MySQL
         };
 
         result
@@ -534,6 +536,7 @@ pub async fn get_view_columns(
                 is_pk: key == "PRI",
                 is_nullable: null_str == "YES",
                 is_auto_increment: extra.contains("auto_increment"),
+                default_value: None, // TODO: Implement default value retrieval for MySQL
             }
         })
         .collect())

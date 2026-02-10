@@ -61,6 +61,7 @@ pub async fn get_columns(
             let pk: i32 = r.try_get("pk").unwrap_or(0);
             let notnull: i32 = r.try_get("notnull").unwrap_or(0);
             let dtype: String = r.try_get("type").unwrap_or_default();
+            let dflt_value: Option<String> = r.try_get("dflt_value").ok();
 
             let _is_auto = pk > 0 && dtype.to_uppercase().contains("INT");
 
@@ -70,6 +71,7 @@ pub async fn get_columns(
                 is_pk: pk > 0,
                 is_nullable: notnull == 0,
                 is_auto_increment: false,
+                default_value: dflt_value,
             }
         })
         .collect())
@@ -149,12 +151,14 @@ pub async fn get_all_columns_batch(
             .map(|r| {
                 let pk: i32 = r.try_get("pk").unwrap_or(0);
                 let notnull: i32 = r.try_get("notnull").unwrap_or(0);
+                let dflt_value: Option<String> = r.try_get("dflt_value").ok();
                 TableColumn {
                     name: r.try_get("name").unwrap_or_default(),
                     data_type: r.try_get("type").unwrap_or_default(),
                     is_pk: pk > 0,
                     is_nullable: notnull == 0,
                     is_auto_increment: false, // SQLite doesn't expose this via table_info easily, typically AUTOINCREMENT on INTEGER PRIMARY KEY
+                    default_value: dflt_value,
                 }
             })
             .collect();
@@ -605,12 +609,14 @@ pub async fn get_view_columns(
         .map(|r| {
             let pk: i32 = r.try_get("pk").unwrap_or(0);
             let notnull: i32 = r.try_get("notnull").unwrap_or(0);
+            let dflt_value: Option<String> = r.try_get("dflt_value").ok();
             TableColumn {
                 name: r.try_get("name").unwrap_or_default(),
                 data_type: r.try_get("type").unwrap_or_default(),
                 is_pk: pk > 0,
                 is_nullable: notnull == 0,
                 is_auto_increment: false,
+                default_value: dflt_value,
             }
         })
         .collect())

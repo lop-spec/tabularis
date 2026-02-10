@@ -344,7 +344,8 @@
     "copyRow": "Copia riga",
     "copyCells": "Copia {{count}} celle",
     "copyRows": "Copia {{count}} righe",
-    "copied": "Copiato negli appunti"
+    "copied": "Copiato negli appunti",
+    "discardInsertion": "Clicca per scartare questa riga (rollback)"
   },
   "editRow": {
     "title": "Modifica riga",

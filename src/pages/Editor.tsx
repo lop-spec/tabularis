@@ -257,19 +257,29 @@ export const Editor = () => {
 
   const selectionHasPending = useMemo(() => {
     if (!activeTab) return false;
-    const { pendingChanges, pendingDeletions, selectedRows, result, pkColumn } =
+    const { pendingChanges, pendingDeletions, pendingInsertions, selectedRows, result, pkColumn } =
       activeTab;
     const hasGlobalPending =
       (pendingChanges && Object.keys(pendingChanges).length > 0) ||
-      (pendingDeletions && Object.keys(pendingDeletions).length > 0);
+      (pendingDeletions && Object.keys(pendingDeletions).length > 0) ||
+      (pendingInsertions && Object.keys(pendingInsertions).length > 0);
 
     if (!selectedRows || selectedRows.length === 0) return hasGlobalPending;
 
-    if (!result || !pkColumn) return false;
-    const pkIndex = result.columns.indexOf(pkColumn);
-    if (pkIndex === -1) return false;
+    const existingRowCount = result?.rows.length || 0;
 
     return selectedRows.some((rowIndex) => {
+      // Check if this is an insertion row (displayIndex >= existingRowCount)
+      if (rowIndex >= existingRowCount) {
+        // This is an insertion row
+        return pendingInsertions && Object.keys(pendingInsertions).length > 0;
+      }
+
+      // This is an existing row - check for changes/deletions
+      if (!result || !pkColumn) return false;
+      const pkIndex = result.columns.indexOf(pkColumn);
+      if (pkIndex === -1) return false;
+
       const row = result.rows[rowIndex];
       if (!row) return false;
       const pkVal = String(row[pkIndex]);
@@ -309,13 +319,21 @@ export const Editor = () => {
           tableName: table,
         });
         const pk = cols.find((c) => c.is_pk);
+        const autoInc = cols
+          .filter((c) => c.is_auto_increment)
+          .map((c) => c.name);
         const targetId = tabId || activeTabId;
-        if (targetId) updateTab(targetId, { pkColumn: pk ? pk.name : null });
+        if (targetId)
+          updateTab(targetId, {
+            pkColumn: pk ? pk.name : null,
+            autoIncrementColumns: autoInc,
+          });
       } catch (e) {
         console.error("Failed to fetch PK:", e);
         // Even if PK fetch fails, set pkColumn to null to unblock the UI
         const targetId = tabId || activeTabId;
-        if (targetId) updateTab(targetId, { pkColumn: null });
+        if (targetId)
+          updateTab(targetId, { pkColumn: null, autoIncrementColumns: [] });
       }
     },
     [activeConnectionId, activeTabId, updateTab],
@@ -428,6 +446,7 @@ export const Editor = () => {
         // Clear pending changes and selection when running a new query (unless preserving)
         pendingChanges: preservePendingChanges?.pendingChanges,
         pendingDeletions: preservePendingChanges?.pendingDeletions,
+        pendingInsertions: preservePendingChanges?.pendingInsertions,
         selectedRows: [],
       });
 
@@ -693,6 +712,21 @@ export const Editor = () => {
     [updateTab],
   );
 
+  const handleDiscardInsertion = useCallback(
+    (tempId: string) => {
+      if (!activeTabIdRef.current) return;
+      const tabId = activeTabIdRef.current;
+      const currentTab = tabsRef.current.find((t) => t.id === tabId);
+      if (!currentTab?.pendingInsertions) return;
+
+      const newPendingInsertions = { ...currentTab.pendingInsertions };
+      delete newPendingInsertions[tempId];
+
+      updateTab(tabId, { pendingInsertions: newPendingInsertions });
+    },
+    [updateTab],
+  );
+
   const handleNewRow = useCallback(async () => {
     if (!activeTabIdRef.current || !activeConnectionId || !activeTab?.activeTable) {
       console.warn("Cannot create new row: missing required context", {
@@ -734,9 +768,41 @@ export const Editor = () => {
         },
       };
 
-      updateTab(activeTabIdRef.current, {
+      const updates: Partial<Tab> = {
         pendingInsertions: newPendingInsertions,
-      });
+      };
+
+      // If activeTab.result is missing (e.g. empty table initially), initialize it
+      // so DataGrid receives columns and can render the new row
+      if (!activeTab.result) {
+        updates.result = {
+          columns: columns.map((c) => c.name),
+          rows: [],
+          affected_rows: 0,
+          pagination: {
+            page: 1,
+            page_size: settings.resultPageSize || 100,
+            total_rows: 0,
+          },
+        };
+      }
+
+      // Ensure pkColumn and autoIncrementColumns are set
+      if (!activeTab.pkColumn) {
+        const pk = columns.find((c) => c.is_pk);
+        if (pk) {
+          updates.pkColumn = pk.name;
+        }
+      }
+
+      if (!activeTab.autoIncrementColumns) {
+        const autoInc = columns
+          .filter((c) => c.is_auto_increment)
+          .map((c) => c.name);
+        updates.autoIncrementColumns = autoInc;
+      }
+
+      updateTab(activeTabIdRef.current, updates);
     } catch (err) {
       console.error("Failed to create new row:", err);
       await message(t("editor.failedCreateRow") + String(err), {
@@ -744,7 +810,7 @@ export const Editor = () => {
         kind: "error",
       });
     }
-  }, [activeConnectionId, activeTab, updateTab, t]);
+  }, [activeConnectionId, activeTab, updateTab, t, settings.resultPageSize]);
 
   const handleSubmitChanges = useCallback(async () => {
     if (
@@ -816,21 +882,19 @@ export const Editor = () => {
 
         if (hasSelection && selectedRows) {
           // Convert selectedRows to displayIndices
-          // Insertions have displayIndex 0, 1, 2, ... (numInsertions - 1)
-          // Existing rows have displayIndex numInsertions, numInsertions + 1, ...
+          // Insertion rows are displayed AFTER existing rows
           selectedRows.forEach((rowIndex) => {
-            // Row indices in the merged grid:
-            // - First numInsertions rows are insertions (displayIndex < numInsertions)
-            // - Remaining rows are existing data (displayIndex >= numInsertions)
             selectedDisplayIndices.add(rowIndex);
           });
         }
 
         // Filter and validate insertions
+        // Insertion rows have displayIndex = existingRowCount + insertionIndex
+        const existingRowCount = activeTab.result?.rows.length || 0;
         let insertionIndex = 0;
         for (const [tempId, insertion] of Object.entries(pendingInsertions)) {
           // Check if this insertion is selected (if filtering by selection)
-          const insertionDisplayIndex = insertionIndex;
+          const insertionDisplayIndex = existingRowCount + insertionIndex;
           if (hasSelection && !selectedDisplayIndices.has(insertionDisplayIndex)) {
             insertionIndex++;
             continue;
@@ -845,8 +909,9 @@ export const Editor = () => {
             continue;
           }
 
-          // Convert to backend format
+          // Convert to backend format (auto-increment columns are automatically excluded)
           const backendData = insertionToBackendData(insertion, columns);
+
           insertions.push({ tempId, data: backendData });
           insertionIndex++;
         }
@@ -1030,11 +1095,16 @@ export const Editor = () => {
     const selectedPkSet = new Set<string>();
     const selectedDisplayIndices = new Set<number>();
 
+    // Add all selected row indices to the set
+    selectedRows.forEach((rowIndex) => {
+      selectedDisplayIndices.add(rowIndex);
+    });
+
+    // For existing rows, also collect their PK values
     if (result && pkColumn) {
       const pkIndex = result.columns.indexOf(pkColumn);
       if (pkIndex !== -1) {
         selectedRows.forEach((rowIndex) => {
-          selectedDisplayIndices.add(rowIndex);
           const row = result.rows[rowIndex];
           if (row) selectedPkSet.add(String(row[pkIndex]));
         });
@@ -1052,9 +1122,11 @@ export const Editor = () => {
     });
 
     // Rollback insertions (for new rows)
+    // Insertion rows are displayed AFTER existing rows, so their displayIndex = existingRowCount + insertionIndex
+    const existingRowCount = result?.rows.length || 0;
     let insertionIndex = 0;
     for (const tempId of Object.keys(newPendingInsertions)) {
-      const insertionDisplayIndex = insertionIndex;
+      const insertionDisplayIndex = existingRowCount + insertionIndex;
       if (selectedDisplayIndices.has(insertionDisplayIndex)) {
         delete newPendingInsertions[tempId];
       }
@@ -1807,7 +1879,7 @@ export const Editor = () => {
                 )}
 
                 {/* Data Manipulation Toolbar (Below Header) */}
-                {activeTab.activeTable && (activeTab.pkColumn || activeTab.result) && (
+                {activeTab.activeTable && (
                   <div className="p-1 px-2 bg-elevated border-b border-default flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <button
@@ -1886,6 +1958,7 @@ export const Editor = () => {
                     data={activeTab.result?.rows || []}
                     tableName={activeTab.activeTable}
                     pkColumn={activeTab.pkColumn}
+                    autoIncrementColumns={activeTab.autoIncrementColumns}
                     connectionId={activeConnectionId}
                     onRefresh={handleRefresh}
                     pendingChanges={activeTab.pendingChanges}

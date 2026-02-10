@@ -97,6 +97,7 @@ pub async fn get_columns(
                 is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
+                default_value: None, // TODO: Implement default value retrieval for PostgreSQL
             }
         })
         .collect())
@@ -196,6 +197,7 @@ pub async fn get_all_columns_batch(
             is_pk,
             is_nullable: null_str == "YES",
             is_auto_increment: is_auto,
+            default_value: None, // TODO: Implement default value retrieval for PostgreSQL
         };
 
         result
@@ -732,6 +734,7 @@ pub async fn get_view_columns(
                 is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
+                default_value: None, // TODO: Implement default value retrieval for PostgreSQL
             }
         })
         .collect())

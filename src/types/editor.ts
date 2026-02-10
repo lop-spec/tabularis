@@ -10,6 +10,7 @@ export interface TableColumn {
   is_pk: boolean;
   is_nullable: boolean;
   is_auto_increment: boolean;
+  default_value?: string;
 }
 
 export interface ForeignKey {
@@ -63,6 +64,7 @@ export interface Tab {
   page: number;
   activeTable: string | null;
   pkColumn: string | null;
+  autoIncrementColumns?: string[]; // Names of auto-increment columns
   isLoading?: boolean;
   connectionId: string;
   flowState?: FlowState;
