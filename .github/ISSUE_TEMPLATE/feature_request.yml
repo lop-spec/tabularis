@@ -1,41 +1,39 @@
 name: 🚀 Feature Proposal
 description: Submit a proposal for a new feature
 title: "[Feat]: "
-labels: ["enhancement"]
+labels: ["feature request"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to suggest a new feature for Tabularis!
-  - type: textarea
-    id: problem
+        Before you submit an issue we recommend you visit [Tabularis Help](https://github.com/debba/tabularis/discussions) if you have any questions regarding using Tabularis.
+  - type: checkboxes
+    id: prerequisites
     attributes:
-      label: Is your feature request related to a problem? Please describe.
-      description: A clear and concise description of what the problem is.
-      placeholder: I'm always frustrated when [...]
+      label: Prerequisites
+      options:
+        - label: I have written a descriptive issue title
+          required: true
+        - label: I have searched existing issues to ensure the feature has not already been requested
+          required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 🚀 Feature Proposal
+      description: A clear and concise description of what the feature is.
     validations:
       required: true
   - type: textarea
-    id: solution
+    id: motivation
     attributes:
-      label: Describe the solution you'd like
-      description: A clear and concise description of what you want to happen.
-      placeholder: I want to be able to [...]
+      label: Motivation
+      description: The motivation for the proposal.
     validations:
       required: true
   - type: textarea
-    id: alternatives
+    id: example
     attributes:
-      label: Describe alternatives you've considered
-      description: A clear and concise description of any alternative solutions or features you've considered.
-      placeholder: I tried using X but [...]
-    validations:
-      required: false
-  - type: textarea
-    id: context
-    attributes:
-      label: Additional context
-      description: Add any other context or screenshots about the feature request here.
-      placeholder: Add screenshots or relevant links...
+      label: Example
+      description: An example for how this feature would be used. Make sure you place example code inside a code (```) block to avoid linking unrelated issues.
     validations:
       required: false
