@@ -6,3 +6,6 @@ contact_links:
   - name: 🚨 Security Issue
     url: https://github.com/debba/tabularis/security/policy
     about: Report a security vulnerability
+  - name: 🌐 Website
+    url: https://tabularis.dev
+    about: Visit our website for more information

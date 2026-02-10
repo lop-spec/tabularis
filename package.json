@@ -14,6 +14,7 @@
     "test:rust": "cd src-tauri && cargo test",
     "test:all": "pnpm test:rust && pnpm test:coverage",
     "tauri": "tauri",
+    "roadmap": "node scripts/update-roadmap.js",
     "version": "node scripts/sync-version.js && conventional-changelog -p angular -i CHANGELOG.md -s && git add README.md CHANGELOG.md src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock src/version.ts website/index.html"
   },
   "dependencies": {

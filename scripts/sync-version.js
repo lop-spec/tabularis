@@ -1,35 +1,33 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
-// Percorsi dei file
+// File paths
 const paths = {
   package: resolve('package.json'),
   tauri: resolve('src-tauri/tauri.conf.json'),
   cargo: resolve('src-tauri/Cargo.toml'),
   appVersion: resolve('src/version.ts'),
   website: resolve('website/index.html'),
-  readme: resolve('README.md'),
-  roadmap: resolve('roadmap.json')
+  readme: resolve('README.md')
 };
 
-// 1. Leggi la nuova versione da package.json (che è già stato aggiornato da npm version)
+// 1. Read the new version from package.json (already updated by npm version)
 const pkg = JSON.parse(readFileSync(paths.package, 'utf-8'));
 const newVersion = pkg.version;
 
 console.log(`🔄 Syncing version to ${newVersion}...`);
 
-// 2. Aggiorna tauri.conf.json
+// 2. Update tauri.conf.json
 const tauriConf = JSON.parse(readFileSync(paths.tauri, 'utf-8'));
 tauriConf.version = newVersion;
-// Aggiorna anche la versione nel nodo package se presente (Tauri v2 non lo usa sempre, ma per sicurezza)
+// Also update the version in the package node if present
 if (tauriConf.package) tauriConf.package.version = newVersion;
 writeFileSync(paths.tauri, JSON.stringify(tauriConf, null, 2));
 console.log('✅ Updated tauri.conf.json');
 
-// 3. Aggiorna Cargo.toml
+// 3. Update Cargo.toml
 let cargo = readFileSync(paths.cargo, 'utf-8');
-// Usa una regex per sostituire solo la versione nel blocco [package]
-// Cerca "version =" seguito da virgolette, ma solo nelle prime righe per evitare di cambiare le dipendenze
+// Use a regex to replace only the version in the [package] block
 cargo = cargo.replace(
   /^version = ".*"/m,
   `version = "${newVersion}"`
@@ -37,23 +35,21 @@ cargo = cargo.replace(
 writeFileSync(paths.cargo, cargo);
 console.log('✅ Updated Cargo.toml');
 
-// 4. Aggiorna src/version.ts
+// 4. Update src/version.ts
 const versionContent = `export const APP_VERSION = "${newVersion}";\n`;
 writeFileSync(paths.appVersion, versionContent);
 console.log('✅ Updated src/version.ts');
 
-// 5. Aggiorna website/index.html
+// 5. Update website/index.html
 let website = readFileSync(paths.website, 'utf-8');
 
-// Aggiorna il badge della versione: <span class="badge version">v0.6.0</span>
+// Update version badge: <span class="badge version">v0.6.0</span>
 website = website.replace(
   /<span class="badge version">v.*?<\/span>/,
   `<span class="badge version">v${newVersion}</span>`
 );
 
-// Aggiorna i link di download (sia il tag vX.Y.Z nell'URL che il nome file tabularis_X.Y.Z_)
-// URL: releases/download/v0.6.0/tabularis_0.6.0_...
-// Sostituisce tutte le occorrenze globalmente
+// Update download links (both tag vX.Y.Z in URL and filename tabularis_X.Y.Z_)
 website = website.replace(
   /releases\/download\/v.*?\//g,
   `releases/download/v${newVersion}/`
@@ -67,11 +63,9 @@ website = website.replace(
 writeFileSync(paths.website, website);
 console.log('✅ Updated website/index.html');
 
-// 6. Aggiorna README.md download badges e roadmap
 let readme = readFileSync(paths.readme, 'utf-8');
 
-// Aggiorna i link di download nel README (sia il tag vX.Y.Z nell'URL che il nome file tabularis_X.Y.Z_)
-// URL: releases/download/v0.6.0/tabularis_0.6.0_...
+// Update download links in README
 readme = readme.replace(
   /releases\/download\/v.*?\//g,
   `releases/download/v${newVersion}/`
@@ -81,19 +75,6 @@ readme = readme.replace(
   /tabularis_\d+\.\d+\.\d+_/g,
   `tabularis_${newVersion}_`
 );
-
-// Leggi e aggiorna la roadmap da roadmap.json
-const roadmapData = JSON.parse(readFileSync(paths.roadmap, 'utf-8'));
-const roadmapMarkdown = roadmapData
-  .map(item => `- [${item.done ? 'x' : ' '}] ${item.label}`)
-  .join('\n');
-
-// Sostituisci la sezione roadmap nel README
-readme = readme.replace(
-  /(## Roadmap\n\n)([\s\S]*?)(\n## \w)/,
-  `$1${roadmapMarkdown}$3`
-);
-console.log('✅ Updated README.md roadmap');
 
 writeFileSync(paths.readme, readme);
 console.log('✅ Updated README.md');

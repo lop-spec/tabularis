@@ -1,30 +1,52 @@
 [
-  { "label": "Multi-database support (MySQL, Postgres, SQLite)", "done": true },
-  { "label": "SSH Tunneling", "done": true },
-  { "label": "Schema Introspection", "done": true },
-  { "label": "SQL Execution & Results Grid", "done": true },
-  { "label": "Inline Editing & Deletion", "done": true },
-  { "label": "Create New Table Wizard", "done": true },
-  { "label": "Data Export (CSV/JSON)", "done": true },
-  { "label": "Result Limiting & Pagination", "done": true },
-  { "label": "Multiple Query Tabs", "done": true },
-  { "label": "Saved Queries & Persistence", "done": true },
-  { "label": "Visual Query Builder (Experimental)", "done": true },
-  { "label": "Secure Keychain Storage", "done": true },
-  { "label": "Internationalization (i18n)", "done": true },
-  { "label": "AI Integration", "done": true },
-  { "label": "Theme Customization", "done": true },
-  { "label": "Database Export/Dump", "done": true },
-  { "label": "Support for Views", "done": true },
-  { "label": "Support for Functions and Stored Procedures", "done": true },
-  { "label": "Better PostgreSQL Support", "done": false },
-  { "label": "Better SQLite Support", "done": false },
-  { "label": "Query History", "done": false },
-  { "label": "Plugin System", "done": false },
-  { "label": "Team Collaboration", "done": false },
-  { "label": "Data Compare / Diff Tool", "done": false },
-  { "label": "Visual Explain Analyze", "done": false },
-  { "label": "SQL Formatting / Prettier", "done": false },
-  { "label": "JSON/JSONB Editor & Viewer", "done": false },
-  { "label": "Command Palette", "done": false }
+  {
+    "label": "Command Palette",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/25"
+  },
+  {
+    "label": "JSON/JSONB Editor & Viewer",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/24"
+  },
+  {
+    "label": "SQL Formatting / Prettier",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/23"
+  },
+  {
+    "label": "Visual Explain Analyze",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/22"
+  },
+  {
+    "label": "Data Compare / Diff Tool",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/21"
+  },
+  {
+    "label": "Team Collaboration",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/20"
+  },
+  {
+    "label": "Plugin System",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/19"
+  },
+  {
+    "label": "Query History",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/18"
+  },
+  {
+    "label": "Better SQLite Support",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/17"
+  },
+  {
+    "label": "Better PostgreSQL Support",
+    "done": false,
+    "url": "https://github.com/debba/tabularis/issues/16"
+  }
 ]
