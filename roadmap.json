@@ -17,6 +17,14 @@
   { "label": "Database Export/Dump", "done": true },
   { "label": "Support for Views", "done": true },
   { "label": "Support for Functions and Stored Procedures", "done": true },
-  { "label": "Better support for PostgreSQL & SQLite", "done": false },
-  { "label": "Query history", "done": false }
+  { "label": "Better PostgreSQL Support", "done": false },
+  { "label": "Better SQLite Support", "done": false },
+  { "label": "Query History", "done": false },
+  { "label": "Plugin System", "done": false },
+  { "label": "Team Collaboration", "done": false },
+  { "label": "Data Compare / Diff Tool", "done": false },
+  { "label": "Visual Explain Analyze", "done": false },
+  { "label": "SQL Formatting / Prettier", "done": false },
+  { "label": "JSON/JSONB Editor & Viewer", "done": false },
+  { "label": "Command Palette", "done": false }
 ]
