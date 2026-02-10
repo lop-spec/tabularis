@@ -766,6 +766,25 @@ export const Editor = () => {
     [updateTab],
   );
 
+  const handleMarkForDeletion = useCallback(
+    (pkVal: unknown) => {
+      if (!activeTabIdRef.current) return;
+      const tabId = activeTabIdRef.current;
+      const currentTab = tabsRef.current.find((t) => t.id === tabId);
+      if (!currentTab) return;
+
+      const pkKey = String(pkVal);
+      const currentPendingDeletions = currentTab.pendingDeletions || {};
+      const newPendingDeletions = {
+        ...currentPendingDeletions,
+        [pkKey]: pkVal,
+      };
+
+      updateTab(tabId, { pendingDeletions: newPendingDeletions });
+    },
+    [updateTab],
+  );
+
   const handleNewRow = useCallback(async () => {
     if (!activeTabIdRef.current || !activeConnectionId || !activeTab?.activeTable) {
       console.warn("Cannot create new row: missing required context", {
@@ -2013,6 +2032,7 @@ export const Editor = () => {
                     onPendingInsertionChange={handlePendingInsertionChange}
                     onDiscardInsertion={handleDiscardInsertion}
                     onRevertDeletion={handleRevertDeletion}
+                    onMarkForDeletion={handleMarkForDeletion}
                     selectedRows={new Set(activeTab.selectedRows || [])}
                     onSelectionChange={handleSelectionChange}
                     sortClause={activeTab.sortClause}

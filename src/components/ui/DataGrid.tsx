@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "./ContextMenu";
-import { ArrowUp, ArrowDown, ArrowUpDown, Copy, Undo } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowUpDown, Copy, Undo, Trash2, Edit } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { message } from "@tauri-apps/plugin-dialog";
 import { formatCellValue, getColumnSortState, calculateSelectionRange, toggleSetValue } from "../../utils/dataGrid";
@@ -37,6 +37,7 @@ interface DataGridProps {
   ) => void;
   onDiscardInsertion?: (tempId: string) => void;
   onRevertDeletion?: (pkVal: unknown) => void;
+  onMarkForDeletion?: (pkVal: unknown) => void;
   selectedRows?: Set<number>;
   onSelectionChange?: (indices: Set<number>) => void;
   sortClause?: string;
@@ -58,6 +59,7 @@ export const DataGrid = React.memo(({
   onPendingInsertionChange,
   onDiscardInsertion,
   onRevertDeletion,
+  onMarkForDeletion,
   selectedRows: externalSelectedRows,
   onSelectionChange,
   sortClause,
@@ -462,6 +464,37 @@ export const DataGrid = React.memo(({
     pendingDeletions,
   ]);
 
+  const deleteSelectedRow = useCallback(() => {
+    if (!contextMenu) return;
+
+    const isInsertion = contextMenu.mergedRow?.type === "insertion";
+    const tempId = contextMenu.mergedRow?.tempId;
+
+    // Handle insertion row deletion (discard)
+    if (isInsertion && tempId && onDiscardInsertion) {
+      onDiscardInsertion(tempId);
+      setContextMenu(null);
+      return;
+    }
+
+    // For existing rows, mark for deletion
+    if (pkColumn && pkIndexMap !== null && onMarkForDeletion) {
+      const pkVal = contextMenu.row[pkIndexMap];
+      onMarkForDeletion(pkVal);
+      setContextMenu(null);
+    }
+  }, [contextMenu, onDiscardInsertion, onMarkForDeletion, pkColumn, pkIndexMap]);
+
+  const editSelectedRow = useCallback(() => {
+    if (!contextMenu || !contextMenu.mergedRow) return;
+
+    const rowIndex = contextMenu.mergedRow.displayIndex;
+    // Start editing the first column (index 0)
+    const firstColValue = contextMenu.row[0];
+    setEditingCell({ rowIndex, colIndex: 0, value: firstColValue });
+    setContextMenu(null);
+  }, [contextMenu]);
+
   const copyToClipboard = useCallback(async (text: string) => {
     try {
       await copyTextToClipboard(text);
@@ -721,6 +754,17 @@ export const DataGrid = React.memo(({
                 label: t("dataGrid.copyRow"),
                 icon: Copy,
                 action: copyCellValue,
+              },
+              {
+                label: t("dataGrid.editRow"),
+                icon: Edit,
+                action: editSelectedRow,
+              },
+              {
+                label: t("dataGrid.deleteRow"),
+                icon: Trash2,
+                danger: true,
+                action: deleteSelectedRow,
               },
               {
                 label: t("dataGrid.revertSelected"),
