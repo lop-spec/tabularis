@@ -653,29 +653,47 @@ export const Editor = () => {
   const handleDeleteRows = useCallback(() => {
     if (
       !activeTab ||
-      !activeTab.result ||
-      !activeTab.pkColumn ||
       !activeTab.selectedRows ||
       activeTab.selectedRows.length === 0
     )
       return;
 
-    const pkIndex = activeTab.result.columns.indexOf(activeTab.pkColumn);
-    if (pkIndex === -1) return;
-
+    const existingRowCount = activeTab.result?.rows.length || 0;
+    const currentPendingInsertions = activeTab.pendingInsertions || {};
     const currentPendingDeletions = activeTab.pendingDeletions || {};
+    
     const newPendingDeletions = { ...currentPendingDeletions };
+    const newPendingInsertions = { ...currentPendingInsertions };
 
+    // Separate selected rows into existing rows and new rows
+    const insertionTempIds = Object.keys(currentPendingInsertions);
+    
     activeTab.selectedRows.forEach((rowIndex) => {
-      const row = activeTab.result!.rows[rowIndex];
-      if (row) {
-        const pkVal = row[pkIndex];
-        newPendingDeletions[String(pkVal)] = pkVal;
+      if (rowIndex < existingRowCount) {
+        // Existing row - add to pending deletions
+        if (activeTab.result && activeTab.pkColumn) {
+          const pkIndex = activeTab.result.columns.indexOf(activeTab.pkColumn);
+          if (pkIndex !== -1) {
+            const row = activeTab.result.rows[rowIndex];
+            if (row) {
+              const pkVal = row[pkIndex];
+              newPendingDeletions[String(pkVal)] = pkVal;
+            }
+          }
+        }
+      } else {
+        // New row (insertion) - remove directly from pendingInsertions
+        const insertionArrayIndex = rowIndex - existingRowCount;
+        if (insertionArrayIndex >= 0 && insertionArrayIndex < insertionTempIds.length) {
+          const tempId = insertionTempIds[insertionArrayIndex];
+          delete newPendingInsertions[tempId];
+        }
       }
     });
 
     updateActiveTab({
       pendingDeletions: newPendingDeletions,
+      pendingInsertions: newPendingInsertions,
       selectedRows: [],
     });
   }, [activeTab, updateActiveTab]);
@@ -784,6 +802,12 @@ export const Editor = () => {
             page_size: settings.resultPageSize || 100,
             total_rows: 0,
           },
+        };
+      } else if (!activeTab.result.columns || activeTab.result.columns.length === 0) {
+        // If result exists but has no columns, update it with columns
+        updates.result = {
+          ...activeTab.result,
+          columns: columns.map((c) => c.name),
         };
       }
 
@@ -1726,7 +1750,7 @@ export const Editor = () => {
               <div className="p-4 text-red-400 font-mono text-sm bg-red-900/10 h-full overflow-auto whitespace-pre-wrap">
                 Error: {activeTab.error}
               </div>
-            ) : activeTab.result || (activeTab.activeTable && activeTab.pkColumn) ? (
+            ) : activeTab.result || (activeTab.activeTable && activeTab.pkColumn) || (activeTab.pendingInsertions && Object.keys(activeTab.pendingInsertions).length > 0) ? (
               <div className="flex-1 min-h-0 flex flex-col">
                 {activeTab.result && (
                   <div className="p-2 bg-elevated text-xs text-secondary border-b border-default flex justify-between items-center shrink-0">
@@ -1953,7 +1977,7 @@ export const Editor = () => {
 
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <DataGrid
-                    key={`${activeTab.id}-${activeTab.sortClause || "none"}-${activeTab.filterClause || "none"}-${activeTab.result?.rows.length || 0}`}
+                    key={`${activeTab.id}-${activeTab.sortClause || "none"}-${activeTab.filterClause || "none"}-${activeTab.result?.rows.length || 0}-${Object.keys(activeTab.pendingInsertions || {}).length}`}
                     columns={activeTab.result?.columns || []}
                     data={activeTab.result?.rows || []}
                     tableName={activeTab.activeTable}
@@ -1966,6 +1990,7 @@ export const Editor = () => {
                     pendingInsertions={activeTab.pendingInsertions}
                     onPendingChange={handlePendingChange}
                     onPendingInsertionChange={handlePendingInsertionChange}
+                    onDiscardInsertion={handleDiscardInsertion}
                     selectedRows={new Set(activeTab.selectedRows || [])}
                     onSelectionChange={handleSelectionChange}
                     sortClause={activeTab.sortClause}

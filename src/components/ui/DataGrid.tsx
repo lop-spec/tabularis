@@ -70,6 +70,7 @@ export const DataGrid = React.memo(({
     x: number;
     y: number;
     row: unknown[];
+    mergedRow?: { type: "existing" | "insertion"; rowData: unknown[]; displayIndex: number; tempId?: string };
   } | null>(null);
   const [editingCell, setEditingCell] = useState<{
     rowIndex: number;
@@ -352,27 +353,8 @@ export const DataGrid = React.memo(({
             const val = info.getValue();
             const formatted = formatCellValue(val, t("dataGrid.null"));
 
-            // Check if this is an auto-increment column
-            const isAutoIncrement = autoIncrementColumns?.includes(colName);
-
-            // For new rows (insertions), show <default> for auto-increment columns if value is null/empty
-            const rowData = info.row.original;
-            // Need a way to check if this is an insertion row inside cell render
-            // Since we can't easily access mergedRows logic here without context,
-            // we rely on the value being null/undefined for auto-increment columns in new rows.
-            // However, existing rows might also have nulls.
-
-            // Actually, the cell value for new rows is initialized to null for auto-increment in initializeNewRow.
-            // But we need to distinguish between "existing null" and "new row auto-increment placeholder".
-            // The row object passed to accessor is the raw data array.
-            // We can't easily know if it's an insertion row just from the row array here unless we add metadata.
-
-            // BUT: The formatting logic in the main render loop (where we map over rows) has access to `isInsertion`.
-            // We can override the display there?
-            // Wait, `flexRender` calls this cell function.
-
-            // Let's keep the standard formatting here, and handle the <default> placeholder in the main render loop
-            // where we have full context (isInsertion, etc).
+            // The <generated> placeholder logic for auto-increment columns is handled
+            // in the main render loop where we have full context (isInsertion, etc).
 
             // Apply styling for null values
             if (val === null || val === undefined) {
@@ -421,12 +403,6 @@ export const DataGrid = React.memo(({
     prevInsertionCountRef.current = insertionCount;
   }, [pendingInsertions, tableRows.length, rowVirtualizer]);
 
-  const discardInsertion = useCallback((mergedRow: any) => {
-    if (mergedRow.type === "insertion" && mergedRow.tempId && onDiscardInsertion) {
-        onDiscardInsertion(mergedRow.tempId);
-    }
-  }, [onDiscardInsertion]);
-
   const handleContextMenu = useCallback((e: React.MouseEvent, row: unknown[]) => {
     if (tableName) {
       e.preventDefault();
@@ -442,9 +418,7 @@ export const DataGrid = React.memo(({
     if (!contextMenu || !tableName) return;
 
     // Check if this is an insertion
-    // @ts-ignore
     const isInsertion = contextMenu.mergedRow?.type === "insertion";
-    // @ts-ignore
     const tempId = contextMenu.mergedRow?.tempId;
 
     if (isInsertion && tempId) {
@@ -533,6 +507,8 @@ export const DataGrid = React.memo(({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [editingCell, selectedRowIndices, copySelectedCells]);
 
+  // Show "no data" if there are no columns (even with pending insertions, we can't render without column info)
+  // OR if there are columns but no data and no pending insertions
   if (columns.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-muted">
@@ -665,8 +641,7 @@ export const DataGrid = React.memo(({
                         onClick={(e) => handleRowClick(rowIndex, e)}
                         onDoubleClick={() =>
                           !isPendingDelete &&
-                          !isAutoIncrementPlaceholder &&
-                          handleCellDoubleClick(rowIndex, colIndex, displayValue)
+                          handleCellDoubleClick(rowIndex, colIndex, isAutoIncrementPlaceholder ? "" : displayValue)
                         }
                         className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text ${
                           isPendingDelete
