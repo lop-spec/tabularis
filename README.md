@@ -19,6 +19,29 @@ A lightweight, developer-focused database management tool, built with Tauri and 
 
 [![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.8.10/tabularis_0.8.10_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.8.10/tabularis_0.8.10_x64.dmg) [![Linux](https://img.shields.io/badge/Linux-Download-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.8.10/tabularis_0.8.10_amd64.AppImage)
 
+## Table of Contents
+
+- [Installation](#installation)
+  - [macOS](#macos)
+  - [Arch Linux (AUR)](#arch-linux-aur)
+- [Updates](#updates)
+- [Gallery](#gallery)
+- [Changelog](#changelog)
+- [Features](#features)
+  - [Connection Management](#connection-management)
+  - [Database Explorer](#database-explorer)
+  - [SQL Editor](#sql-editor)
+  - [Visual Query Builder](#visual-query-builder)
+  - [Data Grid](#data-grid)
+  - [Logging](#logging)
+  - [Configuration Storage](#configuration-storage)
+  - [AI Features (Optional)](#ai-features-optional)
+- [Tech Stack](#tech-stack)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [License](#license)
+
+
 ## Installation
 
 ### macOS
