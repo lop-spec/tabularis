@@ -1,3 +1,33 @@
+## [0.8.11](https://github.com/debba/tabularis/compare/v0.8.10...v0.8.11) (2026-02-10)
+
+
+### Bug Fixes
+
+* **db:** allow empty inserts for auto-generated fields in insert_record ([5c34144](https://github.com/debba/tabularis/commit/5c3414424d38a742140bef4cce94ff6c4ea70fa8))
+* **postgres:** read is_pk as bool instead of i64 ([90a95da](https://github.com/debba/tabularis/commit/90a95da42a76ffe2923db5a52e0a6e82d9edff3d))
+* **ui-data-grid:** handle insertion row metadata and cleanup comments ([d54c3cb](https://github.com/debba/tabularis/commit/d54c3cb2cc4b0c8ff85587047e5ed2ebc8547ddd))
+* **ui:** show database load error below database select ([fe6d7eb](https://github.com/debba/tabularis/commit/fe6d7eb929b70d8a206d770f2fbd21fe00b9e31f))
+
+
+### Features
+
+* **community:** add community modal and Discord link ([d031009](https://github.com/debba/tabularis/commit/d031009eacb7ebf9895172b5e4dc2430d6ac5a8d))
+* **data-grid:** add cell display utils and styling helpers ([759b80c](https://github.com/debba/tabularis/commit/759b80c46e6a8870a6fb82884f5409978b851b2e))
+* **data-grid:** add DEFAULT sentinel handling and cell value actions ([b89eed5](https://github.com/debba/tabularis/commit/b89eed5cbb4c93a4087d764d99dd40259768b0c4))
+* **data-grid:** add edit and mark-for-deletion actions in context menu ([7e7426c](https://github.com/debba/tabularis/commit/7e7426ced0e90359b60e7f4d490db34d88305990))
+* **db:** implement default value retrieval for MySQL and PostgreSQL ([ac7ecd5](https://github.com/debba/tabularis/commit/ac7ecd59593f8addf6f02e52c1c8a8d7d0fad8cd))
+* **drivers-postgres:** add extended PostgreSQL metadata functions and ([4f91dbb](https://github.com/debba/tabularis/commit/4f91dbb7ecc5b4f1ab25b43c7407980d2908c0a5))
+* **editor:** add global Ctrl+F5 shortcut to run queries ([895bfb6](https://github.com/debba/tabularis/commit/895bfb669ea2d82d4e0422988c90ff53c9a10bc5))
+* **editor:** add pending insertions support ([c4c6ad9](https://github.com/debba/tabularis/commit/c4c6ad95c75e582860e16d842c2f142765baf2d2))
+* **editor:** add table run prompt and fallback query handling ([483fdd4](https://github.com/debba/tabularis/commit/483fdd4fbd7622d9ac41bf8447018d7f25f133dc))
+* **editor:** display discard option and handle auto-increment defaults ([bb60012](https://github.com/debba/tabularis/commit/bb600123a1e936bd3085333cdf3d8f6936e4c9a1))
+* **prefs:** add editor preferences persistence via tauri backend ([9b481d9](https://github.com/debba/tabularis/commit/9b481d918feba2ce4c8aa8f2b1ed5dcc59c72580))
+* **roadmap:** add links to roadmap and make items openable ([77f7995](https://github.com/debba/tabularis/commit/77f7995ba4b26d017f467cc74ab0647c76815bd5))
+* **roadmap:** add roadmap sync workflow and update scripts ([2a8c48d](https://github.com/debba/tabularis/commit/2a8c48d3bf02f9e6124b9526a3d899a7eddf051d))
+* **ui-datagrid:** add tab key navigation between cells ([e101191](https://github.com/debba/tabularis/commit/e1011918488319af50a479f957ba11bf8c0ade49))
+
+
+
 ## [0.8.10](https://github.com/debba/tabularis/compare/v0.8.8...v0.8.10) (2026-02-08)
 
 
