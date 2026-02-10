@@ -7,16 +7,24 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ContextMenu } from "./ContextMenu";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { ArrowUp, ArrowDown, ArrowUpDown, Copy, Undo, Trash2, Edit, Sparkles, Ban, FileDigit } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { message } from "@tauri-apps/plugin-dialog";
-import { formatCellValue, getColumnSortState, calculateSelectionRange, toggleSetValue } from "../../utils/dataGrid";
+import {
+  USE_DEFAULT_SENTINEL,
+  formatCellValue,
+  getColumnSortState,
+  calculateSelectionRange,
+  toggleSetValue,
+  resolveInsertionCellDisplay,
+  resolveExistingCellDisplay,
+  getCellStateClass,
+  type MergedRow,
+  type ColumnDisplayInfo,
+} from "../../utils/dataGrid";
 import { rowToTSV, rowsToTSV, getSelectedRows, copyTextToClipboard } from "../../utils/clipboard";
 import type { PendingInsertion } from "../../types/editor";
-
-// Special sentinel value to indicate that the database DEFAULT value should be used
-export const USE_DEFAULT_SENTINEL = "__USE_DEFAULT__";
 
 interface DataGridProps {
   columns: string[];
@@ -117,13 +125,6 @@ export const DataGrid = React.memo(({
 
   // Merge existing rows with pending insertions
   const mergedRows = useMemo(() => {
-    type MergedRow = {
-      type: "existing" | "insertion";
-      rowData: unknown[];
-      displayIndex: number;
-      tempId?: string;
-    };
-
     const rows: MergedRow[] = [];
 
     // Add existing rows first (displayIndex 0, 1, 2, ...)
@@ -550,66 +551,30 @@ export const DataGrid = React.memo(({
     setContextMenu(null);
   }, [contextMenu]);
 
-  // Cell value manipulation actions
-  const setCellGenerate = useCallback(() => {
+  // Unified handler for setting cell values from context menu actions
+  const setCellValue = useCallback((value: unknown) => {
     if (!contextMenu) return;
-    const { rowIndex, colIndex, colName, mergedRow } = contextMenu;
+    const { colName, mergedRow } = contextMenu;
     const isInsertion = mergedRow?.type === "insertion";
 
     if (isInsertion && onPendingInsertionChange && mergedRow.tempId) {
-      // For insertions, set to null (will be displayed as <generated>)
-      onPendingInsertionChange(mergedRow.tempId, colName, null);
+      onPendingInsertionChange(mergedRow.tempId, colName, value);
     } else if (onPendingChange && pkIndexMap !== null) {
-      // For existing rows, mark as pending change with null
       const pkVal = contextMenu.row[pkIndexMap];
-      onPendingChange(pkVal, colName, null);
+      onPendingChange(pkVal, colName, value);
     }
     setContextMenu(null);
   }, [contextMenu, onPendingInsertionChange, onPendingChange, pkIndexMap]);
 
-  const setCellNull = useCallback(() => {
-    if (!contextMenu) return;
-    const { rowIndex, colIndex, colName, mergedRow } = contextMenu;
-    const isInsertion = mergedRow?.type === "insertion";
-
-    if (isInsertion && onPendingInsertionChange && mergedRow.tempId) {
-      onPendingInsertionChange(mergedRow.tempId, colName, null);
-    } else if (onPendingChange && pkIndexMap !== null) {
-      const pkVal = contextMenu.row[pkIndexMap];
-      onPendingChange(pkVal, colName, null);
-    }
-    setContextMenu(null);
-  }, [contextMenu, onPendingInsertionChange, onPendingChange, pkIndexMap]);
-
+  const setCellGenerate = useCallback(() => setCellValue(null), [setCellValue]);
+  const setCellNull = useCallback(() => setCellValue(null), [setCellValue]);
   const setCellDefault = useCallback(() => {
     if (!contextMenu) return;
-    const { rowIndex, colIndex, colName, mergedRow } = contextMenu;
-    const isInsertion = mergedRow?.type === "insertion";
-
-    if (isInsertion && onPendingInsertionChange && mergedRow.tempId) {
-      // For insertions, set to null (will be displayed as <default>)
-      onPendingInsertionChange(mergedRow.tempId, colName, null);
-    } else if (onPendingChange && pkIndexMap !== null) {
-      // For existing rows, use sentinel value to indicate DEFAULT should be used
-      const pkVal = contextMenu.row[pkIndexMap];
-      onPendingChange(pkVal, colName, USE_DEFAULT_SENTINEL);
-    }
-    setContextMenu(null);
-  }, [contextMenu, onPendingInsertionChange, onPendingChange, pkIndexMap]);
-
-  const setCellEmpty = useCallback(() => {
-    if (!contextMenu) return;
-    const { rowIndex, colIndex, colName, mergedRow } = contextMenu;
-    const isInsertion = mergedRow?.type === "insertion";
-
-    if (isInsertion && onPendingInsertionChange && mergedRow.tempId) {
-      onPendingInsertionChange(mergedRow.tempId, colName, " ");
-    } else if (onPendingChange && pkIndexMap !== null) {
-      const pkVal = contextMenu.row[pkIndexMap];
-      onPendingChange(pkVal, colName, " ");
-    }
-    setContextMenu(null);
-  }, [contextMenu, onPendingInsertionChange, onPendingChange, pkIndexMap]);
+    const isInsertion = contextMenu.mergedRow?.type === "insertion";
+    // For insertions, null triggers <default> display; for existing rows, use sentinel
+    setCellValue(isInsertion ? null : USE_DEFAULT_SENTINEL);
+  }, [contextMenu, setCellValue]);
+  const setCellEmpty = useCallback(() => setCellValue(" "), [setCellValue]);
 
   const copyToClipboard = useCallback(async (text: string) => {
     try {
@@ -754,75 +719,41 @@ export const DataGrid = React.memo(({
                       editingCell?.rowIndex === rowIndex &&
                       editingCell?.colIndex === colIndex;
 
-                    // Check if this cell has a pending change (ONLY if pkColumn exists)
                     const colName = cell.column.id;
 
-                    // For insertions, all cells are "pending" (new data)
-                    let displayValue: unknown;
-                    let hasPendingChange = false;
-                    let isModified = false;
-                    let isAutoIncrementPlaceholder = false;
-                    let isDefaultValuePlaceholder = false;
+                    const columnInfo: ColumnDisplayInfo = {
+                      colName,
+                      autoIncrementColumns,
+                      defaultValueColumns,
+                      nullableColumns,
+                    };
 
-                    if (isInsertion) {
-                      // Insertion cell - show data from pendingInsertions
-                      displayValue = cell.getValue();
-                      hasPendingChange = true; // All insertion cells are "pending"
-                      isModified = displayValue !== null && displayValue !== "";
+                    const resolved = isInsertion
+                      ? resolveInsertionCellDisplay(cell.getValue(), columnInfo)
+                      : resolveExistingCellDisplay(
+                          cell.getValue(),
+                          pkVal,
+                          pkColumn,
+                          pendingChanges,
+                          columnInfo,
+                        );
 
-                      // Check for auto-increment
-                      if (
-                        autoIncrementColumns?.includes(colName) &&
-                        (displayValue === null || displayValue === "")
-                      ) {
-                        displayValue = "<generated>";
-                        isAutoIncrementPlaceholder = true;
-                      }
-                      // Check for default value (only if not auto-increment and not nullable)
-                      else if (
-                        defaultValueColumns?.includes(colName) &&
-                        !nullableColumns?.includes(colName) &&
-                        (displayValue === null || displayValue === "")
-                      ) {
-                        displayValue = "<default>";
-                        isDefaultValuePlaceholder = true;
-                      }
-                    } else {
-                      // Existing row - check for pending changes
-                      const pendingVal =
-                        pkColumn && pkVal && pendingChanges?.[pkVal]?.changes?.[colName];
-                      hasPendingChange = pkColumn ? (pendingVal !== undefined) : false;
-                      displayValue = hasPendingChange ? pendingVal : cell.getValue();
-                      isModified =
-                        hasPendingChange &&
-                        String(pendingVal) !== String(cell.getValue());
+                    const {
+                      displayValue,
+                      hasPendingChange,
+                      isModified,
+                      isAutoIncrementPlaceholder,
+                      isDefaultValuePlaceholder,
+                    } = resolved;
 
-                      // Show placeholders for existing rows with pending changes
-                      if (hasPendingChange) {
-                        // Check for USE_DEFAULT sentinel value
-                        if (displayValue === USE_DEFAULT_SENTINEL) {
-                          displayValue = "<default>";
-                          isDefaultValuePlaceholder = true;
-                        }
-                        // Check for null or empty values
-                        else if (displayValue === null || displayValue === "") {
-                          // Check for auto-increment
-                          if (autoIncrementColumns?.includes(colName)) {
-                            displayValue = "<generated>";
-                            isAutoIncrementPlaceholder = true;
-                          }
-                          // Check for default value (only if not auto-increment and not nullable)
-                          else if (
-                            defaultValueColumns?.includes(colName) &&
-                            !nullableColumns?.includes(colName)
-                          ) {
-                            displayValue = "<default>";
-                            isDefaultValuePlaceholder = true;
-                          }
-                          // For nullable columns with null value, keep as null (formatted by formatCellValue)
-                        }
-                      }
-                    }
+                    const stateClass = getCellStateClass({
+                      isPendingDelete,
+                      isSelected,
+                      isInsertion,
+                      isAutoIncrementPlaceholder,
+                      isDefaultValuePlaceholder,
+                      isModified,
+                    });
 
                     return (
                       <td
@@ -833,25 +764,7 @@ export const DataGrid = React.memo(({
                           handleCellDoubleClick(rowIndex, colIndex, (isAutoIncrementPlaceholder || isDefaultValuePlaceholder) ? "" : displayValue)
                         }
                         onContextMenu={(e) => handleContextMenu(e, row.original, rowIndex, colIndex, colName)}
-                        className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text ${
-                          isPendingDelete
-                            ? "text-red-400/60 line-through decoration-red-500/30"
-                            : isSelected && isInsertion
-                              ? (isAutoIncrementPlaceholder || isDefaultValuePlaceholder)
-                                ? "text-muted italic select-none"
-                                : isModified
-                                  ? "bg-blue-600/20 text-blue-200 italic font-medium"
-                                  : "bg-blue-900/20 text-secondary italic"
-                              : isInsertion
-                                ? (isAutoIncrementPlaceholder || isDefaultValuePlaceholder)
-                                  ? "text-muted italic select-none"
-                                  : isModified
-                                    ? "bg-green-500/15 text-green-200 italic"
-                                    : "bg-green-500/5 text-secondary italic"
-                                : isModified
-                                  ? "bg-blue-600/30 text-blue-100 italic font-medium"
-                                  : "text-secondary"
-                        }`}
+                        className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text ${stateClass}`}
                         title={!isEditing ? String(displayValue) : ""}
                       >
                         {isEditing ? (
@@ -902,7 +815,7 @@ export const DataGrid = React.memo(({
         const hasDefault = defaultValueColumns?.includes(colName);
 
         // Build menu items dynamically
-        const menuItems = [];
+        const menuItems: ContextMenuItem[] = [];
 
         // Cell value manipulation options (shown first for cell context)
         // SET GENERATED only for insertion rows, not for existing rows
@@ -936,7 +849,7 @@ export const DataGrid = React.memo(({
 
         // Separator and row actions
         if (menuItems.length > 0) {
-          menuItems.push({ separator: true } as any);
+          menuItems.push({ separator: true });
         }
 
         menuItems.push(

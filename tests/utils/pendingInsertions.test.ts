@@ -156,7 +156,7 @@ describe("pendingInsertions", () => {
         displayIndex: 0,
       };
       const errors = validatePendingInsertion(insertion, columns);
-      expect(errors.name).toBe("Campo obbligatorio");
+      expect(errors.name).toBe("Required field");
     });
 
     it("should detect missing required field (empty string)", () => {
@@ -166,7 +166,7 @@ describe("pendingInsertions", () => {
         displayIndex: 0,
       };
       const errors = validatePendingInsertion(insertion, columns);
-      expect(errors.name).toBe("Campo obbligatorio");
+      expect(errors.name).toBe("Required field");
     });
 
     it("should detect missing required field (undefined)", () => {
@@ -176,7 +176,7 @@ describe("pendingInsertions", () => {
         displayIndex: 0,
       };
       const errors = validatePendingInsertion(insertion, columns);
-      expect(errors.name).toBe("Campo obbligatorio");
+      expect(errors.name).toBe("Required field");
     });
 
     it("should skip auto-increment columns in validation", () => {
@@ -230,8 +230,8 @@ describe("pendingInsertions", () => {
         displayIndex: 0,
       };
       const errors = validatePendingInsertion(insertion, columnsWithMultipleRequired);
-      expect(errors.name).toBe("Campo obbligatorio");
-      expect(errors.age).toBe("Campo obbligatorio");
+      expect(errors.name).toBe("Required field");
+      expect(errors.age).toBe("Required field");
       expect(Object.keys(errors)).toHaveLength(2);
     });
   });

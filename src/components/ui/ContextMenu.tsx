@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { calculateContextMenuPosition, type ViewportConstraints } from '../../utils/contextMenu';
 
-interface ContextMenuItem {
+export interface ContextMenuItem {
   label?: string;
   icon?: React.ElementType;
   action?: () => void;

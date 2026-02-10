@@ -3,7 +3,13 @@ import {
   formatCellValue,
   getColumnSortState,
   calculateSelectionRange,
-  toggleSetValue
+  toggleSetValue,
+  USE_DEFAULT_SENTINEL,
+  resolveInsertionCellDisplay,
+  resolveExistingCellDisplay,
+  getCellStateClass,
+  type ColumnDisplayInfo,
+  type CellClassParams,
 } from '../../src/utils/dataGrid';
 
 describe('dataGrid utils', () => {
@@ -222,6 +228,338 @@ describe('dataGrid utils', () => {
       const result = toggleSetValue(set, 1);
       const removed = toggleSetValue(result, 1);
       expect(removed.size).toBe(0);
+    });
+  });
+
+  describe('USE_DEFAULT_SENTINEL', () => {
+    it('should be a non-empty string constant', () => {
+      expect(typeof USE_DEFAULT_SENTINEL).toBe('string');
+      expect(USE_DEFAULT_SENTINEL.length).toBeGreaterThan(0);
+    });
+
+    it('should have a recognizable sentinel pattern', () => {
+      expect(USE_DEFAULT_SENTINEL).toBe('__USE_DEFAULT__');
+    });
+  });
+
+  describe('resolveInsertionCellDisplay', () => {
+    const baseColumnInfo: ColumnDisplayInfo = {
+      colName: 'name',
+      autoIncrementColumns: [],
+      defaultValueColumns: [],
+      nullableColumns: [],
+    };
+
+    it('should return the cell value as-is for a regular column with data', () => {
+      const result = resolveInsertionCellDisplay('John', baseColumnInfo);
+      expect(result.displayValue).toBe('John');
+      expect(result.hasPendingChange).toBe(true);
+      expect(result.isModified).toBe(true);
+      expect(result.isAutoIncrementPlaceholder).toBe(false);
+      expect(result.isDefaultValuePlaceholder).toBe(false);
+    });
+
+    it('should mark isModified false when value is null', () => {
+      const result = resolveInsertionCellDisplay(null, baseColumnInfo);
+      expect(result.isModified).toBe(false);
+    });
+
+    it('should mark isModified false when value is empty string', () => {
+      const result = resolveInsertionCellDisplay('', baseColumnInfo);
+      expect(result.isModified).toBe(false);
+    });
+
+    it('should show <generated> placeholder for auto-increment column with null value', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'id',
+        autoIncrementColumns: ['id'],
+        defaultValueColumns: [],
+        nullableColumns: [],
+      };
+      const result = resolveInsertionCellDisplay(null, columnInfo);
+      expect(result.displayValue).toBe('<generated>');
+      expect(result.isAutoIncrementPlaceholder).toBe(true);
+      expect(result.isDefaultValuePlaceholder).toBe(false);
+    });
+
+    it('should show <generated> placeholder for auto-increment column with empty string', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'id',
+        autoIncrementColumns: ['id'],
+        defaultValueColumns: [],
+        nullableColumns: [],
+      };
+      const result = resolveInsertionCellDisplay('', columnInfo);
+      expect(result.displayValue).toBe('<generated>');
+      expect(result.isAutoIncrementPlaceholder).toBe(true);
+    });
+
+    it('should not show <generated> for auto-increment column with a user-provided value', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'id',
+        autoIncrementColumns: ['id'],
+        defaultValueColumns: [],
+        nullableColumns: [],
+      };
+      const result = resolveInsertionCellDisplay(42, columnInfo);
+      expect(result.displayValue).toBe(42);
+      expect(result.isAutoIncrementPlaceholder).toBe(false);
+    });
+
+    it('should show <default> placeholder for non-nullable default-value column with null', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'status',
+        autoIncrementColumns: [],
+        defaultValueColumns: ['status'],
+        nullableColumns: [],
+      };
+      const result = resolveInsertionCellDisplay(null, columnInfo);
+      expect(result.displayValue).toBe('<default>');
+      expect(result.isDefaultValuePlaceholder).toBe(true);
+      expect(result.isAutoIncrementPlaceholder).toBe(false);
+    });
+
+    it('should not show <default> for nullable default-value column with null', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'status',
+        autoIncrementColumns: [],
+        defaultValueColumns: ['status'],
+        nullableColumns: ['status'],
+      };
+      const result = resolveInsertionCellDisplay(null, columnInfo);
+      expect(result.displayValue).toBeNull();
+      expect(result.isDefaultValuePlaceholder).toBe(false);
+    });
+
+    it('should prioritize auto-increment over default-value when column is in both lists', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'id',
+        autoIncrementColumns: ['id'],
+        defaultValueColumns: ['id'],
+        nullableColumns: [],
+      };
+      const result = resolveInsertionCellDisplay(null, columnInfo);
+      expect(result.displayValue).toBe('<generated>');
+      expect(result.isAutoIncrementPlaceholder).toBe(true);
+      expect(result.isDefaultValuePlaceholder).toBe(false);
+    });
+
+    it('should always set hasPendingChange to true for insertion rows', () => {
+      const result = resolveInsertionCellDisplay(null, baseColumnInfo);
+      expect(result.hasPendingChange).toBe(true);
+    });
+  });
+
+  describe('resolveExistingCellDisplay', () => {
+    const baseColumnInfo: ColumnDisplayInfo = {
+      colName: 'name',
+      autoIncrementColumns: [],
+      defaultValueColumns: [],
+      nullableColumns: [],
+    };
+
+    it('should return the original cell value when no pending changes exist', () => {
+      const result = resolveExistingCellDisplay('John', '1', 'id', undefined, baseColumnInfo);
+      expect(result.displayValue).toBe('John');
+      expect(result.hasPendingChange).toBe(false);
+      expect(result.isModified).toBe(false);
+    });
+
+    it('should return the pending value when a change exists for the column', () => {
+      const pending = { '1': { pkOriginalValue: 1, changes: { name: 'Jane' } } };
+      const result = resolveExistingCellDisplay('John', '1', 'id', pending, baseColumnInfo);
+      expect(result.displayValue).toBe('Jane');
+      expect(result.hasPendingChange).toBe(true);
+      expect(result.isModified).toBe(true);
+    });
+
+    it('should not flag as modified when pending value equals original', () => {
+      const pending = { '1': { pkOriginalValue: 1, changes: { name: 'John' } } };
+      const result = resolveExistingCellDisplay('John', '1', 'id', pending, baseColumnInfo);
+      expect(result.hasPendingChange).toBe(true);
+      expect(result.isModified).toBe(false);
+    });
+
+    it('should resolve USE_DEFAULT_SENTINEL to <default> placeholder', () => {
+      const pending = { '1': { pkOriginalValue: 1, changes: { name: USE_DEFAULT_SENTINEL } } };
+      const result = resolveExistingCellDisplay('John', '1', 'id', pending, baseColumnInfo);
+      expect(result.displayValue).toBe('<default>');
+      expect(result.isDefaultValuePlaceholder).toBe(true);
+    });
+
+    it('should show <generated> for auto-increment column with null pending value', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'id',
+        autoIncrementColumns: ['id'],
+        defaultValueColumns: [],
+        nullableColumns: [],
+      };
+      const pending = { '1': { pkOriginalValue: 1, changes: { id: null } } };
+      const result = resolveExistingCellDisplay(1, '1', 'id', pending, columnInfo);
+      expect(result.displayValue).toBe('<generated>');
+      expect(result.isAutoIncrementPlaceholder).toBe(true);
+    });
+
+    it('should show <default> for non-nullable default-value column with empty pending value', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'status',
+        autoIncrementColumns: [],
+        defaultValueColumns: ['status'],
+        nullableColumns: [],
+      };
+      const pending = { '1': { pkOriginalValue: 1, changes: { status: '' } } };
+      const result = resolveExistingCellDisplay('active', '1', 'id', pending, columnInfo);
+      expect(result.displayValue).toBe('<default>');
+      expect(result.isDefaultValuePlaceholder).toBe(true);
+    });
+
+    it('should not show placeholder for nullable default-value column with null pending value', () => {
+      const columnInfo: ColumnDisplayInfo = {
+        colName: 'status',
+        autoIncrementColumns: [],
+        defaultValueColumns: ['status'],
+        nullableColumns: ['status'],
+      };
+      const pending = { '1': { pkOriginalValue: 1, changes: { status: null } } };
+      const result = resolveExistingCellDisplay('active', '1', 'id', pending, columnInfo);
+      expect(result.displayValue).toBeNull();
+      expect(result.isDefaultValuePlaceholder).toBe(false);
+    });
+
+    it('should return no pending change when pkColumn is null', () => {
+      const pending = { '1': { pkOriginalValue: 1, changes: { name: 'Jane' } } };
+      const result = resolveExistingCellDisplay('John', '1', null, pending, baseColumnInfo);
+      expect(result.hasPendingChange).toBe(false);
+      expect(result.displayValue).toBe('John');
+    });
+
+    it('should return no pending change when pkVal is null', () => {
+      const pending = { '1': { pkOriginalValue: 1, changes: { name: 'Jane' } } };
+      const result = resolveExistingCellDisplay('John', null, 'id', pending, baseColumnInfo);
+      expect(result.hasPendingChange).toBe(false);
+      expect(result.displayValue).toBe('John');
+    });
+
+    it('should return no pending change when row has no pending entry', () => {
+      const pending = { '2': { pkOriginalValue: 2, changes: { name: 'Jane' } } };
+      const result = resolveExistingCellDisplay('John', '1', 'id', pending, baseColumnInfo);
+      expect(result.hasPendingChange).toBe(false);
+      expect(result.displayValue).toBe('John');
+    });
+  });
+
+  describe('getCellStateClass', () => {
+    const baseParams: CellClassParams = {
+      isPendingDelete: false,
+      isSelected: false,
+      isInsertion: false,
+      isAutoIncrementPlaceholder: false,
+      isDefaultValuePlaceholder: false,
+      isModified: false,
+    };
+
+    it('should return default text class for unmodified existing row', () => {
+      expect(getCellStateClass(baseParams)).toBe('text-secondary');
+    });
+
+    it('should return delete styling for pending-delete rows', () => {
+      const result = getCellStateClass({ ...baseParams, isPendingDelete: true });
+      expect(result).toContain('line-through');
+      expect(result).toContain('text-red');
+    });
+
+    it('should prioritize pending-delete over all other states', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isPendingDelete: true,
+        isSelected: true,
+        isInsertion: true,
+        isModified: true,
+      });
+      expect(result).toContain('line-through');
+    });
+
+    it('should return placeholder class for selected insertion with auto-increment', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isSelected: true,
+        isInsertion: true,
+        isAutoIncrementPlaceholder: true,
+      });
+      expect(result).toContain('text-muted');
+      expect(result).toContain('italic');
+    });
+
+    it('should return placeholder class for selected insertion with default-value', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isSelected: true,
+        isInsertion: true,
+        isDefaultValuePlaceholder: true,
+      });
+      expect(result).toContain('text-muted');
+      expect(result).toContain('italic');
+    });
+
+    it('should return modified class for selected insertion with user data', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isSelected: true,
+        isInsertion: true,
+        isModified: true,
+      });
+      expect(result).toContain('bg-blue');
+      expect(result).toContain('italic');
+    });
+
+    it('should return unmodified insertion class for selected insertion without changes', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isSelected: true,
+        isInsertion: true,
+      });
+      expect(result).toContain('italic');
+      expect(result).toContain('text-secondary');
+    });
+
+    it('should return placeholder class for unselected insertion with auto-increment', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isInsertion: true,
+        isAutoIncrementPlaceholder: true,
+      });
+      expect(result).toContain('text-muted');
+      expect(result).toContain('italic');
+    });
+
+    it('should return modified insertion class for unselected insertion with user data', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isInsertion: true,
+        isModified: true,
+      });
+      expect(result).toContain('bg-green');
+      expect(result).toContain('italic');
+    });
+
+    it('should return unmodified insertion class for unselected insertion without changes', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isInsertion: true,
+      });
+      expect(result).toContain('bg-green');
+      expect(result).toContain('text-secondary');
+      expect(result).toContain('italic');
+    });
+
+    it('should return modified existing-row class for non-insertion modified cell', () => {
+      const result = getCellStateClass({
+        ...baseParams,
+        isModified: true,
+      });
+      expect(result).toContain('bg-blue');
+      expect(result).toContain('italic');
+      expect(result).toContain('font-medium');
     });
   });
 });
