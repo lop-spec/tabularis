@@ -429,7 +429,7 @@ export const DataGrid = React.memo(({
   // Memoize table data to prevent unnecessary re-renders
   const tableData = useMemo(() => mergedRows.map((r) => r.rowData), [mergedRows]);
 
-  // eslint-disable-next-line react-hooks/incompatible-library
+   
   const table = useReactTable({
     data: tableData,
     columns: tableColumns,
