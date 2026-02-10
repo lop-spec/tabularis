@@ -123,7 +123,7 @@ describe('settings', () => {
 
     it('should return null and warn on parse error', () => {
       localStorageMock.getItem.mockReturnValue('invalid json');
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
       
       const result = loadFontCache();
       
@@ -147,7 +147,7 @@ describe('settings', () => {
       localStorageMock.setItem.mockImplementation(() => {
         throw new Error('Storage full');
       });
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
       
       saveFontCache('System', 14);
       
@@ -204,7 +204,7 @@ describe('settings', () => {
     it('should handle parse errors gracefully', () => {
       const backendConfig: Partial<Settings> = {};
       localStorageMock.getItem.mockReturnValue('invalid');
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
       
       const result = migrateFromLocalStorage(backendConfig);
       
@@ -496,3 +496,4 @@ describe('settings', () => {
       expect(uniqueNames.length).toBe(names.length);
     });
   });
+});
