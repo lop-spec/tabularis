@@ -395,7 +395,7 @@
     "pageOf": "Page {{current}} of {{total}}",
     "jumpToPage": "Click to jump to page",
     "executePrompt": "Execute a query to see results",
-    "tableRunPrompt": "Press Run (Ctrl+F5) to load table data",
+    "tableRunPrompt": "Press Run (Ctrl/Command+F5) to load table data",
     "closeTab": "Close Tab",
     "closeOthers": "Close Other Tabs",
     "closeRight": "Close Tabs to Right",
@@ -540,6 +540,16 @@
     "alterSuccess": "View updated successfully",
     "saveError": "Failed to save view: ",
     "confirmAlter": "Are you sure you want to modify view \"{{view}}\"?"
+  },
+  "community": {
+    "title": "Join the Community",
+    "subtitle": "Help tabularis grow",
+    "description": "Tabularis is a free, open-source project. If you find it useful, consider supporting the project and connecting with the community.",
+    "starTitle": "Star on GitHub",
+    "starDesc": "A star helps others discover the project",
+    "discordTitle": "Join Discord",
+    "discordDesc": "Chat with the community, get help, suggest features",
+    "dismiss": "Maybe later"
   },
   "dump": {
     "title": "Dump Database",

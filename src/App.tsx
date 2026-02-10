@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { MainLayout } from "./components/layout/MainLayout";
@@ -7,7 +7,10 @@ import { Editor } from "./pages/Editor";
 import { Settings } from "./pages/Settings";
 import { SchemaDiagramPage } from "./pages/SchemaDiagramPage";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
+import { CommunityModal } from "./components/modals/CommunityModal";
 import { useUpdate } from "./hooks/useUpdate";
+
+const COMMUNITY_MODAL_KEY = "tabularis_community_modal_dismissed";
 
 function App() {
   const {
@@ -19,6 +22,14 @@ function App() {
     error: updateError,
   } = useUpdate();
   const [isDebugMode, setIsDebugMode] = useState(false);
+  const [isCommunityModalOpen, setIsCommunityModalOpen] = useState(
+    () => !localStorage.getItem(COMMUNITY_MODAL_KEY),
+  );
+
+  const dismissCommunityModal = useCallback(() => {
+    localStorage.setItem(COMMUNITY_MODAL_KEY, "1");
+    setIsCommunityModalOpen(false);
+  }, []);
 
   useEffect(() => {
     invoke<boolean>("is_debug_mode").then((debugMode) => {
@@ -67,6 +78,11 @@ function App() {
         downloadProgress={downloadProgress}
         onDownloadAndInstall={downloadAndInstall}
         error={updateError}
+      />
+
+      <CommunityModal
+        isOpen={isCommunityModalOpen}
+        onClose={dismissCommunityModal}
       />
     </>
   );

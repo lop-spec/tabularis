@@ -26,8 +26,10 @@ import {
   ChevronDown,
   RefreshCw,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 import { ask, message, open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useTheme } from "../../hooks/useTheme";
 import { useSavedQueries } from "../../hooks/useSavedQueries";
@@ -256,6 +258,18 @@ export const Sidebar = () => {
         </nav>
 
         <div className="mt-auto">
+          <button
+            onClick={() => openUrl("https://discord.gg/WgsVw69F")}
+            className="flex items-center justify-center w-12 h-12 rounded-lg transition-colors mb-2 relative group text-secondary hover:bg-surface-secondary hover:text-indigo-400"
+          >
+            <div className="relative">
+              <MessageSquare size={24} />
+            </div>
+            <span className="absolute left-14 bg-surface-secondary text-primary text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+              Discord
+            </span>
+          </button>
+
           <button
             onClick={() => setIsMcpModalOpen(true)}
             className="flex items-center justify-center w-12 h-12 rounded-lg transition-colors mb-2 relative group text-secondary hover:bg-surface-secondary hover:text-primary"

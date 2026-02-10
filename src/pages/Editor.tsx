@@ -551,7 +551,7 @@ export const Editor = () => {
     }
   }, [activeTab, runQuery]);
 
-  // Global Ctrl+F5 shortcut for Run
+  // Global Ctrl/Command+F5 shortcut for Run
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "F5") {
