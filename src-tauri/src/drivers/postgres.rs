@@ -91,13 +91,25 @@ pub async fn get_columns(
 
             let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
+            // Only set default_value if not auto-increment, not empty, and not NULL
+            // Filter out NULL defaults (PostgreSQL represents nullable without default as NULL or NULL::type)
+            let default_value = if !is_auto
+                && !default_val.is_empty()
+                && !default_val.eq_ignore_ascii_case("null")
+                && !default_val.starts_with("NULL::")
+            {
+                Some(default_val)
+            } else {
+                None
+            };
+
             TableColumn {
                 name: r.try_get("column_name").unwrap_or_default(),
                 data_type: r.try_get("data_type").unwrap_or_default(),
                 is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
-                default_value: None, // TODO: Implement default value retrieval for PostgreSQL
+                default_value,
             }
         })
         .collect())
@@ -191,13 +203,25 @@ pub async fn get_all_columns_batch(
 
         let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
+        // Only set default_value if not auto-increment, not empty, and not NULL
+        // Filter out NULL defaults (PostgreSQL represents nullable without default as NULL or NULL::type)
+        let default_value = if !is_auto
+            && !default_val.is_empty()
+            && !default_val.eq_ignore_ascii_case("null")
+            && !default_val.starts_with("NULL::")
+        {
+            Some(default_val)
+        } else {
+            None
+        };
+
         let column = TableColumn {
             name: row.try_get("column_name").unwrap_or_default(),
             data_type: row.try_get("data_type").unwrap_or_default(),
             is_pk,
             is_nullable: null_str == "YES",
             is_auto_increment: is_auto,
-            default_value: None, // TODO: Implement default value retrieval for PostgreSQL
+            default_value,
         };
 
         result
@@ -730,13 +754,25 @@ pub async fn get_view_columns(
 
             let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
+            // Only set default_value if not auto-increment, not empty, and not NULL
+            // Filter out NULL defaults (PostgreSQL represents nullable without default as NULL or NULL::type)
+            let default_value = if !is_auto
+                && !default_val.is_empty()
+                && !default_val.eq_ignore_ascii_case("null")
+                && !default_val.starts_with("NULL::")
+            {
+                Some(default_val)
+            } else {
+                None
+            };
+
             TableColumn {
                 name: r.try_get("column_name").unwrap_or_default(),
                 data_type: r.try_get("data_type").unwrap_or_default(),
                 is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
-                default_value: None, // TODO: Implement default value retrieval for PostgreSQL
+                default_value,
             }
         })
         .collect())

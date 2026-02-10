@@ -44,6 +44,10 @@ export function validatePendingInsertion(
       return;
     }
 
+    if (col.default_value) {
+      return;
+    }
+
     // Check required fields
     if (!col.is_nullable) {
       const value = insertion.data[col.name];
@@ -69,7 +73,18 @@ export function insertionToBackendData(
     const value = insertion.data[col.name];
 
     // Skip auto-increment columns if no value provided (let DB generate it)
-    if (col.is_auto_increment && (value === null || value === undefined || value === "")) {
+    if (
+      col.is_auto_increment &&
+      (value === null || value === undefined || value === "")
+    ) {
+      return;
+    }
+
+    // Skip columns with default value if no value provided (let DB use default)
+    if (
+      col.default_value &&
+      (value === null || value === undefined || value === "")
+    ) {
       return;
     }
 

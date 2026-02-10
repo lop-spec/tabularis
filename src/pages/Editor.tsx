@@ -65,16 +65,8 @@ import { useDatabase } from "../hooks/useDatabase";
 import { useSavedQueries } from "../hooks/useSavedQueries";
 import { useSettings } from "../hooks/useSettings";
 import { useEditor } from "../hooks/useEditor";
-import type { QueryResult, Tab, PendingInsertion } from "../types/editor";
+import type { QueryResult, Tab, PendingInsertion, TableColumn } from "../types/editor";
 import clsx from "clsx";
-
-interface TableColumn {
-  name: string;
-  data_type: string;
-  is_pk: boolean;
-  is_nullable: boolean;
-  is_auto_increment: boolean;
-}
 
 interface EditorState {
   initialQuery?: string;
@@ -322,18 +314,26 @@ export const Editor = () => {
         const autoInc = cols
           .filter((c) => c.is_auto_increment)
           .map((c) => c.name);
+        const defaultVal = cols
+          .filter((c) => c.default_value !== undefined && c.default_value !== null)
+          .map((c) => c.name);
+        const nullable = cols
+          .filter((c) => c.is_nullable)
+          .map((c) => c.name);
         const targetId = tabId || activeTabId;
         if (targetId)
           updateTab(targetId, {
             pkColumn: pk ? pk.name : null,
             autoIncrementColumns: autoInc,
+            defaultValueColumns: defaultVal,
+            nullableColumns: nullable,
           });
       } catch (e) {
         console.error("Failed to fetch PK:", e);
         // Even if PK fetch fails, set pkColumn to null to unblock the UI
         const targetId = tabId || activeTabId;
         if (targetId)
-          updateTab(targetId, { pkColumn: null, autoIncrementColumns: [] });
+          updateTab(targetId, { pkColumn: null, autoIncrementColumns: [], defaultValueColumns: [], nullableColumns: [] });
       }
     },
     [activeConnectionId, activeTabId, updateTab],
@@ -864,6 +864,20 @@ export const Editor = () => {
           .filter((c) => c.is_auto_increment)
           .map((c) => c.name);
         updates.autoIncrementColumns = autoInc;
+      }
+
+      if (!activeTab.defaultValueColumns) {
+        const defaultVal = columns
+          .filter((c) => c.default_value !== undefined && c.default_value !== null)
+          .map((c) => c.name);
+        updates.defaultValueColumns = defaultVal;
+      }
+
+      if (!activeTab.nullableColumns) {
+        const nullable = columns
+          .filter((c) => c.is_nullable)
+          .map((c) => c.name);
+        updates.nullableColumns = nullable;
       }
 
       updateTab(activeTabIdRef.current, updates);
@@ -2023,6 +2037,8 @@ export const Editor = () => {
                     tableName={activeTab.activeTable}
                     pkColumn={activeTab.pkColumn}
                     autoIncrementColumns={activeTab.autoIncrementColumns}
+                    defaultValueColumns={activeTab.defaultValueColumns}
+                    nullableColumns={activeTab.nullableColumns}
                     connectionId={activeConnectionId}
                     onRefresh={handleRefresh}
                     pendingChanges={activeTab.pendingChanges}

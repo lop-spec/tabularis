@@ -65,6 +65,8 @@ export interface Tab {
   activeTable: string | null;
   pkColumn: string | null;
   autoIncrementColumns?: string[]; // Names of auto-increment columns
+  defaultValueColumns?: string[]; // Names of columns with default values
+  nullableColumns?: string[]; // Names of nullable columns
   isLoading?: boolean;
   connectionId: string;
   flowState?: FlowState;

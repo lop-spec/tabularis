@@ -21,6 +21,8 @@ interface DataGridProps {
   tableName?: string | null;
   pkColumn?: string | null;
   autoIncrementColumns?: string[];
+  defaultValueColumns?: string[];
+  nullableColumns?: string[];
   connectionId?: string | null;
   onRefresh?: () => void;
   pendingChanges?: Record<
@@ -50,6 +52,8 @@ export const DataGrid = React.memo(({
   tableName,
   pkColumn,
   autoIncrementColumns,
+  defaultValueColumns,
+  nullableColumns,
   connectionId,
   onRefresh,
   pendingChanges,
@@ -410,7 +414,7 @@ export const DataGrid = React.memo(({
           },
         }),
       ),
-    [columns, columnHelper, t, sortClause, onSort, autoIncrementColumns],
+    [columns, columnHelper, t, sortClause, onSort, autoIncrementColumns, defaultValueColumns, nullableColumns],
   );
 
   const parentRef = useRef<HTMLDivElement>(null);
@@ -688,6 +692,7 @@ export const DataGrid = React.memo(({
                     let hasPendingChange = false;
                     let isModified = false;
                     let isAutoIncrementPlaceholder = false;
+                    let isDefaultValuePlaceholder = false;
 
                     if (isInsertion) {
                       // Insertion cell - show data from pendingInsertions
@@ -703,7 +708,15 @@ export const DataGrid = React.memo(({
                         displayValue = "<generated>";
                         isAutoIncrementPlaceholder = true;
                       }
-                      // TODO: Add support for <default> placeholder when column has default_value
+                      // Check for default value (only if not auto-increment and not nullable)
+                      else if (
+                        defaultValueColumns?.includes(colName) &&
+                        !nullableColumns?.includes(colName) &&
+                        (displayValue === null || displayValue === "")
+                      ) {
+                        displayValue = "<default>";
+                        isDefaultValuePlaceholder = true;
+                      }
                     } else {
                       // Existing row - check for pending changes
                       const pendingVal =
@@ -721,19 +734,19 @@ export const DataGrid = React.memo(({
                         onClick={(e) => handleRowClick(rowIndex, e)}
                         onDoubleClick={() =>
                           !isPendingDelete &&
-                          handleCellDoubleClick(rowIndex, colIndex, isAutoIncrementPlaceholder ? "" : displayValue)
+                          handleCellDoubleClick(rowIndex, colIndex, (isAutoIncrementPlaceholder || isDefaultValuePlaceholder) ? "" : displayValue)
                         }
                         className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 whitespace-nowrap font-mono truncate max-w-[300px] cursor-text ${
                           isPendingDelete
                             ? "text-red-400/60 line-through decoration-red-500/30"
                             : isSelected && isInsertion
-                              ? isAutoIncrementPlaceholder
+                              ? (isAutoIncrementPlaceholder || isDefaultValuePlaceholder)
                                 ? "text-muted italic select-none"
                                 : isModified
                                   ? "bg-blue-600/20 text-blue-200 italic font-medium"
                                   : "bg-blue-900/20 text-secondary italic"
                               : isInsertion
-                                ? isAutoIncrementPlaceholder
+                                ? (isAutoIncrementPlaceholder || isDefaultValuePlaceholder)
                                   ? "text-muted italic select-none"
                                   : isModified
                                     ? "bg-green-500/15 text-green-200 italic"

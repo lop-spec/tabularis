@@ -53,7 +53,7 @@ pub async fn get_columns(
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
-        SELECT column_name, data_type, column_key, is_nullable, extra
+        SELECT column_name, data_type, column_key, is_nullable, extra, column_default
         FROM information_schema.columns
         WHERE table_schema = DATABASE() AND table_name = ?
         ORDER BY ordinal_position
@@ -71,13 +71,27 @@ pub async fn get_columns(
             let key: String = r.try_get("column_key").unwrap_or_default();
             let null_str: String = r.try_get("is_nullable").unwrap_or_default();
             let extra: String = r.try_get("extra").unwrap_or_default();
+            let is_auto_increment = extra.contains("auto_increment");
+            let default_val: Option<String> = r.try_get("column_default").ok();
+
+            // Only set default_value if not auto-increment, value exists, and not NULL
+            // Filter out NULL defaults (MySQL may return "NULL" string for nullable without default)
+            let default_value = if !is_auto_increment {
+                match default_val {
+                    Some(val) if !val.is_empty() && !val.eq_ignore_ascii_case("null") => Some(val),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
             TableColumn {
                 name: r.try_get("column_name").unwrap_or_default(),
                 data_type: r.try_get("data_type").unwrap_or_default(),
                 is_pk: key == "PRI",
                 is_nullable: null_str == "YES",
-                is_auto_increment: extra.contains("auto_increment"),
-                default_value: None, // TODO: Implement default value retrieval for MySQL
+                is_auto_increment,
+                default_value,
             }
         })
         .collect())
@@ -134,7 +148,7 @@ pub async fn get_all_columns_batch(
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
-        SELECT table_name, column_name, data_type, column_key, is_nullable, extra
+        SELECT table_name, column_name, data_type, column_key, is_nullable, extra, column_default
         FROM information_schema.columns
         WHERE table_schema = DATABASE()
         ORDER BY table_name, ordinal_position
@@ -152,14 +166,27 @@ pub async fn get_all_columns_batch(
         let key: String = row.try_get("column_key").unwrap_or_default();
         let null_str: String = row.try_get("is_nullable").unwrap_or_default();
         let extra: String = row.try_get("extra").unwrap_or_default();
+        let is_auto_increment = extra.contains("auto_increment");
+        let default_val: Option<String> = row.try_get("column_default").ok();
+
+        // Only set default_value if not auto-increment, value exists, and not NULL
+        // Filter out NULL defaults (MySQL may return "NULL" string for nullable without default)
+        let default_value = if !is_auto_increment {
+            match default_val {
+                Some(val) if !val.is_empty() && !val.eq_ignore_ascii_case("null") => Some(val),
+                _ => None,
+            }
+        } else {
+            None
+        };
 
         let column = TableColumn {
             name: row.try_get("column_name").unwrap_or_default(),
             data_type: row.try_get("data_type").unwrap_or_default(),
             is_pk: key == "PRI",
             is_nullable: null_str == "YES",
-            is_auto_increment: extra.contains("auto_increment"),
-            default_value: None, // TODO: Implement default value retrieval for MySQL
+            is_auto_increment,
+            default_value,
         };
 
         result
@@ -514,7 +541,7 @@ pub async fn get_view_columns(
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
-            SELECT column_name, data_type, column_key, is_nullable, extra
+            SELECT column_name, data_type, column_key, is_nullable, extra, column_default
             FROM information_schema.columns
             WHERE table_schema = DATABASE() AND table_name = ?
             ORDER BY ordinal_position
@@ -532,13 +559,27 @@ pub async fn get_view_columns(
             let key: String = r.try_get("column_key").unwrap_or_default();
             let null_str: String = r.try_get("is_nullable").unwrap_or_default();
             let extra: String = r.try_get("extra").unwrap_or_default();
+            let is_auto_increment = extra.contains("auto_increment");
+            let default_val: Option<String> = r.try_get("column_default").ok();
+
+            // Only set default_value if not auto-increment, value exists, and not NULL
+            // Filter out NULL defaults (MySQL may return "NULL" string for nullable without default)
+            let default_value = if !is_auto_increment {
+                match default_val {
+                    Some(val) if !val.is_empty() && !val.eq_ignore_ascii_case("null") => Some(val),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
             TableColumn {
                 name: r.try_get("column_name").unwrap_or_default(),
                 data_type: r.try_get("data_type").unwrap_or_default(),
                 is_pk: key == "PRI",
                 is_nullable: null_str == "YES",
-                is_auto_increment: extra.contains("auto_increment"),
-                default_value: None, // TODO: Implement default value retrieval for MySQL
+                is_auto_increment,
+                default_value,
             }
         })
         .collect())
