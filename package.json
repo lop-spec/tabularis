@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.8.12",
   "type": "module",
+  "links": {
+    "discord": "https://discord.gg/YrZPHAwMSG",
+    "github": "https://github.com/debba/tabularis"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -15,6 +19,7 @@
     "test:all": "pnpm test:rust && pnpm test:coverage",
     "tauri": "tauri",
     "roadmap": "node scripts/update-roadmap.js",
+    "sync-links": "node scripts/sync-links.js",
     "version": "node scripts/sync-version.js && conventional-changelog -p angular -i CHANGELOG.md -s && git add README.md CHANGELOG.md src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock src/version.ts website/index.html"
   },
   "dependencies": {

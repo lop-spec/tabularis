@@ -2,9 +2,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Github, Star, MessageSquare } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-
-const GITHUB_URL = "https://github.com/debba/tabularis";
-const DISCORD_URL = "https://discord.gg/YrZPHAwMSG";
+import { GITHUB_URL, DISCORD_URL } from "../../config/links";
 
 interface CommunityModalProps {
   isOpen: boolean;

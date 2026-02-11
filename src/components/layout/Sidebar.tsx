@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { quoteIdentifier } from "../../utils/identifiers";
 import { invoke } from "@tauri-apps/api/core";
+import { DISCORD_URL } from "../../config/links";
 import {
   Database,
   Terminal,
@@ -259,7 +260,7 @@ export const Sidebar = () => {
 
         <div className="mt-auto">
           <button
-            onClick={() => openUrl("https://discord.gg/YrZPHAwMSG")}
+            onClick={() => openUrl(DISCORD_URL)}
             className="flex items-center justify-center w-12 h-12 rounded-lg transition-colors mb-2 relative group text-secondary hover:bg-surface-secondary hover:text-indigo-400"
           >
             <div className="relative">
