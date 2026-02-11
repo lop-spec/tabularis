@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Github, Star, MessageSquare } from "lucide-react";
+import { X, Github, Star } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { GITHUB_URL, DISCORD_URL } from "../../config/links";
+import { DiscordIcon } from "../icons/DiscordIcon";
 
 interface CommunityModalProps {
   isOpen: boolean;
@@ -70,7 +71,7 @@ export const CommunityModal = ({ isOpen, onClose }: CommunityModalProps) => {
             className="w-full flex items-center gap-4 p-4 bg-base border border-default rounded-lg hover:border-indigo-500/50 hover:bg-indigo-900/10 transition-all group cursor-pointer"
           >
             <div className="p-2.5 bg-surface-secondary rounded-lg group-hover:bg-indigo-900/20 transition-colors">
-              <MessageSquare size={22} className="text-secondary group-hover:text-indigo-400 transition-colors" />
+              <DiscordIcon size={22} className="text-secondary group-hover:text-indigo-400 transition-colors" />
             </div>
             <div className="text-left flex-1">
               <div className="text-sm font-medium text-primary">{t("community.discordTitle")}</div>
