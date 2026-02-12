@@ -11,6 +11,7 @@ import {
 import clsx from "clsx";
 import { SidebarColumnItem } from "./SidebarColumnItem";
 import type { TableColumn } from "../../../types/schema";
+import type { ContextMenuData } from "../../../types/sidebar";
 
 interface SidebarViewItemProps {
   view: { name: string };
@@ -22,6 +23,7 @@ interface SidebarViewItemProps {
     type: string,
     id: string,
     label: string,
+    data?: ContextMenuData,
   ) => void;
   connectionId: string;
   driver: string;

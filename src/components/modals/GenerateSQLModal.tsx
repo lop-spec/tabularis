@@ -72,7 +72,7 @@ export const GenerateSQLModal = ({
     };
 
     void generateSQL();
-  }, [isOpen, activeConnectionId, tableName, activeDriver, t]);
+  }, [isOpen, activeConnectionId, tableName, activeDriver, t, activeSchema]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(sql);

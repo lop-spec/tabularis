@@ -144,7 +144,7 @@ export const NewRowModal = ({
         .catch((err) => setError(t("newRow.failLoad") + err))
         .finally(() => setSchemaLoading(false));
     }
-  }, [isOpen, activeConnectionId, tableName, fetchFkOptions, t]);
+  }, [isOpen, activeConnectionId, tableName, fetchFkOptions, t, activeSchema]);
 
   if (!isOpen) return null;
 

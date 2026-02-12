@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Loader2,
@@ -16,6 +16,7 @@ import type { SchemaData, RoutineInfo } from "../../../contexts/DatabaseContext"
 import type { TableColumn } from "../../../types/schema";
 import type { ContextMenuData } from "../../../types/sidebar";
 import { groupRoutinesByType } from "../../../utils/routines";
+import { formatObjectCount } from "../../../utils/schema";
 
 interface SidebarSchemaItemProps {
   schemaName: string;
@@ -79,11 +80,20 @@ export const SidebarSchemaItem = ({
   const [isExpanded, setIsExpanded] = useState(
     activeSchema === schemaName,
   );
+  const [prevActiveSchema, setPrevActiveSchema] = useState(activeSchema);
   const [tablesOpen, setTablesOpen] = useState(true);
   const [viewsOpen, setViewsOpen] = useState(true);
   const [routinesOpen, setRoutinesOpen] = useState(false);
   const [functionsOpen, setFunctionsOpen] = useState(true);
   const [proceduresOpen, setProceduresOpen] = useState(true);
+
+  // Adjust isExpanded during render when activeSchema changes (avoids useEffect)
+  if (activeSchema !== prevActiveSchema) {
+    setPrevActiveSchema(activeSchema);
+    if (activeSchema === schemaName) {
+      setIsExpanded(true);
+    }
+  }
 
   const tables = schemaData?.tables ?? [];
   const views = schemaData?.views ?? [];
@@ -92,12 +102,6 @@ export const SidebarSchemaItem = ({
   const isLoaded = schemaData?.isLoaded ?? false;
 
   const groupedRoutines = routines.length > 0 ? groupRoutinesByType(routines) : { procedures: [], functions: [] };
-
-  useEffect(() => {
-    if (activeSchema === schemaName) {
-      setIsExpanded(true);
-    }
-  }, [activeSchema, schemaName]);
 
   const handleToggle = () => {
     const willExpand = !isExpanded;
@@ -108,7 +112,7 @@ export const SidebarSchemaItem = ({
   };
 
   const itemCount = isLoaded
-    ? `${tables.length}T / ${views.length}V / ${routines.length}R`
+    ? formatObjectCount(tables.length, views.length, routines.length)
     : "";
 
   return (

@@ -25,7 +25,7 @@ import {
 } from "../utils/editor";
 
 export const EditorProvider = ({ children }: { children: ReactNode }) => {
-  const { activeConnectionId, activeSchema } = useDatabase();
+  const { activeConnectionId } = useDatabase();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabIds, setActiveTabIds] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);

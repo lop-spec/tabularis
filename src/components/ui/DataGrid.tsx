@@ -422,7 +422,7 @@ export const DataGrid = React.memo(({
           },
         }),
       ),
-    [columns, columnHelper, t, sortClause, onSort, autoIncrementColumns, defaultValueColumns, nullableColumns],
+    [columns, columnHelper, t, sortClause, onSort],
   );
 
   const parentRef = useRef<HTMLDivElement>(null);

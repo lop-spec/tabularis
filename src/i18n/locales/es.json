@@ -69,6 +69,7 @@
     "procedures": "Procedimientos",
     "noRoutines": "No se encontraron rutinas",
     "refreshRoutines": "Actualizar Rutinas",
+    "objectSummary": "Objetos",
     "failGetRoutineDefinition": "Error al obtener la definición de la rutina: ",
     "schemas": "Esquemas",
     "noSchemas": "No se encontraron esquemas",

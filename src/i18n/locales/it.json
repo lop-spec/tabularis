@@ -69,6 +69,7 @@
     "procedures": "Procedure",
     "noRoutines": "Nessuna routine trovata",
     "refreshRoutines": "Aggiorna Routine",
+    "objectSummary": "Oggetti",
     "failGetRoutineDefinition": "Impossibile recuperare la definizione della routine: ",
     "schemas": "Schemi",
     "noSchemas": "Nessuno schema trovato",

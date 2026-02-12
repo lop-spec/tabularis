@@ -228,7 +228,7 @@ const VisualQueryBuilderContent = () => {
         console.error("Failed to fetch columns", e);
       }
     },
-    [activeConnectionId, screenToFlowPosition, setNodes, onColumnCheck, onColumnAggregation, onColumnAlias, deleteNode],
+    [activeConnectionId, screenToFlowPosition, setNodes, onColumnCheck, onColumnAggregation, onColumnAlias, deleteNode, activeSchema],
   );
 
   // Get all available columns from all nodes

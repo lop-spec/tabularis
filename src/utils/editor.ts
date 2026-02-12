@@ -4,7 +4,7 @@ import type {
   TableSchema,
   EditorPreferences,
 } from "../types/editor";
-import { quoteIdentifier, quoteTableRef } from "./identifiers";
+import { quoteTableRef } from "./identifiers";
 import { invoke } from "@tauri-apps/api/core";
 import { cleanTabForStorage, restoreTabFromStorage } from "./tabCleaner";
 import {

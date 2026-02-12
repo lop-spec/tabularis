@@ -1292,7 +1292,7 @@ export const Editor = () => {
       );
       return () => disposable.dispose();
     }
-  }, [monacoInstance, activeConnectionId, tables]);
+  }, [monacoInstance, activeConnectionId, tables, activeSchema]);
 
   useEffect(() => {
     const state = location.state as EditorState;

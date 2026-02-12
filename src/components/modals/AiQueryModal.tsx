@@ -57,7 +57,7 @@ export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) =
     } finally {
       setIsSchemaLoading(false);
     }
-  }, [activeConnectionId, tables]);
+  }, [activeConnectionId, tables, activeSchema]);
 
   useEffect(() => {
     if (isOpen && activeConnectionId && tables.length > 0) {

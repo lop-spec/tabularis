@@ -66,6 +66,7 @@ import type { TableColumn } from "../../types/schema";
 import type { ContextMenuData } from "../../types/sidebar";
 import type { RoutineInfo } from "../../contexts/DatabaseContext";
 import { groupRoutinesByType } from "../../utils/routines";
+import { formatObjectCount } from "../../utils/schema";
 
 export const Sidebar = () => {
   const { t } = useTranslation();
@@ -798,6 +799,15 @@ export const Sidebar = () => {
                   ) : (
                     <>
                       {/* MySQL/SQLite: Flat layout */}
+                      {/* Object count summary */}
+                      <div className="flex items-center justify-between px-3 py-1">
+                        <span className="text-[10px] text-muted opacity-80 uppercase tracking-wider">
+                          {t("sidebar.objectSummary")}
+                        </span>
+                        <span className="text-[10px] text-muted opacity-60">
+                          {formatObjectCount(tables.length, views.length, routines.length)}
+                        </span>
+                      </div>
                       {/* Tables */}
                       <Accordion
                         title={`${t("sidebar.tables")} (${tables.length})`}
