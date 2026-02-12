@@ -228,7 +228,7 @@ async fn handle_read_resource(
 
         let tables = match conn.params.driver.as_str() {
             "mysql" => mysql::get_tables(&params).await,
-            "postgres" => postgres::get_tables(&params).await,
+            "postgres" => postgres::get_tables(&params, "public").await,
             "sqlite" => sqlite::get_tables(&params).await,
             _ => Err("Unsupported driver".into()),
         }

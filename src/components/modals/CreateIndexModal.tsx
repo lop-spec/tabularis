@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { X, Save, Loader2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { SqlPreview } from '../ui/SqlPreview';
+import { useDatabase } from '../../hooks/useDatabase';
 
 interface CreateIndexModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export const CreateIndexModal = ({
   driver
 }: CreateIndexModalProps) => {
   const { t } = useTranslation();
+  const { activeSchema } = useDatabase();
   const [indexName, setIndexName] = useState('');
   const [isUnique, setIsUnique] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -42,7 +44,7 @@ export const CreateIndexModal = ({
         setIsUnique(false);
         setError('');
         
-        invoke<TableColumn[]>('get_columns', { connectionId, tableName })
+        invoke<TableColumn[]>('get_columns', { connectionId, tableName, ...(activeSchema ? { schema: activeSchema } : {}) })
             .then(cols => setAvailableColumns(cols))
             .catch(e => console.error(e))
             .finally(() => setFetchingCols(false));

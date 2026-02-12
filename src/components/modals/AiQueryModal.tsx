@@ -16,7 +16,7 @@ interface TableColumn {
 }
 
 export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) => {
-  const { activeConnectionId, tables } = useDatabase();
+  const { activeConnectionId, tables, activeSchema } = useDatabase();
   const { settings } = useSettings();
   
   const [prompt, setPrompt] = useState("");
@@ -38,6 +38,7 @@ export const AiQueryModal = ({ isOpen, onClose, onInsert }: AiQueryModalProps) =
         const cols = await invoke<TableColumn[]>("get_columns", {
           connectionId: activeConnectionId,
           tableName: table.name,
+          ...(activeSchema ? { schema: activeSchema } : {}),
         });
         return `Table: ${table.name} (${cols.map(c => `${c.name} ${c.data_type}`).join(", ")})`;
       });

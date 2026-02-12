@@ -4,6 +4,7 @@ import { X, Loader2, Eye, AlertCircle, Play } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { message, ask } from "@tauri-apps/plugin-dialog";
 import { SqlEditorWrapper } from "../ui/SqlEditorWrapper";
+import { useDatabase } from "../../hooks/useDatabase";
 
 interface ViewEditorModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const ViewEditorModal = ({
   onSuccess,
 }: ViewEditorModalProps) => {
   const { t } = useTranslation();
+  const { activeSchema } = useDatabase();
   const [name, setName] = useState("");
   const [definition, setDefinition] = useState("");
   const [originalDefinition, setOriginalDefinition] = useState("");
@@ -42,6 +44,7 @@ export const ViewEditorModal = ({
       const def = await invoke<string>("get_view_definition", {
         connectionId,
         viewName: vName,
+        ...(activeSchema ? { schema: activeSchema } : {}),
       });
       // Extract just the SELECT part for editing
       let selectPart = def;
@@ -121,6 +124,7 @@ export const ViewEditorModal = ({
           connectionId,
           viewName: name,
           definition,
+          ...(activeSchema ? { schema: activeSchema } : {}),
         });
         await message(t("views.createSuccess"), { kind: "info" });
       } else {
@@ -140,6 +144,7 @@ export const ViewEditorModal = ({
           connectionId,
           viewName: name,
           definition,
+          ...(activeSchema ? { schema: activeSchema } : {}),
         });
         await message(t("views.alterSuccess"), { kind: "info" });
       }

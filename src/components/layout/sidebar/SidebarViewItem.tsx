@@ -25,6 +25,7 @@ interface SidebarViewItemProps {
   ) => void;
   connectionId: string;
   driver: string;
+  schema?: string;
 }
 
 export const SidebarViewItem = ({
@@ -35,6 +36,7 @@ export const SidebarViewItem = ({
   onContextMenu,
   connectionId,
   driver,
+  schema,
 }: SidebarViewItemProps) => {
   const { t } = useTranslation();
 
@@ -49,6 +51,7 @@ export const SidebarViewItem = ({
       const cols = await invoke<TableColumn[]>("get_view_columns", {
         connectionId,
         viewName: view.name,
+        ...(schema ? { schema } : {}),
       });
       setColumns(cols);
     } catch (err) {
@@ -56,7 +59,7 @@ export const SidebarViewItem = ({
     } finally {
       setIsLoading(false);
     }
-  }, [connectionId, view.name]);
+  }, [connectionId, view.name, schema]);
 
   useEffect(() => {
     if (isExpanded) {
@@ -78,7 +81,7 @@ export const SidebarViewItem = ({
   const showContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    onContextMenu(e, "view", view.name, view.name);
+    onContextMenu(e, "view", view.name, view.name, { tableName: view.name, schema });
   };
 
   return (

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { X, Save, Loader2, AlertTriangle } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { SqlPreview } from '../ui/SqlPreview';
+import { useDatabase } from '../../hooks/useDatabase';
 
 interface CreateForeignKeyModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const CreateForeignKeyModal = ({
   driver
 }: CreateForeignKeyModalProps) => {
   const { t } = useTranslation();
+  const { activeSchema } = useDatabase();
   const [fkName, setFkName] = useState('');
   const [localColumn, setLocalColumn] = useState('');
   const [refTable, setRefTable] = useState('');
@@ -59,9 +61,10 @@ export const CreateForeignKeyModal = ({
         setError('');
         
         // Fetch tables and local columns
+        const schemaParam = activeSchema ? { schema: activeSchema } : {};
         Promise.all([
-            invoke<TableInfo[]>('get_tables', { connectionId }),
-            invoke<TableColumn[]>('get_columns', { connectionId, tableName })
+            invoke<TableInfo[]>('get_tables', { connectionId, ...schemaParam }),
+            invoke<TableColumn[]>('get_columns', { connectionId, tableName, ...schemaParam })
         ]).then(([tbls, cols]) => {
             setTables(tbls);
             setLocalColumns(cols);
@@ -75,7 +78,7 @@ export const CreateForeignKeyModal = ({
   useEffect(() => {
       if (refTable && isOpen) {
           setFetchingRefCols(true);
-          invoke<TableColumn[]>('get_columns', { connectionId, tableName: refTable })
+          invoke<TableColumn[]>('get_columns', { connectionId, tableName: refTable, ...(activeSchema ? { schema: activeSchema } : {}) })
             .then(cols => {
                 setRefColumns(cols);
                 if (cols.length > 0) setRefColumn(cols[0].name);

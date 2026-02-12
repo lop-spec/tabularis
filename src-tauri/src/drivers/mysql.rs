@@ -11,6 +11,10 @@ fn escape_identifier(name: &str) -> String {
     name.replace('`', "``")
 }
 
+pub async fn get_schemas(_params: &ConnectionParams) -> Result<Vec<String>, String> {
+    Ok(vec![])
+}
+
 pub async fn get_databases(params: &ConnectionParams) -> Result<Vec<String>, String> {
     let pool = get_mysql_pool(params).await?;
     let rows = sqlx::query("SHOW DATABASES")

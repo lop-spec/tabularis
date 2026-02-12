@@ -121,7 +121,7 @@ async fn test_postgres_integration_flow() {
     // 1. Wait for DB
     let mut connected = false;
     for _ in 0..10 {
-        if postgres::get_tables(&params).await.is_ok() {
+        if postgres::get_tables(&params, "public").await.is_ok() {
             connected = true;
             break;
         }

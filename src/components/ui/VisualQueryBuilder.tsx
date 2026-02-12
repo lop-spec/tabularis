@@ -38,7 +38,7 @@ interface TableColumn {
 }
 
 const VisualQueryBuilderContent = () => {
-  const { activeConnectionId } = useDatabase();
+  const { activeConnectionId, activeSchema } = useDatabase();
   const { activeTab, activeTabId, updateTab } = useEditor();
   const { screenToFlowPosition } = useReactFlow();
   
@@ -203,7 +203,7 @@ const VisualQueryBuilderContent = () => {
       });
 
       try {
-        const columns = await invoke<TableColumn[]>("get_columns", { connectionId: activeConnectionId, tableName });
+        const columns = await invoke<TableColumn[]>("get_columns", { connectionId: activeConnectionId, tableName, ...(activeSchema ? { schema: activeSchema } : {}) });
         const newNodeId = `${tableName}-${Date.now()}`;
         
         const newNode: Node = {

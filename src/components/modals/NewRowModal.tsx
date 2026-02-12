@@ -34,7 +34,7 @@ export const NewRowModal = ({
   onSaveSuccess,
 }: NewRowModalProps) => {
   const { t } = useTranslation();
-  const { activeConnectionId, activeDriver } = useDatabase();
+  const { activeConnectionId, activeDriver, activeSchema } = useDatabase();
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(false);
@@ -111,14 +111,17 @@ export const NewRowModal = ({
       setSchemaLoading(true);
 
       // Fetch columns and FKs in parallel
+      const schemaParam = activeSchema ? { schema: activeSchema } : {};
       Promise.all([
         invoke<TableColumn[]>("get_columns", {
           connectionId: activeConnectionId,
           tableName,
+          ...schemaParam,
         }),
         invoke<ForeignKey[]>("get_foreign_keys", {
           connectionId: activeConnectionId,
           tableName,
+          ...schemaParam,
         }),
       ])
         .then(([cols, fks]) => {
@@ -220,6 +223,7 @@ export const NewRowModal = ({
         connectionId: activeConnectionId,
         table: tableName,
         data: dataToSend,
+        ...(activeSchema ? { schema: activeSchema } : {}),
       });
 
       onSaveSuccess();

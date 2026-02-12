@@ -19,7 +19,7 @@ interface SchemaModalProps {
 
 export const SchemaModal = ({ isOpen, onClose, tableName }: SchemaModalProps) => {
   const { t } = useTranslation();
-  const { activeConnectionId } = useDatabase();
+  const { activeConnectionId, activeSchema } = useDatabase();
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -29,9 +29,10 @@ export const SchemaModal = ({ isOpen, onClose, tableName }: SchemaModalProps) =>
     const loadSchema = async () => {
       setLoading(true);
       try {
-        const cols = await invoke<TableColumn[]>('get_columns', { 
-          connectionId: activeConnectionId, 
-          tableName 
+        const cols = await invoke<TableColumn[]>('get_columns', {
+          connectionId: activeConnectionId,
+          tableName,
+          ...(activeSchema ? { schema: activeSchema } : {}),
         });
         setColumns(cols);
       } catch (err) {
