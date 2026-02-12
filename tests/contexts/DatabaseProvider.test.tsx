@@ -47,6 +47,7 @@ describe('DatabaseProvider', () => {
     // Default mock implementation that handles all invoke calls
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === 'get_connections') return Promise.resolve(mockConnections);
+      if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
       if (cmd === 'get_tables') return Promise.resolve(mockTables);
       if (cmd === 'get_views') return Promise.resolve(mockViews);
       if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
@@ -158,6 +159,7 @@ describe('DatabaseProvider', () => {
     const updatedTables = [...mockTables, { name: 'new_table' }];
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === 'get_connections') return Promise.resolve(mockConnections);
+      if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
       if (cmd === 'get_tables') return Promise.resolve(updatedTables);
       if (cmd === 'get_views') return Promise.resolve(mockViews);
       if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
@@ -266,6 +268,7 @@ describe('DatabaseProvider', () => {
       const updatedViews = [...mockViews, { name: 'new_view' }];
       vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'get_connections') return Promise.resolve(mockConnections);
+        if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
         if (cmd === 'get_tables') return Promise.resolve(mockTables);
         if (cmd === 'get_views') return Promise.resolve(updatedViews);
         if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
@@ -360,6 +363,7 @@ describe('DatabaseProvider', () => {
     it('should set needsSchemaSelection=true when no saved selection exists', async () => {
       vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'get_connections') return Promise.resolve(mockPgConnections);
+        if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
         if (cmd === 'get_schemas') return Promise.resolve(mockSchemas);
         if (cmd === 'get_selected_schemas') return Promise.resolve([]);
         if (cmd === 'set_window_title') return Promise.resolve(undefined);
@@ -384,6 +388,7 @@ describe('DatabaseProvider', () => {
     it('should load only selected schemas when saved selection exists', async () => {
       vi.mocked(invoke).mockImplementation((cmd: string, args?: Record<string, unknown>) => {
         if (cmd === 'get_connections') return Promise.resolve(mockPgConnections);
+        if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
         if (cmd === 'get_schemas') return Promise.resolve(mockSchemas);
         if (cmd === 'get_selected_schemas') return Promise.resolve(['public']);
         if (cmd === 'get_schema_preference') return Promise.resolve('public');
@@ -414,6 +419,7 @@ describe('DatabaseProvider', () => {
       // Start with no saved selection (needsSchemaSelection=true)
       vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'get_connections') return Promise.resolve(mockPgConnections);
+        if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
         if (cmd === 'get_schemas') return Promise.resolve(mockSchemas);
         if (cmd === 'get_selected_schemas') return Promise.resolve([]);
         if (cmd === 'set_selected_schemas') return Promise.resolve(undefined);
@@ -455,6 +461,7 @@ describe('DatabaseProvider', () => {
     it('should update activeSchema when removed from selection', async () => {
       vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'get_connections') return Promise.resolve(mockPgConnections);
+        if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
         if (cmd === 'get_schemas') return Promise.resolve(mockSchemas);
         if (cmd === 'get_selected_schemas') return Promise.resolve(['public', 'analytics']);
         if (cmd === 'get_schema_preference') return Promise.resolve('analytics');
@@ -490,6 +497,7 @@ describe('DatabaseProvider', () => {
     it('should reset schema selection state on disconnect', async () => {
       vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'get_connections') return Promise.resolve(mockPgConnections);
+        if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
         if (cmd === 'get_schemas') return Promise.resolve(mockSchemas);
         if (cmd === 'get_selected_schemas') return Promise.resolve(['public']);
         if (cmd === 'get_schema_preference') return Promise.resolve('public');
@@ -521,6 +529,7 @@ describe('DatabaseProvider', () => {
     it('should filter saved selection against available schemas', async () => {
       vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'get_connections') return Promise.resolve(mockPgConnections);
+        if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
         if (cmd === 'get_schemas') return Promise.resolve(['public', 'analytics']); // 'deleted_schema' not available
         if (cmd === 'get_selected_schemas') return Promise.resolve(['public', 'deleted_schema']); // saved has stale entry
         if (cmd === 'get_schema_preference') return Promise.resolve('public');

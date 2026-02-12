@@ -224,7 +224,23 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         setActiveDatabaseName(conn.params.database);
       }
 
-      // 2. For PostgreSQL: fetch schemas, then check saved selection
+      // 2. Test the connection (SSH tunnel + database) before proceeding
+      if (conn) {
+        try {
+          await invoke<string>('test_connection', {
+            request: {
+              params: conn.params,
+              connection_id: connectionId,
+            },
+          });
+        } catch (testError) {
+          // Connection test failed - throw error with clear message
+          const errorMsg = typeof testError === 'string' ? testError : (testError as Error).message || String(testError);
+          throw new Error(errorMsg);
+        }
+      }
+
+      // 3. For PostgreSQL: fetch schemas, then check saved selection
       if (driver === 'postgres') {
         setIsLoadingSchemas(true);
         try {
@@ -287,7 +303,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
           setIsLoadingSchemas(false);
         }
       } else {
-        // 3. MySQL/SQLite: fetch flat tables/views/routines
+        // 4. MySQL/SQLite: fetch flat tables/views/routines
         const [tablesResult, viewsResult, routinesResult] = await Promise.all([
           invoke<TableInfo[]>('get_tables', { connectionId }),
           invoke<ViewInfo[]>('get_views', { connectionId }),
