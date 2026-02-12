@@ -4,21 +4,7 @@ import { X, Save, Loader2, AlertTriangle } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { SqlPreview } from "../ui/SqlPreview";
 import { useDatabase } from "../../hooks/useDatabase";
-
-const COMMON_TYPES = [
-  "INTEGER",
-  "BIGINT",
-  "VARCHAR",
-  "TEXT",
-  "BOOLEAN",
-  "DATE",
-  "DATETIME",
-  "TIMESTAMP",
-  "FLOAT",
-  "DOUBLE",
-  "JSON",
-  "UUID",
-];
+import { useDataTypes } from "../../hooks/useDataTypes";
 
 interface ColumnDef {
   name: string;
@@ -58,7 +44,13 @@ export const ModifyColumnModal = ({
 }: ModifyColumnModalProps) => {
   const { t } = useTranslation();
   const { activeSchema } = useDatabase();
+  const { dataTypes } = useDataTypes(driver);
   const isEdit = !!column;
+
+  const availableTypes = useMemo(
+    () => dataTypes?.types || [],
+    [dataTypes],
+  );
 
   // Parse initial type/length from column.data_type if possible
   // e.g. "varchar(255)" -> type="VARCHAR", length="255"
@@ -325,22 +317,13 @@ export const ModifyColumnModal = ({
                 value={form.type}
                 onChange={(e) => {
                   const newType = e.target.value;
-                  const needsLength = [
-                    "VARCHAR",
-                    "CHAR",
-                    "DECIMAL",
-                    "FLOAT",
-                    "DOUBLE",
-                  ].some((t_type) => newType.includes(t_type));
+                  const typeInfo = availableTypes.find((t) => t.name === newType);
+                  const needsLength = typeInfo?.requires_length || typeInfo?.requires_precision;
                   setForm({
                     ...form,
                     type: newType,
-                    // Clear length if new type doesn't support it, unless it's VARCHAR which defaults to 255 if empty in some contexts, but here we can just clear it or set to default if needed.
-                    // User asked: "Su add column mette always length 255 anche o dove non serve"
-                    // So if type changes to INTEGER, length should be cleared.
                     length: needsLength
-                      ? form.length ||
-                        (newType.includes("VARCHAR") ? "255" : "")
+                      ? form.length || typeInfo?.default_length || ""
                       : "",
                   });
                 }}
@@ -354,9 +337,9 @@ export const ModifyColumnModal = ({
                   paddingRight: `2.5rem`,
                 }}
               >
-                {COMMON_TYPES.map((t_type) => (
-                  <option key={t_type} value={t_type}>
-                    {t_type}
+                {availableTypes.map((typeInfo) => (
+                  <option key={typeInfo.name} value={typeInfo.name}>
+                    {typeInfo.name}
                   </option>
                 ))}
               </select>
@@ -370,19 +353,12 @@ export const ModifyColumnModal = ({
                 onChange={(e) => setForm({ ...form, length: e.target.value })}
                 disabled={
                   (driver === "sqlite" && isEdit) ||
-                  !["VARCHAR", "CHAR", "DECIMAL", "FLOAT", "DOUBLE"].some(
-                    (t_type) => form.type.includes(t_type),
-                  )
+                  !availableTypes.find((t) => t.name === form.type)?.requires_length &&
+                  !availableTypes.find((t) => t.name === form.type)?.requires_precision
                 }
                 className="w-full bg-base border border-strong rounded p-2 text-primary text-sm focus:border-focus outline-none font-mono disabled:opacity-50"
                 placeholder={
-                  form.type.includes("VARCHAR")
-                    ? "255"
-                    : ["DECIMAL", "FLOAT", "DOUBLE"].some((t_type) =>
-                          form.type.includes(t_type),
-                        )
-                      ? "10,2"
-                      : ""
+                  availableTypes.find((t) => t.name === form.type)?.default_length || ""
                 }
               />
             </div>

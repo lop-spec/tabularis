@@ -1,4 +1,7 @@
-use crate::drivers::common::extract_sqlite_value;
+pub mod types;
+pub mod extract;
+
+use extract::extract_value;
 use crate::models::{
     ConnectionParams, ForeignKey, Index, Pagination, QueryResult, RoutineInfo, RoutineParameter,
     TableColumn, TableInfo, ViewInfo,
@@ -501,7 +504,7 @@ pub async fn execute_query(
 
                 let mut json_row = Vec::new();
                 for (i, _) in row.columns().iter().enumerate() {
-                    let val = extract_sqlite_value(&row, i);
+                    let val = extract_value(&row, i);
                     json_row.push(val);
                 }
                 json_rows.push(json_row);

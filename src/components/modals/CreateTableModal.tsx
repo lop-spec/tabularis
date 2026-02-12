@@ -4,11 +4,7 @@ import { X, Plus, Trash2, Save, Code, Loader2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useDatabase } from '../../hooks/useDatabase';
 import { SqlPreview } from '../ui/SqlPreview';
-
-// Common types across DBs (simplified for MVP)
-const COMMON_TYPES = [
-  'INTEGER', 'BIGINT', 'VARCHAR', 'TEXT', 'BOOLEAN', 'DATE', 'DATETIME', 'TIMESTAMP', 'FLOAT', 'DOUBLE'
-];
+import { useDataTypes } from '../../hooks/useDataTypes';
 
 interface ColumnDef {
   id: string; // Internal ID for React keys
@@ -30,7 +26,8 @@ interface CreateTableModalProps {
 export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModalProps) => {
   const { t } = useTranslation();
   const { activeConnectionId, activeDriver, activeSchema } = useDatabase();
-  
+  const { dataTypes } = useDataTypes(activeDriver);
+
   const [tableName, setTableName] = useState('');
   const [columns, setColumns] = useState<ColumnDef[]>([
     { id: '1', name: 'id', type: 'INTEGER', length: '', isPk: true, isNullable: false, isAutoInc: true, defaultValue: '' }
@@ -41,6 +38,11 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
 
   // Determine current driver
   const currentDriver = activeDriver || 'sqlite';
+
+  const availableTypes = useMemo(
+    () => dataTypes?.types || [],
+    [dataTypes],
+  );
 
   const sqlPreview = useMemo(() => {
     if (!tableName.trim()) return '-- ' + t('createTable.nameRequired');
@@ -229,9 +231,18 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                                         />
                                     </td>
                                     <td className="p-2">
-                                        <select 
+                                        <select
                                             value={col.type}
-                                            onChange={(e) => updateColumn(col.id, 'type', e.target.value)}
+                                            onChange={(e) => {
+                                              const newType = e.target.value;
+                                              const typeInfo = availableTypes.find((t) => t.name === newType);
+                                              updateColumn(col.id, 'type', newType);
+                                              if (typeInfo?.requires_length || typeInfo?.requires_precision) {
+                                                updateColumn(col.id, 'length', typeInfo.default_length || '');
+                                              } else {
+                                                updateColumn(col.id, 'length', '');
+                                              }
+                                            }}
                                             className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer hover:bg-surface-tertiary transition-colors"
                                             style={{
                                               backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
@@ -241,16 +252,19 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                                               paddingRight: `2.5rem`
                                             }}
                                         >
-                                            {COMMON_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                            {availableTypes.map(typeInfo => <option key={typeInfo.name} value={typeInfo.name}>{typeInfo.name}</option>)}
                                         </select>
                                     </td>
                                     <td className="p-2">
-                                        <input 
+                                        <input
                                             value={col.length}
                                             onChange={(e) => updateColumn(col.id, 'length', e.target.value)}
                                             className="w-full bg-transparent text-xs text-secondary focus:outline-none border-b border-transparent focus:border-blue-500 text-center"
-                                            placeholder={col.type.includes('CHAR') ? "255" : "-"}
-                                            disabled={!col.type.includes('CHAR')}
+                                            placeholder={availableTypes.find((t) => t.name === col.type)?.default_length || "-"}
+                                            disabled={
+                                              !availableTypes.find((t) => t.name === col.type)?.requires_length &&
+                                              !availableTypes.find((t) => t.name === col.type)?.requires_precision
+                                            }
                                         />
                                     </td>
                                     <td className="p-2 text-center">

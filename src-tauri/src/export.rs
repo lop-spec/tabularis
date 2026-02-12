@@ -1,5 +1,7 @@
 use crate::commands::{find_connection_by_id, resolve_connection_params};
-use crate::drivers::common::{extract_mysql_value, extract_postgres_value, extract_sqlite_value};
+use crate::drivers::mysql::extract::extract_value as extract_mysql_value;
+use crate::drivers::postgres::extract::extract_value as extract_postgres_value;
+use crate::drivers::sqlite::extract::extract_value as extract_sqlite_value;
 use crate::pool_manager::{get_mysql_pool, get_postgres_pool, get_sqlite_pool};
 use futures::StreamExt;
 use serde::Serialize;

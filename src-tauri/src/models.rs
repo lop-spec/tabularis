@@ -171,3 +171,18 @@ pub struct ViewInfo {
     pub name: String,
     pub definition: Option<String>,
 }
+
+#[derive(Debug, Serialize, Clone)]
+pub struct DataTypeInfo {
+    pub name: String,
+    pub category: String, // "numeric", "string", "date", "binary", "json", "spatial", "other"
+    pub requires_length: bool,
+    pub requires_precision: bool,
+    pub default_length: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DataTypeRegistry {
+    pub driver: String,
+    pub types: Vec<DataTypeInfo>,
+}

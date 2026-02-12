@@ -147,6 +147,7 @@ pub fn run() {
             commands::duplicate_connection,
             commands::get_connections,
             commands::disconnect_connection,
+            commands::get_data_types,
             // SSH Connections
             commands::get_ssh_connections,
             commands::save_ssh_connection,

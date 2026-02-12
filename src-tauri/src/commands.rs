@@ -2229,3 +2229,25 @@ pub async fn disconnect_connection<R: Runtime>(
     log::info!("Successfully disconnected from connection: {}", connection_id);
     Ok(())
 }
+
+// --- Type Registry ---
+
+#[tauri::command]
+pub fn get_data_types(driver: String) -> crate::models::DataTypeRegistry {
+    log::debug!("Fetching data types for driver: {}", driver);
+
+    let types = match driver.to_lowercase().as_str() {
+        "postgres" => postgres::types::get_data_types(),
+        "mysql" | "mariadb" => mysql::types::get_data_types(),
+        "sqlite" => sqlite::types::get_data_types(),
+        _ => {
+            log::warn!("Unknown driver: {}, returning empty type list", driver);
+            vec![]
+        }
+    };
+
+    crate::models::DataTypeRegistry {
+        driver,
+        types,
+    }
+}

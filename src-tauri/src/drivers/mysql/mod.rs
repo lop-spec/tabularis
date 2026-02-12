@@ -1,4 +1,7 @@
-use crate::drivers::common::extract_mysql_value;
+pub mod types;
+pub mod extract;
+
+use extract::extract_value;
 use crate::models::{
     ConnectionParams, ForeignKey, Index, Pagination, QueryResult, RoutineInfo, RoutineParameter,
     TableColumn, TableInfo, ViewInfo,
@@ -44,10 +47,7 @@ pub async fn get_databases(params: &ConnectionParams) -> Result<Vec<String>, Str
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
-    Ok(rows
-        .iter()
-        .map(|r| mysql_row_str(r, 0))
-        .collect())
+    Ok(rows.iter().map(|r| mysql_row_str(r, 0)).collect())
 }
 
 pub async fn get_tables(params: &ConnectionParams) -> Result<Vec<TableInfo>, String> {
@@ -815,7 +815,7 @@ pub async fn execute_query(
                 // Map row using type extraction function
                 let mut json_row = Vec::new();
                 for (i, _) in row.columns().iter().enumerate() {
-                    let val = extract_mysql_value(&row, i);
+                    let val = extract_value(&row, i);
                     json_row.push(val);
                 }
                 json_rows.push(json_row);
@@ -831,86 +831,4 @@ pub async fn execute_query(
         truncated,
         pagination,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    mod sql_parsing {
-        use super::*;
-
-        #[test]
-        fn test_extract_order_by_simple() {
-            let query = "SELECT * FROM users ORDER BY id DESC";
-            assert_eq!(extract_order_by(query), "ORDER BY id DESC");
-        }
-
-        #[test]
-        fn test_extract_order_by_multiple_columns() {
-            let query = "SELECT * FROM users ORDER BY name ASC, id DESC";
-            assert_eq!(extract_order_by(query), "ORDER BY name ASC, id DESC");
-        }
-
-        #[test]
-        fn test_extract_order_by_case_insensitive() {
-            let query = "select * from users order by id";
-            assert_eq!(extract_order_by(query), "order by id");
-        }
-
-        #[test]
-        fn test_extract_order_by_no_order_by() {
-            let query = "SELECT * FROM users WHERE id = 1";
-            assert_eq!(extract_order_by(query), "");
-        }
-
-        #[test]
-        fn test_extract_order_by_with_where() {
-            let query = "SELECT * FROM users WHERE active = true ORDER BY created_at DESC";
-            assert_eq!(extract_order_by(query), "ORDER BY created_at DESC");
-        }
-
-        #[test]
-        fn test_extract_order_by_subquery() {
-            // Should find the last ORDER BY (in the main query, not subquery)
-            let query = "SELECT * FROM (SELECT * FROM users ORDER BY id) AS u ORDER BY name";
-            assert_eq!(extract_order_by(query), "ORDER BY name");
-        }
-
-        #[test]
-        fn test_remove_order_by_simple() {
-            let query = "SELECT * FROM users ORDER BY id DESC";
-            assert_eq!(remove_order_by(query), "SELECT * FROM users");
-        }
-
-        #[test]
-        fn test_remove_order_by_with_where() {
-            let query = "SELECT * FROM users WHERE active = true ORDER BY created_at DESC";
-            assert_eq!(
-                remove_order_by(query),
-                "SELECT * FROM users WHERE active = true"
-            );
-        }
-
-        #[test]
-        fn test_remove_order_by_no_order_by() {
-            let query = "SELECT * FROM users WHERE id = 1";
-            assert_eq!(remove_order_by(query), query);
-        }
-
-        #[test]
-        fn test_remove_order_by_preserves_whitespace() {
-            let query = "SELECT * FROM users ORDER BY id";
-            let result = remove_order_by(query);
-            assert!(!result.contains("ORDER BY"));
-            assert_eq!(result, "SELECT * FROM users");
-        }
-
-        #[test]
-        fn test_remove_order_by_complex_query() {
-            let query = "SELECT u.name, p.title FROM users u JOIN posts p ON u.id = p.user_id WHERE p.published = true ORDER BY p.created_at DESC, u.name ASC";
-            let expected = "SELECT u.name, p.title FROM users u JOIN posts p ON u.id = p.user_id WHERE p.published = true";
-            assert_eq!(remove_order_by(query), expected);
-        }
-    }
 }

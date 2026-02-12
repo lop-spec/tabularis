@@ -152,7 +152,7 @@ async fn export_table_data(
 
     match driver {
         "mysql" => {
-            use crate::drivers::common::extract_mysql_value;
+            use crate::drivers::mysql::extract::extract_value;
             use crate::pool_manager::get_mysql_pool; // Returns String (JSON value or "NULL")
 
             let pool = get_mysql_pool(params).await?;
@@ -162,7 +162,7 @@ async fn export_table_data(
             while let Some(row) = rows.try_next().await.map_err(|e| e.to_string())? {
                 let mut values = Vec::new();
                 for i in 0..row.columns().len() {
-                    let val = extract_mysql_value(&row, i);
+                    let val = extract_value(&row, i);
                     values.push(escape_sql_value(val));
                 }
                 batch.push(format!("({})", values.join(", ")));
@@ -189,7 +189,7 @@ async fn export_table_data(
             }
         }
         "postgres" => {
-            use crate::drivers::common::extract_postgres_value;
+            use crate::drivers::postgres::extract::extract_value;
             use crate::pool_manager::get_postgres_pool;
 
             let pool = get_postgres_pool(params).await?;
@@ -199,7 +199,7 @@ async fn export_table_data(
             while let Some(row) = rows.try_next().await.map_err(|e| e.to_string())? {
                 let mut values = Vec::new();
                 for i in 0..row.columns().len() {
-                    let val = extract_postgres_value(&row, i);
+                    let val = extract_value(&row, i);
                     values.push(escape_sql_value(val));
                 }
                 batch.push(format!("({})", values.join(", ")));
@@ -226,7 +226,7 @@ async fn export_table_data(
             }
         }
         "sqlite" => {
-            use crate::drivers::common::extract_sqlite_value;
+            use crate::drivers::sqlite::extract::extract_value;
             use crate::pool_manager::get_sqlite_pool;
 
             let pool = get_sqlite_pool(params).await?;
@@ -236,7 +236,7 @@ async fn export_table_data(
             while let Some(row) = rows.try_next().await.map_err(|e| e.to_string())? {
                 let mut values = Vec::new();
                 for i in 0..row.columns().len() {
-                    let val = extract_sqlite_value(&row, i);
+                    let val = extract_value(&row, i);
                     values.push(escape_sql_value(val));
                 }
                 batch.push(format!("({})", values.join(", ")));
