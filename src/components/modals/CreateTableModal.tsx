@@ -26,7 +26,8 @@ interface CreateTableModalProps {
 export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModalProps) => {
   const { t } = useTranslation();
   const { activeConnectionId, activeDriver, activeSchema } = useDatabase();
-  const { dataTypes } = useDataTypes(activeDriver);
+  const currentDriver = activeDriver || "sqlite";
+  const { dataTypes } = useDataTypes(currentDriver);
 
   const [tableName, setTableName] = useState('');
   const [columns, setColumns] = useState<ColumnDef[]>([
@@ -37,7 +38,6 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
   const [showSqlPreview, setShowSqlPreview] = useState(false);
 
   // Determine current driver
-  const currentDriver = activeDriver || 'sqlite';
 
   const availableTypes = useMemo(
     () => dataTypes?.types || [],
@@ -48,21 +48,20 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
     if (!tableName.trim()) return '-- ' + t('createTable.nameRequired');
     if (columns.length === 0) return '-- ' + t('createTable.colRequired');
 
-    const driver = currentDriver;
-    let sql = `CREATE TABLE ${driver === 'postgres' ? `"${tableName}"` : `\`${tableName}\``} (\n`;
+    let sql = `CREATE TABLE ${currentDriver === 'postgres' ? `"${tableName}"` : `\`${tableName}\``} (\n`;
     
     const colDefs = columns.map(col => {
-      let def = `  ${driver === 'postgres' ? `"${col.name}"` : `\`${col.name}\``}`;
+      let def = `  ${currentDriver === 'postgres' ? `"${col.name}"` : `\`${col.name}\``}`;
       
       // Type mapping / logic
       let type = col.type;
       
       // Driver specific adjustments
-      if (driver === 'postgres') {
+      if (currentDriver === 'postgres') {
         if (col.isAutoInc && (type === 'INTEGER' || type === 'BIGINT')) {
           type = type === 'BIGINT' ? 'BIGSERIAL' : 'SERIAL';
         }
-      } else if (driver === 'sqlite') {
+      } else if (currentDriver === 'sqlite') {
         if (col.isPk && col.isAutoInc) {
           type = 'INTEGER'; // SQLite requirement for auto_increment
         }
@@ -76,13 +75,13 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
       def += ` ${type}`;
 
       // Constraints
-      if (driver === 'sqlite' && col.isPk) {
+      if (currentDriver === 'sqlite' && col.isPk) {
          def += ' PRIMARY KEY';
          if (col.isAutoInc) def += ' AUTOINCREMENT';
       } else {
          if (!col.isNullable) def += ' NOT NULL';
          
-         if (driver === 'mysql' && col.isAutoInc) def += ' AUTO_INCREMENT';
+         if (currentDriver === 'mysql' && col.isAutoInc) def += ' AUTO_INCREMENT';
          
          if (col.defaultValue) {
             const isNum = !isNaN(Number(col.defaultValue));
@@ -96,8 +95,8 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
     sql += colDefs.join(',\n');
 
     // Primary Keys (Non-SQLite or Composite or Standard)
-    if (driver !== 'sqlite') {
-      const pks = columns.filter(c => c.isPk).map(c => driver === 'postgres' ? `"${c.name}"` : `\`${c.name}\``);
+    if (currentDriver !== 'sqlite') {
+      const pks = columns.filter(c => c.isPk).map(c => currentDriver === 'postgres' ? `"${c.name}"` : `\`${c.name}\``);
       if (pks.length > 0) {
         sql += `,\n  PRIMARY KEY (${pks.join(', ')})`;
       }
