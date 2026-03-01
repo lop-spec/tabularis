@@ -1,3 +1,22 @@
+## [0.9.3](https://github.com/debba/tabularis/compare/v0.9.2...v0.9.3) (2026-03-01)
+
+
+### Bug Fixes
+
+* open graph image ([12696a0](https://github.com/debba/tabularis/commit/12696a0db8ce00f227b2bc02b38d701601d69f2e))
+* **plugins:** resolve plugin executable lookup on Windows ([f766141](https://github.com/debba/tabularis/commit/f766141a48673d2bb816d7d462232e929b4ba5bd))
+
+
+### Features
+
+* **settings:** add downgrade flow and translations for older versions ([77ebbb3](https://github.com/debba/tabularis/commit/77ebbb3ee5b856f1b0d73030484e6a5ed753790d))
+* **site-header:** smooth scroll to top when clicking logo on home ([a83b765](https://github.com/debba/tabularis/commit/a83b76555967677f63812229e24200b6e259cf0d))
+* website - create latests-post.json ([081c7e5](https://github.com/debba/tabularis/commit/081c7e5a47349d2672cdead08504288f6b290616))
+* **website:** add blog post for plugins evolved and plugin card ([d12b24f](https://github.com/debba/tabularis/commit/d12b24fd2fdca282dda449f843758860271f1ed4))
+* **website:** add install links and update installation docs ([ee0c597](https://github.com/debba/tabularis/commit/ee0c597eebf37325927bb76b831947bed6a6c19a))
+
+
+
 ## [0.9.2](https://github.com/debba/tabularis/compare/v0.9.1...v0.9.2) (2026-02-26)
 
 
