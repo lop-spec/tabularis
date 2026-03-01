@@ -83,9 +83,19 @@ pub async fn load_plugin_from_dir(path: &Path) -> Result<(), String> {
     let config: ConfigManifest = serde_json::from_str(&manifest_str)
         .map_err(|e| format!("Failed to parse plugin manifest {:?}: {}", manifest_path, e))?;
 
-    let exec_path = path.join(&config.executable);
+    let mut exec_path = path.join(&config.executable);
     if !exec_path.exists() {
-        return Err(format!("Plugin executable not found: {:?}", exec_path));
+        // On Windows, try appending .exe if the manifest omits it
+        if cfg!(windows) {
+            let with_exe = path.join(format!("{}.exe", config.executable));
+            if with_exe.exists() {
+                exec_path = with_exe;
+            } else {
+                return Err(format!("Plugin executable not found: {:?}", exec_path));
+            }
+        } else {
+            return Err(format!("Plugin executable not found: {:?}", exec_path));
+        }
     }
 
     let manifest = PluginManifest {
