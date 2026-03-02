@@ -144,7 +144,9 @@
     "connectionCount": "{{count}} connection(s)",
     "noConnectionsHint": "Create your first connection to get started.",
     "searchPlaceholder": "Search connections...",
-    "noSearchResults": "No connections match \"{{query}}\""
+    "noSearchResults": "No connections match \"{{query}}\"",
+    "gridView": "Grid view",
+    "listView": "List view"
   },
   "settings": {
     "title": "Settings",

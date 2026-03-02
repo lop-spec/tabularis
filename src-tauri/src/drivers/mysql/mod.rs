@@ -1050,7 +1050,7 @@ impl MysqlDriver {
                 is_builtin: true,
                 default_username: "root".to_string(),
                 color: "#f97316".to_string(),
-                icon: "network".to_string(),
+                icon: "mysql".to_string(),
             },
         }
     }

@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { Database, Loader2, Shield, X, AlertCircle, Terminal, Check, Copy, Power, Columns2, Rows2 } from "lucide-react";
+import { Loader2, Shield, X, AlertCircle, Terminal, Check, Copy, Power, Columns2, Rows2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionStatus } from "../../../hooks/useConnectionManager";
 import { getConnectionItemClass, getStatusDotClass } from "../../../utils/connectionManager";
 import { canActivateSplit } from "../../../utils/connectionLayout";
 import { ContextMenu } from "../../ui/ContextMenu";
+import type { PluginManifest } from "../../../types/plugins";
+import { getDriverIcon, getDriverColor } from "../../../utils/driverUI";
 
 interface Props {
   connection: ConnectionStatus;
+  driverManifest?: PluginManifest | null;
   isSelected: boolean;
   onSwitch: () => void;
   onOpenInEditor: () => void;
@@ -19,6 +22,7 @@ interface Props {
 
 export const OpenConnectionItem = ({
   connection,
+  driverManifest,
   isSelected,
   onSwitch,
   onOpenInEditor,
@@ -29,6 +33,7 @@ export const OpenConnectionItem = ({
 }: Props) => {
   const { t } = useTranslation();
   const { isActive, isConnecting, name, database, sshEnabled, error } = connection;
+  const driverColor = getDriverColor(driverManifest);
   const hasError = !!error;
   const canSplit = canActivateSplit(selectedConnectionIds);
 
@@ -106,7 +111,12 @@ export const OpenConnectionItem = ({
           {isConnecting ? (
             <Loader2 size={20} className="animate-spin text-blue-400" />
           ) : (
-            <Database size={20} />
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-md"
+              style={{ backgroundColor: driverColor }}
+            >
+              {getDriverIcon(driverManifest, 16)}
+            </div>
           )}
 
           {/* Status dot */}

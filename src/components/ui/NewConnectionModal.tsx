@@ -711,29 +711,54 @@ export const NewConnectionModal = ({
 
           {/* Left: driver list */}
           <div className="w-[160px] shrink-0 border-r border-default bg-base flex flex-col py-2 overflow-y-auto">
-            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-              {t("newConnection.dbType")}
-            </p>
-            {drivers.map((d: PluginManifest) => (
-              <button
-                key={d.id}
-                onClick={() => handleDriverChange(d.id)}
-                className={clsx(
-                  "flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors text-left w-full",
-                  driver === d.id
-                    ? "bg-blue-500/15 text-primary border-r-2 border-blue-500"
-                    : "text-secondary hover:bg-surface-secondary hover:text-primary border-r-2 border-transparent"
-                )}
-              >
-                <span
-                  className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-white"
-                  style={getDriverColorStyle(d)}
-                >
-                  {getDriverIcon(d)}
-                </span>
-                <span className="truncate capitalize">{d.name}</span>
-              </button>
-            ))}
+            {(() => {
+              const sortedDrivers = [...drivers].sort((a, b) => {
+                const aBuiltin = a.is_builtin === true ? 0 : 1;
+                const bBuiltin = b.is_builtin === true ? 0 : 1;
+                return aBuiltin - bBuiltin;
+              });
+              const firstExternalIdx = sortedDrivers.findIndex(d => !d.is_builtin);
+              return (
+                <>
+                  <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    {t("newConnection.dbType")}
+                  </p>
+                  {sortedDrivers.map((d: PluginManifest, idx) => (
+                    <div key={d.id}>
+                      {/* Separator before first external plugin */}
+                      {idx === firstExternalIdx && (
+                        <div className="px-3 pt-2.5 pb-1">
+                          <div className="flex items-center gap-2">
+                            <div className="h-px flex-1 bg-default/60" />
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-muted/60">
+                              Plugins
+                            </span>
+                            <div className="h-px flex-1 bg-default/60" />
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleDriverChange(d.id)}
+                        className={clsx(
+                          "flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors text-left w-full",
+                          driver === d.id
+                            ? "bg-blue-500/15 text-primary border-r-2 border-blue-500"
+                            : "text-secondary hover:bg-surface-secondary hover:text-primary border-r-2 border-transparent"
+                        )}
+                      >
+                        <span
+                          className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-white"
+                          style={getDriverColorStyle(d)}
+                        >
+                          {getDriverIcon(d)}
+                        </span>
+                        <span className="truncate capitalize">{d.name}</span>
+                      </button>
+                    </div>
+                  ))}
+                </>
+              );
+            })()}
           </div>
 
           {/* Right: form area */}

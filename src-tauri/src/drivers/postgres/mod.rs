@@ -1183,7 +1183,7 @@ impl PostgresDriver {
                 is_builtin: true,
                 default_username: "postgres".to_string(),
                 color: "#3b82f6".to_string(),
-                icon: "network".to_string(),
+                icon: "postgres".to_string(),
             },
         }
     }

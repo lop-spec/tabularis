@@ -28,7 +28,8 @@ export interface PluginManifest {
   default_username?: string;
   /** CSS hex color for UI accents (e.g. "#f97316"). Undefined falls back to a neutral color. */
   color?: string;
-  /** Lucide-compatible icon name (e.g. "network", "database"). Undefined falls back to a generic icon. */
+  /** Icon name: built-in values are "mysql" | "postgres" | "sqlite" | "network" | "database" | "folder-open".
+   * External plugins can reference a file bundled in the plugin package. */
   icon?: string;
 }
 

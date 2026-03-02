@@ -871,7 +871,7 @@ impl SqliteDriver {
                 is_builtin: true,
                 default_username: String::new(),
                 color: "#06b6d4".to_string(),
-                icon: "database".to_string(),
+                icon: "sqlite".to_string(),
             },
         }
     }

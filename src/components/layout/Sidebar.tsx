@@ -21,6 +21,7 @@ import { useSidebarResize } from "../../hooks/useSidebarResize";
 import { useConnectionManager } from "../../hooks/useConnectionManager";
 import { useConnectionLayoutContext } from "../../contexts/useConnectionLayoutContext";
 import { isConnectionGrouped } from "../../utils/connectionLayout";
+import { useDrivers } from "../../hooks/useDrivers";
 
 export const Sidebar = () => {
   const { t } = useTranslation();
@@ -38,6 +39,8 @@ export const Sidebar = () => {
     handleDisconnect: disconnectConnection,
     handleSwitch,
   } = useConnectionManager();
+
+  const { allDrivers } = useDrivers();
 
   const {
     splitView,
@@ -129,6 +132,7 @@ export const Sidebar = () => {
                   <OpenConnectionItem
                     key={conn.id}
                     connection={conn}
+                    driverManifest={allDrivers.find(d => d.id === conn.driver)}
                     isSelected={selectedConnectionIds.has(conn.id)}
                     onSwitch={() => handleSwitchOrSetExplorer(conn.id)}
                     onOpenInEditor={() => handleOpenInEditor(conn.id)}

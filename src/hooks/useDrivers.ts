@@ -14,7 +14,7 @@ const FALLBACK_DRIVERS: PluginManifest[] = [
     is_builtin: true,
     default_username: "postgres",
     color: "#3b82f6",
-    icon: "network",
+    icon: "postgres",
     capabilities: {
       schemas: true,
       views: true,
@@ -39,7 +39,7 @@ const FALLBACK_DRIVERS: PluginManifest[] = [
     is_builtin: true,
     default_username: "root",
     color: "#f97316",
-    icon: "network",
+    icon: "mysql",
     capabilities: {
       schemas: false,
       views: true,
@@ -64,7 +64,7 @@ const FALLBACK_DRIVERS: PluginManifest[] = [
     is_builtin: true,
     default_username: "",
     color: "#06b6d4",
-    icon: "database",
+    icon: "sqlite",
     capabilities: {
       schemas: false,
       views: true,

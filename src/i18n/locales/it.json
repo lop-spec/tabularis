@@ -144,7 +144,9 @@
     "connectionCount": "{{count}} connessione/i",
     "noConnectionsHint": "Crea la tua prima connessione per iniziare.",
     "searchPlaceholder": "Cerca connessioni...",
-    "noSearchResults": "Nessuna connessione corrisponde a \"{{query}}\""
+    "noSearchResults": "Nessuna connessione corrisponde a \"{{query}}\"",
+    "gridView": "Vista griglia",
+    "listView": "Vista lista"
   },
   "settings": {
     "title": "Impostazioni",
