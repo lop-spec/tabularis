@@ -292,6 +292,28 @@
       "confirmRemove": "Are you sure you want to remove \"{{name}}\"? This will delete the plugin files.",
       "enabled": "Enabled",
       "disabled": "Disabled"
+    },
+    "shortcuts": {
+      "title": "Keyboard Shortcuts",
+      "categories": {
+        "editor": "Editor",
+        "navigation": "Navigation",
+        "data_grid": "Data Grid"
+      },
+      "runQuery": "Run query",
+      "runQueryEditor": "Run query (in editor)",
+      "tabSwitcher": "Switch tab",
+      "copySelection": "Copy selection",
+      "toggleSidebar": "Toggle sidebar",
+      "openConnections": "Open connections",
+      "newConnection": "New connection",
+      "newTab": "New tab",
+      "nextPage": "Next page",
+      "prevPage": "Previous page",
+      "switchConnection": "Switch to connection 1–9",
+      "resetToDefault": "Reset to default",
+      "notOverridable": "Built-in, not customizable",
+      "pressKeys": "Press key combination..."
     }
   },
   "update": {

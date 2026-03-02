@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { NewConnectionModal } from '../components/ui/NewConnectionModal';
 import { invoke } from '@tauri-apps/api/core';
@@ -120,6 +120,7 @@ const ActionButtons = ({
 export const Connections = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { connect, activeConnectionId, disconnect, isConnectionOpen, switchConnection } = useDatabase();
   const { drivers, allDrivers } = useDrivers();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -140,6 +141,13 @@ export const Connections = () => {
   };
 
   useEffect(() => { void loadConnections(); }, []);
+
+  useEffect(() => {
+    if ((location.state as { openNew?: boolean } | null)?.openNew) {
+      setEditingConnection(null);
+      setIsModalOpen(true);
+    }
+  }, []);
 
   const handleSave = () => {
     loadConnections();

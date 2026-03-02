@@ -292,6 +292,28 @@
       "confirmRemove": "¿Estás seguro de que deseas eliminar \"{{name}}\"? Los archivos del plugin serán eliminados.",
       "enabled": "Habilitado",
       "disabled": "Deshabilitado"
+    },
+    "shortcuts": {
+      "title": "Atajos de teclado",
+      "categories": {
+        "editor": "Editor",
+        "navigation": "Navegación",
+        "data_grid": "Cuadrícula de datos"
+      },
+      "runQuery": "Ejecutar consulta",
+      "runQueryEditor": "Ejecutar consulta (en el editor)",
+      "tabSwitcher": "Cambiar pestaña",
+      "copySelection": "Copiar selección",
+      "toggleSidebar": "Mostrar/ocultar barra lateral",
+      "openConnections": "Abrir conexiones",
+      "newConnection": "Nueva conexión",
+      "newTab": "Nueva pestaña",
+      "nextPage": "Página siguiente",
+      "prevPage": "Página anterior",
+      "switchConnection": "Cambiar a conexión 1–9",
+      "resetToDefault": "Restablecer predeterminado",
+      "notOverridable": "Integrado, no personalizable",
+      "pressKeys": "Pulsa la combinación de teclas..."
     }
   },
   "update": {

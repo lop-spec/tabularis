@@ -2473,6 +2473,35 @@ pub async fn get_registered_drivers() -> Vec<crate::drivers::driver_trait::Plugi
 }
 
 #[tauri::command]
+pub async fn get_keybindings<R: Runtime>(app: AppHandle<R>) -> Result<serde_json::Value, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?;
+    let path = config_dir.join("keybindings.json");
+    if !path.exists() {
+        return Ok(serde_json::Value::Object(serde_json::Map::new()));
+    }
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn save_keybindings<R: Runtime>(
+    app: AppHandle<R>,
+    keybindings: serde_json::Value,
+) -> Result<(), String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    let path = config_dir.join("keybindings.json");
+    let content = serde_json::to_string_pretty(&keybindings).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_driver_manifest(
     driver_id: String,
 ) -> Option<crate::drivers::driver_trait::PluginManifest> {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plug2, Settings, Cpu, PanelLeft } from "lucide-react";
@@ -34,6 +34,12 @@ export const Sidebar = () => {
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
 
+  useEffect(() => {
+    const handler = () => setIsExplorerCollapsed((prev) => !prev);
+    window.addEventListener("tabularis:toggle-sidebar", handler);
+    return () => window.removeEventListener("tabularis:toggle-sidebar", handler);
+  }, []);
+
   const {
     openConnections,
     handleDisconnect: disconnectConnection,
@@ -56,7 +62,11 @@ export const Sidebar = () => {
 
   const handleSwitchToConnection = (connectionId: string) => {
     handleSwitch(connectionId);
-    if (location.pathname === "/" || location.pathname === "/connections") {
+    if (
+      location.pathname === "/" ||
+      location.pathname === "/connections" ||
+      location.pathname === "/settings"
+    ) {
       navigate("/editor");
     }
   };

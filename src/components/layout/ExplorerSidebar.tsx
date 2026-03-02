@@ -381,7 +381,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
             ) : (
               <>
                 <button
-                  onClick={handleImportDatabase}
+                  onClick={() => handleImportDatabase()}
                   className="text-muted hover:text-green-400 transition-colors p-1 hover:bg-surface-secondary rounded"
                   title={t("dump.importDatabase")}
                 >

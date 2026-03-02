@@ -69,6 +69,7 @@ import { useSavedQueries } from "../hooks/useSavedQueries";
 import { useSettings } from "../hooks/useSettings";
 import { useEditor } from "../hooks/useEditor";
 import { useConnectionLayoutContext } from "../contexts/useConnectionLayoutContext";
+import { useKeybindings } from "../hooks/useKeybindings";
 import type { QueryResult, Tab, PendingInsertion, TableColumn } from "../types/editor";
 import { getTabScrollState, getAdjacentTabIndex, resolveNextTabId, isFocusedPane } from "../utils/tabScroll";
 import clsx from "clsx";
@@ -107,6 +108,7 @@ export const Editor = () => {
     closeTabsToRight,
   } = useEditor();
   const location = useLocation();
+  const { matchesShortcut } = useKeybindings();
   const navigate = useNavigate();
 
   const [tabContextMenu, setTabContextMenu] = useState<{
@@ -658,6 +660,40 @@ export const Editor = () => {
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [explorerConnectionId, activeConnectionId, setActiveTabId]);
+
+  // Cmd/Ctrl+T: new console tab; Cmd/Ctrl+Right: next page; Cmd/Ctrl+Left: prev page
+  useEffect(() => {
+    const focused = isFocusedPane(explorerConnectionId, activeConnectionId);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!focused) return;
+
+      if (matchesShortcut(e, "new_tab")) {
+        e.preventDefault();
+        addTab({ type: "console" });
+        return;
+      }
+
+      if (matchesShortcut(e, "next_page")) {
+        const tab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+        if (tab?.result?.pagination?.has_more) {
+          e.preventDefault();
+          runQuery(tab.query, (tab.result.pagination.page ?? 1) + 1);
+        }
+        return;
+      }
+
+      if (matchesShortcut(e, "prev_page")) {
+        const tab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+        if (tab?.result?.pagination && tab.result.pagination.page > 1) {
+          e.preventDefault();
+          runQuery(tab.query, tab.result.pagination.page - 1);
+        }
+        return;
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [explorerConnectionId, activeConnectionId, matchesShortcut, addTab, runQuery]);
 
   const handleRefresh = useCallback(() => {
     const currentTab = tabsRef.current.find(

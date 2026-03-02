@@ -49,6 +49,26 @@ Every built-in driver now has its own branded icon: the PostgreSQL elephant, the
 
 A search bar filters connections by name or host in real time, with a clear button that appears when there is text to dismiss.
 
+## New in v0.9.3: Keyboard Shortcuts
+
+v0.9.3 also ships a complete keyboard shortcut system — six new shortcuts and a **Settings → Keyboard Shortcuts** tab to manage them all.
+
+The most useful ones for the new Connections page:
+
+- **Cmd/Ctrl+Shift+N** — open the new connection modal from anywhere in the app, without navigating away from the editor.
+- **Cmd/Ctrl+Shift+C** — jump straight to the Connections page.
+- **Cmd/Ctrl+B** — toggle the sidebar without reaching for the mouse.
+- **Cmd/Ctrl+Shift+1–9** — switch directly to the Nth open connection from the keyboard.
+
+Inside the editor, two new shortcuts speed up data exploration:
+
+- **Cmd/Ctrl+T** — open a new console tab.
+- **Cmd/Ctrl+→ / ←** — jump to the next or previous page of query results.
+
+Shortcuts that can be reassigned show an **Edit** button in the Settings tab. Press the new combination to record it; press **Escape** to cancel. Overrides are saved to `keybindings.json` in your app config directory and persist across restarts.
+
+See the full reference in the [Keyboard Shortcuts wiki page](/wiki/keyboard-shortcuts).
+
 ## What's Next
 
 The multi-database model opens the door to cross-database query autocompletion and ER diagrams that span multiple databases on the same server. Both are on the roadmap.
