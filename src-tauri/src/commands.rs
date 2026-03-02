@@ -1002,6 +1002,7 @@ pub async fn test_connection<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::DatabaseSelection;
 
     fn base_params() -> ConnectionParams {
         ConnectionParams {

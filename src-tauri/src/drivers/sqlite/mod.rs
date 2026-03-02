@@ -718,7 +718,7 @@ pub async fn get_view_columns(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::ConnectionParams;
+    use crate::models::{ConnectionParams, DatabaseSelection};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use std::str::FromStr;
     use tempfile::NamedTempFile;
@@ -729,7 +729,7 @@ mod tests {
 
         let params = ConnectionParams {
             driver: "sqlite".to_string(),
-            database: path.clone(),
+            database: DatabaseSelection::Single(path.clone()),
             host: None,
             port: None,
             username: None,

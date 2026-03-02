@@ -151,21 +151,47 @@ export const Connections = () => {
     ? connections.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.params.driver.toLowerCase().includes(search.toLowerCase()))
     : connections;
 
+  const openCount = connections.filter(c => isConnectionOpen(c.id)).length;
+
   return (
     <div className="h-full flex flex-col overflow-hidden bg-base">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-5 border-b border-default bg-elevated shrink-0">
-        <div>
-          <h1 className="text-lg font-bold text-primary">{t('connections.title')}</h1>
-          <p className="text-xs text-muted mt-0.5">
-            {connections.length > 0
-              ? t('connections.connectionCount', { count: connections.length, defaultValue: '{{count}} connection(s)' })
-              : t('connections.noConnections')}
-          </p>
+      <div className="relative flex items-center justify-between px-8 pt-7 pb-6 border-b border-default bg-elevated shrink-0 overflow-hidden">
+        {/* Decorative gradients */}
+        <div className="absolute top-0 right-0 w-72 h-full bg-gradient-to-bl from-blue-600/10 via-blue-600/3 to-transparent pointer-events-none" />
+        <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-indigo-600/6 to-transparent pointer-events-none" />
+
+        <div className="relative">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Database size={12} className="text-blue-400" />
+            <span className="text-[10px] font-bold text-blue-400/80 uppercase tracking-[0.15em]">
+              Database Manager
+            </span>
+          </div>
+          <h1 className="text-xl font-bold text-primary tracking-tight">{t('connections.title')}</h1>
+
+          {/* Stats */}
+          <div className="flex items-center gap-3 mt-1.5">
+            <span className="text-xs text-muted">
+              {connections.length === 0
+                ? t('connections.noConnections')
+                : t('connections.connectionCount', { count: connections.length, defaultValue: '{{count}} connection(s)' })}
+            </span>
+            {openCount > 0 && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-default" />
+                <span className="flex items-center gap-1.5 text-xs text-green-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  {openCount} active
+                </span>
+              </>
+            )}
+          </div>
         </div>
+
         <button
           onClick={() => { setEditingConnection(null); setIsModalOpen(true); }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-2 rounded-lg font-medium text-sm transition-colors"
+          className="relative flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-150 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:-translate-y-px"
         >
           <Plus size={15} />
           {t('connections.addConnection')}
@@ -174,28 +200,35 @@ export const Connections = () => {
 
       {/* Error banner */}
       {error && (
-        <div className="mx-8 mt-4 p-3 bg-red-900/20 border border-red-900/50 rounded-lg flex items-start gap-3 text-red-400 shrink-0">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span className="text-sm whitespace-pre-wrap flex-1">{error}</span>
-          <button onClick={() => setError(null)} className="text-red-400/60 hover:text-red-400 transition-colors shrink-0">
+        <div className="mx-6 mt-4 p-3.5 bg-red-900/20 border border-red-900/40 rounded-xl flex items-start gap-3 text-red-400 shrink-0">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span className="text-sm whitespace-pre-wrap flex-1 leading-relaxed">{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400/50 hover:text-red-400 transition-colors shrink-0 mt-0.5">
             <X size={14} />
           </button>
         </div>
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-8 py-5">
+      <div className="flex-1 overflow-y-auto px-6 py-5">
         {connections.length === 0 ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center">
-            <div className="w-16 h-16 rounded-2xl bg-elevated border border-default flex items-center justify-center mb-4">
-              <Database size={28} className="text-muted" />
+            <div className="relative mb-6">
+              <div className="w-20 h-20 rounded-2xl bg-elevated border border-default flex items-center justify-center shadow-sm">
+                <Database size={32} className="text-muted" />
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg">
+                <Plus size={14} className="text-white" />
+              </div>
             </div>
-            <p className="text-base font-semibold text-primary mb-1">{t('connections.noConnections')}</p>
-            <p className="text-sm text-muted mb-5">{t('connections.noConnectionsHint', { defaultValue: 'Create your first connection to get started.' })}</p>
+            <p className="text-base font-bold text-primary mb-1.5">{t('connections.noConnections')}</p>
+            <p className="text-sm text-muted mb-6 max-w-xs leading-relaxed">
+              {t('connections.noConnectionsHint', { defaultValue: 'Create your first connection to get started.' })}
+            </p>
             <button
               onClick={() => { setEditingConnection(null); setIsModalOpen(true); }}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-500/20 hover:-translate-y-px"
             >
               <Plus size={14} />
               {t('connections.createFirst')}
@@ -205,13 +238,13 @@ export const Connections = () => {
           <>
             {/* Search */}
             <div className="relative mb-5">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder={t('connections.searchPlaceholder', { defaultValue: 'Search connections...' })}
-                className="w-full pl-9 pr-9 py-2.5 bg-elevated border border-strong rounded-lg text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+                className="w-full pl-10 pr-9 py-2.5 bg-elevated border border-strong rounded-xl text-sm text-primary placeholder:text-muted focus:border-blue-500/70 focus:outline-none transition-colors"
               />
               {search && (
                 <button
@@ -223,8 +256,8 @@ export const Connections = () => {
               )}
             </div>
 
-            {/* Connection list */}
-            <div className="flex flex-col gap-2">
+            {/* Connection grid */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
               {filtered.map(conn => {
                 const isActive = activeConnectionId === conn.id;
                 const isOpen = isConnectionOpen(conn.id);
@@ -233,118 +266,120 @@ export const Connections = () => {
                 const driverManifest = allDrivers.find(d => d.id === conn.params.driver);
                 const isDriverEnabled = drivers.some(d => d.id === conn.params.driver);
                 const subtitle = connectionSubtitle(conn, capabilities);
+                const driverColor = getDriverColor(driverManifest);
 
                 return (
                   <div
                     key={conn.id}
                     onDoubleClick={() => isDriverEnabled && !isConnecting && handleConnect(conn)}
                     className={clsx(
-                      'group relative flex items-center gap-3 px-4 py-3.5 rounded-xl border transition-all cursor-pointer select-none',
+                      'group relative flex flex-col rounded-2xl border transition-all duration-150 cursor-pointer select-none overflow-hidden',
                       !isDriverEnabled && 'opacity-60 cursor-not-allowed',
                       isConnecting && 'pointer-events-none',
                       isActive
-                        ? 'border-blue-500/50 bg-blue-500/8'
+                        ? 'border-blue-500/40 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-lg shadow-blue-500/8'
                         : isOpen
-                          ? 'border-green-500/40 bg-green-500/6 hover:bg-green-500/10'
-                          : 'border-strong bg-elevated hover:bg-surface-primary hover:border-strong',
+                          ? 'border-green-500/35 bg-green-500/4 ring-1 ring-green-500/15 shadow-md shadow-green-500/6'
+                          : 'border-strong bg-elevated hover:border-blue-400/30 hover:bg-surface-primary hover:shadow-md hover:shadow-black/10',
                     )}
                   >
-                    {/* Left accent bar for active/open */}
-                    {(isActive || isOpen) && (
-                      <div className={clsx(
-                        'absolute left-0 top-3 bottom-3 w-0.5 rounded-full',
-                        isActive ? 'bg-blue-400' : 'bg-green-400/70',
-                      )} />
-                    )}
-
-                    {/* Driver icon */}
-                    <div
-                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0"
-                      style={{ backgroundColor: getDriverColor(driverManifest) }}
-                    >
-                      {getDriverIcon(driverManifest)}
-                    </div>
-
-                    {/* Name + info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold text-sm text-primary truncate">{conn.name}</span>
-                        <span className="text-[10px] font-medium text-secondary bg-surface-secondary px-1.5 py-0.5 rounded-md capitalize shrink-0 border border-strong/50">
-                          {conn.params.driver}
-                        </span>
-                        {conn.params.ssh_enabled && (
-                          <span className="flex items-center gap-0.5 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-md shrink-0">
-                            <Shield size={9} /> SSH
-                          </span>
-                        )}
-                        {!isDriverEnabled && (
-                          <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded-md shrink-0">
-                            <PlugZap size={9} /> {t('connections.pluginDisabled')}
-                          </span>
-                        )}
+                    {/* Card body */}
+                    <div className="flex items-start gap-3.5 px-4 pt-4 pb-3">
+                      {/* Driver icon */}
+                      <div
+                        className="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md"
+                        style={{ backgroundColor: driverColor }}
+                      >
+                        {getDriverIcon(driverManifest, 19)}
                       </div>
-                      <span className="text-xs text-secondary truncate block leading-relaxed">{subtitle}</span>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0 pt-0.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <span className="font-bold text-sm text-primary leading-snug truncate">{conn.name}</span>
+
+                          {/* Status badge */}
+                          <div className="shrink-0">
+                            {isConnecting ? (
+                              <Loader2 size={14} className="animate-spin text-blue-400" />
+                            ) : isActive ? (
+                              <span className="flex items-center gap-1 text-[10px] font-bold text-green-400 bg-green-400/12 border border-green-400/25 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                {t('connections.active')}
+                              </span>
+                            ) : isOpen ? (
+                              <span className="flex items-center gap-1 text-[10px] font-semibold text-green-400/80 bg-green-400/8 border border-green-400/20 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-400/70" />
+                                {t('connections.open')}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Driver + SSH badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                          <span className="text-[10px] font-semibold text-secondary bg-surface-secondary border border-strong/40 px-1.5 py-0.5 rounded-md capitalize">
+                            {conn.params.driver}
+                          </span>
+                          {conn.params.ssh_enabled && (
+                            <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-md">
+                              <Shield size={8} /> SSH
+                            </span>
+                          )}
+                          {!isDriverEnabled && (
+                            <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded-md">
+                              <PlugZap size={8} /> {t('connections.pluginDisabled')}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Subtitle */}
+                        <p className="text-[11px] text-muted truncate">{subtitle}</p>
+                      </div>
                     </div>
 
-                    {/* Status badge */}
-                    <div className="shrink-0">
-                      {isConnecting ? (
-                        <Loader2 size={15} className="animate-spin text-blue-400" />
-                      ) : isActive ? (
-                        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-green-400 bg-green-400/12 border border-green-400/25 px-2.5 py-1 rounded-full">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                          {t('connections.active')}
-                        </span>
-                      ) : isOpen ? (
-                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-green-400/80 bg-green-400/8 border border-green-400/20 px-2.5 py-1 rounded-full">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-400/70" />
-                          {t('connections.open')}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {/* Actions — always visible at low opacity, full on hover */}
-                    <div className="flex items-center gap-0.5 opacity-40 group-hover:opacity-100 transition-opacity shrink-0">
+                    {/* Action bar */}
+                    <div className="flex items-center justify-end gap-0.5 px-3 py-2 border-t border-default/50 mt-auto">
                       {isOpen ? (
                         <button
                           onClick={e => { e.stopPropagation(); handleDisconnect(conn.id); }}
-                          className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                          className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-50 group-hover:opacity-100"
                           title={t('connections.disconnect')}
                         >
-                          <Power size={14} />
+                          <Power size={13} />
                         </button>
                       ) : (
                         <button
                           onClick={e => { e.stopPropagation(); if (isDriverEnabled) handleConnect(conn); }}
                           disabled={!isDriverEnabled}
-                          className="p-1.5 rounded-lg text-muted hover:text-green-400 hover:bg-green-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="p-1.5 rounded-lg text-muted hover:text-green-400 hover:bg-green-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors opacity-50 group-hover:opacity-100"
                           title={isDriverEnabled ? t('connections.connect') : t('connections.pluginDisabled')}
                         >
-                          <Power size={14} />
+                          <Power size={13} />
                         </button>
                       )}
                       <button
                         onClick={e => { e.stopPropagation(); if (isDriverEnabled) void openEdit(conn); }}
                         disabled={!isDriverEnabled}
-                        className="p-1.5 rounded-lg text-muted hover:text-blue-400 hover:bg-blue-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 rounded-lg text-muted hover:text-blue-400 hover:bg-blue-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors opacity-50 group-hover:opacity-100"
                         title={t('connections.edit')}
                       >
-                        <Edit size={14} />
+                        <Edit size={13} />
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); if (isDriverEnabled) handleDuplicate(conn.id); }}
                         disabled={!isDriverEnabled}
-                        className="p-1.5 rounded-lg text-muted hover:text-purple-400 hover:bg-purple-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 rounded-lg text-muted hover:text-purple-400 hover:bg-purple-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors opacity-50 group-hover:opacity-100"
                         title={t('connections.clone')}
                       >
-                        <Copy size={14} />
+                        <Copy size={13} />
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); handleDelete(conn.id); }}
-                        className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                        className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-50 group-hover:opacity-100"
                         title={t('connections.delete')}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </div>
@@ -352,7 +387,7 @@ export const Connections = () => {
               })}
 
               {filtered.length === 0 && search && (
-                <div className="text-center py-10 text-sm text-muted">
+                <div className="col-span-2 text-center py-12 text-sm text-muted">
                   {t('connections.noSearchResults', { defaultValue: 'No connections match "{{query}}"', query: search })}
                 </div>
               )}

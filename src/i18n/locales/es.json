@@ -140,7 +140,11 @@
     "failDuplicate": "Error al duplicar la conexión",
     "connecting": "Conectando...",
     "open": "Abierta",
-    "pluginDisabled": "Plugin desactivado"
+    "pluginDisabled": "Plugin desactivado",
+    "connectionCount": "{{count}} conexión/es",
+    "noConnectionsHint": "Crea tu primera conexión para empezar.",
+    "searchPlaceholder": "Buscar conexiones...",
+    "noSearchResults": "Ninguna conexión coincide con \"{{query}}\""
   },
   "settings": {
     "title": "Configuración",

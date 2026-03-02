@@ -140,7 +140,11 @@
     "failDuplicate": "Impossibile duplicare la connessione",
     "connecting": "Connessione in corso...",
     "open": "Aperta",
-    "pluginDisabled": "Plugin disabilitato"
+    "pluginDisabled": "Plugin disabilitato",
+    "connectionCount": "{{count}} connessione/i",
+    "noConnectionsHint": "Crea la tua prima connessione per iniziare.",
+    "searchPlaceholder": "Cerca connessioni...",
+    "noSearchResults": "Nessuna connessione corrisponde a \"{{query}}\""
   },
   "settings": {
     "title": "Impostazioni",

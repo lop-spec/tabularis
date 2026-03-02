@@ -140,7 +140,11 @@
     "failDuplicate": "Failed to duplicate connection",
     "connecting": "Connecting...",
     "open": "Open",
-    "pluginDisabled": "Plugin disabled"
+    "pluginDisabled": "Plugin disabled",
+    "connectionCount": "{{count}} connection(s)",
+    "noConnectionsHint": "Create your first connection to get started.",
+    "searchPlaceholder": "Search connections...",
+    "noSearchResults": "No connections match \"{{query}}\""
   },
   "settings": {
     "title": "Settings",
