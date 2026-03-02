@@ -29,7 +29,9 @@ That's gone now.
 
 ### The Sidebar Experience
 
-When you create or edit a MySQL (or MariaDB-compatible) connection, a new **Databases** tab appears alongside General and SSH. Click **Load Databases** to fetch everything your user can see, then check the ones you want attached to this connection. A filter box handles the common case of dozens of databases.
+When you create or edit a MySQL (or MariaDB-compatible) connection, a new **Databases** tab appears alongside General and SSH. Click **Load Databases** to fetch everything your user can see, then check the ones you want attached to this connection. A filter box handles the common case of dozens of databases. **Select All** and **Deselect All** buttons cover bulk operations.
+
+Selected databases are saved with the connection. On the next open, Tabularis reconnects to the primary database and lazily loads each database's table list as you expand it — so startup stays fast even when many databases are attached.
 
 Each selected database gets its own collapsible node in the Explorer sidebar — exactly like PostgreSQL schemas. Expand a node to see tables and views. Double-click a table to open it in the editor.
 
