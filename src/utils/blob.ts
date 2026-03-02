@@ -6,6 +6,25 @@
  */
 
 /**
+ * Maximum column length (in bytes) below which a BINARY/VARBINARY column is
+ * rendered as plain text instead of as a BLOB. Columns with
+ * character_maximum_length <= this threshold are treated as text fields
+ * (e.g. UUIDs stored as VARBINARY(36)). Columns without a known length are
+ * always rendered as BLOBs.
+ */
+export const BLOB_TEXT_LENGTH_THRESHOLD = 65_535;
+
+/**
+ * Returns true if the value is in the canonical BLOB wire format
+ * ("BLOB:..." or "BLOB_FILE_REF:...") produced by the backend.
+ */
+export function isBlobWireFormat(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  const s = String(value);
+  return s.startsWith("BLOB:") || s.startsWith("BLOB_FILE_REF:");
+}
+
+/**
  * Checks if a data type is a BLOB/binary type.
  * Supports MySQL, PostgreSQL, and SQLite binary types.
  */
@@ -27,6 +46,38 @@ export function isBlobType(dataType: string): boolean {
   ];
 
   return binaryTypes.some((type) => normalizedType.includes(type));
+}
+
+/**
+ * Returns true if a column should be rendered as a BLOB (binary data viewer)
+ * rather than as plain text.
+ *
+ * BINARY/VARBINARY columns whose character_maximum_length is known and does
+ * not exceed BLOB_TEXT_LENGTH_THRESHOLD are treated as text fields so that
+ * small fixed-size values (e.g. UUIDs stored as VARBINARY(36)) remain readable.
+ * Columns without a known length (undefined) are always treated as BLOBs.
+ */
+export function isBlobColumn(
+  dataType: string,
+  characterMaximumLength?: number,
+): boolean {
+  if (!isBlobType(dataType)) {
+    return false;
+  }
+
+  const normalizedType = dataType.toUpperCase();
+  const isVariableOrFixedBinary =
+    normalizedType.includes("VARBINARY") || normalizedType === "BINARY";
+
+  if (
+    isVariableOrFixedBinary &&
+    characterMaximumLength !== undefined &&
+    characterMaximumLength <= BLOB_TEXT_LENGTH_THRESHOLD
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 /**

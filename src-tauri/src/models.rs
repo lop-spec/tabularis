@@ -145,6 +145,8 @@ pub struct TableColumn {
     pub is_auto_increment: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub character_maximum_length: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

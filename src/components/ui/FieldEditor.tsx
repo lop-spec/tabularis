@@ -5,13 +5,14 @@ import { GeometryInput } from "./GeometryInput";
 import { BlobInput } from "./BlobInput";
 import { DateInput } from "./DateInput";
 import { isGeometricType, formatGeometricValue } from "../../utils/geometry";
-import { isBlobType } from "../../utils/blob";
+import { isBlobColumn } from "../../utils/blob";
 import { getDateInputMode } from "../../utils/dateInput";
 import { USE_DEFAULT_SENTINEL } from "../../utils/dataGrid";
 
 export interface FieldEditorProps {
   name: string;
   type?: string;
+  characterMaximumLength?: number;
   value: unknown;
   onChange: (value: unknown) => void;
   placeholder?: string;
@@ -35,6 +36,7 @@ export interface FieldEditorProps {
 export const FieldEditor: React.FC<FieldEditorProps> = ({
   name,
   type,
+  characterMaximumLength,
   value,
   onChange,
   placeholder,
@@ -51,7 +53,7 @@ export const FieldEditor: React.FC<FieldEditorProps> = ({
 }) => {
   const { t } = useTranslation();
   const isGeometric = type && isGeometricType(type);
-  const isBlob = type && isBlobType(type);
+  const isBlob = type && isBlobColumn(type, characterMaximumLength);
   const dateMode = type ? getDateInputMode(type) : null;
 
   const defaultPlaceholder = placeholder || t("rowEditor.enterValue");
