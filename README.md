@@ -18,6 +18,7 @@
 <p align="center">
   <a href="https://snapcraft.io/tabularis"><img src="https://img.shields.io/badge/snap-tabularis-blue?logo=snapcraft" alt="Snap Store" /></a>
   <a href="https://aur.archlinux.org/packages/tabularis-bin"><img src="https://img.shields.io/badge/AUR-tabularis--bin-1793D1?logo=archlinux&logoColor=white" alt="AUR" /></a>
+  <a href="https://winstall.app/apps/Debba.Tabularis"><img src="https://img.shields.io/winget/v/Debba.Tabularis?label=WinGet&logo=windows&color=0078D4" alt="WinGet" /></a>
 </p>
 
 A lightweight, developer-focused database management tool, built with Tauri and React.
@@ -50,6 +51,7 @@ A lightweight, developer-focused database management tool, built with Tauri and 
   - [Connection Management](#connection-management)
   - [Database Explorer](#database-explorer)
   - [SQL Editor](#sql-editor)
+  - [Keyboard Shortcuts](#keyboard-shortcuts)
   - [Visual Query Builder](#visual-query-builder)
   - [Data Grid](#data-grid)
   - [Logging](#logging)
@@ -64,6 +66,14 @@ A lightweight, developer-focused database management tool, built with Tauri and 
 ## Installation
 
 ### Windows
+
+#### WinGet (Recommended)
+
+```bash
+winget install Debba.Tabularis
+```
+
+#### Direct Download
 
 Download the installer from the [Releases page](https://github.com/debba/tabularis/releases) and run it:
 
@@ -152,6 +162,8 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 
 ### Connection Management
 
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/connections)
+
 - Support for **MySQL/MariaDB**, **PostgreSQL** (with multi-schema support) and **SQLite**.
 - **Multi-Database Selection:** Select multiple MySQL/MariaDB databases in a single connection — each appears as its own collapsible node in the sidebar.
 - Save, manage, and clone connection profiles with secure local persistence.
@@ -162,6 +174,8 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 - **SSH Tunneling** with automatic readiness detection.
 
 ### Database Explorer
+
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/schema-management)
 
 - **Tree View:** Browse tables, columns, keys, foreign keys, indexes, views, and stored routines.
 - **Inline Editing:** Edit table and column properties directly from the sidebar.
@@ -174,6 +188,8 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 
 ### SQL Editor
 
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/editor)
+
 - **Monaco Editor:** Syntax highlighting and auto-completion.
 - **Tabbed Interface:** Isolated connections per tab.
 - **Split View:** Open multiple database connections side-by-side in a resizable split-pane layout.
@@ -181,7 +197,19 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 - **Saved Queries:** Persist frequently used SQL.
 - **AI Assist Overlay:** AI assistance buttons accessible as a floating overlay directly in the editor.
 
+### Keyboard Shortcuts
+
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/keyboard-shortcuts)
+
+- **Built-in shortcuts** for navigation, editor, and data grid actions (e.g. `Ctrl+B` to toggle sidebar, `Ctrl+T` for a new tab, `Ctrl+→/←` to paginate results).
+- **Fully customizable:** Remap any non-locked shortcut from **Settings → Keyboard Shortcuts** — press the combo to record it, click ↺ to reset.
+- **Platform-aware:** Uses `Cmd` on macOS and `Ctrl` on Windows/Linux throughout.
+- **Visual hints:** Hold `Ctrl+Shift` in the sidebar to reveal numbered badges (1–9) for instant connection switching.
+- **Persistent overrides:** Saved to `keybindings.json` in the app config directory; can also be edited manually.
+
 ### Visual Query Builder
+
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/visual-query-builder)
 
 - **Drag-and-Drop:** Build queries visually with ReactFlow.
 - **Visual JOINs:** Connect tables to create relationships.
@@ -189,6 +217,8 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 - **Real-time SQL:** Instant code generation.
 
 ### Data Grid
+
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/data-grid)
 
 - **Inline & Batch Editing:** Modify cells and commit multiple changes at once.
 - **Row Management:** Create, delete, and select multiple rows.
@@ -198,6 +228,8 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 - **Spatial Data Support:** Initial GEOMETRY support for MySQL with raw SQL function inputs for spatial data.
 
 ### Plugin System
+
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/plugins)
 
 Tabularis supports extending its database support via an **external plugin system**. Plugins are standalone executables that communicate with the app over **JSON-RPC 2.0 via stdin/stdout**, and can be written in any language.
 
