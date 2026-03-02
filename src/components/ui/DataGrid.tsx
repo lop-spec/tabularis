@@ -284,11 +284,11 @@ export const DataGrid = React.memo(
         (isBlobColumn(colType, columnLengthMap?.get(colName)) ||
           isBlobWireFormat(value))
       ) {
-        const rowData: Record<string, unknown> = {};
-        columns.forEach((col, idx) => {
-          rowData[col] = mergedRow.rowData[idx];
+        setSidebarRowData({
+          data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
+          rowIndex,
+          focusField: colName,
         });
-        setSidebarRowData({ data: rowData, rowIndex, focusField: colName });
         setSidebarOpen(true);
         return;
       }
@@ -667,22 +667,32 @@ export const DataGrid = React.memo(
       pkIndexMap,
     ]);
 
+    const buildRowDataWithPending = useCallback(
+      (rowArray: unknown[], isInsertion: boolean): Record<string, unknown> => {
+        const rowData: Record<string, unknown> = {};
+        columns.forEach((col, idx) => {
+          rowData[col] = rowArray[idx];
+        });
+        if (!isInsertion && pkIndexMap !== null) {
+          const pkVal = rowArray[pkIndexMap];
+          const pending = pendingChanges?.[String(pkVal)]?.changes;
+          if (pending) Object.assign(rowData, pending);
+        }
+        return rowData;
+      },
+      [columns, pkIndexMap, pendingChanges],
+    );
+
     const openSidebarEditor = useCallback(() => {
       if (!contextMenu) return;
-
-      // Convert row array to object with column names
-      const rowData: Record<string, unknown> = {};
-      columns.forEach((colName, index) => {
-        rowData[colName] = contextMenu.row[index];
-      });
-
+      const isInsertion = contextMenu.mergedRow?.type === "insertion";
       setSidebarRowData({
-        data: rowData,
+        data: buildRowDataWithPending(contextMenu.row, isInsertion ?? false),
         rowIndex: contextMenu.rowIndex,
       });
       setSidebarOpen(true);
       setContextMenu(null);
-    }, [contextMenu, columns]);
+    }, [contextMenu, buildRowDataWithPending]);
 
     // Unified handler for setting cell values from context menu actions
     const setCellValue = useCallback(
@@ -980,17 +990,8 @@ export const DataGrid = React.memo(
                                         // Open sidebar with the current row
                                         const mergedRow = mergedRows[rowIndex];
                                         if (mergedRow) {
-                                          const rowData: Record<
-                                            string,
-                                            unknown
-                                          > = {};
-                                          columns.forEach((col, idx) => {
-                                            rowData[col] =
-                                              mergedRow.rowData[idx];
-                                          });
-
                                           setSidebarRowData({
-                                            data: rowData,
+                                            data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
                                             rowIndex: rowIndex,
                                             focusField: colName,
                                           });
@@ -1105,16 +1106,8 @@ export const DataGrid = React.memo(
                                             const mergedRow =
                                               mergedRows[rowIndex];
                                             if (mergedRow) {
-                                              const rowData: Record<
-                                                string,
-                                                unknown
-                                              > = {};
-                                              columns.forEach((col, idx) => {
-                                                rowData[col] =
-                                                  mergedRow.rowData[idx];
-                                              });
                                               setSidebarRowData({
-                                                data: rowData,
+                                                data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
                                                 rowIndex,
                                                 focusField: colName,
                                               });
