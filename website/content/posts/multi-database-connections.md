@@ -41,6 +41,14 @@ Existing connections with a single database string continue to work without any 
 
 This feature is scoped to drivers that support cross-database access from a single connection — MySQL, MariaDB, and compatible engines. SQLite connections (file-based) and PostgreSQL connections (which use schemas instead) are unaffected.
 
+## A Redesigned Connections Page
+
+v0.9.3 also ships a fully redesigned Connections page. The list now supports two display modes — **grid** and **list** — switchable from the toolbar. In grid mode, each connection is a card showing the driver icon, status badge, host/database info, and SSH indicator. In list mode, the same information is laid out in compact rows.
+
+Every built-in driver now has its own branded icon: the PostgreSQL elephant, the MySQL dolphin, the SQLite cylinder — each rendered in the driver's official brand color. Plugin-provided drivers continue to use a generic icon or any icon they declare in their manifest.
+
+A search bar filters connections by name or host in real time, with a clear button that appears when there is text to dismiss.
+
 ## What's Next
 
 The multi-database model opens the door to cross-database query autocompletion and ER diagrams that span multiple databases on the same server. Both are on the roadmap.
@@ -49,4 +57,4 @@ For now: configure once, navigate everything.
 
 ---
 
-*v0.9.3 is available now. Update via the in-app updater or download from the releases page.*
+_v0.9.3 is available now. Update via the in-app updater or download from the releases page._

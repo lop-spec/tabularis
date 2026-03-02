@@ -152,8 +152,10 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 
 ### Connection Management
 
-- Support for **MySQL/MariaDB**, working on: **PostgreSQL** (with multi-schema support) and **SQLite**.
+- Support for **MySQL/MariaDB**, **PostgreSQL** (with multi-schema support) and **SQLite**.
+- **Multi-Database Selection:** Select multiple MySQL/MariaDB databases in a single connection — each appears as its own collapsible node in the sidebar.
 - Save, manage, and clone connection profiles with secure local persistence.
+- **Redesigned Connections Page:** Grid and list view modes, real-time search, branded driver icons (PostgreSQL elephant, MySQL dolphin, SQLite cylinder) in their official colors.
 - **Open in Editor:** Right-click any connection in the sidebar to open it directly in the editor via context menu.
 - Manage **SSH Connections** from the connection manager.
 - Optional secure password storage in system **Keychain**.
