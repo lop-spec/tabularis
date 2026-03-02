@@ -147,7 +147,7 @@ export const Connections = () => {
       setEditingConnection(null);
       setIsModalOpen(true);
     }
-  }, []);
+  }, [location.state]);
 
   const handleSave = () => {
     loadConnections();

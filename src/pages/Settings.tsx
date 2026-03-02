@@ -541,7 +541,7 @@ const ShortcutsTab = () => {
           : (hasOverride ? formatMatch(overrides[s.id].win, false) : s.defaultWin),
       });
     },
-    [t, overrides],
+    [t, overrides, isMac],
   );
 
   const handleSave = useCallback(
