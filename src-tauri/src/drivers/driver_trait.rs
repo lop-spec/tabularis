@@ -84,6 +84,12 @@ pub struct PluginManifest {
     /// `"root"`). Empty string for drivers that have no default.
     #[serde(default)]
     pub default_username: String,
+    /// CSS hex color for UI accents (e.g. `"#f97316"`). Empty string falls back to a neutral color.
+    #[serde(default)]
+    pub color: String,
+    /// Lucide-compatible icon name (e.g. `"network"`, `"database"`). Empty string falls back to a generic icon.
+    #[serde(default)]
+    pub icon: String,
 }
 
 /// The complete interface every database driver plugin must implement.

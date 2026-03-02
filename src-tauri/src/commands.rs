@@ -9,9 +9,9 @@ use uuid::Uuid;
 
 use crate::keychain_utils;
 use crate::models::{
-    ColumnDefinition, ConnectionParams, ForeignKey, Index, QueryResult, RoutineInfo,
-    RoutineParameter, SavedConnection, SshConnection, SshConnectionInput, SshTestParams,
-    TableColumn, TableInfo, TestConnectionRequest,
+    ColumnDefinition, ConnectionParams, ForeignKey, Index, QueryResult,
+    RoutineInfo, RoutineParameter, SavedConnection, SshConnection, SshConnectionInput,
+    SshTestParams, TableColumn, TableInfo, TestConnectionRequest,
 };
 use crate::ssh_tunnel::{get_tunnels, SshTunnel};
 
@@ -966,7 +966,7 @@ pub async fn test_connection<R: Runtime>(
 
     // For file-based drivers, verify the database file exists before attempting connection
     if drv.manifest().capabilities.file_based {
-        let db_path = std::path::Path::new(&resolved_params.database);
+        let db_path = std::path::Path::new(resolved_params.database.primary());
         if !db_path.exists() {
             return Err(format!(
                 "Database file not found: {}",
@@ -995,7 +995,7 @@ mod tests {
             port: Some(3306),
             username: Some("root".to_string()),
             password: None,
-            database: "testdb".to_string(),
+            database: DatabaseSelection::Single("testdb".to_string()),
             ssh_enabled: None,
             ssh_connection_id: None,
             ssh_host: None,
@@ -1073,7 +1073,7 @@ mod tests {
                 port,
                 username: Some(username.to_string()),
                 password: password.map(|p| p.to_string()),
-                database: database.to_string(),
+                database: DatabaseSelection::Single(database.to_string()),
                 ssh_enabled: None,
                 ssh_connection_id: None,
                 ssh_host: None,
@@ -1350,7 +1350,7 @@ mod tests {
                 port: Some(remote_port),
                 username: Some("dbuser".to_string()),
                 password: Some("dbpass".to_string()),
-                database: "testdb".to_string(),
+                database: DatabaseSelection::Single("testdb".to_string()),
                 ssh_enabled: Some(true),
                 ssh_connection_id: None,
                 ssh_host: Some(ssh_host.to_string()),

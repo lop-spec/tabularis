@@ -26,6 +26,10 @@ export interface PluginManifest {
   is_builtin?: boolean;
   /** Default username pre-filled in the connection modal (e.g. "postgres", "root") */
   default_username?: string;
+  /** CSS hex color for UI accents (e.g. "#f97316"). Undefined falls back to a neutral color. */
+  color?: string;
+  /** Lucide-compatible icon name (e.g. "network", "database"). Undefined falls back to a generic icon. */
+  icon?: string;
 }
 
 export interface RegistryReleaseWithStatus {

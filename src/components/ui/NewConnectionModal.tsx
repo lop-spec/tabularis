@@ -9,6 +9,10 @@ import {
   Settings,
   XCircle,
   FolderOpen,
+  CheckSquare,
+  Square,
+  Network,
+  Plug,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -18,6 +22,8 @@ import { SearchableSelect } from "./SearchableSelect";
 import { useDrivers } from "../../hooks/useDrivers";
 import type { PluginManifest } from "../../types/plugins";
 import { loadSshConnections, type SshConnection } from "../../utils/ssh";
+import { isMultiDatabaseCapable } from "../../utils/database";
+import { getDriverColor, getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 
 interface ConnectionParams {
   driver: string;
@@ -25,7 +31,7 @@ interface ConnectionParams {
   port?: number;
   username?: string;
   password?: string;
-  database: string;
+  database: string | string[];
   // SSH
   ssh_enabled?: boolean;
   ssh_connection_id?: string;
@@ -52,46 +58,38 @@ interface NewConnectionModalProps {
   initialConnection?: SavedConnection | null;
 }
 
-const InputClass =
-  "w-full px-3 pt-2 pb-1 bg-base border border-strong rounded-lg text-primary focus:border-blue-500 focus:outline-none leading-tight";
-const LabelClass = "block text-xs uppercase font-bold text-muted";
-
-interface ConnectionInputProps {
-  label: string;
-  value: string | number | undefined;
-  onChange: (value: string) => void;
-  type?: string;
-  placeholder?: string;
-  error?: React.ReactNode;
-  autoFocus?: boolean;
-  className?: string;
-}
-
-const ConnectionInput = ({
+const FieldInput = ({
   label,
   value,
   onChange,
   type = "text",
   placeholder,
-  error,
   autoFocus,
   className,
-}: ConnectionInputProps) => {
-  return (
-    <div className={clsx("space-y-1", className)}>
-      <label className={LabelClass}>{label}</label>
-      <input
-        type={type}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        className={clsx(InputClass, error && "border-amber-500/50")}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-      />
-      {error}
-    </div>
-  );
-};
+}: {
+  label: string;
+  value: string | number | undefined;
+  onChange: (v: string) => void;
+  type?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+  className?: string;
+}) => (
+  <div className={clsx("flex flex-col gap-1", className)}>
+    <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+      {label}
+    </label>
+    <input
+      type={type}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+      className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+    />
+  </div>
+);
+
 
 export const NewConnectionModal = ({
   isOpen,
@@ -101,7 +99,9 @@ export const NewConnectionModal = ({
 }: NewConnectionModalProps) => {
   const { t } = useTranslation();
   const { drivers } = useDrivers();
-  const [driver, setDriver] = useState<string>("postgres");
+
+  // ── form state ──
+  const [driver, setDriver] = useState<string>("mysql");
   const activeDriver = drivers.find((d) => d.id === driver) ?? drivers[0];
   const [name, setName] = useState("");
   const [formData, setFormData] = useState<Partial<ConnectionParams>>({
@@ -112,37 +112,47 @@ export const NewConnectionModal = ({
     ssh_enabled: false,
     ssh_port: 22,
   });
-  const [status, setStatus] = useState<
-    "idle" | "testing" | "saving" | "success" | "error"
-  >("idle");
-  const [message, setMessage] = useState("");
-  const [testResult, setTestResult] = useState<"success" | "error" | null>(
-    null,
-  );
-  const [sshConnections, setSshConnections] = useState<SshConnection[]>([]);
-  const [isSshModalOpen, setIsSshModalOpen] = useState(false);
-  const [sshMode, setSshMode] = useState<"existing" | "inline">("existing");
-  const [availableDatabases, setAvailableDatabases] = useState<string[]>([]);
-  const [loadingDatabases, setLoadingDatabases] = useState(false);
-  const [databaseLoadError, setDatabaseLoadError] = useState<string | null>(
-    null,
-  );
+  const [selectedDatabasesState, setSelectedDatabasesState] = useState<string[]>([]);
+  const [dbSearchQuery, setDbSearchQuery] = useState("");
   const [passwordDirty, setPasswordDirty] = useState(false);
   const [sshPasswordDirty, setSshPasswordDirty] = useState(false);
 
-  // Load SSH connections
+  // ── tab ──
+  const [activeTab, setActiveTab] = useState<"general" | "databases" | "ssh">("general");
+
+  // ── SSH ──
+  const [sshConnections, setSshConnections] = useState<SshConnection[]>([]);
+  const [isSshModalOpen, setIsSshModalOpen] = useState(false);
+  const [sshMode, setSshMode] = useState<"existing" | "inline">("existing");
+
+  // ── databases ──
+  const [availableDatabases, setAvailableDatabases] = useState<string[]>([]);
+  const [loadingDatabases, setLoadingDatabases] = useState(false);
+  const [databaseLoadError, setDatabaseLoadError] = useState<string | null>(null);
+
+  // ── connection test ──
+  const [status, setStatus] = useState<"idle" | "testing" | "saving" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const [testResult, setTestResult] = useState<"success" | "error" | null>(null);
+
+  // ── capabilities ──
+  const isNetworkDriver =
+    activeDriver?.capabilities?.file_based === false &&
+    !activeDriver?.capabilities?.folder_based;
+  const isMultiDb = isMultiDatabaseCapable(activeDriver?.capabilities);
+
+  // ── helpers ──
   const loadSshConnectionsList = async () => {
     const result = await loadSshConnections();
     setSshConnections(result);
   };
 
-  // Load available databases for the user
-  const loadDatabases = async () => {
-    if (activeDriver?.capabilities?.file_based === true) {
-      // SQLite doesn't support database listing
-      return;
-    }
+  const updateField = (field: keyof ConnectionParams, value: string | number | boolean | undefined) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
+  const loadDatabases = async () => {
+    if (activeDriver?.capabilities?.file_based === true) return;
     setLoadingDatabases(true);
     setDatabaseLoadError(null);
     try {
@@ -151,35 +161,17 @@ export const NewConnectionModal = ({
         ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
       };
-
-      // In edit mode: only send password if it was modified (dirty)
-      // If not dirty, don't send it (backend will use saved password)
       if (initialConnection) {
-        if (!passwordDirty) {
-          delete listParams.password;
-        }
-        if (!sshPasswordDirty) {
-          delete listParams.ssh_password;
-        }
+        if (!passwordDirty) delete listParams.password;
+        if (!sshPasswordDirty) delete listParams.ssh_password;
       }
-
       const databases = await invoke<string[]>("list_databases", {
-        request: {
-          params: {
-            ...listParams,
-          },
-          connection_id: initialConnection?.id,
-        },
+        request: { params: { ...listParams }, connection_id: initialConnection?.id },
       });
       setAvailableDatabases(databases);
     } catch (err) {
-      console.error("Failed to load databases:", err);
       const errorMsg =
-        typeof err === "string"
-          ? err
-          : err instanceof Error
-            ? err.message
-            : t("newConnection.failLoadDatabases");
+        typeof err === "string" ? err : err instanceof Error ? err.message : t("newConnection.failLoadDatabases");
       setDatabaseLoadError(errorMsg);
       setAvailableDatabases([]);
     } finally {
@@ -187,66 +179,60 @@ export const NewConnectionModal = ({
     }
   };
 
-  // Populate form on open if editing
+  // ── init form on open ──
   useEffect(() => {
     if (!isOpen) return;
-
-    const initializeForm = async () => {
+    const init = async () => {
       if (initialConnection) {
         setName(initialConnection.name);
         setDriver(initialConnection.params.driver);
-        setFormData({ ...initialConnection.params });
+        const db = initialConnection.params.database;
+        if (Array.isArray(db)) {
+          setSelectedDatabasesState(db);
+          setFormData({ ...initialConnection.params, database: db[0] ?? "" });
+        } else {
+          setSelectedDatabasesState([]);
+          setFormData({ ...initialConnection.params });
+        }
         setPasswordDirty(false);
         setSshPasswordDirty(false);
-        // Set SSH mode based on whether using connection ID or inline config
-        setSshMode(
-          initialConnection.params.ssh_connection_id ? "existing" : "inline",
-        );
+        setDbSearchQuery("");
+        setSshMode(initialConnection.params.ssh_connection_id ? "existing" : "inline");
       } else {
-        // Reset to defaults
         setName("");
         setDriver("mysql");
-        setFormData({
-          host: "localhost",
-          port: 3306,
-          username: "",
-          database: "",
-          ssh_enabled: false,
-          ssh_port: 22,
-        });
+        setFormData({ host: "localhost", port: 3306, username: "", database: "", ssh_enabled: false, ssh_port: 22 });
+        setSelectedDatabasesState([]);
+        setDbSearchQuery("");
         setPasswordDirty(false);
         setSshPasswordDirty(false);
         setSshMode("existing");
       }
       setStatus("idle");
       setMessage("");
+      setTestResult(null);
+      setActiveTab("general");
+      setAvailableDatabases([]);
+      setDatabaseLoadError(null);
       await loadSshConnectionsList();
     };
-
-    void initializeForm();
+    void init();
   }, [isOpen, initialConnection]);
 
   if (!isOpen) return null;
 
   const handleDriverChange = (newDriver: string) => {
     setDriver(newDriver);
-    // Only reset if creating new, or be careful not to wipe existing data being edited?
-    // Let's assume switching driver resets defaults for convenience.
     setFormData((prev) => ({
       ...prev,
       driver: newDriver,
-      port: drivers.find(d => d.id === newDriver)?.default_port ?? undefined,
-      username: drivers.find(d => d.id === newDriver)?.default_username ?? "",
+      port: drivers.find((d) => d.id === newDriver)?.default_port ?? undefined,
+      username: drivers.find((d) => d.id === newDriver)?.default_username ?? "",
     }));
+    setAvailableDatabases([]);
+    setDatabaseLoadError(null);
     setStatus("idle");
     setMessage("");
-  };
-
-  const updateField = (
-    field: keyof ConnectionParams,
-    value: string | number | boolean | undefined,
-  ) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const testConnection = async () => {
@@ -258,580 +244,598 @@ export const NewConnectionModal = ({
         driver,
         ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
+        database: isMultiDb
+          ? (selectedDatabasesState[0] ?? (typeof formData.database === "string" ? formData.database : ""))
+          : formData.database,
       };
-
       if (initialConnection) {
-        // Only send password if it was modified (dirty)
-        // If not dirty, don't send it (backend will use saved password)
-        if (!passwordDirty) {
-          delete testParams.password;
-        }
-        if (!sshPasswordDirty) {
-          delete testParams.ssh_password;
-        }
+        if (!passwordDirty) delete testParams.password;
+        if (!sshPasswordDirty) delete testParams.ssh_password;
       }
-
       const result = await invoke<string>("test_connection", {
-        request: {
-          params: {
-            ...testParams,
-          },
-          connection_id: initialConnection?.id,
-        },
+        request: { params: { ...testParams }, connection_id: initialConnection?.id },
       });
       setStatus("success");
       setMessage(result);
       setTestResult("success");
-
-      // Clear the success indicator and message after 3 seconds
-      setTimeout(() => {
-        setTestResult(null);
-        setStatus("idle");
-        setMessage("");
-      }, 3000);
-
+      setTimeout(() => { setTestResult(null); setStatus("idle"); setMessage(""); }, 3000);
       return true;
     } catch (err) {
-      console.error("Connection test error:", err);
       setStatus("error");
-      const msg =
-        typeof err === "string"
-          ? err
-          : err instanceof Error
-            ? err.message
-            : JSON.stringify(err);
+      const msg = typeof err === "string" ? err : err instanceof Error ? err.message : JSON.stringify(err);
       setMessage(msg);
       setTestResult("error");
-
-      // Clear only the error icon after 3 seconds, keep the message
-      setTimeout(() => {
-        setTestResult(null);
-        setStatus("idle");
-      }, 3000);
-
+      setTimeout(() => { setTestResult(null); setStatus("idle"); }, 3000);
       return false;
     }
   };
 
   const saveConnection = async () => {
     if (!name.trim()) {
-      setStatus("error");
-      setMessage(t("newConnection.nameRequired"));
-      setTestResult("error");
-      return;
+      setStatus("error"); setMessage(t("newConnection.nameRequired")); setTestResult("error"); return;
     }
-
-    if (!formData.database?.trim()) {
-      setStatus("error");
-      setMessage(t("newConnection.dbNameRequired"));
-      setTestResult("error");
-      return;
+    if (isMultiDb) {
+      if (selectedDatabasesState.length === 0) {
+        setStatus("error"); setMessage(t("newConnection.noDatabasesSelected")); setTestResult("error"); return;
+      }
+    } else if (!formData.database || (typeof formData.database === "string" && !formData.database.trim())) {
+      setStatus("error"); setMessage(t("newConnection.dbNameRequired")); setTestResult("error"); return;
     }
-
-    setStatus("saving");
-    setMessage("");
-    setTestResult(null);
+    setStatus("saving"); setMessage(""); setTestResult(null);
     try {
       const params: Partial<ConnectionParams> = {
-        driver,
-        ...formData,
+        driver, ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
+        database: isMultiDb
+          ? (selectedDatabasesState.length === 1 ? selectedDatabasesState[0] : selectedDatabasesState)
+          : formData.database,
       };
-
       if (initialConnection) {
-        if (!params.password?.trim()) {
-          delete params.password;
-        }
-        if (!params.ssh_password?.trim()) {
-          delete params.ssh_password;
-        }
-        // Update
-        await invoke("update_connection", {
-          id: initialConnection.id,
-          name,
-          params,
-        });
+        if (!params.password?.trim()) delete params.password;
+        if (!params.ssh_password?.trim()) delete params.ssh_password;
+        await invoke("update_connection", { id: initialConnection.id, name, params });
       } else {
-        // Create
-        await invoke("save_connection", {
-          name,
-          params,
-        });
+        await invoke("save_connection", { name, params });
       }
-
       if (onSave) onSave();
       onClose();
     } catch (err) {
       setStatus("error");
-      const msg = typeof err === "string" ? err : t("newConnection.failSave");
-      setMessage(msg);
+      setMessage(typeof err === "string" ? err : t("newConnection.failSave"));
       setTestResult("error");
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
-      <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-default bg-base">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-900/30 rounded-lg">
-              <Database size={20} className="text-blue-400" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-primary">
-                {initialConnection
-                  ? t("newConnection.titleEdit")
-                  : t("newConnection.titleNew")}
-              </h2>
-              <p className="text-xs text-secondary">
-                {t("newConnection.subtitle")}
-              </p>
-            </div>
+  // ── rendered general tab content ──
+  const generalTabContent = (
+    <div className="space-y-4">
+      {/* File / folder based */}
+      {activeDriver?.capabilities?.file_based === true || activeDriver?.capabilities?.folder_based === true ? (
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+            {activeDriver.capabilities.folder_based ? t("newConnection.folderPath") : t("newConnection.filePath")}
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={typeof formData.database === "string" ? formData.database : ""}
+              onChange={(e) => updateField("database", e.target.value)}
+              className="flex-1 px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+              placeholder={activeDriver.capabilities.folder_based ? t("newConnection.folderPathPlaceholder") : t("newConnection.filePathPlaceholder")}
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                const selected = await open({ multiple: false, directory: activeDriver.capabilities.folder_based });
+                if (selected) updateField("database", selected);
+              }}
+              className="px-2.5 py-1.5 bg-base hover:bg-surface-secondary border border-strong rounded-md text-muted hover:text-primary transition-colors"
+              title={activeDriver.capabilities.folder_based ? t("newConnection.browseFolder") : t("newConnection.browseFile")}
+            >
+              <FolderOpen size={15} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-secondary hover:text-primary hover:bg-surface-tertiary rounded-lg transition-colors"
-          >
-            <X size={20} />
-          </button>
         </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-4 overflow-y-auto">
-          <ConnectionInput
-            label={t("newConnection.name")}
-            value={name}
-            onChange={setName}
-            placeholder={t("newConnection.namePlaceholder")}
-            autoFocus
-          />
-
-          <div className="space-y-1">
-            <label className={LabelClass}>{t("newConnection.dbType")}</label>
-            <div className="flex gap-2 mt-1">
-              {drivers.map((d: PluginManifest) => (
-                <button
-                  key={d.id}
-                  onClick={() => handleDriverChange(d.id)}
-                  className={clsx(
-                    "px-4 py-2 rounded border text-sm font-medium capitalize flex-1",
-                    driver === d.id
-                      ? "bg-blue-600 border-blue-600 text-white"
-                      : "bg-elevated border-strong text-secondary hover:border-strong",
-                  )}
-                >
-                  {d.name}
-                </button>
-              ))}
-            </div>
+      ) : (
+        <>
+          {/* Host + Port */}
+          <div className="grid grid-cols-3 gap-3">
+            <FieldInput
+              className="col-span-2"
+              label={t("newConnection.host")}
+              value={formData.host}
+              onChange={(v) => updateField("host", v)}
+              placeholder="localhost"
+            />
+            <FieldInput
+              label={t("newConnection.port")}
+              value={formData.port}
+              onChange={(v) => updateField("port", v)}
+              type="number"
+              placeholder={driver === "mysql" ? "3306" : "5432"}
+            />
           </div>
 
-          {activeDriver?.capabilities?.file_based === false && !activeDriver?.capabilities?.folder_based && (
-            <div className="grid grid-cols-3 gap-4">
-              <ConnectionInput
-                className="col-span-2"
-                label={t("newConnection.host")}
-                value={formData.host}
-                onChange={(val) => updateField("host", val)}
-                placeholder="localhost"
-              />
-              <ConnectionInput
-                label={t("newConnection.port")}
-                value={formData.port}
-                onChange={(val) => updateField("port", val)}
-                type="number"
-                placeholder={driver === "mysql" ? "3306" : "5432"}
-              />
-            </div>
-          )}
+          {/* User + Password */}
+          <div className="grid grid-cols-2 gap-3">
+            <FieldInput
+              label={t("newConnection.username")}
+              value={formData.username}
+              onChange={(v) => updateField("username", v)}
+              placeholder="root"
+            />
+            <FieldInput
+              label={t("newConnection.password")}
+              value={formData.password}
+              onChange={(v) => { setPasswordDirty(true); updateField("password", v); }}
+              type="password"
+              placeholder={initialConnection && !passwordDirty && !formData.password ? "••••••••" : t("newConnection.passwordPlaceholder")}
+            />
+          </div>
 
-          {activeDriver?.capabilities?.file_based === false && !activeDriver?.capabilities?.folder_based && (
-            <div className="grid grid-cols-2 gap-4">
-              <ConnectionInput
-                label={t("newConnection.username")}
-                value={formData.username}
-                onChange={(val) => updateField("username", val)}
-                placeholder="Username"
-              />
-              <ConnectionInput
-                label={t("newConnection.password")}
-                value={formData.password}
-                onChange={(val) => {
-                  setPasswordDirty(true);
-                  updateField("password", val);
-                }}
-                type="password"
-                placeholder={
-                  initialConnection && !passwordDirty && !formData.password
-                    ? "<hidden>"
-                    : t("newConnection.passwordPlaceholder")
-                }
-              />
-            </div>
-          )}
-
-          {/* Database Name / File Path / Folder Path Field */}
-          {activeDriver?.capabilities?.file_based === true || activeDriver?.capabilities?.folder_based === true ? (
-            <div className="space-y-1">
-              <label className={LabelClass}>
-                {activeDriver.capabilities.folder_based
-                  ? t("newConnection.folderPath")
-                  : t("newConnection.filePath")}
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={formData.database ?? ""}
-                  onChange={(e) => updateField("database", e.target.value)}
-                  className={clsx(InputClass, "flex-1")}
-                  placeholder={
-                    activeDriver.capabilities.folder_based
-                      ? t("newConnection.folderPathPlaceholder")
-                      : t("newConnection.filePathPlaceholder")
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const selected = await open({
-                      multiple: false,
-                      directory: activeDriver.capabilities.folder_based,
-                    });
-                    if (selected) {
-                      updateField("database", selected);
-                    }
-                  }}
-                  className="px-3 pt-2 pb-1 bg-base hover:bg-surface-tertiary text-secondary hover:text-primary border border-strong rounded-lg transition-colors shrink-0"
-                  title={
-                    activeDriver.capabilities.folder_based
-                      ? t("newConnection.browseFolder")
-                      : t("newConnection.browseFile")
-                  }
-                >
-                  <FolderOpen size={16} />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1">
+          {/* Database (single) — only shown for non-multi-db drivers */}
+          {!isMultiDb && (
+            <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <label className={LabelClass}>
+                <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
                   {t("newConnection.dbName")}
                 </label>
                 <button
                   type="button"
                   onClick={loadDatabases}
-                  disabled={
-                    loadingDatabases || !formData.host || !formData.username
-                  }
-                  className="text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed flex items-center gap-1"
+                  disabled={loadingDatabases || !formData.host || !formData.username}
+                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors"
                 >
-                  {loadingDatabases ? (
-                    <>
-                      <Loader2 size={12} className="animate-spin" />
-                      {t("newConnection.loadingDatabases")}
-                    </>
-                  ) : (
-                    <>
-                      <Database size={12} />
-                      {t("newConnection.loadDatabases")}
-                    </>
-                  )}
+                  {loadingDatabases ? <Loader2 size={11} className="animate-spin" /> : <Database size={11} />}
+                  {loadingDatabases ? t("newConnection.loadingDatabases") : t("newConnection.loadDatabases")}
                 </button>
               </div>
-              <div className="space-y-2">
-                {availableDatabases.length > 0 ? (
-                  <SearchableSelect
-                    value={formData.database || null}
-                    options={availableDatabases}
-                    onChange={(val) => updateField("database", val)}
-                    placeholder={t("newConnection.selectDatabase")}
-                    searchPlaceholder={t("common.search")}
-                    noResultsLabel={t("newConnection.noDatabasesFound")}
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    value={formData.database ?? ""}
-                    onChange={(e) => updateField("database", e.target.value)}
-                    className={InputClass}
-                    placeholder={t("newConnection.dbNamePlaceholder")}
-                  />
-                )}
-                {databaseLoadError && (
-                  <div className="text-xs text-red-400 flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    {databaseLoadError}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* SSH Tunnel Section */}
-          {activeDriver?.capabilities?.file_based === false && !activeDriver?.capabilities?.folder_based && (
-            <div className="pt-4 border-t border-default space-y-4">
-              <div className="flex items-center gap-2 mb-3">
-                <input
-                  type="checkbox"
-                  id="ssh-toggle"
-                  checked={!!formData.ssh_enabled}
-                  onChange={(e) => {
-                    const enabled = e.target.checked;
-                    updateField("ssh_enabled", enabled);
-                    if (enabled && !formData.ssh_port)
-                      updateField("ssh_port", 22);
-                  }}
-                  className="accent-blue-500 w-4 h-4 rounded cursor-pointer"
+              {availableDatabases.length > 0 ? (
+                <SearchableSelect
+                  value={typeof formData.database === "string" ? formData.database || null : null}
+                  options={availableDatabases}
+                  onChange={(val) => updateField("database", val)}
+                  placeholder={t("newConnection.selectDatabase")}
+                  searchPlaceholder={t("common.search")}
+                  noResultsLabel={t("newConnection.noDatabasesFound")}
                 />
-                <label
-                  htmlFor="ssh-toggle"
-                  className="text-sm font-semibold text-secondary cursor-pointer select-none"
-                >
-                  {t("newConnection.useSsh")}
-                </label>
-              </div>
-
-              {formData.ssh_enabled && (
-                <div className="space-y-4 pl-3 border-l-2 border-default ml-1">
-                  {/* SSH Mode Selection */}
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSshMode("existing");
-                        // Clear inline fields when switching to existing
-                        updateField("ssh_host", undefined);
-                        updateField("ssh_user", undefined);
-                        updateField("ssh_password", undefined);
-                        updateField("ssh_key_file", undefined);
-                        updateField("ssh_key_passphrase", undefined);
-                        setSshPasswordDirty(false);
-                      }}
-                      className={clsx(
-                        "flex-1 px-3 py-2 rounded border text-sm font-medium transition-colors",
-                        sshMode === "existing"
-                          ? "bg-blue-600 border-blue-600 text-white"
-                          : "bg-elevated border-strong text-secondary hover:border-strong",
-                      )}
-                    >
-                      {t("newConnection.useSshConnection")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSshMode("inline");
-                        // Clear connection ID when switching to inline
-                        updateField("ssh_connection_id", undefined);
-                      }}
-                      className={clsx(
-                        "flex-1 px-3 py-2 rounded border text-sm font-medium transition-colors",
-                        sshMode === "inline"
-                          ? "bg-blue-600 border-blue-600 text-white"
-                          : "bg-elevated border-strong text-secondary hover:border-strong",
-                      )}
-                    >
-                      {t("newConnection.createInlineSsh")}
-                    </button>
-                  </div>
-
-                  {/* Existing SSH Connection */}
-                  {sshMode === "existing" && (
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <label className={LabelClass}>
-                          {t("newConnection.selectSshConnection")}
-                        </label>
-                        <select
-                          value={formData.ssh_connection_id || ""}
-                          onChange={(e) =>
-                            updateField("ssh_connection_id", e.target.value)
-                          }
-                          className={clsx(
-                            InputClass,
-                            "cursor-pointer appearance-auto",
-                          )}
-                        >
-                          <option value="">
-                            {sshConnections.length === 0
-                              ? t("newConnection.noSshConnections")
-                              : "-- " +
-                                t("newConnection.selectSshConnection") +
-                                " --"}
-                          </option>
-                          {sshConnections.map((conn) => (
-                            <option key={conn.id} value={conn.id}>
-                              {conn.name} ({conn.user}@{conn.host}:{conn.port})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsSshModalOpen(true)}
-                        className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1.5 font-medium"
-                      >
-                        <Settings size={14} />
-                        {t("newConnection.manageSshConnections")}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Inline SSH Configuration */}
-                  {sshMode === "inline" && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-3 gap-4">
-                        <ConnectionInput
-                          className="col-span-2"
-                          label={t("newConnection.sshHost")}
-                          value={formData.ssh_host}
-                          onChange={(val) => updateField("ssh_host", val)}
-                          placeholder="ssh.example.com"
-                        />
-                        <ConnectionInput
-                          label={t("newConnection.sshPort")}
-                          value={formData.ssh_port}
-                          onChange={(val) =>
-                            updateField("ssh_port", Number(val))
-                          }
-                          type="number"
-                          placeholder="22"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <ConnectionInput
-                          label={t("newConnection.sshUser")}
-                          value={formData.ssh_user}
-                          onChange={(val) => updateField("ssh_user", val)}
-                          placeholder="Username"
-                        />
-                        <ConnectionInput
-                          label={t("newConnection.sshPassword")}
-                          value={formData.ssh_password}
-                          onChange={(val) => {
-                            setSshPasswordDirty(true);
-                            updateField("ssh_password", val);
-                          }}
-                          type="password"
-                          placeholder={
-                            initialConnection &&
-                            !sshPasswordDirty &&
-                            !formData.ssh_password
-                              ? "<hidden>"
-                              : t("newConnection.sshPasswordPlaceholder")
-                          }
-                          error={
-                            formData.save_in_keychain &&
-                            sshPasswordDirty &&
-                            !formData.ssh_password ? (
-                              <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
-                                <AlertCircle size={10} />
-                                {t("newConnection.sshPasswordMissing")}
-                              </p>
-                            ) : null
-                          }
-                        />
-                      </div>
-
-                      <ConnectionInput
-                        label={t("newConnection.sshKeyFile")}
-                        value={formData.ssh_key_file}
-                        onChange={(val) => updateField("ssh_key_file", val)}
-                        placeholder={t("newConnection.sshKeyFilePlaceholder")}
-                      />
-
-                      <ConnectionInput
-                        label={t("newConnection.sshKeyPassphrase")}
-                        value={formData.ssh_key_passphrase}
-                        onChange={(val) =>
-                          updateField("ssh_key_passphrase", val)
-                        }
-                        type="password"
-                        placeholder={t(
-                          "newConnection.sshKeyPassphrasePlaceholder",
-                        )}
-                      />
-                    </div>
-                  )}
+              ) : (
+                <input
+                  type="text"
+                  value={typeof formData.database === "string" ? formData.database : ""}
+                  onChange={(e) => updateField("database", e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+                  placeholder={t("newConnection.dbNamePlaceholder")}
+                />
+              )}
+              {databaseLoadError && (
+                <div className="flex items-center gap-1 text-xs text-red-400 mt-0.5">
+                  <AlertCircle size={11} /> {databaseLoadError}
                 </div>
               )}
             </div>
           )}
 
-          {activeDriver?.capabilities?.file_based === false && !activeDriver?.capabilities?.folder_based && (
-            <div className="mt-4 flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="keychain-toggle"
-                checked={!!formData.save_in_keychain}
-                onChange={(e) => {
-                  updateField("password", "");
-                  setPasswordDirty(true);
-                  setSshPasswordDirty(true);
-                  updateField("save_in_keychain", e.target.checked);
+          {/* Keychain */}
+          <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              checked={!!formData.save_in_keychain}
+              onChange={(e) => {
+                updateField("password", "");
+                setPasswordDirty(true);
+                setSshPasswordDirty(true);
+                updateField("save_in_keychain", e.target.checked);
+              }}
+              className="accent-blue-500 w-3.5 h-3.5 rounded"
+            />
+            <span className="text-xs text-secondary">{t("newConnection.saveKeychain")}</span>
+          </label>
+        </>
+      )}
+    </div>
+  );
+
+  // ── rendered Databases tab content (multi-db selection) ──
+  const databasesTabContent = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted">{t("newConnection.selectDatabasesHint", { defaultValue: "Select the databases to include in this connection." })}</p>
+        <button
+          type="button"
+          onClick={loadDatabases}
+          disabled={loadingDatabases || !formData.host || !formData.username}
+          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors shrink-0"
+        >
+          {loadingDatabases ? <Loader2 size={11} className="animate-spin" /> : <Database size={11} />}
+          {loadingDatabases ? t("newConnection.loadingDatabases") : t("newConnection.loadDatabases")}
+        </button>
+      </div>
+      {databaseLoadError && (
+        <div className="flex items-center gap-1 text-xs text-red-400">
+          <AlertCircle size={11} /> {databaseLoadError}
+        </div>
+      )}
+      {availableDatabases.length > 0 ? (
+        <div className="border border-strong rounded-md overflow-hidden">
+          <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-default bg-base">
+            <input
+              type="text"
+              value={dbSearchQuery}
+              onChange={(e) => setDbSearchQuery(e.target.value)}
+              placeholder={t("common.search")}
+              className="flex-1 bg-transparent text-xs text-primary placeholder:text-muted outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const filteredDbs = availableDatabases.filter((db) =>
+                  db.toLowerCase().includes(dbSearchQuery.toLowerCase())
+                );
+                const allSel = filteredDbs.every((db) => selectedDatabasesState.includes(db));
+                if (allSel) {
+                  setSelectedDatabasesState((prev) => prev.filter((db) => !filteredDbs.includes(db)));
+                } else {
+                  setSelectedDatabasesState((prev) => Array.from(new Set([...prev, ...filteredDbs])));
+                }
+              }}
+              className="text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap shrink-0"
+            >
+              {availableDatabases
+                .filter((db) => db.toLowerCase().includes(dbSearchQuery.toLowerCase()))
+                .every((db) => selectedDatabasesState.includes(db))
+                ? t("sidebar.deselectAll")
+                : t("sidebar.selectAll")}
+            </button>
+          </div>
+          <div className="max-h-[300px] overflow-y-auto">
+            {availableDatabases
+              .filter((db) => db.toLowerCase().includes(dbSearchQuery.toLowerCase()))
+              .map((db) => {
+                const sel = selectedDatabasesState.includes(db);
+                return (
+                  <div
+                    key={db}
+                    onClick={() =>
+                      setSelectedDatabasesState((prev) =>
+                        sel ? prev.filter((d) => d !== db) : [...prev, db]
+                      )
+                    }
+                    className={clsx(
+                      "flex items-center gap-2 px-2.5 py-1.5 cursor-pointer text-sm transition-colors hover:bg-surface-secondary select-none",
+                      sel ? "text-primary" : "text-muted"
+                    )}
+                  >
+                    <span className={clsx("shrink-0", sel ? "text-blue-500" : "text-muted")}>
+                      {sel ? <CheckSquare size={13} /> : <Square size={13} />}
+                    </span>
+                    <span className="truncate">{db}</span>
+                  </div>
+                );
+              })}
+          </div>
+          <div className="px-2.5 py-1.5 border-t border-default bg-base text-xs text-muted">
+            {selectedDatabasesState.length > 0
+              ? t("newConnection.selectedDatabases", { count: selectedDatabasesState.length })
+              : t("newConnection.noDatabasesSelected")}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted border border-dashed border-strong rounded-md">
+          <Database size={20} className="opacity-40" />
+          <p className="text-xs">{t("newConnection.loadDatabasesHint", { defaultValue: "Click Load Databases to fetch available databases." })}</p>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── rendered SSH tab content ──
+  const sshTabContent = !isNetworkDriver ? (
+    <p className="text-xs text-muted italic">{t("newConnection.sshNotAvailable", { defaultValue: "SSH is not available for this driver." })}</p>
+  ) : (
+    <div className="space-y-4">
+      {/* Enable toggle */}
+      <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+        <input
+          type="checkbox"
+          id="ssh-toggle"
+          checked={!!formData.ssh_enabled}
+          onChange={(e) => {
+            const enabled = e.target.checked;
+            updateField("ssh_enabled", enabled);
+            if (enabled && !formData.ssh_port) updateField("ssh_port", 22);
+          }}
+          className="accent-blue-500 w-3.5 h-3.5 rounded"
+        />
+        <span className="text-sm font-medium text-secondary">{t("newConnection.useSsh")}</span>
+      </label>
+
+      {formData.ssh_enabled && (
+        <div className="space-y-4">
+          {/* Mode tabs */}
+          <div className="flex rounded-md border border-strong overflow-hidden w-fit">
+            {(["existing", "inline"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setSshMode(mode);
+                  if (mode === "existing") {
+                    updateField("ssh_host", undefined);
+                    updateField("ssh_user", undefined);
+                    updateField("ssh_password", undefined);
+                    updateField("ssh_key_file", undefined);
+                    updateField("ssh_key_passphrase", undefined);
+                    setSshPasswordDirty(false);
+                  } else {
+                    updateField("ssh_connection_id", undefined);
+                  }
                 }}
-                className="accent-blue-500 w-4 h-4 rounded cursor-pointer"
-              />
-              <label
-                htmlFor="keychain-toggle"
-                className="text-sm font-medium text-secondary cursor-pointer select-none"
+                className={clsx(
+                  "px-3 py-1.5 text-xs font-medium transition-colors",
+                  sshMode === mode ? "bg-blue-600 text-white" : "bg-elevated text-secondary hover:text-primary"
+                )}
               >
-                {t("newConnection.saveKeychain")}
-              </label>
+                {mode === "existing" ? t("newConnection.useSshConnection") : t("newConnection.createInlineSsh")}
+              </button>
+            ))}
+          </div>
+
+          {/* Existing SSH connection */}
+          {sshMode === "existing" && (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+                  {t("newConnection.selectSshConnection")}
+                </label>
+                <select
+                  value={formData.ssh_connection_id || ""}
+                  onChange={(e) => updateField("ssh_connection_id", e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary focus:border-blue-500 focus:outline-none appearance-auto cursor-pointer transition-colors"
+                >
+                  <option value="">
+                    {sshConnections.length === 0
+                      ? t("newConnection.noSshConnections")
+                      : "-- " + t("newConnection.selectSshConnection") + " --"}
+                  </option>
+                  {sshConnections.map((conn) => (
+                    <option key={conn.id} value={conn.id}>
+                      {conn.name} ({conn.user}@{conn.host}:{conn.port})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSshModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
+              >
+                <Settings size={12} />
+                {t("newConnection.manageSshConnections")}
+              </button>
+            </div>
+          )}
+
+          {/* Inline SSH config */}
+          {sshMode === "inline" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <FieldInput
+                  className="col-span-2"
+                  label={t("newConnection.sshHost")}
+                  value={formData.ssh_host}
+                  onChange={(v) => updateField("ssh_host", v)}
+                  placeholder="ssh.example.com"
+                />
+                <FieldInput
+                  label={t("newConnection.sshPort")}
+                  value={formData.ssh_port}
+                  onChange={(v) => updateField("ssh_port", Number(v))}
+                  type="number"
+                  placeholder="22"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <FieldInput
+                  label={t("newConnection.sshUser")}
+                  value={formData.ssh_user}
+                  onChange={(v) => updateField("ssh_user", v)}
+                  placeholder="user"
+                />
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+                    {t("newConnection.sshPassword")}
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.ssh_password ?? ""}
+                    onChange={(e) => { setSshPasswordDirty(true); updateField("ssh_password", e.target.value); }}
+                    placeholder={initialConnection && !sshPasswordDirty && !formData.ssh_password ? "••••••••" : t("newConnection.sshPasswordPlaceholder")}
+                    className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+                  />
+                  {formData.save_in_keychain && sshPasswordDirty && !formData.ssh_password && (
+                    <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
+                      <AlertCircle size={10} /> {t("newConnection.sshPasswordMissing")}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <FieldInput
+                label={t("newConnection.sshKeyFile")}
+                value={formData.ssh_key_file}
+                onChange={(v) => updateField("ssh_key_file", v)}
+                placeholder={t("newConnection.sshKeyFilePlaceholder")}
+              />
+              <FieldInput
+                label={t("newConnection.sshKeyPassphrase")}
+                value={formData.ssh_key_passphrase}
+                onChange={(v) => updateField("ssh_key_passphrase", v)}
+                type="password"
+                placeholder={t("newConnection.sshKeyPassphrasePlaceholder")}
+              />
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
 
-        {/* Footer */}
-        <div className="p-4 border-t border-default bg-base/50 space-y-3">
-          {/* Error Message Only */}
-          {message &&
-            (status === "error" ||
-              (status === "idle" && testResult !== "success")) && (
-              <div className="text-sm text-red-500 flex items-start gap-2">
-                <XCircle size={16} className="mt-0.5 flex-shrink-0" />
-                <span>{message}</span>
-              </div>
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm">
+      <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[760px] max-h-[88vh] flex flex-col overflow-hidden">
+
+        {/* ── Top bar: name + close ── */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-default bg-base">
+          <div className="w-2 h-2 rounded-full shrink-0" style={getDriverColorStyle(activeDriver)} />
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t("newConnection.namePlaceholder")}
+            autoFocus
+            className="flex-1 bg-transparent text-base font-semibold text-primary placeholder:text-muted/50 outline-none"
+          />
+          <span className="text-xs text-muted bg-surface-secondary px-2 py-0.5 rounded-full font-medium capitalize">
+            {activeDriver?.name ?? driver}
+          </span>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-muted hover:text-primary hover:bg-surface-secondary rounded-md transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* ── Main body: left driver list + right form ── */}
+        <div className="flex flex-1 min-h-0">
+
+          {/* Left: driver list */}
+          <div className="w-[160px] shrink-0 border-r border-default bg-base flex flex-col py-2 overflow-y-auto">
+            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+              {t("newConnection.dbType")}
+            </p>
+            {drivers.map((d: PluginManifest) => (
+              <button
+                key={d.id}
+                onClick={() => handleDriverChange(d.id)}
+                className={clsx(
+                  "flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors text-left w-full",
+                  driver === d.id
+                    ? "bg-blue-500/15 text-primary border-r-2 border-blue-500"
+                    : "text-secondary hover:bg-surface-secondary hover:text-primary border-r-2 border-transparent"
+                )}
+              >
+                <span
+                  className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-white"
+                  style={getDriverColorStyle(d)}
+                >
+                  {getDriverIcon(d)}
+                </span>
+                <span className="truncate capitalize">{d.name}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Right: form area */}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0">
+            {/* Tab bar */}
+            <div className="flex items-center border-b border-default px-5 bg-base/50">
+              {([
+                { id: "general", label: t("newConnection.general", { defaultValue: "General" }) },
+                ...(isMultiDb ? [{ id: "databases", label: t("newConnection.selectDatabases") }] : []),
+                { id: "ssh", label: "SSH" },
+              ] as { id: "general" | "databases" | "ssh"; label: string }[]).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={clsx(
+                    "px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 -mb-px",
+                    activeTab === tab.id
+                      ? "border-blue-500 text-blue-400"
+                      : "border-transparent text-muted hover:text-secondary"
+                  )}
+                >
+                  {tab.label}
+                  {tab.id === "databases" && selectedDatabasesState.length > 0 && (
+                    <span className="ml-1.5 text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">
+                      {selectedDatabasesState.length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {activeTab === "general" ? generalTabContent
+                : activeTab === "databases" ? databasesTabContent
+                : sshTabContent}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Footer: test status + actions ── */}
+        <div className="border-t border-default bg-base px-5 py-3 flex items-center gap-3">
+          {/* Test button */}
+          <button
+            onClick={testConnection}
+            disabled={status === "testing" || status === "saving"}
+            className={clsx(
+              "flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm font-medium transition-colors disabled:opacity-50",
+              testResult === "success"
+                ? "border-green-600/50 bg-green-900/20 text-green-400"
+                : testResult === "error"
+                  ? "border-red-600/50 bg-red-900/20 text-red-400"
+                  : "border-strong bg-elevated text-secondary hover:text-primary hover:bg-surface-secondary"
             )}
+          >
+            {status === "testing" ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : testResult === "success" ? (
+              <Check size={14} />
+            ) : testResult === "error" ? (
+              <XCircle size={14} />
+            ) : (
+              <Plug size={14} />
+            )}
+            {t("newConnection.testConnection")}
+          </button>
 
-          <div className="flex justify-end gap-3">
+          {/* Status message */}
+          {message && (
+            <p className={clsx(
+              "flex-1 text-xs truncate",
+              testResult === "success" ? "text-green-400" : "text-red-400"
+            )}>
+              {message}
+            </p>
+          )}
+          {!message && <div className="flex-1" />}
+
+          {/* Cancel + Save */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={testConnection}
-              disabled={status === "testing" || status === "saving"}
-              className="px-4 py-2 text-secondary hover:text-primary hover:bg-surface-tertiary transition-colors text-sm flex items-center gap-2 disabled:opacity-50 rounded-lg"
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm text-secondary hover:text-primary hover:bg-surface-secondary rounded-md border border-strong transition-colors"
             >
-              {status === "testing" ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : testResult === "success" ? (
-                <Check size={16} className="text-green-500" />
-              ) : testResult === "error" ? (
-                <XCircle size={16} className="text-red-500" />
-              ) : null}
-              {t("newConnection.testConnection")}
+              {t("common.cancel")}
             </button>
             <button
               onClick={saveConnection}
               disabled={status === "saving"}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
             >
-              {status === "saving" && (
-                <Loader2 size={16} className="animate-spin" />
-              )}
+              {status === "saving" && <Loader2 size={14} className="animate-spin" />}
               {t("newConnection.save")}
             </button>
           </div>
         </div>
       </div>
 
-      {/* SSH Connections Management Modal */}
+      {/* SSH Management Modal */}
       <SshConnectionsModal
         isOpen={isSshModalOpen}
-        onClose={async () => {
-          setIsSshModalOpen(false);
-          await loadSshConnectionsList();
-        }}
+        onClose={async () => { setIsSshModalOpen(false); await loadSshConnectionsList(); }}
       />
     </div>
   );

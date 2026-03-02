@@ -22,7 +22,7 @@ export interface SavedConnection {
   params: {
     driver: string;
     host?: string;
-    database: string;
+    database: string | string[];
     port?: number;
     username?: string;
     password?: string;
@@ -56,6 +56,8 @@ export interface ConnectionData {
   activeSchema: string | null;
   selectedSchemas: string[];
   needsSchemaSelection: boolean;
+  selectedDatabases: string[];
+  databaseDataMap: Record<string, SchemaData>;
   isConnecting: boolean;
   isConnected: boolean;
   error?: string;
@@ -82,6 +84,8 @@ export interface DatabaseContextType {
   activeSchema: string | null;
   selectedSchemas: string[];
   needsSchemaSelection: boolean;
+  selectedDatabases: string[];
+  databaseDataMap: Record<string, SchemaData>;
   connections: SavedConnection[];
   loadConnections: () => Promise<void>;
   isLoadingConnections: boolean;
@@ -95,6 +99,8 @@ export interface DatabaseContextType {
   loadSchemaData: (schema: string) => Promise<void>;
   refreshSchemaData: (schema: string) => Promise<void>;
   setSelectedSchemas: (schemas: string[]) => Promise<void>;
+  loadDatabaseData: (database: string) => Promise<void>;
+  refreshDatabaseData: (database: string) => Promise<void>;
   getConnectionData: (connectionId: string) => ConnectionData | undefined;
   isConnectionOpen: (connectionId: string) => boolean;
 }

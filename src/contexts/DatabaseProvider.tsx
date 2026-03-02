@@ -13,6 +13,7 @@ import type { PluginManifest } from '../types/plugins';
 import { clearAutocompleteCache } from '../utils/autocomplete';
 import { useSettings } from '../hooks/useSettings';
 import { findConnectionsForDrivers } from '../utils/connectionManager';
+import { isMultiDatabaseCapable, getEffectiveDatabase, getDatabaseList } from '../utils/database';
 
 const createEmptyConnectionData = (driver: string = '', name: string = '', dbName: string = ''): ConnectionData => ({
   driver,
@@ -31,6 +32,8 @@ const createEmptyConnectionData = (driver: string = '', name: string = '', dbNam
   activeSchema: null,
   selectedSchemas: [],
   needsSchemaSelection: false,
+  selectedDatabases: [],
+  databaseDataMap: {},
   isConnecting: false,
   isConnected: false,
 });
@@ -74,6 +77,8 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   const activeSchema = activeData?.activeSchema ?? null;
   const selectedSchemas = activeData?.selectedSchemas ?? [];
   const needsSchemaSelection = activeData?.needsSchemaSelection ?? false;
+  const selectedDatabases = activeData?.selectedDatabases ?? [];
+  const databaseDataMap = activeData?.databaseDataMap ?? {};
 
   useEffect(() => {
     const updateTitle = async () => {
@@ -244,6 +249,113 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [activeConnectionId, connectionDataMap, updateConnectionData]);
 
+  const loadDatabaseData = useCallback(async (database: string) => {
+    if (!activeConnectionId) return;
+
+    const currentData = connectionDataMap[activeConnectionId];
+    if (!currentData) return;
+
+    const existing = currentData.databaseDataMap[database];
+    if (existing?.isLoaded || existing?.isLoading) return;
+
+    updateConnectionData(activeConnectionId, {
+      databaseDataMap: {
+        ...currentData.databaseDataMap,
+        [database]: { tables: [], views: [], routines: [], isLoading: true, isLoaded: false },
+      },
+    });
+
+    try {
+      const [tablesResult, viewsResult, routinesResult] = await Promise.all([
+        invoke<TableInfo[]>('get_tables', { connectionId: activeConnectionId, schema: database }),
+        invoke<ViewInfo[]>('get_views', { connectionId: activeConnectionId, schema: database }),
+        invoke<RoutineInfo[]>('get_routines', { connectionId: activeConnectionId, schema: database }),
+      ]);
+
+      const freshData = connectionDataMap[activeConnectionId];
+      if (freshData) {
+        updateConnectionData(activeConnectionId, {
+          databaseDataMap: {
+            ...freshData.databaseDataMap,
+            [database]: {
+              tables: tablesResult,
+              views: viewsResult,
+              routines: routinesResult,
+              isLoading: false,
+              isLoaded: true,
+            },
+          },
+        });
+      }
+    } catch (e) {
+      console.error(`Failed to load database data for ${database}:`, e);
+      const freshData = connectionDataMap[activeConnectionId];
+      if (freshData) {
+        updateConnectionData(activeConnectionId, {
+          databaseDataMap: {
+            ...freshData.databaseDataMap,
+            [database]: { tables: [], views: [], routines: [], isLoading: false, isLoaded: false },
+          },
+        });
+      }
+    }
+  }, [activeConnectionId, connectionDataMap, updateConnectionData]);
+
+  const refreshDatabaseData = useCallback(async (database: string) => {
+    if (!activeConnectionId) return;
+
+    const currentData = connectionDataMap[activeConnectionId];
+    if (!currentData) return;
+
+    updateConnectionData(activeConnectionId, {
+      databaseDataMap: {
+        ...currentData.databaseDataMap,
+        [database]: {
+          ...(currentData.databaseDataMap[database] || { tables: [], views: [], routines: [], isLoaded: false }),
+          isLoading: true,
+        },
+      },
+    });
+
+    try {
+      const [tablesResult, viewsResult, routinesResult] = await Promise.all([
+        invoke<TableInfo[]>('get_tables', { connectionId: activeConnectionId, schema: database }),
+        invoke<ViewInfo[]>('get_views', { connectionId: activeConnectionId, schema: database }),
+        invoke<RoutineInfo[]>('get_routines', { connectionId: activeConnectionId, schema: database }),
+      ]);
+
+      const freshData = connectionDataMap[activeConnectionId];
+      if (freshData) {
+        updateConnectionData(activeConnectionId, {
+          databaseDataMap: {
+            ...freshData.databaseDataMap,
+            [database]: {
+              tables: tablesResult,
+              views: viewsResult,
+              routines: routinesResult,
+              isLoading: false,
+              isLoaded: true,
+            },
+          },
+        });
+      }
+    } catch (e) {
+      console.error(`Failed to refresh database data for ${database}:`, e);
+      const freshData = connectionDataMap[activeConnectionId];
+      if (freshData) {
+        updateConnectionData(activeConnectionId, {
+          databaseDataMap: {
+            ...freshData.databaseDataMap,
+            [database]: {
+              ...(freshData.databaseDataMap[database] || { tables: [], views: [], routines: [], isLoaded: false }),
+              isLoading: false,
+            },
+          },
+        });
+      }
+    }
+  }, [activeConnectionId, connectionDataMap, updateConnectionData]);
+
   const setSelectedSchemas = useCallback(async (newSchemas: string[]) => {
     if (!activeConnectionId) return;
 
@@ -321,11 +433,15 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         // Manifest not found; capabilities will be null and features will degrade gracefully
       }
 
+      const capabilities = driverManifest?.capabilities ?? null;
+      const dbParam = conn.params.database; // string | string[]
+      const primaryDb = getEffectiveDatabase(dbParam);
+
       updateConnectionData(connectionId, {
         driver,
-        capabilities: driverManifest?.capabilities ?? null,
+        capabilities,
         connectionName: conn.name,
-        databaseName: conn.params.database,
+        databaseName: primaryDb,
       });
 
       try {
@@ -349,7 +465,45 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(errorMsg);
       }
 
-      if (driverManifest?.capabilities?.schemas === true) {
+      const isMultiDb = isMultiDatabaseCapable(capabilities) && Array.isArray(dbParam) && dbParam.length > 1;
+
+      if (isMultiDb) {
+        const dbList = getDatabaseList(dbParam);
+        const firstDb = dbList[0] ?? '';
+
+        // Pre-load first database inline
+        let initialDbMap: Record<string, import('./DatabaseContext').SchemaData> = {};
+        if (firstDb) {
+          try {
+            const [tablesResult, viewsResult, routinesResult] = await Promise.all([
+              invoke<TableInfo[]>('get_tables', { connectionId, schema: firstDb }),
+              invoke<ViewInfo[]>('get_views', { connectionId, schema: firstDb }),
+              invoke<RoutineInfo[]>('get_routines', { connectionId, schema: firstDb }),
+            ]);
+            initialDbMap = {
+              [firstDb]: {
+                tables: tablesResult,
+                views: viewsResult,
+                routines: routinesResult,
+                isLoading: false,
+                isLoaded: true,
+              },
+            };
+          } catch (e) {
+            console.error(`Failed to pre-load database ${firstDb}:`, e);
+          }
+        }
+
+        updateConnectionData(connectionId, {
+          selectedDatabases: dbList,
+          databaseDataMap: initialDbMap,
+          isLoadingTables: false,
+          isLoadingViews: false,
+          isLoadingRoutines: false,
+          isConnecting: false,
+          isConnected: true,
+        });
+      } else if (capabilities?.schemas === true) {
         updateConnectionData(connectionId, { isLoadingSchemas: true });
 
         try {
@@ -567,6 +721,8 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       activeSchema,
       selectedSchemas,
       needsSchemaSelection,
+      selectedDatabases,
+      databaseDataMap,
       connections,
       loadConnections,
       isLoadingConnections,
@@ -580,6 +736,8 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       loadSchemaData,
       refreshSchemaData,
       setSelectedSchemas,
+      loadDatabaseData,
+      refreshDatabaseData,
       getConnectionData,
       isConnectionOpen,
     }}>

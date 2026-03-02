@@ -82,7 +82,7 @@ export const Sidebar = () => {
   const shouldShowExplorer =
     !!explorerConnId &&
     location.pathname !== "/settings" &&
-    location.pathname !== "/";
+    location.pathname !== "/connections";
 
   return (
     <div className="flex h-full">
@@ -103,7 +103,7 @@ export const Sidebar = () => {
 
         <nav className="flex-1 w-full flex flex-col items-center">
           <NavItem
-            to="/"
+            to="/connections"
             icon={Plug2}
             label={t("sidebar.connections")}
             isConnected={!!activeConnectionId}

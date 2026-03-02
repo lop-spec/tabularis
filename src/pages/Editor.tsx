@@ -80,6 +80,7 @@ interface EditorState {
   preventAutoRun?: boolean;
   schema?: string;
   targetConnectionId?: string;
+  title?: string;
 }
 
 interface ExportProgress {
@@ -88,7 +89,7 @@ interface ExportProgress {
 
 export const Editor = () => {
   const { t } = useTranslation();
-  const { activeConnectionId, tables, activeDriver, activeSchema } = useDatabase();
+  const { activeConnectionId, tables, activeDriver, activeSchema, activeCapabilities } = useDatabase();
   const { explorerConnectionId } = useConnectionLayoutContext();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
@@ -158,7 +159,8 @@ export const Editor = () => {
       if (tab.type === "table" && tab.activeTable) {
         const filter = tab.filterClause ? `WHERE ${tab.filterClause}` : "";
         const sort = tab.sortClause ? `ORDER BY ${tab.sortClause}` : "";
-        const quotedTable = quoteTableRef(tab.activeTable, activeDriver, tab.schema);
+        const schemaPrefix = activeCapabilities?.schemas === true ? tab.schema : undefined;
+        const quotedTable = quoteTableRef(tab.activeTable, activeDriver, schemaPrefix);
 
         let baseQuery = `SELECT * FROM ${quotedTable} ${filter} ${sort}`;
 
@@ -427,7 +429,8 @@ export const Editor = () => {
 
         const filter = filterClause ? `WHERE ${filterClause}` : "";
         const sort = sortClause ? `ORDER BY ${sortClause}` : "";
-        const quotedTable = quoteTableRef(targetTab.activeTable, activeDriver, targetTab.schema);
+        const schemaPrefix = activeCapabilities?.schemas === true ? targetTab.schema : undefined;
+        const quotedTable = quoteTableRef(targetTab.activeTable, activeDriver, schemaPrefix);
 
         const baseQuery = `SELECT * FROM ${quotedTable} ${filter} ${sort}`;
 
@@ -1399,11 +1402,11 @@ export const Editor = () => {
         if (processingRef.current === queryKey) return;
         processingRef.current = queryKey;
 
-        const { initialQuery: sql, tableName: table, queryName, preventAutoRun, schema: navSchema } = state;
+        const { initialQuery: sql, tableName: table, queryName, preventAutoRun, schema: navSchema, title: navTitle } = state;
         const tabId = addTab({
           type: table ? "table" : "console",
           title:
-            queryName || table || (table ? table : t("sidebar.newConsole")),
+            navTitle || queryName || table || t("sidebar.newConsole"),
           query: sql,
           activeTable: table,
           schema: navSchema,
@@ -1497,7 +1500,8 @@ export const Editor = () => {
       const sort = activeTab.sortClause
         ? `ORDER BY ${activeTab.sortClause}`
         : "";
-      const quotedTable = quoteTableRef(activeTab.activeTable, activeDriver, activeTab.schema);
+      const schemaPrefix = activeCapabilities?.schemas === true ? activeTab.schema : undefined;
+      const quotedTable = quoteTableRef(activeTab.activeTable, activeDriver, schemaPrefix);
 
       // Base query
       let baseQuery = `SELECT * FROM ${quotedTable} ${filter} ${sort}`;

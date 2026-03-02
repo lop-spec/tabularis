@@ -1,5 +1,44 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DatabaseSelection {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl DatabaseSelection {
+    pub fn primary(&self) -> &str {
+        match self {
+            DatabaseSelection::Single(s) => s.as_str(),
+            DatabaseSelection::Multiple(v) => v.first().map(|s| s.as_str()).unwrap_or(""),
+        }
+    }
+
+    pub fn as_vec(&self) -> Vec<String> {
+        match self {
+            DatabaseSelection::Single(s) => {
+                if s.is_empty() {
+                    vec![]
+                } else {
+                    vec![s.clone()]
+                }
+            }
+            DatabaseSelection::Multiple(v) => v.clone(),
+        }
+    }
+
+    pub fn is_multi(&self) -> bool {
+        matches!(self, DatabaseSelection::Multiple(v) if v.len() > 1)
+    }
+}
+
+impl std::fmt::Display for DatabaseSelection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.primary())
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SshConnection {
     pub id: String,
@@ -55,7 +94,7 @@ pub struct ConnectionParams {
     pub port: Option<u16>,
     pub username: Option<String>,
     pub password: Option<String>,
-    pub database: String,
+    pub database: DatabaseSelection,
     // SSH Tunnel
     pub ssh_enabled: Option<bool>,
     pub ssh_connection_id: Option<String>,

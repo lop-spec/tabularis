@@ -1182,6 +1182,8 @@ impl PostgresDriver {
                 },
                 is_builtin: true,
                 default_username: "postgres".to_string(),
+                color: "#3b82f6".to_string(),
+                icon: "network".to_string(),
             },
         }
     }
@@ -1214,7 +1216,7 @@ impl DatabaseDriver for PostgresDriver {
 
     async fn get_databases(&self, params: &crate::models::ConnectionParams) -> Result<Vec<String>, String> {
         let mut p = params.clone();
-        p.database = "postgres".to_string();
+        p.database = crate::models::DatabaseSelection::Single("postgres".to_string());
         get_databases(&p).await
     }
 

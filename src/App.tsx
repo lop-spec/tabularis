@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { MainLayout } from "./components/layout/MainLayout";
 import { ConnectionLayoutProvider } from "./contexts/ConnectionLayoutProvider";
@@ -59,7 +59,8 @@ function App() {
         <ConnectionLayoutProvider>
           <Routes>
             <Route path="/" element={<MainLayout />}>
-              <Route index element={<Connections />} />
+              <Route index element={<Navigate to="/connections" replace />} />
+              <Route path="connections" element={<Connections />} />
               <Route path="editor" element={<Editor />} />
               <Route path="settings" element={<Settings />} />
             </Route>

@@ -13,6 +13,8 @@ const FALLBACK_DRIVERS: PluginManifest[] = [
     default_port: 5432,
     is_builtin: true,
     default_username: "postgres",
+    color: "#3b82f6",
+    icon: "network",
     capabilities: {
       schemas: true,
       views: true,
@@ -36,6 +38,8 @@ const FALLBACK_DRIVERS: PluginManifest[] = [
     default_port: 3306,
     is_builtin: true,
     default_username: "root",
+    color: "#f97316",
+    icon: "network",
     capabilities: {
       schemas: false,
       views: true,
@@ -59,6 +63,8 @@ const FALLBACK_DRIVERS: PluginManifest[] = [
     default_port: null,
     is_builtin: true,
     default_username: "",
+    color: "#06b6d4",
+    icon: "database",
     capabilities: {
       schemas: false,
       views: true,

@@ -66,7 +66,7 @@ pub async fn dump_database<R: Runtime>(
 
         // Get tables
         let all_tables = match driver.as_str() {
-            "mysql" => mysql::get_tables(&params).await?,
+            "mysql" => mysql::get_tables(&params, None).await?,
             "postgres" => postgres::get_tables(&params, &pg_schema).await?,
             "sqlite" => sqlite::get_tables(&params).await?,
             _ => return Err("Unsupported driver".into()),

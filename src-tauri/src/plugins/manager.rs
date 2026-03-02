@@ -20,6 +20,10 @@ struct ConfigManifest {
     pub executable: String,
     #[serde(default)]
     pub default_username: Option<String>,
+    #[serde(default)]
+    pub color: String,
+    #[serde(default)]
+    pub icon: String,
 }
 
 /// Load installed plugins at startup.
@@ -107,6 +111,8 @@ pub async fn load_plugin_from_dir(path: &Path) -> Result<(), String> {
         capabilities: config.capabilities,
         is_builtin: false,
         default_username: config.default_username.unwrap_or_default(),
+        color: config.color,
+        icon: config.icon,
     };
 
     let driver = RpcDriver::new(manifest, exec_path, config.data_types).await?;

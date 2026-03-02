@@ -50,12 +50,14 @@ pub async fn get_databases(params: &ConnectionParams) -> Result<Vec<String>, Str
     Ok(rows.iter().map(|r| mysql_row_str(r, 0)).collect())
 }
 
-pub async fn get_tables(params: &ConnectionParams) -> Result<Vec<TableInfo>, String> {
-    log::debug!("MySQL: Fetching tables for database: {}", params.database);
+pub async fn get_tables(params: &ConnectionParams, schema: Option<&str>) -> Result<Vec<TableInfo>, String> {
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
+    log::debug!("MySQL: Fetching tables for database: {}", db_name);
     let pool = get_mysql_pool(params).await?;
     let rows = sqlx::query(
-        "SELECT table_name as name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name ASC",
+        "SELECT table_name as name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE' ORDER BY table_name ASC",
     )
+    .bind(db_name)
     .fetch_all(&pool)
     .await
     .map_err(|e| e.to_string())?;
@@ -68,7 +70,7 @@ pub async fn get_tables(params: &ConnectionParams) -> Result<Vec<TableInfo>, Str
     log::debug!(
         "MySQL: Found {} tables in {}",
         tables.len(),
-        params.database
+        db_name
     );
     Ok(tables)
 }
@@ -76,17 +78,20 @@ pub async fn get_tables(params: &ConnectionParams) -> Result<Vec<TableInfo>, Str
 pub async fn get_columns(
     params: &ConnectionParams,
     table_name: &str,
+    schema: Option<&str>,
 ) -> Result<Vec<TableColumn>, String> {
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
         SELECT column_name, data_type, column_key, is_nullable, extra, column_default
         FROM information_schema.columns
-        WHERE table_schema = DATABASE() AND table_name = ?
+        WHERE table_schema = ? AND table_name = ?
         ORDER BY ordinal_position
     "#;
 
     let rows = sqlx::query(query)
+        .bind(db_name)
         .bind(table_name)
         .fetch_all(&pool)
         .await
@@ -128,7 +133,9 @@ pub async fn get_columns(
 pub async fn get_foreign_keys(
     params: &ConnectionParams,
     table_name: &str,
+    schema: Option<&str>,
 ) -> Result<Vec<ForeignKey>, String> {
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
@@ -143,13 +150,14 @@ pub async fn get_foreign_keys(
         JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
         ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
         AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
-        WHERE kcu.TABLE_SCHEMA = DATABASE()
+        WHERE kcu.TABLE_SCHEMA = ?
         AND kcu.TABLE_NAME = ?
         AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
         ORDER BY kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION
     "#;
 
     let rows = sqlx::query(query)
+        .bind(db_name)
         .bind(table_name)
         .fetch_all(&pool)
         .await
@@ -171,18 +179,21 @@ pub async fn get_foreign_keys(
 // Batch function: Get all columns for all tables in one query
 pub async fn get_all_columns_batch(
     params: &ConnectionParams,
+    schema: Option<&str>,
 ) -> Result<std::collections::HashMap<String, Vec<TableColumn>>, String> {
     use std::collections::HashMap;
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
         SELECT table_name, column_name, data_type, column_key, is_nullable, extra, column_default
         FROM information_schema.columns
-        WHERE table_schema = DATABASE()
+        WHERE table_schema = ?
         ORDER BY table_name, ordinal_position
     "#;
 
     let rows = sqlx::query(query)
+        .bind(db_name)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -230,8 +241,10 @@ pub async fn get_all_columns_batch(
 // Batch function: Get all foreign keys for all tables in one query
 pub async fn get_all_foreign_keys_batch(
     params: &ConnectionParams,
+    schema: Option<&str>,
 ) -> Result<std::collections::HashMap<String, Vec<ForeignKey>>, String> {
     use std::collections::HashMap;
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
@@ -247,12 +260,13 @@ pub async fn get_all_foreign_keys_batch(
         JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
         ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
         AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
-        WHERE kcu.TABLE_SCHEMA = DATABASE()
+        WHERE kcu.TABLE_SCHEMA = ?
         AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
         ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION
     "#;
 
     let rows = sqlx::query(query)
+        .bind(db_name)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -280,7 +294,9 @@ pub async fn get_all_foreign_keys_batch(
 pub async fn get_indexes(
     params: &ConnectionParams,
     table_name: &str,
+    schema: Option<&str>,
 ) -> Result<Vec<Index>, String> {
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
@@ -290,12 +306,13 @@ pub async fn get_indexes(
             NON_UNIQUE,
             SEQ_IN_INDEX
         FROM information_schema.STATISTICS
-        WHERE TABLE_SCHEMA = DATABASE()
+        WHERE TABLE_SCHEMA = ?
         AND TABLE_NAME = ?
         ORDER BY INDEX_NAME, SEQ_IN_INDEX
     "#;
 
     let rows = sqlx::query(query)
+        .bind(db_name)
         .bind(table_name)
         .fetch_all(&pool)
         .await
@@ -627,12 +644,14 @@ pub async fn get_table_ddl(params: &ConnectionParams, table_name: &str) -> Resul
     Ok(format!("{};", create_sql))
 }
 
-pub async fn get_views(params: &ConnectionParams) -> Result<Vec<ViewInfo>, String> {
-    log::debug!("MySQL: Fetching views for database: {}", params.database);
+pub async fn get_views(params: &ConnectionParams, schema: Option<&str>) -> Result<Vec<ViewInfo>, String> {
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
+    log::debug!("MySQL: Fetching views for database: {}", db_name);
     let pool = get_mysql_pool(params).await?;
     let rows = sqlx::query(
-            "SELECT table_name as name FROM information_schema.views WHERE table_schema = DATABASE() ORDER BY table_name ASC",
+            "SELECT table_name as name FROM information_schema.views WHERE table_schema = ? ORDER BY table_name ASC",
         )
+        .bind(db_name)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -643,7 +662,7 @@ pub async fn get_views(params: &ConnectionParams) -> Result<Vec<ViewInfo>, Strin
             definition: None,
         })
         .collect();
-    log::debug!("MySQL: Found {} views in {}", views.len(), params.database);
+    log::debug!("MySQL: Found {} views in {}", views.len(), db_name);
     Ok(views)
 }
 
@@ -707,18 +726,21 @@ pub async fn drop_view(params: &ConnectionParams, view_name: &str) -> Result<(),
 pub async fn get_view_columns(
     params: &ConnectionParams,
     view_name: &str,
+    schema: Option<&str>,
 ) -> Result<Vec<TableColumn>, String> {
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
     // Views in MySQL can be queried like tables for column info
     let pool = get_mysql_pool(params).await?;
 
     let query = r#"
             SELECT column_name, data_type, column_key, is_nullable, extra, column_default
             FROM information_schema.columns
-            WHERE table_schema = DATABASE() AND table_name = ?
+            WHERE table_schema = ? AND table_name = ?
             ORDER BY ordinal_position
         "#;
 
     let rows = sqlx::query(query)
+        .bind(db_name)
         .bind(view_name)
         .fetch_all(&pool)
         .await
@@ -757,16 +779,18 @@ pub async fn get_view_columns(
         .collect())
 }
 
-pub async fn get_routines(params: &ConnectionParams) -> Result<Vec<RoutineInfo>, String> {
+pub async fn get_routines(params: &ConnectionParams, schema: Option<&str>) -> Result<Vec<RoutineInfo>, String> {
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
     let pool = get_mysql_pool(params).await?;
     let query = r#"
             SELECT routine_name, routine_type, routine_definition
             FROM information_schema.routines
-            WHERE routine_schema = DATABASE()
+            WHERE routine_schema = ?
             ORDER BY routine_name
         "#;
 
     let rows = sqlx::query(query)
+        .bind(db_name)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -784,17 +808,20 @@ pub async fn get_routines(params: &ConnectionParams) -> Result<Vec<RoutineInfo>,
 pub async fn get_routine_parameters(
     params: &ConnectionParams,
     routine_name: &str,
+    schema: Option<&str>,
 ) -> Result<Vec<RoutineParameter>, String> {
+    let db_name = schema.unwrap_or_else(|| params.database.primary());
     let pool = get_mysql_pool(params).await?;
 
     // 1. Get return type for functions from routines table
     let return_type_query = r#"
             SELECT DATA_TYPE, ROUTINE_TYPE
             FROM information_schema.routines
-            WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_NAME = ?
+            WHERE ROUTINE_SCHEMA = ? AND ROUTINE_NAME = ?
         "#;
 
     let routine_info = sqlx::query(return_type_query)
+        .bind(db_name)
         .bind(routine_name)
         .fetch_optional(&pool)
         .await
@@ -821,11 +848,12 @@ pub async fn get_routine_parameters(
     let query = r#"
             SELECT parameter_name, data_type, parameter_mode, ordinal_position
             FROM information_schema.parameters
-            WHERE specific_schema = DATABASE() AND specific_name = ?
+            WHERE specific_schema = ? AND specific_name = ?
             ORDER BY ordinal_position
         "#;
 
     let rows = sqlx::query(query)
+        .bind(db_name)
         .bind(routine_name)
         .fetch_all(&pool)
         .await
@@ -868,9 +896,19 @@ pub async fn execute_query(
     query: &str,
     limit: Option<u32>,
     page: u32,
+    schema: Option<&str>,
 ) -> Result<QueryResult, String> {
     let pool = get_mysql_pool(params).await?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+
+    // Switch to the target database if a schema override is provided (multi-db isolation)
+    if let Some(db) = schema {
+        let escaped = db.replace('`', "``");
+        sqlx::query(&format!("USE `{}`", escaped))
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| format!("Failed to switch database '{}': {}", db, e))?;
+    }
 
     let is_select = query.trim_start().to_uppercase().starts_with("SELECT");
     let mut pagination: Option<Pagination> = None;
@@ -910,41 +948,42 @@ pub async fn execute_query(
         final_query = query.to_string();
     }
 
-    // Use fetch instead of fetch_all to support streaming/limit
-    let mut rows_stream = sqlx::query(&final_query).fetch(&mut *conn);
-
     let mut columns: Vec<String> = Vec::new();
     let mut json_rows = Vec::new();
 
-    use futures::stream::StreamExt; // Correct import
+    // Scope the stream so `conn` borrow is released before the restore step
+    {
+        use futures::stream::StreamExt;
+        let mut rows_stream = sqlx::query(&final_query).fetch(&mut *conn);
 
-    while let Some(result) = rows_stream.next().await {
-        match result {
-            Ok(row) => {
-                // Initialize columns from the first row
-                if columns.is_empty() {
-                    columns = row.columns().iter().map(|c| c.name().to_string()).collect();
-                }
-
-                // Check limit (only if manual_limit is set)
-                if let Some(l) = manual_limit {
-                    if json_rows.len() >= l as usize {
-                        truncated = true;
-                        break;
+        while let Some(result) = rows_stream.next().await {
+            match result {
+                Ok(row) => {
+                    // Initialize columns from the first row
+                    if columns.is_empty() {
+                        columns = row.columns().iter().map(|c| c.name().to_string()).collect();
                     }
-                }
 
-                // Map row using type extraction function
-                let mut json_row = Vec::new();
-                for (i, _) in row.columns().iter().enumerate() {
-                    let val = extract_value(&row, i);
-                    json_row.push(val);
+                    // Check limit (only if manual_limit is set)
+                    if let Some(l) = manual_limit {
+                        if json_rows.len() >= l as usize {
+                            truncated = true;
+                            break;
+                        }
+                    }
+
+                    // Map row using type extraction function
+                    let mut json_row = Vec::new();
+                    for (i, _) in row.columns().iter().enumerate() {
+                        let val = extract_value(&row, i);
+                        json_row.push(val);
+                    }
+                    json_rows.push(json_row);
                 }
-                json_rows.push(json_row);
+                Err(e) => return Err(e.to_string()),
             }
-            Err(e) => return Err(e.to_string()),
         }
-    }
+    } // rows_stream dropped here — conn borrow released
 
     // Apply LIMIT +1 result: if we got page_size+1 rows, has_more=true
     if let Some(ref mut p) = pagination {
@@ -954,6 +993,14 @@ pub async fn execute_query(
         }
         p.has_more = has_more;
         truncated = has_more;
+    }
+
+    // Restore primary database context so the pooled connection is clean
+    if schema.is_some() {
+        let primary = params.database.primary().replace('`', "``");
+        let _ = sqlx::query(&format!("USE `{}`", primary))
+            .execute(&mut *conn)
+            .await;
     }
 
     Ok(QueryResult {
@@ -1002,6 +1049,8 @@ impl MysqlDriver {
                 },
                 is_builtin: true,
                 default_username: "root".to_string(),
+                color: "#f97316".to_string(),
+                icon: "network".to_string(),
             },
         }
     }
@@ -1031,7 +1080,7 @@ impl DatabaseDriver for MysqlDriver {
     async fn get_databases(&self, params: &crate::models::ConnectionParams) -> Result<Vec<String>, String> {
         // MySQL requires connecting to information_schema to list databases
         let mut p = params.clone();
-        p.database = "information_schema".to_string();
+        p.database = crate::models::DatabaseSelection::Single("information_schema".to_string());
         p.connection_id = None; // avoid caching under the real connection key
         get_databases(&p).await
     }
@@ -1040,32 +1089,32 @@ impl DatabaseDriver for MysqlDriver {
         get_schemas(params).await
     }
 
-    async fn get_tables(&self, params: &crate::models::ConnectionParams, _schema: Option<&str>) -> Result<Vec<crate::models::TableInfo>, String> {
-        get_tables(params).await
+    async fn get_tables(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::TableInfo>, String> {
+        get_tables(params, schema).await
     }
 
-    async fn get_columns(&self, params: &crate::models::ConnectionParams, table: &str, _schema: Option<&str>) -> Result<Vec<crate::models::TableColumn>, String> {
-        get_columns(params, table).await
+    async fn get_columns(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::TableColumn>, String> {
+        get_columns(params, table, schema).await
     }
 
-    async fn get_foreign_keys(&self, params: &crate::models::ConnectionParams, table: &str, _schema: Option<&str>) -> Result<Vec<crate::models::ForeignKey>, String> {
-        get_foreign_keys(params, table).await
+    async fn get_foreign_keys(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::ForeignKey>, String> {
+        get_foreign_keys(params, table, schema).await
     }
 
-    async fn get_indexes(&self, params: &crate::models::ConnectionParams, table: &str, _schema: Option<&str>) -> Result<Vec<crate::models::Index>, String> {
-        get_indexes(params, table).await
+    async fn get_indexes(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::Index>, String> {
+        get_indexes(params, table, schema).await
     }
 
-    async fn get_views(&self, params: &crate::models::ConnectionParams, _schema: Option<&str>) -> Result<Vec<crate::models::ViewInfo>, String> {
-        get_views(params).await
+    async fn get_views(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::ViewInfo>, String> {
+        get_views(params, schema).await
     }
 
     async fn get_view_definition(&self, params: &crate::models::ConnectionParams, view_name: &str, _schema: Option<&str>) -> Result<String, String> {
         get_view_definition(params, view_name).await
     }
 
-    async fn get_view_columns(&self, params: &crate::models::ConnectionParams, view_name: &str, _schema: Option<&str>) -> Result<Vec<crate::models::TableColumn>, String> {
-        get_view_columns(params, view_name).await
+    async fn get_view_columns(&self, params: &crate::models::ConnectionParams, view_name: &str, schema: Option<&str>) -> Result<Vec<crate::models::TableColumn>, String> {
+        get_view_columns(params, view_name, schema).await
     }
 
     async fn create_view(&self, params: &crate::models::ConnectionParams, view_name: &str, definition: &str, _schema: Option<&str>) -> Result<(), String> {
@@ -1080,20 +1129,20 @@ impl DatabaseDriver for MysqlDriver {
         drop_view(params, view_name).await
     }
 
-    async fn get_routines(&self, params: &crate::models::ConnectionParams, _schema: Option<&str>) -> Result<Vec<crate::models::RoutineInfo>, String> {
-        get_routines(params).await
+    async fn get_routines(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::RoutineInfo>, String> {
+        get_routines(params, schema).await
     }
 
-    async fn get_routine_parameters(&self, params: &crate::models::ConnectionParams, routine_name: &str, _schema: Option<&str>) -> Result<Vec<crate::models::RoutineParameter>, String> {
-        get_routine_parameters(params, routine_name).await
+    async fn get_routine_parameters(&self, params: &crate::models::ConnectionParams, routine_name: &str, schema: Option<&str>) -> Result<Vec<crate::models::RoutineParameter>, String> {
+        get_routine_parameters(params, routine_name, schema).await
     }
 
     async fn get_routine_definition(&self, params: &crate::models::ConnectionParams, routine_name: &str, routine_type: &str, _schema: Option<&str>) -> Result<String, String> {
         get_routine_definition(params, routine_name, routine_type).await
     }
 
-    async fn execute_query(&self, params: &crate::models::ConnectionParams, query: &str, limit: Option<u32>, page: u32, _schema: Option<&str>) -> Result<crate::models::QueryResult, String> {
-        execute_query(params, query, limit, page).await
+    async fn execute_query(&self, params: &crate::models::ConnectionParams, query: &str, limit: Option<u32>, page: u32, schema: Option<&str>) -> Result<crate::models::QueryResult, String> {
+        execute_query(params, query, limit, page, schema).await
     }
 
     async fn insert_record(&self, params: &crate::models::ConnectionParams, table: &str, data: std::collections::HashMap<String, serde_json::Value>, _schema: Option<&str>, max_blob_size: u64) -> Result<u64, String> {
@@ -1279,7 +1328,7 @@ impl DatabaseDriver for MysqlDriver {
             escape_identifier(index_name),
             escape_identifier(table)
         );
-        execute_query(params, &sql, None, 1).await?;
+        execute_query(params, &sql, None, 1, None).await?;
         Ok(())
     }
 
@@ -1295,16 +1344,16 @@ impl DatabaseDriver for MysqlDriver {
             escape_identifier(table),
             escape_identifier(fk_name)
         );
-        execute_query(params, &sql, None, 1).await?;
+        execute_query(params, &sql, None, 1, None).await?;
         Ok(())
     }
 
-    async fn get_all_columns_batch(&self, params: &crate::models::ConnectionParams, _schema: Option<&str>) -> Result<HashMap<String, Vec<crate::models::TableColumn>>, String> {
-        get_all_columns_batch(params).await
+    async fn get_all_columns_batch(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<HashMap<String, Vec<crate::models::TableColumn>>, String> {
+        get_all_columns_batch(params, schema).await
     }
 
-    async fn get_all_foreign_keys_batch(&self, params: &crate::models::ConnectionParams, _schema: Option<&str>) -> Result<HashMap<String, Vec<crate::models::ForeignKey>>, String> {
-        get_all_foreign_keys_batch(params).await
+    async fn get_all_foreign_keys_batch(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<HashMap<String, Vec<crate::models::ForeignKey>>, String> {
+        get_all_foreign_keys_batch(params, schema).await
     }
 
     async fn get_schema_snapshot(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::TableSchema>, String> {
