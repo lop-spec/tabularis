@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from "@/components/Analytics";
+import { CookieConsent } from "@/components/CookieConsent";
 import { SearchModal } from "@/components/SearchModal";
 import { getAllPosts } from "@/lib/posts";
 import { getAllWikiPages } from "@/lib/wiki";
@@ -47,6 +48,7 @@ export default function RootLayout({
       <body>
         {children}
         <Analytics />
+        <CookieConsent />
         <SearchModal posts={posts} wikiPages={wikiPages} plugins={plugins} />
       </body>
     </html>
