@@ -36,6 +36,11 @@
     "sqlEditor": "SQL Editor",
     "loadingSchema": "Loading schema...",
     "noSavedQueries": "No saved queries",
+    "execute": "Execute",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirmDeleteQuery": "Are you sure you want to delete query \"{{name}}\"?",
+    "confirmDeleteTitle": "Delete Query",
     "noTables": "No tables found",
     "columns": "columns",
     "keys": "keys",
@@ -73,6 +78,7 @@
     "noRoutines": "No routines found",
     "refreshRoutines": "Refresh Routines",
     "objectSummary": "Objects",
+    "databases": "Databases",
     "failGetRoutineDefinition": "Failed to get routine definition: ",
     "schemas": "Schemas",
     "noSchemas": "No schemas found",
@@ -93,7 +99,11 @@
     "splitVertical": "Split Vertical",
     "splitHorizontal": "Split Horizontal",
     "separateConnections": "Separate Connections",
-    "splitGroup": "Split Group"
+    "splitGroup": "Split Group",
+    "filterTables": "Filter tables...",
+    "noTablesMatch": "No tables match",
+    "filterDatabases": "Filter databases...",
+    "manageDatabases": "Manage Databases"
   },
   "mcp": {
     "title": "MCP Server Integration",
@@ -130,7 +140,13 @@
     "failDuplicate": "Failed to duplicate connection",
     "connecting": "Connecting...",
     "open": "Open",
-    "pluginDisabled": "Plugin disabled"
+    "pluginDisabled": "Plugin disabled",
+    "connectionCount": "{{count}} connection(s)",
+    "noConnectionsHint": "Create your first connection to get started.",
+    "searchPlaceholder": "Search connections...",
+    "noSearchResults": "No connections match \"{{query}}\"",
+    "gridView": "Grid view",
+    "listView": "List view"
   },
   "settings": {
     "title": "Settings",
@@ -276,6 +292,28 @@
       "confirmRemove": "Are you sure you want to remove \"{{name}}\"? This will delete the plugin files.",
       "enabled": "Enabled",
       "disabled": "Disabled"
+    },
+    "shortcuts": {
+      "title": "Keyboard Shortcuts",
+      "categories": {
+        "editor": "Editor",
+        "navigation": "Navigation",
+        "data_grid": "Data Grid"
+      },
+      "runQuery": "Run query",
+      "runQueryEditor": "Run query (in editor)",
+      "tabSwitcher": "Switch tab",
+      "copySelection": "Copy selection",
+      "toggleSidebar": "Toggle sidebar",
+      "openConnections": "Open connections",
+      "newConnection": "New connection",
+      "newTab": "New tab",
+      "nextPage": "Next page",
+      "prevPage": "Previous page",
+      "switchConnection": "Switch to connection 1–9",
+      "resetToDefault": "Reset to default",
+      "notOverridable": "Built-in, not customizable",
+      "pressKeys": "Press key combination..."
     }
   },
   "update": {
@@ -336,6 +374,9 @@
     "dbNamePlaceholder": "Database name",
     "loadDatabases": "Load Databases",
     "loadingDatabases": "Loading...",
+    "selectDatabases": "Select Databases",
+    "noDatabasesSelected": "Select at least one database",
+    "selectedDatabases": "{{count}} database(s) selected",
     "selectDatabase": "Select a database",
     "noDatabasesFound": "No databases found",
     "failLoadDatabases": "Failed to load databases. Check your credentials.",

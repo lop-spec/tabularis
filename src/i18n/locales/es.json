@@ -36,6 +36,11 @@
     "sqlEditor": "Editor SQL",
     "loadingSchema": "Cargando esquema...",
     "noSavedQueries": "No hay consultas guardadas",
+    "execute": "Ejecutar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "confirmDeleteQuery": "¿Estás seguro de que quieres eliminar la consulta \"{{name}}\"?",
+    "confirmDeleteTitle": "Eliminar Consulta",
     "noTables": "No se encontraron tablas",
     "columns": "columnas",
     "keys": "claves",
@@ -73,6 +78,7 @@
     "noRoutines": "No se encontraron rutinas",
     "refreshRoutines": "Actualizar Rutinas",
     "objectSummary": "Objetos",
+    "databases": "Bases de Datos",
     "failGetRoutineDefinition": "Error al obtener la definición de la rutina: ",
     "schemas": "Esquemas",
     "noSchemas": "No se encontraron esquemas",
@@ -93,7 +99,11 @@
     "splitVertical": "Dividir Vertical",
     "splitHorizontal": "Dividir Horizontal",
     "separateConnections": "Separar Conexiones",
-    "splitGroup": "Grupo Dividido"
+    "splitGroup": "Grupo Dividido",
+    "filterTables": "Filtrar tablas...",
+    "noTablesMatch": "No hay tablas que coincidan",
+    "filterDatabases": "Filtrar bases de datos...",
+    "manageDatabases": "Gestionar Bases de Datos"
   },
   "mcp": {
     "title": "Integración del Servidor MCP",
@@ -130,7 +140,13 @@
     "failDuplicate": "Error al duplicar la conexión",
     "connecting": "Conectando...",
     "open": "Abierta",
-    "pluginDisabled": "Plugin desactivado"
+    "pluginDisabled": "Plugin desactivado",
+    "connectionCount": "{{count}} conexión/es",
+    "noConnectionsHint": "Crea tu primera conexión para empezar.",
+    "searchPlaceholder": "Buscar conexiones...",
+    "noSearchResults": "Ninguna conexión coincide con \"{{query}}\"",
+    "gridView": "Vista de cuadrícula",
+    "listView": "Vista de lista"
   },
   "settings": {
     "title": "Configuración",
@@ -276,6 +292,28 @@
       "confirmRemove": "¿Estás seguro de que deseas eliminar \"{{name}}\"? Los archivos del plugin serán eliminados.",
       "enabled": "Habilitado",
       "disabled": "Deshabilitado"
+    },
+    "shortcuts": {
+      "title": "Atajos de teclado",
+      "categories": {
+        "editor": "Editor",
+        "navigation": "Navegación",
+        "data_grid": "Cuadrícula de datos"
+      },
+      "runQuery": "Ejecutar consulta",
+      "runQueryEditor": "Ejecutar consulta (en el editor)",
+      "tabSwitcher": "Cambiar pestaña",
+      "copySelection": "Copiar selección",
+      "toggleSidebar": "Mostrar/ocultar barra lateral",
+      "openConnections": "Abrir conexiones",
+      "newConnection": "Nueva conexión",
+      "newTab": "Nueva pestaña",
+      "nextPage": "Página siguiente",
+      "prevPage": "Página anterior",
+      "switchConnection": "Cambiar a conexión 1–9",
+      "resetToDefault": "Restablecer predeterminado",
+      "notOverridable": "Integrado, no personalizable",
+      "pressKeys": "Pulsa la combinación de teclas..."
     }
   },
   "update": {
@@ -336,6 +374,9 @@
     "dbNamePlaceholder": "Nombre de la base de datos",
     "loadDatabases": "Cargar Bases de Datos",
     "loadingDatabases": "Cargando...",
+    "selectDatabases": "Seleccionar Bases de Datos",
+    "noDatabasesSelected": "Selecciona al menos una base de datos",
+    "selectedDatabases": "{{count}} base(s) de datos seleccionada(s)",
     "selectDatabase": "Selecciona una base de datos",
     "noDatabasesFound": "No se encontraron bases de datos",
     "failLoadDatabases": "Error al cargar las bases de datos. Verifica tus credenciales.",

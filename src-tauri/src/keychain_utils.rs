@@ -137,7 +137,7 @@ pub fn set_ai_key(provider: &str, key: &str) -> Result<(), String> {
 
 pub fn get_ai_key(provider: &str) -> Result<String, String> {
     #[cfg(debug_assertions)]
-    println!("[Keychain] Getting AI key for {}", provider);
+    log::info!("[Keychain] Getting AI key for {}", provider);
     let entry =
         Entry::new(SERVICE_NAME, &format!("ai_key:{}", provider)).map_err(|e| e.to_string())?;
     match entry.get_password() {

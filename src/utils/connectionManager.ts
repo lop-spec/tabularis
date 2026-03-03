@@ -25,7 +25,7 @@ export function buildConnectionStatus(
     id: conn.id,
     name: conn.name,
     driver: conn.params.driver,
-    database: conn.params.database,
+    database: Array.isArray(conn.params.database) ? conn.params.database[0] : conn.params.database,
     host: conn.params.host,
     sshEnabled: conn.params.ssh_enabled ?? false,
     isOpen,

@@ -74,11 +74,22 @@ pub fn extract_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_json::V
         }
     }
 
-    // For BLOB/BINARY types, always encode via the shared helper so every
-    // driver returns the canonical wire format ("BLOB:<size>:<mime>:<base64>").
+    // For BLOB/BINARY types, encode via the shared helper so every driver
+    // returns the canonical wire format ("BLOB:<size>:<mime>:<base64>").
+    // Exception: VARBINARY/BINARY columns whose content is valid UTF-8 and
+    // fits within 65 535 bytes are returned as plain strings so that small
+    // fixed-size values (e.g. UUIDs stored as VARBINARY(36)) remain readable.
+    // This threshold mirrors BLOB_TEXT_LENGTH_THRESHOLD on the frontend.
     if col_type.contains("BLOB") || col_type.contains("BINARY") {
         match row.try_get::<Vec<u8>, _>(index) {
             Ok(v) => {
+                let is_variable_or_fixed_binary =
+                    col_type.contains("VARBINARY") || col_type == "BINARY";
+                if is_variable_or_fixed_binary && v.len() <= 65_535 {
+                    if let Ok(s) = String::from_utf8(v.clone()) {
+                        return serde_json::Value::String(s);
+                    }
+                }
                 return serde_json::Value::String(encode_blob(&v));
             }
             Err(e) => eprintln!("[DEBUG] ✗ {} as Vec<u8>: {}", col_name, e),

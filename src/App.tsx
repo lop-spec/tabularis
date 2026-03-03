@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { MainLayout } from "./components/layout/MainLayout";
 import { ConnectionLayoutProvider } from "./contexts/ConnectionLayoutProvider";
+import { KeybindingsProvider } from "./contexts/KeybindingsProvider";
 import { Connections } from "./pages/Connections";
 import { Editor } from "./pages/Editor";
 import { Settings } from "./pages/Settings";
@@ -56,10 +57,12 @@ function App() {
   return (
     <>
       <BrowserRouter>
+        <KeybindingsProvider>
         <ConnectionLayoutProvider>
           <Routes>
             <Route path="/" element={<MainLayout />}>
-              <Route index element={<Connections />} />
+              <Route index element={<Navigate to="/connections" replace />} />
+              <Route path="connections" element={<Connections />} />
               <Route path="editor" element={<Editor />} />
               <Route path="settings" element={<Settings />} />
             </Route>
@@ -67,6 +70,7 @@ function App() {
             <Route path="/task-manager" element={<TaskManagerPage />} />
           </Routes>
         </ConnectionLayoutProvider>
+        </KeybindingsProvider>
       </BrowserRouter>
 
       <UpdateNotificationModal

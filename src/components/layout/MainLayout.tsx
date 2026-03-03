@@ -2,14 +2,17 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { SplitPaneLayout } from './SplitPaneLayout';
 import { useConnectionLayoutContext } from '../../contexts/useConnectionLayoutContext';
+import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts';
 
 export const MainLayout = () => {
   const { splitView, isSplitVisible } = useConnectionLayoutContext();
   const location = useLocation();
+  useGlobalShortcuts();
 
   const showSplit = !!splitView
     && isSplitVisible
     && location.pathname !== '/'
+    && location.pathname !== '/connections'
     && location.pathname !== '/settings';
 
   return (

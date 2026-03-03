@@ -1,3 +1,45 @@
+## [0.9.4](https://github.com/debba/tabularis/compare/v0.9.3...v0.9.4) (2026-03-02)
+
+
+### Bug Fixes
+
+* **blob:** treat small UTF-8 varbinary values as plain text ([c6f5c75](https://github.com/debba/tabularis/commit/c6f5c7594989a6f457f284702da038e7c6df12ef))
+* **datagrid:** include pending changes in sidebar row data ([ec08534](https://github.com/debba/tabularis/commit/ec08534dc2f814c2b1d8a92ae61eb0f2e9edd292))
+* **react:** include missing hook deps in Connections and Settings ([540e69c](https://github.com/debba/tabularis/commit/540e69cffd14c48996f02b4168c159a841abf9ae))
+
+
+### Features
+
+* **connections:** redesign connections UI and add i18n keys ([3e06b75](https://github.com/debba/tabularis/commit/3e06b75208c7e6c188873799bbc0100d3f95befd))
+* **database:** support multi-database selection and driver UI metadata ([02efa39](https://github.com/debba/tabularis/commit/02efa3917736eeaea8969816b83272f6eb8437ff))
+* **db-panel:** scope database APIs per panel and display conn name ([c7ce603](https://github.com/debba/tabularis/commit/c7ce603a3c3f32ff307e6d7229d66782187d4320))
+* **db:** add multi-database sidebar and utilities ([5851da9](https://github.com/debba/tabularis/commit/5851da983f15e64a1659262fb6586bfeeee1d7b7))
+* **drivers:** use branded icons and colors for built-in drivers ([621d765](https://github.com/debba/tabularis/commit/621d76571ff081291ddb3c791fac65c1a59691a2))
+* **explorer:** add database manager and get_available_databases command ([d4ad168](https://github.com/debba/tabularis/commit/d4ad1681bb1fbf357fe546b4864947912dc69c93))
+* **keybindings:** add keyboard shortcuts system and persistence ([45df357](https://github.com/debba/tabularis/commit/45df357bab8c3cb1b4edae7d93ea752ceba54fd8))
+* **keybindings:** show shortcut hints and map display keys ([e608b5f](https://github.com/debba/tabularis/commit/e608b5f54533573eec06b78ee13e161132215aae))
+
+
+
+## [0.9.3](https://github.com/debba/tabularis/compare/v0.9.2...v0.9.3) (2026-03-01)
+
+
+### Bug Fixes
+
+* open graph image ([12696a0](https://github.com/debba/tabularis/commit/12696a0db8ce00f227b2bc02b38d701601d69f2e))
+* **plugins:** resolve plugin executable lookup on Windows ([f766141](https://github.com/debba/tabularis/commit/f766141a48673d2bb816d7d462232e929b4ba5bd))
+
+
+### Features
+
+* **settings:** add downgrade flow and translations for older versions ([77ebbb3](https://github.com/debba/tabularis/commit/77ebbb3ee5b856f1b0d73030484e6a5ed753790d))
+* **site-header:** smooth scroll to top when clicking logo on home ([a83b765](https://github.com/debba/tabularis/commit/a83b76555967677f63812229e24200b6e259cf0d))
+* website - create latests-post.json ([081c7e5](https://github.com/debba/tabularis/commit/081c7e5a47349d2672cdead08504288f6b290616))
+* **website:** add blog post for plugins evolved and plugin card ([d12b24f](https://github.com/debba/tabularis/commit/d12b24fd2fdca282dda449f843758860271f1ed4))
+* **website:** add install links and update installation docs ([ee0c597](https://github.com/debba/tabularis/commit/ee0c597eebf37325927bb76b831947bed6a6c19a))
+
+
+
 ## [0.9.2](https://github.com/debba/tabularis/compare/v0.9.1...v0.9.2) (2026-02-26)
 
 

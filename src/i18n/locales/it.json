@@ -36,6 +36,11 @@
     "sqlEditor": "Editor SQL",
     "loadingSchema": "Caricamento schema...",
     "noSavedQueries": "Nessuna query salvata",
+    "execute": "Esegui",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "confirmDeleteQuery": "Sei sicuro di voler eliminare la query \"{{name}}\"?",
+    "confirmDeleteTitle": "Elimina Query",
     "noTables": "Nessuna tabella trovata",
     "columns": "colonne",
     "keys": "chiavi",
@@ -73,6 +78,7 @@
     "noRoutines": "Nessuna routine trovata",
     "refreshRoutines": "Aggiorna Routine",
     "objectSummary": "Oggetti",
+    "databases": "Database",
     "failGetRoutineDefinition": "Impossibile recuperare la definizione della routine: ",
     "schemas": "Schemi",
     "noSchemas": "Nessuno schema trovato",
@@ -93,7 +99,11 @@
     "splitVertical": "Dividi Verticale",
     "splitHorizontal": "Dividi Orizzontale",
     "separateConnections": "Separa Connessioni",
-    "splitGroup": "Gruppo Diviso"
+    "splitGroup": "Gruppo Diviso",
+    "filterTables": "Filtra tabelle...",
+    "noTablesMatch": "Nessuna tabella trovata",
+    "filterDatabases": "Filtra database...",
+    "manageDatabases": "Gestisci Database"
   },
   "mcp": {
     "title": "Integrazione Server MCP",
@@ -130,7 +140,13 @@
     "failDuplicate": "Impossibile duplicare la connessione",
     "connecting": "Connessione in corso...",
     "open": "Aperta",
-    "pluginDisabled": "Plugin disabilitato"
+    "pluginDisabled": "Plugin disabilitato",
+    "connectionCount": "{{count}} connessione/i",
+    "noConnectionsHint": "Crea la tua prima connessione per iniziare.",
+    "searchPlaceholder": "Cerca connessioni...",
+    "noSearchResults": "Nessuna connessione corrisponde a \"{{query}}\"",
+    "gridView": "Vista griglia",
+    "listView": "Vista lista"
   },
   "settings": {
     "title": "Impostazioni",
@@ -276,6 +292,28 @@
       "confirmRemove": "Sei sicuro di voler rimuovere \"{{name}}\"? I file del plugin verranno eliminati.",
       "enabled": "Abilitato",
       "disabled": "Disabilitato"
+    },
+    "shortcuts": {
+      "title": "Scorciatoie da tastiera",
+      "categories": {
+        "editor": "Editor",
+        "navigation": "Navigazione",
+        "data_grid": "Griglia dati"
+      },
+      "runQuery": "Esegui query",
+      "runQueryEditor": "Esegui query (nell'editor)",
+      "tabSwitcher": "Cambia tab",
+      "copySelection": "Copia selezione",
+      "toggleSidebar": "Mostra/nascondi sidebar",
+      "openConnections": "Apri connessioni",
+      "newConnection": "Nuova connessione",
+      "newTab": "Nuovo tab",
+      "nextPage": "Pagina successiva",
+      "prevPage": "Pagina precedente",
+      "switchConnection": "Passa alla connessione 1–9",
+      "resetToDefault": "Ripristina predefinito",
+      "notOverridable": "Integrata, non personalizzabile",
+      "pressKeys": "Premi la combinazione di tasti..."
     }
   },
   "update": {
@@ -336,6 +374,9 @@
     "dbNamePlaceholder": "Nome database",
     "loadDatabases": "Carica Database",
     "loadingDatabases": "Caricamento...",
+    "selectDatabases": "Seleziona Database",
+    "noDatabasesSelected": "Seleziona almeno un database",
+    "selectedDatabases": "{{count}} database selezionato/i",
     "selectDatabase": "Seleziona un database",
     "noDatabasesFound": "Nessun database trovato",
     "failLoadDatabases": "Impossibile caricare i database. Verifica le credenziali.",

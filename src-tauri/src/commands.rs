@@ -9,9 +9,9 @@ use uuid::Uuid;
 
 use crate::keychain_utils;
 use crate::models::{
-    ColumnDefinition, ConnectionParams, ForeignKey, Index, QueryResult, RoutineInfo,
-    RoutineParameter, SavedConnection, SshConnection, SshConnectionInput, SshTestParams,
-    TableColumn, TableInfo, TestConnectionRequest,
+    ColumnDefinition, ConnectionParams, ForeignKey, Index, QueryResult,
+    RoutineInfo, RoutineParameter, SavedConnection, SshConnection, SshConnectionInput,
+    SshTestParams, TableColumn, TableInfo, TestConnectionRequest,
 };
 use crate::ssh_tunnel::{get_tunnels, SshTunnel};
 
@@ -238,6 +238,21 @@ pub async fn get_schemas<R: Runtime>(
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_schemas(&params).await
+}
+
+#[tauri::command]
+pub async fn get_available_databases<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+) -> Result<Vec<String>, String> {
+    log::info!("Fetching available databases for connection: {}", connection_id);
+
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+
+    let drv = driver_for(&saved_conn.params.driver).await?;
+    drv.get_databases(&params).await
 }
 
 #[tauri::command]
@@ -966,7 +981,7 @@ pub async fn test_connection<R: Runtime>(
 
     // For file-based drivers, verify the database file exists before attempting connection
     if drv.manifest().capabilities.file_based {
-        let db_path = std::path::Path::new(&resolved_params.database);
+        let db_path = std::path::Path::new(resolved_params.database.primary());
         if !db_path.exists() {
             return Err(format!(
                 "Database file not found: {}",
@@ -987,6 +1002,7 @@ pub async fn test_connection<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::DatabaseSelection;
 
     fn base_params() -> ConnectionParams {
         ConnectionParams {
@@ -995,7 +1011,7 @@ mod tests {
             port: Some(3306),
             username: Some("root".to_string()),
             password: None,
-            database: "testdb".to_string(),
+            database: DatabaseSelection::Single("testdb".to_string()),
             ssh_enabled: None,
             ssh_connection_id: None,
             ssh_host: None,
@@ -1073,7 +1089,7 @@ mod tests {
                 port,
                 username: Some(username.to_string()),
                 password: password.map(|p| p.to_string()),
-                database: database.to_string(),
+                database: DatabaseSelection::Single(database.to_string()),
                 ssh_enabled: None,
                 ssh_connection_id: None,
                 ssh_host: None,
@@ -1350,7 +1366,7 @@ mod tests {
                 port: Some(remote_port),
                 username: Some("dbuser".to_string()),
                 password: Some("dbpass".to_string()),
-                database: "testdb".to_string(),
+                database: DatabaseSelection::Single("testdb".to_string()),
                 ssh_enabled: Some(true),
                 ssh_connection_id: None,
                 ssh_host: Some(ssh_host.to_string()),
@@ -2454,6 +2470,35 @@ pub async fn drop_foreign_key_action<R: Runtime>(
 #[tauri::command]
 pub async fn get_registered_drivers() -> Vec<crate::drivers::driver_trait::PluginManifest> {
     crate::drivers::registry::list_drivers().await
+}
+
+#[tauri::command]
+pub async fn get_keybindings<R: Runtime>(app: AppHandle<R>) -> Result<serde_json::Value, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?;
+    let path = config_dir.join("keybindings.json");
+    if !path.exists() {
+        return Ok(serde_json::Value::Object(serde_json::Map::new()));
+    }
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn save_keybindings<R: Runtime>(
+    app: AppHandle<R>,
+    keybindings: serde_json::Value,
+) -> Result<(), String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    let path = config_dir.join("keybindings.json");
+    let content = serde_json::to_string_pretty(&keybindings).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

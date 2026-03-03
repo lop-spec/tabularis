@@ -10,7 +10,7 @@ interface RowEditorSidebarProps {
   rowData: Record<string, unknown>;
   rowIndex: number;
   isInsertion: boolean;
-  columns: Array<{ name: string; type?: string }>;
+  columns: Array<{ name: string; type?: string; characterMaximumLength?: number }>;
   autoIncrementColumns?: string[];
   defaultValueColumns?: string[];
   nullableColumns?: string[];
@@ -118,6 +118,7 @@ export const RowEditorSidebar: React.FC<RowEditorSidebarProps> = ({
                 <FieldEditor
                   name={column.name}
                   type={column.type}
+                  characterMaximumLength={column.characterMaximumLength}
                   value={value}
                   onChange={(newValue) => updateField(column.name, newValue)}
                   placeholder={t("rowEditor.enterValue")}

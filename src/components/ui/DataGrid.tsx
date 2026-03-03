@@ -42,7 +42,7 @@ import {
   type ColumnDisplayInfo,
 } from "../../utils/dataGrid";
 import { isGeometricType, formatGeometricValue } from "../../utils/geometry";
-import { isBlobType } from "../../utils/blob";
+import { isBlobColumn, isBlobWireFormat } from "../../utils/blob";
 import { getDateInputMode } from "../../utils/dateInput";
 import { GeometryInput } from "./GeometryInput";
 import { DateInput } from "./DateInput";
@@ -176,6 +176,17 @@ export const DataGrid = React.memo(
       return new Map(columnMetadata.map((col) => [col.name, col.data_type]));
     }, [columnMetadata]);
 
+    // Create column length map for O(1) lookup during blob rendering decisions
+    const columnLengthMap = useMemo(() => {
+      if (!columnMetadata) return null;
+      return new Map(
+        columnMetadata.map((col) => [
+          col.name,
+          col.character_maximum_length,
+        ]),
+      );
+    }, [columnMetadata]);
+
     // Merge existing rows with pending insertions
     const mergedRows = useMemo(() => {
       const rows: MergedRow[] = [];
@@ -268,12 +279,16 @@ export const DataGrid = React.memo(
       const colName = columns[colIndex];
       const colType = columnTypeMap?.get(colName);
 
-      if (colType && isBlobType(colType)) {
-        const rowData: Record<string, unknown> = {};
-        columns.forEach((col, idx) => {
-          rowData[col] = mergedRow.rowData[idx];
+      if (
+        colType &&
+        (isBlobColumn(colType, columnLengthMap?.get(colName)) ||
+          isBlobWireFormat(value))
+      ) {
+        setSidebarRowData({
+          data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
+          rowIndex,
+          focusField: colName,
         });
-        setSidebarRowData({ data: rowData, rowIndex, focusField: colName });
         setSidebarOpen(true);
         return;
       }
@@ -493,6 +508,7 @@ export const DataGrid = React.memo(
                 val,
                 t("dataGrid.null"),
                 colType,
+                columnLengthMap?.get(colName),
               );
 
               // The <generated> placeholder logic for auto-increment columns is handled
@@ -507,7 +523,7 @@ export const DataGrid = React.memo(
             },
           }),
         ),
-      [columns, columnHelper, t, sortClause, onSort, columnTypeMap],
+      [columns, columnHelper, t, sortClause, onSort, columnTypeMap, columnLengthMap],
     );
 
     const parentRef = useRef<HTMLDivElement>(null);
@@ -651,22 +667,32 @@ export const DataGrid = React.memo(
       pkIndexMap,
     ]);
 
+    const buildRowDataWithPending = useCallback(
+      (rowArray: unknown[], isInsertion: boolean): Record<string, unknown> => {
+        const rowData: Record<string, unknown> = {};
+        columns.forEach((col, idx) => {
+          rowData[col] = rowArray[idx];
+        });
+        if (!isInsertion && pkIndexMap !== null) {
+          const pkVal = rowArray[pkIndexMap];
+          const pending = pendingChanges?.[String(pkVal)]?.changes;
+          if (pending) Object.assign(rowData, pending);
+        }
+        return rowData;
+      },
+      [columns, pkIndexMap, pendingChanges],
+    );
+
     const openSidebarEditor = useCallback(() => {
       if (!contextMenu) return;
-
-      // Convert row array to object with column names
-      const rowData: Record<string, unknown> = {};
-      columns.forEach((colName, index) => {
-        rowData[colName] = contextMenu.row[index];
-      });
-
+      const isInsertion = contextMenu.mergedRow?.type === "insertion";
       setSidebarRowData({
-        data: rowData,
+        data: buildRowDataWithPending(contextMenu.row, isInsertion ?? false),
         rowIndex: contextMenu.rowIndex,
       });
       setSidebarOpen(true);
       setContextMenu(null);
-    }, [contextMenu, columns]);
+    }, [contextMenu, buildRowDataWithPending]);
 
     // Unified handler for setting cell values from context menu actions
     const setCellValue = useCallback(
@@ -964,17 +990,8 @@ export const DataGrid = React.memo(
                                         // Open sidebar with the current row
                                         const mergedRow = mergedRows[rowIndex];
                                         if (mergedRow) {
-                                          const rowData: Record<
-                                            string,
-                                            unknown
-                                          > = {};
-                                          columns.forEach((col, idx) => {
-                                            rowData[col] =
-                                              mergedRow.rowData[idx];
-                                          });
-
                                           setSidebarRowData({
-                                            data: rowData,
+                                            data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
                                             rowIndex: rowIndex,
                                             focusField: colName,
                                           });
@@ -1071,7 +1088,8 @@ export const DataGrid = React.memo(
                                   const colType = columnTypeMap?.get(colName);
                                   if (
                                     colType &&
-                                    isBlobType(colType) &&
+                                    (isBlobColumn(colType, columnLengthMap?.get(colName)) ||
+                                      isBlobWireFormat(displayValue)) &&
                                     !isPendingDelete
                                   ) {
                                     return (
@@ -1088,16 +1106,8 @@ export const DataGrid = React.memo(
                                             const mergedRow =
                                               mergedRows[rowIndex];
                                             if (mergedRow) {
-                                              const rowData: Record<
-                                                string,
-                                                unknown
-                                              > = {};
-                                              columns.forEach((col, idx) => {
-                                                rowData[col] =
-                                                  mergedRow.rowData[idx];
-                                              });
                                               setSidebarRowData({
-                                                data: rowData,
+                                                data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
                                                 rowIndex,
                                                 focusField: colName,
                                               });
@@ -1176,7 +1186,7 @@ export const DataGrid = React.memo(
             }
             // Always allow setting empty string, except for BLOB columns
             const colDataType = columnTypeMap?.get(colName) ?? "";
-            if (!isBlobType(colDataType)) {
+            if (!isBlobColumn(colDataType, columnLengthMap?.get(colName))) {
               menuItems.push({
                 label: t("dataGrid.setEmpty"),
                 icon: Copy,
@@ -1244,6 +1254,8 @@ export const DataGrid = React.memo(
                 columns={columns.map((colName, index) => ({
                   name: colName,
                   type: columnMetadata?.[index]?.data_type,
+                  characterMaximumLength:
+                    columnMetadata?.[index]?.character_maximum_length,
                 }))}
                 autoIncrementColumns={autoIncrementColumns}
                 defaultValueColumns={defaultValueColumns}

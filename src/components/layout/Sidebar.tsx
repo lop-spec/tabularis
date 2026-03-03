@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plug2, Settings, Cpu, PanelLeft } from "lucide-react";
@@ -21,6 +21,8 @@ import { useSidebarResize } from "../../hooks/useSidebarResize";
 import { useConnectionManager } from "../../hooks/useConnectionManager";
 import { useConnectionLayoutContext } from "../../contexts/useConnectionLayoutContext";
 import { isConnectionGrouped } from "../../utils/connectionLayout";
+import { useDrivers } from "../../hooks/useDrivers";
+import { useKeybindings } from "../../hooks/useKeybindings";
 
 export const Sidebar = () => {
   const { t } = useTranslation();
@@ -32,12 +34,38 @@ export const Sidebar = () => {
 
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
+  const [showShortcutHints, setShowShortcutHints] = useState(false);
+  const { isMac } = useKeybindings();
+
+  useEffect(() => {
+    const handler = () => setIsExplorerCollapsed((prev) => !prev);
+    window.addEventListener("tabularis:toggle-sidebar", handler);
+    return () => window.removeEventListener("tabularis:toggle-sidebar", handler);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const modifierHeld = isMac ? (e.metaKey || e.ctrlKey) : e.ctrlKey;
+      if (modifierHeld && e.shiftKey) setShowShortcutHints(true);
+    };
+    const handleKeyUp = () => setShowShortcutHints(false);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleKeyUp);
+    };
+  }, [isMac]);
 
   const {
     openConnections,
     handleDisconnect: disconnectConnection,
     handleSwitch,
   } = useConnectionManager();
+
+  const { allDrivers } = useDrivers();
 
   const {
     splitView,
@@ -53,7 +81,11 @@ export const Sidebar = () => {
 
   const handleSwitchToConnection = (connectionId: string) => {
     handleSwitch(connectionId);
-    if (location.pathname === "/") {
+    if (
+      location.pathname === "/" ||
+      location.pathname === "/connections" ||
+      location.pathname === "/settings"
+    ) {
       navigate("/editor");
     }
   };
@@ -82,7 +114,7 @@ export const Sidebar = () => {
   const shouldShowExplorer =
     !!explorerConnId &&
     location.pathname !== "/settings" &&
-    location.pathname !== "/";
+    location.pathname !== "/connections";
 
   return (
     <div className="flex h-full">
@@ -103,7 +135,7 @@ export const Sidebar = () => {
 
         <nav className="flex-1 w-full flex flex-col items-center">
           <NavItem
-            to="/"
+            to="/connections"
             icon={Plug2}
             label={t("sidebar.connections")}
             isConnected={!!activeConnectionId}
@@ -125,10 +157,11 @@ export const Sidebar = () => {
               {/* Show individual items for non-grouped connections */}
               {openConnections
                 .filter(conn => !isConnectionGrouped(conn.id, splitView))
-                .map(conn => (
+                .map((conn, idx) => (
                   <OpenConnectionItem
                     key={conn.id}
                     connection={conn}
+                    driverManifest={allDrivers.find(d => d.id === conn.driver)}
                     isSelected={selectedConnectionIds.has(conn.id)}
                     onSwitch={() => handleSwitchOrSetExplorer(conn.id)}
                     onOpenInEditor={() => handleOpenInEditor(conn.id)}
@@ -136,6 +169,8 @@ export const Sidebar = () => {
                     onToggleSelect={(isCtrlHeld) => toggleSelection(conn.id, isCtrlHeld)}
                     selectedConnectionIds={selectedConnectionIds}
                     onActivateSplit={activateSplit}
+                    shortcutIndex={idx + 1}
+                    showShortcutHint={showShortcutHints && idx < 9}
                   />
                 ))}
             </div>

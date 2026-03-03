@@ -26,6 +26,8 @@ import {
   Check,
   CheckSquare,
   Square,
+  Search,
+  X,
 } from "lucide-react";
 import { ask, message, open } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../../hooks/useDatabase";
@@ -47,12 +49,14 @@ import { SidebarTableItem } from "./sidebar/SidebarTableItem";
 import { SidebarViewItem } from "./sidebar/SidebarViewItem";
 import { SidebarRoutineItem } from "./sidebar/SidebarRoutineItem";
 import { SidebarSchemaItem } from "./sidebar/SidebarSchemaItem";
+import { SidebarDatabaseItem } from "./sidebar/SidebarDatabaseItem";
 import { useConnectionLayoutContext } from "../../contexts/useConnectionLayoutContext";
 import type { TableColumn } from "../../types/schema";
 import type { ContextMenuData } from "../../types/sidebar";
 import type { RoutineInfo } from "../../contexts/DatabaseContext";
 import { groupRoutinesByType } from "../../utils/routines";
 import { formatObjectCount } from "../../utils/schema";
+import { isMultiDatabaseCapable } from "../../utils/database";
 
 interface ExplorerSidebarProps {
   sidebarWidth: number;
@@ -86,6 +90,11 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
     selectedSchemas,
     setSelectedSchemas,
     needsSchemaSelection,
+    selectedDatabases,
+    setSelectedDatabases,
+    databaseDataMap,
+    loadDatabaseData,
+    refreshDatabaseData,
     connectionDataMap,
   } = useDatabase();
   const { queries, deleteQuery, updateQuery } = useSavedQueries();
@@ -119,6 +128,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
   }>({ isOpen: false, tableName: "" });
   const [generateSQLModal, setGenerateSQLModal] = useState<string | null>(null);
   const [queriesOpen, setQueriesOpen] = useState(false);
+  const [tableFilter, setTableFilter] = useState("");
   const [tablesOpen, setTablesOpen] = useState(true);
   const [viewsOpen, setViewsOpen] = useState(true);
   const [routinesOpen, setRoutinesOpen] = useState(false);
@@ -129,14 +139,19 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
     isOpen: boolean;
     query?: SavedQuery;
   }>({ isOpen: false });
-  const [isDumpModalOpen, setIsDumpModalOpen] = useState(false);
+  const [dumpModal, setDumpModal] = useState<{ database: string } | null>(null);
   const [importModal, setImportModal] = useState<{
-    isOpen: boolean;
     filePath: string;
-  }>({ isOpen: false, filePath: "" });
+    database: string;
+  } | null>(null);
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
   const [isSchemaFilterOpen, setIsSchemaFilterOpen] = useState(false);
   const [pendingSchemaSelection, setPendingSchemaSelection] = useState<Set<string>>(new Set());
+  const [dbFilter, setDbFilter] = useState("");
+  const [isDbManagerOpen, setIsDbManagerOpen] = useState(false);
+  const [pendingDbSelection, setPendingDbSelection] = useState<Set<string>>(new Set());
+  const [allAvailableDatabases, setAllAvailableDatabases] = useState<string[]>([]);
+  const [isLoadingAllDbs, setIsLoadingAllDbs] = useState(false);
   const [viewEditorModal, setViewEditorModal] = useState<{
     isOpen: boolean;
     viewName?: string;
@@ -186,6 +201,34 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
     });
   };
 
+  // Multi-database: open table/view without qualified prefix — backend uses USE <db> for isolation
+  const handleOpenDatabaseTable = (tableName: string, database?: string) => {
+    if (database) setActiveTable(tableName, database);
+    const quotedTable = quoteTableRef(tableName, activeDriver);
+    navigate("/editor", {
+      state: {
+        initialQuery: `SELECT * FROM ${quotedTable}`,
+        tableName,
+        schema: database,
+        title: database ? `${tableName} (${database})` : tableName,
+        targetConnectionId: activeConnectionId,
+      },
+    });
+  };
+
+  const handleOpenDatabaseView = (viewName: string, database?: string) => {
+    const quotedView = quoteTableRef(viewName, activeDriver);
+    navigate("/editor", {
+      state: {
+        initialQuery: `SELECT * FROM ${quotedView}`,
+        tableName: viewName,
+        schema: database,
+        title: database ? `${viewName} (${database})` : viewName,
+        targetConnectionId: activeConnectionId,
+      },
+    });
+  };
+
   const handleRoutineDoubleClick = async (routine: RoutineInfo, schema?: string) => {
     try {
       const definition = await invoke<string>("get_routine_definition", {
@@ -215,7 +258,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
     setContextMenu({ x: e.clientX, y: e.clientY, type, id, label, data });
   };
 
-  const handleImportDatabase = async () => {
+  const handleImportDatabase = async (database?: string) => {
     const file = await open({
       filters: [{ name: "SQL / Zip File", extensions: ["sql", "zip"] }],
     });
@@ -225,9 +268,11 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
         { title: t("dump.importDatabase"), kind: "warning" },
       );
       if (!confirmed) return;
-      setImportModal({ isOpen: true, filePath: file });
+      setImportModal({ filePath: file, database: database ?? activeDatabaseName ?? "" });
     }
   };
+
+  const isMultiDb = isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
 
   return (
     <>
@@ -263,13 +308,18 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
         )}
 
         <div className="p-4 border-b border-default font-semibold text-sm text-primary flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Database size={16} className="text-blue-400" />
-            <span>{t("sidebar.explorer")}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <Database size={16} className="text-blue-400 shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span>{t("sidebar.explorer")}</span>
+              {activeConnectionName && (
+                <span className="text-xs font-normal text-muted truncate">{activeConnectionName}</span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-1">
-            {/* Show dropdown button when sidebar is narrow */}
-            {sidebarWidth < 200 ? (
+            {/* Global actions — hidden in multi-database mode (actions move to each database node) */}
+            {!isMultiDb && (sidebarWidth < 200 ? (
               <div className="relative">
                 <button
                   onClick={() => setIsActionsDropdownOpen(!isActionsDropdownOpen)}
@@ -297,7 +347,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                       </button>
                       <button
                         onClick={() => {
-                          setIsDumpModalOpen(true);
+                          setDumpModal({ database: activeDatabaseName ?? "" });
                           setIsActionsDropdownOpen(false);
                         }}
                         className="w-full flex items-center gap-3 px-3 py-2 text-sm text-secondary hover:bg-surface-secondary hover:text-primary transition-colors text-left whitespace-nowrap"
@@ -331,14 +381,14 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
             ) : (
               <>
                 <button
-                  onClick={handleImportDatabase}
+                  onClick={() => handleImportDatabase()}
                   className="text-muted hover:text-green-400 transition-colors p-1 hover:bg-surface-secondary rounded"
                   title={t("dump.importDatabase")}
                 >
                   <Upload size={16} />
                 </button>
                 <button
-                  onClick={() => setIsDumpModalOpen(true)}
+                  onClick={() => setDumpModal({ database: activeDatabaseName ?? "" })}
                   className="text-muted hover:text-blue-400 transition-colors p-1 hover:bg-surface-secondary rounded"
                   title={t("dump.dumpDatabase")}
                 >
@@ -363,7 +413,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                   <Network size={16} className="rotate-90" />
                 </button>
               </>
-            )}
+            ))}
             <button
               onClick={onCollapse}
               className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded"
@@ -414,6 +464,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
 
               {/* Schema-capable driver: Schema tree layout */}
               {activeCapabilities?.schemas === true && schemas.length > 0 ? (
+                /* Postgres schema layout (unchanged) */
                 <div>
                   {needsSchemaSelection ? (
                     /* Schema picker (first connect, no saved preference) */
@@ -681,6 +732,230 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                     </>
                   )}
                 </div>
+              ) : isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1 ? (
+                /* Multi-database MySQL layout */
+                <div>
+                  {/* Database header: label + manage button */}
+                  <div className="flex items-center justify-between px-3 py-1.5">
+                    <span className="text-xs font-semibold uppercase text-muted tracking-wider">
+                      {t("sidebar.databases")} ({selectedDatabases.length})
+                    </span>
+                    <div className="relative">
+                      <button
+                        onClick={async () => {
+                          if (!isDbManagerOpen) {
+                            setPendingDbSelection(new Set(selectedDatabases));
+                            setIsLoadingAllDbs(true);
+                            try {
+                              const all = await invoke<string[]>("get_available_databases", { connectionId: activeConnectionId });
+                              setAllAvailableDatabases(all);
+                            } catch (e) {
+                              console.error("Failed to load available databases:", e);
+                            } finally {
+                              setIsLoadingAllDbs(false);
+                            }
+                          }
+                          setIsDbManagerOpen(!isDbManagerOpen);
+                        }}
+                        className={`p-1 rounded transition-colors ${
+                          selectedDatabases.length < allAvailableDatabases.length && allAvailableDatabases.length > 0
+                            ? "text-blue-400 hover:text-blue-300 bg-blue-500/10"
+                            : "text-muted hover:text-secondary hover:bg-surface-secondary"
+                        }`}
+                        title={t("sidebar.manageDatabases")}
+                      >
+                        <Settings2 size={14} />
+                      </button>
+                      {isDbManagerOpen && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setIsDbManagerOpen(false)}
+                          />
+                          <div className="absolute right-0 top-8 bg-elevated border border-default rounded-lg shadow-lg z-50 py-2 min-w-[200px] max-h-[320px] flex flex-col">
+                            <div className="flex items-center justify-between px-3 pb-2 border-b border-default">
+                              <span className="text-xs font-semibold text-secondary">
+                                {t("sidebar.manageDatabases")}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  if (pendingDbSelection.size === allAvailableDatabases.length) {
+                                    setPendingDbSelection(new Set());
+                                  } else {
+                                    setPendingDbSelection(new Set(allAvailableDatabases));
+                                  }
+                                }}
+                                className="text-xs text-blue-500 hover:underline"
+                              >
+                                {pendingDbSelection.size === allAvailableDatabases.length
+                                  ? t("sidebar.deselectAll")
+                                  : t("sidebar.selectAll")}
+                              </button>
+                            </div>
+                            <div className="overflow-y-auto py-1 flex-1">
+                              {isLoadingAllDbs ? (
+                                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted">
+                                  <Loader2 size={12} className="animate-spin" />
+                                  {t("sidebar.loadingSchema")}
+                                </div>
+                              ) : allAvailableDatabases.map((dbName) => {
+                                const isSelected = pendingDbSelection.has(dbName);
+                                return (
+                                  <div
+                                    key={dbName}
+                                    onClick={() => {
+                                      const next = new Set(pendingDbSelection);
+                                      if (isSelected) {
+                                        next.delete(dbName);
+                                      } else {
+                                        next.add(dbName);
+                                      }
+                                      setPendingDbSelection(next);
+                                    }}
+                                    className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors ${
+                                      isSelected ? "text-primary hover:bg-surface-secondary" : "text-muted hover:bg-surface-secondary"
+                                    }`}
+                                  >
+                                    <div className={`w-4 h-4 flex items-center justify-center shrink-0 ${isSelected ? "text-blue-500" : "text-muted"}`}>
+                                      {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                                    </div>
+                                    <span className="text-sm truncate select-none">{dbName}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="px-3 pt-2 border-t border-default">
+                              <button
+                                onClick={() => {
+                                  if (pendingDbSelection.size > 0) {
+                                    setSelectedDatabases(Array.from(pendingDbSelection));
+                                  }
+                                  setIsDbManagerOpen(false);
+                                }}
+                                disabled={pendingDbSelection.size === 0}
+                                className={`w-full flex items-center justify-center gap-1 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                  pendingDbSelection.size > 0
+                                    ? "bg-blue-500 text-white hover:bg-blue-600"
+                                    : "bg-surface-secondary text-muted cursor-not-allowed"
+                                }`}
+                              >
+                                <Check size={12} />
+                                {t("sidebar.confirmSelection")}
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Database filter input */}
+                  <div className="px-3 pb-1.5">
+                    <div className="relative flex items-center">
+                      <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
+                      <input
+                        type="text"
+                        value={dbFilter}
+                        onChange={(e) => setDbFilter(e.target.value)}
+                        placeholder={t("sidebar.filterDatabases")}
+                        className="w-full bg-surface-secondary text-xs text-secondary placeholder:text-muted rounded pl-6 pr-6 py-1 border border-default focus:outline-none focus:border-blue-500/50"
+                      />
+                      {dbFilter && (
+                        <button
+                          onClick={() => setDbFilter("")}
+                          className="absolute right-1.5 text-muted hover:text-primary"
+                        >
+                          <X size={11} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {(dbFilter
+                    ? selectedDatabases.filter((db) => db.toLowerCase().includes(dbFilter.toLowerCase()))
+                    : selectedDatabases
+                  ).map((dbName) => (
+                    <SidebarDatabaseItem
+                      key={dbName}
+                      databaseName={dbName}
+                      databaseData={databaseDataMap[dbName]}
+                      activeTable={activeTable}
+                      activeSchema={activeSchema}
+                      connectionId={activeConnectionId!}
+                      driver={activeDriver!}
+                      schemaVersion={schemaVersion}
+                      onLoadDatabase={loadDatabaseData}
+                      onRefreshDatabase={refreshDatabaseData}
+                      onTableClick={(name, db) => handleTableClick(name, db)}
+                      onTableDoubleClick={(name, db) => handleOpenDatabaseTable(name, db)}
+                      onViewClick={handleViewClick}
+                      onViewDoubleClick={(name, db) => handleOpenDatabaseView(name, db)}
+                      onRoutineDoubleClick={(routine, db) => handleRoutineDoubleClick(routine, db)}
+                      onContextMenu={handleContextMenu}
+                      onAddColumn={(t_name) =>
+                        setModifyColumnModal({ isOpen: true, tableName: t_name, column: null })
+                      }
+                      onEditColumn={(t_name, c) =>
+                        setModifyColumnModal({ isOpen: true, tableName: t_name, column: c })
+                      }
+                      onAddIndex={(t_name) =>
+                        setCreateIndexModal({ isOpen: true, tableName: t_name })
+                      }
+                      onDropIndex={async (t_name, name) => {
+                        if (
+                          await ask(
+                            t("sidebar.deleteIndexConfirm", { name }),
+                            { title: t("sidebar.deleteIndex"), kind: "warning" },
+                          )
+                        ) {
+                          await invoke("drop_index_action", {
+                            connectionId: activeConnectionId,
+                            table: t_name,
+                            indexName: name,
+                            schema: dbName,
+                          }).catch(console.error);
+                          setSchemaVersion((v) => v + 1);
+                        }
+                      }}
+                      onAddForeignKey={(t_name) =>
+                        setCreateForeignKeyModal({ isOpen: true, tableName: t_name })
+                      }
+                      onDropForeignKey={async (t_name, name) => {
+                        if (
+                          await ask(
+                            t("sidebar.deleteFkConfirm", { name }),
+                            { title: t("sidebar.deleteFk"), kind: "warning" },
+                          )
+                        ) {
+                          await invoke("drop_foreign_key_action", {
+                            connectionId: activeConnectionId,
+                            table: t_name,
+                            fkName: name,
+                            schema: dbName,
+                          }).catch(console.error);
+                          setSchemaVersion((v) => v + 1);
+                        }
+                      }}
+                      onCreateTable={() => setIsCreateTableModalOpen(true)}
+                      onCreateView={() =>
+                        setViewEditorModal({ isOpen: true, isNewView: true })
+                      }
+                      onDump={(db) => setDumpModal({ database: db })}
+                      onImport={(db) => handleImportDatabase(db)}
+                      onViewDiagram={async (db) => {
+                        try {
+                          await invoke("open_er_diagram_window", {
+                            connectionId: activeConnectionId || "",
+                            connectionName: activeConnectionName || "Unknown",
+                            databaseName: db,
+                          });
+                        } catch (e) {
+                          console.error("Failed to open ER Diagram window:", e);
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
               ) : (
                 <>
                   {/* MySQL/SQLite: Flat layout */}
@@ -723,69 +998,96 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                       </div>
                     }
                   >
-                    {tables.length === 0 ? (
-                      <div className="text-center p-2 text-xs text-muted italic">
-                        {t("sidebar.noTables")}
-                      </div>
-                    ) : (
-                      <div>
-                        {tables.map((table) => (
-                          <SidebarTableItem
-                            key={table.name}
-                            table={table}
-                            activeTable={activeTable}
-                            onTableClick={handleTableClick}
-                            onTableDoubleClick={handleOpenTable}
-                            onContextMenu={handleContextMenu}
-                            connectionId={activeConnectionId!}
-                            driver={activeDriver!}
-                            onAddColumn={(t_name) =>
-                              setModifyColumnModal({ isOpen: true, tableName: t_name, column: null })
-                            }
-                            onEditColumn={(t_name, c) =>
-                              setModifyColumnModal({ isOpen: true, tableName: t_name, column: c })
-                            }
-                            onAddIndex={(t_name) =>
-                              setCreateIndexModal({ isOpen: true, tableName: t_name })
-                            }
-                            onDropIndex={async (t_name, name) => {
-                              if (
-                                await ask(
-                                  t("sidebar.deleteIndexConfirm", { name }),
-                                  { title: t("sidebar.deleteIndex"), kind: "warning" },
-                                )
-                              ) {
-                                await invoke("drop_index_action", {
-                                  connectionId: activeConnectionId,
-                                  table: t_name,
-                                  indexName: name,
-                                }).catch(console.error);
-                                setSchemaVersion((v) => v + 1);
-                              }
-                            }}
-                            onAddForeignKey={(t_name) =>
-                              setCreateForeignKeyModal({ isOpen: true, tableName: t_name })
-                            }
-                            onDropForeignKey={async (t_name, name) => {
-                              if (
-                                await ask(
-                                  t("sidebar.deleteFkConfirm", { name }),
-                                  { title: t("sidebar.deleteFk"), kind: "warning" },
-                                )
-                              ) {
-                                await invoke("drop_foreign_key_action", {
-                                  connectionId: activeConnectionId,
-                                  table: t_name,
-                                  fkName: name,
-                                }).catch(console.error);
-                                setSchemaVersion((v) => v + 1);
-                              }
-                            }}
-                            schemaVersion={schemaVersion}
+                    {tables.length > 0 && (
+                      <div className="px-2 py-1">
+                        <div className="relative flex items-center">
+                          <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
+                          <input
+                            type="text"
+                            value={tableFilter}
+                            onChange={(e) => setTableFilter(e.target.value)}
+                            placeholder={t("sidebar.filterTables")}
+                            className="w-full bg-surface-secondary text-xs text-secondary placeholder:text-muted rounded pl-6 pr-6 py-1 border border-default focus:outline-none focus:border-blue-500/50"
                           />
-                        ))}
+                          {tableFilter && (
+                            <button
+                              onClick={() => setTableFilter("")}
+                              className="absolute right-1.5 text-muted hover:text-primary"
+                            >
+                              <X size={11} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
+                    {(() => {
+                      const filtered = tableFilter
+                        ? tables.filter((tbl) => tbl.name.toLowerCase().includes(tableFilter.toLowerCase()))
+                        : tables;
+                      return filtered.length === 0 ? (
+                        <div className="text-center p-2 text-xs text-muted italic">
+                          {tableFilter ? t("sidebar.noTablesMatch") : t("sidebar.noTables")}
+                        </div>
+                      ) : (
+                        <div>
+                          {filtered.map((table) => (
+                            <SidebarTableItem
+                              key={table.name}
+                              table={table}
+                              activeTable={activeTable}
+                              onTableClick={handleTableClick}
+                              onTableDoubleClick={handleOpenTable}
+                              onContextMenu={handleContextMenu}
+                              connectionId={activeConnectionId!}
+                              driver={activeDriver!}
+                              onAddColumn={(t_name) =>
+                                setModifyColumnModal({ isOpen: true, tableName: t_name, column: null })
+                              }
+                              onEditColumn={(t_name, c) =>
+                                setModifyColumnModal({ isOpen: true, tableName: t_name, column: c })
+                              }
+                              onAddIndex={(t_name) =>
+                                setCreateIndexModal({ isOpen: true, tableName: t_name })
+                              }
+                              onDropIndex={async (t_name, name) => {
+                                if (
+                                  await ask(
+                                    t("sidebar.deleteIndexConfirm", { name }),
+                                    { title: t("sidebar.deleteIndex"), kind: "warning" },
+                                  )
+                                ) {
+                                  await invoke("drop_index_action", {
+                                    connectionId: activeConnectionId,
+                                    table: t_name,
+                                    indexName: name,
+                                  }).catch(console.error);
+                                  setSchemaVersion((v) => v + 1);
+                                }
+                              }}
+                              onAddForeignKey={(t_name) =>
+                                setCreateForeignKeyModal({ isOpen: true, tableName: t_name })
+                              }
+                              onDropForeignKey={async (t_name, name) => {
+                                if (
+                                  await ask(
+                                    t("sidebar.deleteFkConfirm", { name }),
+                                    { title: t("sidebar.deleteFk"), kind: "warning" },
+                                  )
+                                ) {
+                                  await invoke("drop_foreign_key_action", {
+                                    connectionId: activeConnectionId,
+                                    table: t_name,
+                                    fkName: name,
+                                  }).catch(console.error);
+                                  setSchemaVersion((v) => v + 1);
+                                }
+                              }}
+                              schemaVersion={schemaVersion}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </Accordion>
 
                   {/* Views */}
@@ -1209,6 +1511,39 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                 action: () => navigator.clipboard.writeText(contextMenu.id),
                               },
                             ]
+                          : contextMenu.type === "database"
+                            ? [
+                                {
+                                  label: t("dump.importDatabase"),
+                                  icon: Upload,
+                                  action: () => handleImportDatabase(contextMenu.id),
+                                },
+                                {
+                                  label: t("dump.dumpDatabase"),
+                                  icon: Download,
+                                  action: () => setDumpModal({ database: contextMenu.id }),
+                                },
+                                {
+                                  label: t("sidebar.viewERDiagram"),
+                                  icon: Network,
+                                  action: async () => {
+                                    try {
+                                      await invoke("open_er_diagram_window", {
+                                        connectionId: activeConnectionId || "",
+                                        connectionName: activeConnectionName || "Unknown",
+                                        databaseName: contextMenu.id,
+                                      });
+                                    } catch (e) {
+                                      console.error("Failed to open ER Diagram window:", e);
+                                    }
+                                  },
+                                },
+                                {
+                                  label: t("sidebar.refreshTables"),
+                                  icon: RefreshCw,
+                                  action: () => refreshDatabaseData(contextMenu.id),
+                                },
+                              ]
                           : [
                               // Saved Query Actions (Default fallback)
                               {
@@ -1323,22 +1658,26 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
         />
       )}
 
-      {isDumpModalOpen && activeConnectionId && (
+      {dumpModal && activeConnectionId && (
         <DumpDatabaseModal
-          isOpen={isDumpModalOpen}
-          onClose={() => setIsDumpModalOpen(false)}
+          isOpen={true}
+          onClose={() => setDumpModal(null)}
           connectionId={activeConnectionId}
-          databaseName={activeDatabaseName || "Database"}
-          tables={tables.map((t) => t.name)}
+          databaseName={dumpModal.database || activeDatabaseName || "Database"}
+          tables={(
+            activeCapabilities?.schemas && activeSchema
+              ? (schemaDataMap[activeSchema]?.tables ?? [])
+              : (databaseDataMap[dumpModal.database]?.tables ?? tables)
+          ).map((t) => t.name)}
         />
       )}
 
-      {importModal.isOpen && activeConnectionId && (
+      {importModal && activeConnectionId && (
         <ImportDatabaseModal
-          isOpen={importModal.isOpen}
-          onClose={() => setImportModal({ isOpen: false, filePath: "" })}
+          isOpen={true}
+          onClose={() => setImportModal(null)}
           connectionId={activeConnectionId}
-          databaseName={activeDatabaseName || "Database"}
+          databaseName={importModal.database || activeDatabaseName || "Database"}
           filePath={importModal.filePath}
           onSuccess={() => {
             if (refreshTables) refreshTables();

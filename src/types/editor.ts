@@ -12,6 +12,7 @@ export interface TableColumn {
   is_nullable: boolean;
   is_auto_increment: boolean;
   default_value?: string;
+  character_maximum_length?: number;
 }
 
 export interface ForeignKey {

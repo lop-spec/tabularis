@@ -120,6 +120,7 @@ pub async fn get_columns(
             c.is_nullable,
             c.column_default,
             c.is_identity,
+            c.character_maximum_length,
             (SELECT COUNT(*) FROM information_schema.table_constraints tc
              JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
              AND tc.table_schema = kcu.table_schema
@@ -146,6 +147,11 @@ pub async fn get_columns(
             let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
             let default_val: String = r.try_get("column_default").unwrap_or_default();
             let is_identity: String = r.try_get("is_identity").unwrap_or_default(); // YES/NO
+            let character_maximum_length: Option<u64> =
+                r.try_get::<Option<i64>, _>("character_maximum_length")
+                    .ok()
+                    .flatten()
+                    .and_then(|v| u64::try_from(v).ok());
 
             let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -168,6 +174,7 @@ pub async fn get_columns(
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
                 default_value,
+                character_maximum_length,
             }
         })
         .collect())
@@ -240,6 +247,7 @@ pub async fn get_all_columns_batch(
             c.is_nullable,
             c.column_default,
             c.is_identity,
+            c.character_maximum_length,
             (SELECT COUNT(*) FROM information_schema.table_constraints tc
              JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
              AND tc.table_schema = kcu.table_schema
@@ -266,6 +274,11 @@ pub async fn get_all_columns_batch(
         let is_pk: bool = row.try_get("is_pk").unwrap_or(false);
         let default_val: String = row.try_get("column_default").unwrap_or_default();
         let is_identity: String = row.try_get("is_identity").unwrap_or_default();
+        let character_maximum_length: Option<u64> =
+            row.try_get::<Option<i64>, _>("character_maximum_length")
+                .ok()
+                .flatten()
+                .and_then(|v| u64::try_from(v).ok());
 
         let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -288,6 +301,7 @@ pub async fn get_all_columns_batch(
             is_nullable: null_str == "YES",
             is_auto_increment: is_auto,
             default_value,
+            character_maximum_length,
         };
 
         result
@@ -961,6 +975,7 @@ pub async fn get_view_columns(
             c.is_nullable,
             c.column_default,
             c.is_identity,
+            c.character_maximum_length,
             (SELECT COUNT(*) FROM information_schema.table_constraints tc
              JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
              AND tc.table_schema = kcu.table_schema
@@ -987,6 +1002,11 @@ pub async fn get_view_columns(
             let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
             let default_val: String = r.try_get("column_default").unwrap_or_default();
             let is_identity: String = r.try_get("is_identity").unwrap_or_default();
+            let character_maximum_length: Option<u64> =
+                r.try_get::<Option<i64>, _>("character_maximum_length")
+                    .ok()
+                    .flatten()
+                    .and_then(|v| u64::try_from(v).ok());
 
             let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -1009,6 +1029,7 @@ pub async fn get_view_columns(
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
                 default_value,
+                character_maximum_length,
             }
         })
         .collect())
@@ -1182,6 +1203,8 @@ impl PostgresDriver {
                 },
                 is_builtin: true,
                 default_username: "postgres".to_string(),
+                color: "#3b82f6".to_string(),
+                icon: "postgres".to_string(),
             },
         }
     }
@@ -1214,7 +1237,7 @@ impl DatabaseDriver for PostgresDriver {
 
     async fn get_databases(&self, params: &crate::models::ConnectionParams) -> Result<Vec<String>, String> {
         let mut p = params.clone();
-        p.database = "postgres".to_string();
+        p.database = crate::models::DatabaseSelection::Single("postgres".to_string());
         get_databases(&p).await
     }
 

@@ -69,6 +69,7 @@ import { useSavedQueries } from "../hooks/useSavedQueries";
 import { useSettings } from "../hooks/useSettings";
 import { useEditor } from "../hooks/useEditor";
 import { useConnectionLayoutContext } from "../contexts/useConnectionLayoutContext";
+import { useKeybindings } from "../hooks/useKeybindings";
 import type { QueryResult, Tab, PendingInsertion, TableColumn } from "../types/editor";
 import { getTabScrollState, getAdjacentTabIndex, resolveNextTabId, isFocusedPane } from "../utils/tabScroll";
 import clsx from "clsx";
@@ -80,6 +81,7 @@ interface EditorState {
   preventAutoRun?: boolean;
   schema?: string;
   targetConnectionId?: string;
+  title?: string;
 }
 
 interface ExportProgress {
@@ -88,7 +90,7 @@ interface ExportProgress {
 
 export const Editor = () => {
   const { t } = useTranslation();
-  const { activeConnectionId, tables, activeDriver, activeSchema } = useDatabase();
+  const { activeConnectionId, tables, activeDriver, activeSchema, activeCapabilities } = useDatabase();
   const { explorerConnectionId } = useConnectionLayoutContext();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
@@ -106,6 +108,7 @@ export const Editor = () => {
     closeTabsToRight,
   } = useEditor();
   const location = useLocation();
+  const { matchesShortcut } = useKeybindings();
   const navigate = useNavigate();
 
   const [tabContextMenu, setTabContextMenu] = useState<{
@@ -158,7 +161,8 @@ export const Editor = () => {
       if (tab.type === "table" && tab.activeTable) {
         const filter = tab.filterClause ? `WHERE ${tab.filterClause}` : "";
         const sort = tab.sortClause ? `ORDER BY ${tab.sortClause}` : "";
-        const quotedTable = quoteTableRef(tab.activeTable, activeDriver, tab.schema);
+        const schemaPrefix = activeCapabilities?.schemas === true ? tab.schema : undefined;
+        const quotedTable = quoteTableRef(tab.activeTable, activeDriver, schemaPrefix);
 
         let baseQuery = `SELECT * FROM ${quotedTable} ${filter} ${sort}`;
 
@@ -176,7 +180,7 @@ export const Editor = () => {
         connectionId: tab.connectionId,
       });
     },
-    [addTab, activeDriver],
+    [addTab, activeDriver, activeCapabilities?.schemas],
   );
 
   const [saveQueryModal, setSaveQueryModal] = useState<{
@@ -427,7 +431,8 @@ export const Editor = () => {
 
         const filter = filterClause ? `WHERE ${filterClause}` : "";
         const sort = sortClause ? `ORDER BY ${sortClause}` : "";
-        const quotedTable = quoteTableRef(targetTab.activeTable, activeDriver, targetTab.schema);
+        const schemaPrefix = activeCapabilities?.schemas === true ? targetTab.schema : undefined;
+        const quotedTable = quoteTableRef(targetTab.activeTable, activeDriver, schemaPrefix);
 
         const baseQuery = `SELECT * FROM ${quotedTable} ${filter} ${sort}`;
 
@@ -545,7 +550,7 @@ export const Editor = () => {
         });
       }
     },
-    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t, activeDriver, activeSchema],
+    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t, activeDriver, activeSchema, activeCapabilities?.schemas],
   );
 
   const loadCount = useCallback(async () => {
@@ -655,6 +660,40 @@ export const Editor = () => {
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [explorerConnectionId, activeConnectionId, setActiveTabId]);
+
+  // Cmd/Ctrl+T: new console tab; Cmd/Ctrl+Right: next page; Cmd/Ctrl+Left: prev page
+  useEffect(() => {
+    const focused = isFocusedPane(explorerConnectionId, activeConnectionId);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!focused) return;
+
+      if (matchesShortcut(e, "new_tab")) {
+        e.preventDefault();
+        addTab({ type: "console" });
+        return;
+      }
+
+      if (matchesShortcut(e, "next_page")) {
+        const tab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+        if (tab?.result?.pagination?.has_more) {
+          e.preventDefault();
+          runQuery(tab.query, (tab.result.pagination.page ?? 1) + 1);
+        }
+        return;
+      }
+
+      if (matchesShortcut(e, "prev_page")) {
+        const tab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+        if (tab?.result?.pagination && tab.result.pagination.page > 1) {
+          e.preventDefault();
+          runQuery(tab.query, tab.result.pagination.page - 1);
+        }
+        return;
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [explorerConnectionId, activeConnectionId, matchesShortcut, addTab, runQuery]);
 
   const handleRefresh = useCallback(() => {
     const currentTab = tabsRef.current.find(
@@ -1399,11 +1438,11 @@ export const Editor = () => {
         if (processingRef.current === queryKey) return;
         processingRef.current = queryKey;
 
-        const { initialQuery: sql, tableName: table, queryName, preventAutoRun, schema: navSchema } = state;
+        const { initialQuery: sql, tableName: table, queryName, preventAutoRun, schema: navSchema, title: navTitle } = state;
         const tabId = addTab({
           type: table ? "table" : "console",
           title:
-            queryName || table || (table ? table : t("sidebar.newConsole")),
+            navTitle || queryName || table || t("sidebar.newConsole"),
           query: sql,
           activeTable: table,
           schema: navSchema,
@@ -1497,7 +1536,8 @@ export const Editor = () => {
       const sort = activeTab.sortClause
         ? `ORDER BY ${activeTab.sortClause}`
         : "";
-      const quotedTable = quoteTableRef(activeTab.activeTable, activeDriver, activeTab.schema);
+      const schemaPrefix = activeCapabilities?.schemas === true ? activeTab.schema : undefined;
+      const quotedTable = quoteTableRef(activeTab.activeTable, activeDriver, schemaPrefix);
 
       // Base query
       let baseQuery = `SELECT * FROM ${quotedTable} ${filter} ${sort}`;

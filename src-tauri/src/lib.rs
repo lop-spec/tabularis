@@ -2,6 +2,7 @@ pub mod ai;
 pub mod commands;
 pub mod config;
 pub mod dump_commands; // Added
+pub mod dump_utils;
 #[cfg(test)]
 pub mod dump_commands_tests;
 pub mod export;
@@ -171,6 +172,8 @@ pub fn run() {
             close_devtools,
             commands::get_registered_drivers,
             commands::get_driver_manifest,
+            commands::get_keybindings,
+            commands::save_keybindings,
             commands::test_connection,
             commands::list_databases,
             commands::save_connection,
@@ -187,6 +190,7 @@ pub fn run() {
             commands::delete_ssh_connection,
             commands::test_ssh_connection,
             commands::get_schemas,
+            commands::get_available_databases,
             commands::get_tables,
             commands::get_columns,
             commands::get_foreign_keys,

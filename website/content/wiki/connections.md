@@ -12,13 +12,26 @@ Tabularis stores connection profiles as JSON (non-sensitive fields) and delegate
 
 The following drivers are registered at startup and available natively, with no plugin required:
 
-| Driver ID | Database | Default Port |
-| :--- | :--- | :--- |
-| `postgres` | PostgreSQL | 5432 |
-| `mysql` | MySQL / MariaDB | 3306 |
-| `sqlite` | SQLite | *(file path)* |
+| Driver ID | Database | Default Port | Multi-database |
+| :--- | :--- | :--- | :--- |
+| `postgres` | PostgreSQL | 5432 | — (uses schemas) |
+| `mysql` | MySQL / MariaDB | 3306 | Yes |
+| `sqlite` | SQLite | *(file path)* | — (file-based) |
+
+Each built-in driver renders with its own branded icon in the Connections page — the PostgreSQL elephant, MySQL dolphin, and SQLite cylinder — displayed in the driver's official color. Plugin drivers use any icon declared in their manifest, or a generic fallback.
 
 Additional drivers can be added via the [Plugin System](/wiki/plugins).
+
+## Connections Page
+
+The Connections page (`Cmd/Ctrl + Shift + C`) lists all saved profiles and supports two display modes, switchable from the toolbar:
+
+- **Grid** — each connection is a card with the driver icon, status badge, host/database info, and SSH indicator.
+- **List** — the same information in compact rows, better suited for large numbers of connections.
+
+A search bar filters by name or host in real time.
+
+Double-click a card or row to connect immediately.
 
 ## Connection Profile Fields
 
@@ -107,6 +120,18 @@ Right-click any connection in the sidebar for:
 ## Connection Groups
 
 Connections can be organized into collapsible folder groups in the sidebar. Right-click on the connection list background and select **New Group**. Drag connections between groups by grabbing them in the sidebar.
+
+## Multi-Database Support (MySQL / MariaDB)
+
+MySQL and MariaDB allow a single connection to read and write across multiple databases on the same server. Tabularis exposes this natively: when creating or editing a MySQL connection, open the **Databases** tab and click **Load Databases** to fetch every database visible to your user. Check the ones you want and save.
+
+Each selected database appears as its own collapsible node in the Explorer sidebar. Expand a node to see its tables and views. Double-click a table to open it in the editor.
+
+Cross-database references use fully qualified names (`database_name.table_name`) automatically, so MySQL resolves them correctly regardless of which database the connection was initially opened against.
+
+The connection format accepts either a plain string (`"mydb"`) or an array (`["db1", "db2", "db3"]`). Existing single-database connections continue to work without any changes.
+
+This feature applies only to drivers that support cross-database access from a single connection. SQLite (file-based) and PostgreSQL (schema-based) are unaffected.
 
 ## Multi-Schema Support (PostgreSQL)
 

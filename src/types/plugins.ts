@@ -26,6 +26,11 @@ export interface PluginManifest {
   is_builtin?: boolean;
   /** Default username pre-filled in the connection modal (e.g. "postgres", "root") */
   default_username?: string;
+  /** CSS hex color for UI accents (e.g. "#f97316"). Undefined falls back to a neutral color. */
+  color?: string;
+  /** Icon name: built-in values are "mysql" | "postgres" | "sqlite" | "network" | "database" | "folder-open".
+   * External plugins can reference a file bundled in the plugin package. */
+  icon?: string;
 }
 
 export interface RegistryReleaseWithStatus {

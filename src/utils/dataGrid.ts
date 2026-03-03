@@ -4,7 +4,7 @@
  */
 
 import { formatGeometricValue, isGeometricType } from "./geometry";
-import { formatBlobValue, isBlobType } from "./blob";
+import { formatBlobValue, isBlobColumn, isBlobWireFormat } from "./blob";
 
 /** Sentinel value indicating that the database DEFAULT value should be used */
 export const USE_DEFAULT_SENTINEL = "__USE_DEFAULT__";
@@ -30,18 +30,25 @@ export function formatCellValue(
   value: unknown,
   nullLabel: string = "NULL",
   columnType?: string,
+  characterMaximumLength?: number,
 ): string {
   // Handle geometric types first (before null check to preserve geometric NULL handling)
   if (columnType && isGeometricType(columnType)) {
     return formatGeometricValue(value);
   }
 
-  // Handle BLOB types - show metadata instead of raw data
-  if (columnType && isBlobType(columnType)) {
+  // Handle BLOB types - show metadata instead of raw data.
+  // Also handle the case where the column is typed as text-length VARBINARY but
+  // the backend still returned a wire-format BLOB (e.g. non-UTF-8 binary content).
+  if (
+    columnType &&
+    (isBlobColumn(columnType, characterMaximumLength) ||
+      isBlobWireFormat(value))
+  ) {
     if (value === null || value === undefined) {
       return nullLabel;
     }
-    return formatBlobValue(value, columnType);
+    return formatBlobValue(value, columnType ?? "VARBINARY");
   }
 
   if (value === null || value === undefined) {

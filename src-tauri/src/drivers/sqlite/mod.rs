@@ -79,6 +79,7 @@ pub async fn get_columns(
                 is_nullable: notnull == 0,
                 is_auto_increment: false,
                 default_value: dflt_value,
+                character_maximum_length: None,
             }
         })
         .collect())
@@ -166,6 +167,7 @@ pub async fn get_all_columns_batch(
                     is_nullable: notnull == 0,
                     is_auto_increment: false, // SQLite doesn't expose this via table_info easily, typically AUTOINCREMENT on INTEGER PRIMARY KEY
                     default_value: dflt_value,
+                    character_maximum_length: None,
                 }
             })
             .collect();
@@ -710,6 +712,7 @@ pub async fn get_view_columns(
                 is_nullable: notnull == 0,
                 is_auto_increment: false,
                 default_value: dflt_value,
+                character_maximum_length: None,
             }
         })
         .collect())
@@ -718,7 +721,7 @@ pub async fn get_view_columns(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::ConnectionParams;
+    use crate::models::{ConnectionParams, DatabaseSelection};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use std::str::FromStr;
     use tempfile::NamedTempFile;
@@ -729,7 +732,7 @@ mod tests {
 
         let params = ConnectionParams {
             driver: "sqlite".to_string(),
-            database: path.clone(),
+            database: DatabaseSelection::Single(path.clone()),
             host: None,
             port: None,
             username: None,
@@ -870,6 +873,8 @@ impl SqliteDriver {
                 },
                 is_builtin: true,
                 default_username: String::new(),
+                color: "#06b6d4".to_string(),
+                icon: "sqlite".to_string(),
             },
         }
     }

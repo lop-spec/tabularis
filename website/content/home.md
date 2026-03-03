@@ -18,6 +18,10 @@ Built-in **Model Context Protocol** support. Expose your database schemas and ru
 ### 🎨 Visual Query Builder
 Construct complex queries visually. Drag tables, connect columns for JOINs, and let the tool write the SQL for you. Includes aggregate functions and advanced filtering.
 
+### ⌨️ Keyboard Shortcuts & Custom Bindings
+
+Built-in shortcuts for navigation, the SQL editor, and the data grid — all customizable from **Settings → Keyboard Shortcuts**. Remap any shortcut to your preferred combo, reset it with one click, or edit `keybindings.json` directly. Changes persist across sessions.
+
 ### 🔒 SSH Tunneling & Security
 Connect to remote databases securely through SSH tunnels and manage SSH connections right from the connection manager. Passwords and API Keys are stored securely in your system's Keychain.
 
@@ -48,6 +52,14 @@ Each plugin runs as a separate process. A crashing plugin never takes down the a
 Why stare at a dull interface? Tabularis brings a first-class theming experience. Switch instantly between **10+ presets** without restarting. Syntax highlighting is automatically generated from the UI theme, ensuring perfect visual harmony.
 
 # Installation
+
+### Windows — WinGet
+
+[![WinGet](https://img.shields.io/winget/v/Debba.Tabularis?label=WinGet&logo=windows&color=0078D4)](https://winstall.app/apps/Debba.Tabularis)
+
+```bash
+winget install Debba.Tabularis
+```
 
 ### macOS — Homebrew
 
