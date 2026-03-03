@@ -47,9 +47,20 @@ export default function CookiePolicyPage() {
               <h3>Necessary</h3>
             </div>
             <p>
-              These cookies are required for the website to function correctly.
-              They cannot be disabled. They do not store any personally
-              identifiable information.
+              These are required for the website to function correctly and
+              cannot be disabled. This category also includes{" "}
+              <strong>cookieless, anonymised page-view analytics</strong> via{" "}
+              <a
+                href="https://matomo.org"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Matomo
+              </a>{" "}
+              (self-hosted). No cookies are set, the last two bytes of your IP
+              address are removed before storage, and no data is shared with
+              third parties. This processing is based on legitimate interest
+              (aggregate, anonymous traffic statistics).
             </p>
             <table className="cookie-policy-table">
               <thead>
@@ -69,6 +80,17 @@ export default function CookiePolicyPage() {
                   <td>Stores your cookie consent preferences</td>
                   <td>Persistent (localStorage)</td>
                 </tr>
+                <tr>
+                  <td>
+                    <em>None (cookieless)</em>
+                  </td>
+                  <td>analytics.debbaweb.it</td>
+                  <td>
+                    Anonymised page-view statistics without persistent
+                    identifiers
+                  </td>
+                  <td>Session only</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -81,8 +103,8 @@ export default function CookiePolicyPage() {
               <h3>Measurement</h3>
             </div>
             <p>
-              These cookies help us understand how visitors interact with the
-              website by collecting anonymised usage statistics. We use{" "}
+              Enabling this category upgrades the base cookieless tracking to
+              full cookie-based analytics via{" "}
               <a
                 href="https://matomo.org"
                 target="_blank"
@@ -90,8 +112,9 @@ export default function CookiePolicyPage() {
               >
                 Matomo
               </a>
-              , a self-hosted, privacy-friendly analytics platform. No data is
-              shared with third parties.
+              . Persistent cookies allow us to recognise returning visitors and
+              measure engagement over time. IP addresses are still anonymised
+              and no data is shared with third parties.
             </p>
             <table className="cookie-policy-table">
               <thead>
@@ -108,7 +131,7 @@ export default function CookiePolicyPage() {
                     <code>_pk_id.*</code>
                   </td>
                   <td>analytics.debbaweb.it</td>
-                  <td>Identifies a unique visitor</td>
+                  <td>Identifies a returning visitor across sessions</td>
                   <td>13 months</td>
                 </tr>
                 <tr>

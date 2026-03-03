@@ -11,18 +11,45 @@ type CookiePrefs = {
 
 const STORAGE_KEY = 'tabularis-cookie-consent';
 
-function injectMatomo() {
+/**
+ * Initialises Matomo with two-level privacy:
+ * - Always: cookieless tracking with anonymised IP (no consent required)
+ * - If cookieConsent=true: enables persistent cookies via setCookieConsentGiven()
+ *
+ * If the script is already loaded, only the consent state is updated.
+ */
+function initMatomo(cookieConsent: boolean) {
   if (typeof window === 'undefined') return;
-  if ((window as any).__matomoLoaded) return;
-  (window as any).__matomoLoaded = true;
 
   const _paq: unknown[][] = ((window as any)._paq =
     (window as any)._paq || []);
+
+  if ((window as any).__matomoLoaded) {
+    // Script already running — update consent state only
+    if (cookieConsent) {
+      _paq.push(['setCookieConsentGiven']);
+    } else {
+      _paq.push(['forgetCookieConsentGiven']);
+    }
+    return;
+  }
+
+  (window as any).__matomoLoaded = true;
+
+  // Require cookie consent by default → cookieless until granted
+  _paq.push(['requireCookieConsent']);
+  // Grant immediately if consent already stored
+  if (cookieConsent) {
+    _paq.push(['setCookieConsentGiven']);
+  }
+
   _paq.push(['trackPageView']);
   _paq.push(['enableLinkTracking']);
+
   const u = '//analytics.debbaweb.it/';
   _paq.push(['setTrackerUrl', u + 'matomo.php']);
   _paq.push(['setSiteId', '4']);
+
   const d = document;
   const g = d.createElement('script');
   const s = d.getElementsByTagName('script')[0];
@@ -39,6 +66,8 @@ export function CookieConsent() {
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
+      // No stored prefs — start cookieless tracking, show banner
+      initMatomo(false);
       setVisible(true);
       return;
     }
@@ -46,8 +75,9 @@ export function CookieConsent() {
       const prefs: CookiePrefs = JSON.parse(raw);
       setMeasurement(prefs.measurement);
       setMarketing(prefs.marketing);
-      if (prefs.measurement) injectMatomo();
+      initMatomo(prefs.measurement);
     } catch {
+      initMatomo(false);
       setVisible(true);
     }
   }, []);
@@ -62,7 +92,7 @@ export function CookieConsent() {
     setMeasurement(measurementVal);
     setMarketing(marketingVal);
     setVisible(false);
-    if (measurementVal) injectMatomo();
+    initMatomo(measurementVal);
   }
 
   if (!visible) return null;
