@@ -34,6 +34,15 @@ The import can be cancelled at any time. Tabularis will close the modal automati
 
 > **Note**: Import executes the SQL statements in your file sequentially. If a statement fails, execution stops and the error is displayed. Tabularis does not wrap the import in a transaction automatically — if you want atomicity, ensure your dump file contains `BEGIN;` and `COMMIT;` statements.
 
+## Schema-Level Dump & Import (PostgreSQL)
+
+For PostgreSQL connections, dump and import operations are also available at the **schema** level. Right-click any schema node in the sidebar to access **Dump Schema** or **Import into Schema**. The options and workflow are identical to the database-level counterparts, but scope is limited to the selected schema.
+
+This is particularly useful when working with multi-schema databases where you want to snapshot or restore a single schema without touching the rest of the database.
+
 ## How to Access
 
-Both actions are available by **right-clicking a database** node in the left sidebar. They work with all native drivers (PostgreSQL, MySQL, SQLite) and with plugin drivers that implement the relevant commands.
+- **Database-level**: right-click a database node in the left sidebar.
+- **Schema-level** (PostgreSQL): right-click a schema node in the left sidebar.
+
+Both actions work with all native drivers (PostgreSQL, MySQL, SQLite) and with plugin drivers that implement the relevant commands.

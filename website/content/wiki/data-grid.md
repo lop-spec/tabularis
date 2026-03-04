@@ -76,6 +76,16 @@ Choose **JSON** from the export menu. The full result set is written as a JSON a
 
 Large binary columns (BLOB, `bytea`, etc.) are truncated in the grid to avoid loading multi-megabyte values into memory. The maximum bytes loaded per cell is controlled by `maxBlobSize` in `config.json` (default: 1 MB). Values exceeding this limit are shown as a truncated hex preview with the full size in bytes.
 
+## Column Header Context Menu
+
+Right-click any column header to open the header context menu. Available actions:
+
+| Action | Description |
+|--------|-------------|
+| **Copy column name** | Copies the column name as plain text to the clipboard. Useful when building queries or referencing column names in other tools. |
+
+More actions may appear depending on context (e.g., sort direction, column visibility toggles).
+
 ## Null vs. Empty String
 
 The grid displays `NULL` values with a distinct grey `NULL` badge to differentiate them from empty strings. When editing, leave a cell blank to write an empty string; use the dedicated **Set NULL** option in the cell context menu to write a true `NULL`.
