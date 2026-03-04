@@ -47,10 +47,18 @@ jobs:
 
       - name: install frontend dependencies
         run: npm install
+        
+      
+      # Experimental truly-portable AppImage bundler
+      # https://github.com/tauri-apps/tauri/pull/12491
+      - name: Install experimental tauri-cli (portable AppImage)
+        if: runner.os == 'Linux'
+        run: cargo install tauri-cli --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: ${{ runner.os == 'Linux' && 'true' || '' }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:

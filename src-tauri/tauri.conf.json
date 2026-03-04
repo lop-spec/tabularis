@@ -36,7 +36,15 @@
       "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libsecret-1-0"]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
   },
   "plugins": {
     "updater": {
