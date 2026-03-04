@@ -40,7 +40,7 @@ export default async function Image({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPostBySlug(slug);
   const og = post?.meta.og;
   const release = post?.meta.release;
 
