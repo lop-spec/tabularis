@@ -1,3 +1,25 @@
+## [0.9.5](https://github.com/debba/tabularis/compare/v0.9.4...v0.9.5) (2026-03-04)
+
+
+### Bug Fixes
+
+* **mysql:** use per-db pools and include database in pool key ([9abda3b](https://github.com/debba/tabularis/commit/9abda3bf8c2e4e7b5237233e1a61a725e409a6b8))
+* **postgres:** bind UUID strings as uuid type for queries ([380c494](https://github.com/debba/tabularis/commit/380c494559f0febf6958943cecedaae0dabe7071))
+* remove runtime monaco-editor import to bundle only SQL ([cc8d960](https://github.com/debba/tabularis/commit/cc8d96076f0c8cd2d090303bfbff2e64d2b59fcb))
+* **updater:** avoid stale cache and restart app after update ([38ec23a](https://github.com/debba/tabularis/commit/38ec23abb854c767ec15819a520c4975a97f4621))
+
+
+### Features
+
+* Apply Tauri recommended compiler options ([63de45f](https://github.com/debba/tabularis/commit/63de45f62edee65e136e37bec3e32e0221cb0c0c))
+* **cookie-consent:** add cookie consent component and policy page ([37211d5](https://github.com/debba/tabularis/commit/37211d5db372fd651b2a49b6457690e64f3d8997))
+* **cookie-consent:** enable cookieless Matomo and consent flow ([be1bffd](https://github.com/debba/tabularis/commit/be1bffd01e737e0a0eb8262fff499889b686862a))
+* **cookies:** add manage cookies button and matomo consent handling ([adeedb6](https://github.com/debba/tabularis/commit/adeedb6e660fac5777d2d467c82a0b2118007702))
+* **data-grid:** add header context menu to data grid ([85a6efc](https://github.com/debba/tabularis/commit/85a6efcb3b8905910d65dae3d7bc1f0b419ac150))
+* **dump:** add schema-aware dump/import utilities and UI integration ([f964fb7](https://github.com/debba/tabularis/commit/f964fb7e5d2891a36e94884ef37e79df4d14813e))
+
+
+
 ## [0.9.4](https://github.com/debba/tabularis/compare/v0.9.3...v0.9.4) (2026-03-02)
 
 

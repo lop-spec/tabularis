@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "tabularis",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "identifier": "tabularis",
   "build": {
     "frontendDist": "../dist",
@@ -39,7 +39,10 @@
     ],
     "linux": {
       "deb": {
-        "depends": ["libwebkit2gtk-4.1-0", "libsecret-1-0"]
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libsecret-1-0"
+        ]
       },
       "appimage": {
         "bundleMediaFramework": false
