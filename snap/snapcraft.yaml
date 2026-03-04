@@ -1,6 +1,6 @@
 name: tabularis
 base: core24
-version: '0.0.0'
+version: "0.0.0"
 summary: A lightweight, developer-focused database management tool
 description: |
   Tabularis is a lightweight, developer-focused database management tool
@@ -11,7 +11,7 @@ description: |
 grade: stable
 confinement: strict
 
-architectures:
+platforms:
   - build-on: amd64
     build-for: amd64
 
@@ -29,8 +29,8 @@ apps:
     command: usr/bin/tabularis
     extensions: [gnome]
     environment:
-       WEBKIT_DISABLE_DMABUF_RENDERER: "1"   # disable DMABuf in WebKit
-       LIBGL_ALWAYS_SOFTWARE: "1"            
+      WEBKIT_DISABLE_DMABUF_RENDERER: "1" # disable DMABuf in WebKit
+      LIBGL_ALWAYS_SOFTWARE: "1"
     plugs:
       - home
       - network
