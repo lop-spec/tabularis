@@ -130,6 +130,11 @@ export const DataGrid = React.memo(
         tempId?: string;
       };
     } | null>(null);
+    const [headerContextMenu, setHeaderContextMenu] = useState<{
+      x: number;
+      y: number;
+      colName: string;
+    } | null>(null);
     const [editingCell, setEditingCell] = useState<{
       rowIndex: number;
       colIndex: number;
@@ -751,6 +756,25 @@ export const DataGrid = React.memo(
       await copyToClipboard(rowText);
     }, [contextMenu, copyToClipboard]);
 
+    const copyHeaderName = useCallback(async () => {
+      if (!headerContextMenu) return;
+      await copyToClipboard(headerContextMenu.colName);
+      setHeaderContextMenu(null);
+    }, [headerContextMenu, copyToClipboard]);
+
+    const copyHeaderNameQuoted = useCallback(async () => {
+      if (!headerContextMenu) return;
+      await copyToClipboard(`\`${headerContextMenu.colName}\``);
+      setHeaderContextMenu(null);
+    }, [headerContextMenu, copyToClipboard]);
+
+    const copyHeaderNameTable = useCallback(async () => {
+      if (!headerContextMenu) return;
+      const tName = tableName ? `${tableName}.` : "";
+      await copyToClipboard(`${tName}${headerContextMenu.colName}`);
+      setHeaderContextMenu(null);
+    }, [headerContextMenu, tableName, copyToClipboard]);
+
     const copySelectedCells = useCallback(async () => {
       if (selectedRowIndices.size === 0) return;
 
@@ -824,6 +848,14 @@ export const DataGrid = React.memo(
                     <th
                       key={header.id}
                       className="px-4 py-2 text-xs font-semibold text-secondary tracking-wider border-b border-r border-default last:border-r-0 whitespace-nowrap"
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setHeaderContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          colName: header.id,
+                        });
+                      }}
                     >
                       {flexRender(
                         header.column.columnDef.header,
@@ -1233,6 +1265,31 @@ export const DataGrid = React.memo(
               />
             );
           })()}
+
+        {headerContextMenu && (
+          <ContextMenu
+            x={headerContextMenu.x}
+            y={headerContextMenu.y}
+            onClose={() => setHeaderContextMenu(null)}
+            items={[
+              {
+                label: t("dataGrid.copyColumnName"),
+                icon: Copy,
+                action: copyHeaderName,
+              },
+              {
+                label: t("dataGrid.copyColumnNameQuoted"),
+                icon: Copy,
+                action: copyHeaderNameQuoted,
+              },
+              {
+                label: t("dataGrid.copyColumnNameTable"),
+                icon: Copy,
+                action: copyHeaderNameTable,
+              },
+            ]}
+          />
+        )}
 
         {/* Row Editor Sidebar */}
         {sidebarOpen &&
