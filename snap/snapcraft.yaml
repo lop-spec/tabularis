@@ -2,6 +2,11 @@ name: tabularis
 base: core24
 version: "0.0.0"
 summary: A lightweight, developer-focused database management tool
+website: https://tabularis.dev
+issues: https://github.com/debba/tabularis/issues
+source-code: https://github.com/debba/tabularis
+title: Tabularis
+contact: andrea@debbaweb.it
 description: |
   Tabularis is a lightweight, developer-focused database management tool
   supporting MySQL, PostgreSQL, and SQLite. Features include SSH tunneling,
