@@ -904,17 +904,21 @@ pub async fn execute_query(
     page: u32,
     schema: Option<&str>,
 ) -> Result<QueryResult, String> {
-    let pool = get_mysql_pool(params).await?;
+    // Use a per-database pool when a schema override is requested to avoid
+    // polluting the shared pool's prepared-statement cache (MySQL invalidates
+    // all cached handles on a `USE <db>` command).
+    let effective_params;
+    let pool = if let Some(db) = schema {
+        effective_params = {
+            let mut p = params.clone();
+            p.database = crate::models::DatabaseSelection::Single(db.to_string());
+            p
+        };
+        get_mysql_pool(&effective_params).await?
+    } else {
+        get_mysql_pool(params).await?
+    };
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-
-    // Switch to the target database if a schema override is provided (multi-db isolation)
-    if let Some(db) = schema {
-        let escaped = db.replace('`', "``");
-        sqlx::query(&format!("USE `{}`", escaped))
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| format!("Failed to switch database '{}': {}", db, e))?;
-    }
 
     let is_select = query.trim_start().to_uppercase().starts_with("SELECT");
     let mut pagination: Option<Pagination> = None;
@@ -999,14 +1003,6 @@ pub async fn execute_query(
         }
         p.has_more = has_more;
         truncated = has_more;
-    }
-
-    // Restore primary database context so the pooled connection is clean
-    if schema.is_some() {
-        let primary = params.database.primary().replace('`', "``");
-        let _ = sqlx::query(&format!("USE `{}`", primary))
-            .execute(&mut *conn)
-            .await;
     }
 
     Ok(QueryResult {

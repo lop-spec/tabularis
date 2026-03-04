@@ -18,8 +18,8 @@ static SQLITE_POOLS: Lazy<PoolMap<Sqlite>> = Lazy::new(|| Arc::new(RwLock::new(H
 /// Otherwise fall back to host:port:database (for ad-hoc connections).
 fn build_connection_key(params: &ConnectionParams, connection_id: Option<&str>) -> String {
     if let Some(conn_id) = connection_id {
-        // Use connection_id for stable pooling - works with SSH tunnels
-        format!("{}:conn:{}", params.driver, conn_id)
+        // Include database in key so different databases on the same connection use separate pools
+        format!("{}:conn:{}:{}", params.driver, conn_id, params.database)
     } else {
         // Fall back to host:port:database for ad-hoc connections
         format!(
