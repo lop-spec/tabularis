@@ -54,6 +54,11 @@ jobs:
       - name: Install experimental tauri-cli (portable AppImage)
         if: runner.os == 'Linux'
         run: cargo install tauri-cli --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage
+      
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - uses: tauri-apps/tauri-action@v0
         env:
