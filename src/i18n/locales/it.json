@@ -291,7 +291,14 @@
       "removeTitle": "Rimuovi Plugin",
       "confirmRemove": "Sei sicuro di voler rimuovere \"{{name}}\"? I file del plugin verranno eliminati.",
       "enabled": "Abilitato",
-      "disabled": "Disabilitato"
+      "disabled": "Disabilitato",
+      "installError": {
+        "title": "Installazione fallita",
+        "subtitle": "Si è verificato un errore durante l'installazione del plugin. Vedi i dettagli qui sotto.",
+        "details": "Dettagli errore",
+        "copy": "Copia",
+        "copied": "Copiato!"
+      }
     },
     "shortcuts": {
       "title": "Scorciatoie da tastiera",

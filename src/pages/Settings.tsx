@@ -48,6 +48,7 @@ import { findConnectionsForDrivers } from "../utils/connectionManager";
 import { parseAuthor, versionGte } from "../utils/plugins";
 import type { PluginManifest } from "../types/plugins";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
+import { PluginInstallErrorModal } from "../components/modals/PluginInstallErrorModal";
 import { useUpdate } from "../hooks/useUpdate";
 import { useKeybindings } from "../hooks/useKeybindings";
 import { formatEvent, formatMatch, parseCombo } from "../utils/keybindings";
@@ -678,6 +679,7 @@ export const Settings = () => {
   const { plugins: registryPlugins, loading: registryLoading, error: registryError, refresh: refreshRegistry } = usePluginRegistry();
   const { openConnectionIds, connectionDataMap, disconnect } = useDatabase();
   const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
+  const [pluginInstallError, setPluginInstallError] = useState<{ pluginId: string; error: string } | null>(null);
   const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const [uninstallingPluginId, setUninstallingPluginId] = useState<string | null>(null);
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -1674,7 +1676,7 @@ export const Settings = () => {
                         refreshRegistry();
                         refreshDrivers();
                       } catch (err) {
-                        await message(String(err), { title: t("common.error"), kind: "error" });
+                        setPluginInstallError({ pluginId: plugin.id, error: String(err) });
                       } finally {
                         setInstallingPluginId(null);
                       }
@@ -2210,6 +2212,13 @@ export const Settings = () => {
           )}
         </div>
       </div>
+
+      <PluginInstallErrorModal
+        isOpen={pluginInstallError !== null}
+        onClose={() => setPluginInstallError(null)}
+        pluginId={pluginInstallError?.pluginId ?? ""}
+        error={pluginInstallError?.error ?? ""}
+      />
     </div>
   );
 };

@@ -36,22 +36,68 @@ pub async fn download_and_install(plugin_id: &str, download_url: &str) -> Result
     }
 
     // Download ZIP to memory
+    log::info!("Downloading plugin '{}' from: {}", plugin_id, download_url);
     let response = reqwest::get(download_url)
         .await
         .map_err(|e| format!("Failed to download plugin: {}", e))?;
+
+    let status = response.status();
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+    log::info!(
+        "Download response for '{}': HTTP {} (content-type: {})",
+        plugin_id, status, content_type
+    );
+
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        let snippet = body.chars().take(200).collect::<String>();
+        log::error!(
+            "Plugin '{}' download failed — HTTP {}: {}",
+            plugin_id, status, snippet
+        );
+        return Err(format!(
+            "Failed to download plugin: server returned HTTP {} for URL: {}",
+            status, download_url
+        ));
+    }
 
     let bytes = response
         .bytes()
         .await
         .map_err(|e| format!("Failed to read plugin download: {}", e))?;
 
+    log::info!(
+        "Plugin '{}' downloaded {} bytes (content-type: {})",
+        plugin_id,
+        bytes.len(),
+        content_type
+    );
+
     // Extract to temp dir
     fs::create_dir_all(&tmp_dir)
         .map_err(|e| format!("Failed to create temp directory: {}", e))?;
 
-    let cursor = std::io::Cursor::new(bytes);
-    let mut archive =
-        zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to open ZIP archive: {}", e))?;
+    let cursor = std::io::Cursor::new(bytes.clone());
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| {
+        log::error!(
+            "Plugin '{}': failed to open ZIP archive ({} bytes, content-type: {}): {}",
+            plugin_id,
+            bytes.len(),
+            content_type,
+            e
+        );
+        format!(
+            "Failed to open ZIP archive: {} (downloaded {} bytes from {})",
+            e,
+            bytes.len(),
+            download_url
+        )
+    })?;
 
     for i in 0..archive.len() {
         let mut file = archive

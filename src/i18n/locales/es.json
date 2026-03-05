@@ -291,7 +291,14 @@
       "removeTitle": "Eliminar Plugin",
       "confirmRemove": "¿Estás seguro de que deseas eliminar \"{{name}}\"? Los archivos del plugin serán eliminados.",
       "enabled": "Habilitado",
-      "disabled": "Deshabilitado"
+      "disabled": "Deshabilitado",
+      "installError": {
+        "title": "Instalación fallida",
+        "subtitle": "Ocurrió un error al instalar el plugin. Consulta los detalles a continuación.",
+        "details": "Detalles del error",
+        "copy": "Copiar",
+        "copied": "¡Copiado!"
+      }
     },
     "shortcuts": {
       "title": "Atajos de teclado",
