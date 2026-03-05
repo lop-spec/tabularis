@@ -59,7 +59,7 @@
     },
     {
       "id": "redis",
-      "name": "Redis (GO)",
+      "name": "Redis (Go)",
       "description": "Tabularis driver for Redis databases. Supports virtual table views for Strings, Hashes, Lists, Sets, and ZSets with native UI write operations.",
       "author": "gzamboni <https://github.com/gzamboni>",
       "homepage": "https://github.com/gzamboni/tabularis-redis-plugin-go",
