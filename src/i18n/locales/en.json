@@ -1,4 +1,28 @@
 {
+  "toolbar": {
+    "filters": "Filters",
+    "toggleFilterPanel": "Toggle structured filter panel",
+    "filterConditions": "Filter conditions",
+    "activeOf": "{{active}} of {{total}} active",
+    "noFilters": "No filters —",
+    "addFirstFilter": "add the first filter",
+    "noActiveFilters": "no active filters",
+    "closePanelEsc": "Close filter panel (ESC)",
+    "unset": "Unset",
+    "sql": "SQL",
+    "addFilter": "Add filter",
+    "applyAll": "Apply All",
+    "apply": "Apply",
+    "applied": "Applied",
+    "switchToSql": "Switch to SQL WHERE input",
+    "duplicateFilter": "Duplicate filter",
+    "removeFilter": "Remove filter",
+    "deselectFromApplyAll": "Deselect from Apply All",
+    "selectForApplyAll": "Select for Apply All",
+    "valuePlaceholder": "value",
+    "fromPlaceholder": "from",
+    "toPlaceholder": "to"
+  },
   "common": {
     "save": "Save",
     "close": "Close",
