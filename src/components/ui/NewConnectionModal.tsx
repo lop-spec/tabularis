@@ -19,6 +19,7 @@ import clsx from "clsx";
 import { SshConnectionsModal } from "../modals/SshConnectionsModal";
 import { SearchableSelect } from "./SearchableSelect";
 import { useDrivers } from "../../hooks/useDrivers";
+import { Modal } from "./Modal";
 import type { PluginManifest } from "../../types/plugins";
 import { loadSshConnections, type SshConnection } from "../../utils/ssh";
 import { isMultiDatabaseCapable } from "../../utils/database";
@@ -217,8 +218,6 @@ export const NewConnectionModal = ({
     };
     void init();
   }, [isOpen, initialConnection]);
-
-  if (!isOpen) return null;
 
   const handleDriverChange = (newDriver: string) => {
     setDriver(newDriver);
@@ -680,7 +679,7 @@ export const NewConnectionModal = ({
   );
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm">
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[760px] max-h-[88vh] flex flex-col overflow-hidden">
 
         {/* ── Top bar: name + close ── */}
@@ -861,6 +860,6 @@ export const NewConnectionModal = ({
         isOpen={isSshModalOpen}
         onClose={async () => { setIsSshModalOpen(false); await loadSshConnectionsList(); }}
       />
-    </div>
+    </Modal>
   );
 };

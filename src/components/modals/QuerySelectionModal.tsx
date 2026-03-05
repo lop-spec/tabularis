@@ -1,4 +1,5 @@
 import { X, Play } from 'lucide-react';
+import { Modal } from '../ui/Modal';
 
 interface QuerySelectionModalProps {
   isOpen: boolean;
@@ -8,10 +9,8 @@ interface QuerySelectionModalProps {
 }
 
 export const QuerySelectionModal = ({ isOpen, queries, onSelect, onClose }: QuerySelectionModalProps) => {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-elevated border border-default rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-default">
@@ -50,6 +49,6 @@ export const QuerySelectionModal = ({ isOpen, queries, onSelect, onClose }: Quer
             <span>Esc to cancel</span>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

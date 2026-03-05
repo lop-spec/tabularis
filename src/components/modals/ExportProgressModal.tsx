@@ -1,5 +1,6 @@
 import { X, FileText, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Modal } from "../ui/Modal";
 
 export type ExportStatus = "exporting" | "completed" | "error";
 
@@ -24,10 +25,8 @@ export const ExportProgressModal = ({
 }: ExportProgressModalProps) => {
   const { t } = useTranslation();
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-elevated border border-strong rounded-lg shadow-xl w-96 p-6 animate-in fade-in zoom-in duration-200">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -92,7 +91,7 @@ export const ExportProgressModal = ({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

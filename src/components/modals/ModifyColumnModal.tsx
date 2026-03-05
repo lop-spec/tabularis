@@ -6,6 +6,7 @@ import { SqlPreview } from "../ui/SqlPreview";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useDataTypes } from "../../hooks/useDataTypes";
 import { useDrivers } from "../../hooks/useDrivers";
+import { Modal } from "../ui/Modal";
 import { supportsAlterColumn } from "../../utils/driverCapabilities";
 
 interface ColumnDef {
@@ -230,10 +231,8 @@ export const ModifyColumnModal = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
       <div className="bg-elevated rounded-xl shadow-2xl w-[500px] border border-strong flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-default bg-surface-secondary/50 rounded-t-xl">
@@ -445,6 +444,6 @@ export const ModifyColumnModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

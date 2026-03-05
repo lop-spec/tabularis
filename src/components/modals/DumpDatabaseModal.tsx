@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { message } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../../hooks/useDatabase";
+import { Modal } from "../ui/Modal";
 import { Loader2, Download, Database, Square, CheckSquare } from "lucide-react";
 import {
   validateDumpOptions,
@@ -126,10 +127,8 @@ export const DumpDatabaseModal = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
        <div className="bg-base border border-default rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col">
           <div className="p-4 border-b border-default flex justify-between items-center">
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -228,6 +227,6 @@ export const DumpDatabaseModal = ({
              )}
           </div>
        </div>
-    </div>
+    </Modal>
   );
 };

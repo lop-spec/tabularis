@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useDatabase } from '../../hooks/useDatabase';
 import { SqlPreview } from '../ui/SqlPreview';
 import { useDataTypes } from '../../hooks/useDataTypes';
+import { Modal } from '../ui/Modal';
 
 interface ColumnDef {
   id: string; // Internal ID for React keys
@@ -153,10 +154,8 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-elevated rounded-xl shadow-2xl w-[900px] border border-strong flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-default bg-base rounded-t-xl">
@@ -350,6 +349,6 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

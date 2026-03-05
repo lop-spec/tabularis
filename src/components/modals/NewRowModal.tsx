@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X, Loader2, Plus } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useDatabase } from "../../hooks/useDatabase";
+import { Modal } from "../ui/Modal";
 import { quoteTableRef } from "../../utils/identifiers";
 import { isGeometricType } from "../../utils/geometry";
 import { GeometryInput } from "../ui/GeometryInput";
@@ -148,8 +149,6 @@ export const NewRowModal = ({
     }
   }, [isOpen, activeConnectionId, tableName, fetchFkOptions, t, activeSchema]);
 
-  if (!isOpen) return null;
-
   const parseValue = (value: string, dataType: string) => {
     const type = dataType.toLowerCase();
 
@@ -244,7 +243,7 @@ export const NewRowModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-surface-secondary rounded-lg shadow-xl w-[600px] border border-strong flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-4 border-b border-strong">
           <h2 className="text-lg font-semibold text-primary">
@@ -390,6 +389,6 @@ export const NewRowModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

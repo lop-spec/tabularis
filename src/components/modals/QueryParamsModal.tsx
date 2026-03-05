@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X, Save, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Modal } from "../ui/Modal";
 
 interface QueryParamsModalProps {
   isOpen: boolean;
@@ -19,10 +20,8 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
   initialValues,
   mode = "save",
 }) => {
-  if (!isOpen) return null;
-
   return (
-    <div key={isOpen ? 'open' : 'closed'} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <Modal key={isOpen ? 'open' : 'closed'} isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <QueryParamsForm
         parameters={parameters}
         initialValues={initialValues}
@@ -30,7 +29,7 @@ export const QueryParamsModal: React.FC<QueryParamsModalProps> = ({
         onClose={onClose}
         mode={mode}
       />
-    </div>
+    </Modal>
   );
 };
 

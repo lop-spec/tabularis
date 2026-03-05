@@ -6,6 +6,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "../../hooks/useTheme";
 import { loadMonacoTheme } from "../../themes/themeUtils";
+import { Modal } from "../ui/Modal";
 
 interface McpStatus {
   installed: boolean;
@@ -65,10 +66,8 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose}>
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-default bg-base">
@@ -183,6 +182,6 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
             </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

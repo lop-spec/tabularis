@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Modal } from "../ui/Modal";
 import { X, AlertTriangle, Copy, Check } from "lucide-react";
 
 interface PluginInstallErrorModalProps {
@@ -18,8 +19,6 @@ export const PluginInstallErrorModal = ({
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
-  if (!isOpen) return null;
-
   const handleCopy = () => {
     navigator.clipboard.writeText(error);
     setCopied(true);
@@ -27,7 +26,7 @@ export const PluginInstallErrorModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose}>
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
 
         {/* Header */}
@@ -92,6 +91,6 @@ export const PluginInstallErrorModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

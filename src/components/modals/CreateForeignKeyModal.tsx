@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { SqlPreview } from '../ui/SqlPreview';
 import { useDatabase } from '../../hooks/useDatabase';
 import { useDrivers } from '../../hooks/useDrivers';
+import { Modal } from '../ui/Modal';
 import { supportsCreateForeignKeys, getCapabilitiesForDriver } from '../../utils/driverCapabilities';
 
 interface CreateForeignKeyModalProps {
@@ -162,10 +163,8 @@ export const CreateForeignKeyModal = ({
       }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
       <div className="bg-elevated rounded-xl shadow-2xl w-[600px] border border-strong flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-default bg-surface-secondary/50 rounded-t-xl">
            <h2 className="text-lg font-semibold text-primary">{t('createFk.title')}</h2>
@@ -284,6 +283,6 @@ export const CreateForeignKeyModal = ({
            </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

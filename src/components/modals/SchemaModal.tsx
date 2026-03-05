@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { X, Loader2, Key } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useDatabase } from '../../hooks/useDatabase';
+import { Modal } from '../ui/Modal';
 
 interface TableColumn {
   name: string;
@@ -47,10 +48,8 @@ export const SchemaModal = ({ isOpen, onClose, tableName, schema }: SchemaModalP
     void loadSchema();
   }, [isOpen, activeConnectionId, tableName, resolvedSchema]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-surface-secondary rounded-lg shadow-xl w-[600px] border border-strong flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-4 border-b border-strong">
           <h2 className="text-lg font-semibold text-white">{t('schema.title', { table: tableName })}</h2>
@@ -93,6 +92,6 @@ export const SchemaModal = ({ isOpen, onClose, tableName, schema }: SchemaModalP
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

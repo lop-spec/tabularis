@@ -1,9 +1,9 @@
-import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Github, Star } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { GITHUB_URL, DISCORD_URL } from "../../config/links";
 import { DiscordIcon } from "../icons/DiscordIcon";
+import { Modal } from "../ui/Modal";
 
 interface CommunityModalProps {
   isOpen: boolean;
@@ -13,20 +13,8 @@ interface CommunityModalProps {
 export const CommunityModal = ({ isOpen, onClose }: CommunityModalProps) => {
   const { t } = useTranslation();
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose}>
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[480px] max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-default bg-base">
@@ -90,6 +78,6 @@ export const CommunityModal = ({ isOpen, onClose }: CommunityModalProps) => {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

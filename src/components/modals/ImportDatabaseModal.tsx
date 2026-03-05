@@ -6,6 +6,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { Loader2, Database, X, CheckCircle2, XCircle } from "lucide-react";
 import { formatElapsedTime } from "../../utils/formatTime";
 import { useDatabase } from "../../hooks/useDatabase";
+import { Modal } from "../ui/Modal";
 
 interface ImportProgress {
   statements_executed: number;
@@ -131,10 +132,8 @@ export const ImportDatabaseModal = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-base border border-default rounded-lg shadow-xl w-[600px] flex flex-col">
         <div className="p-4 border-b border-default flex justify-between items-center">
           <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -271,6 +270,6 @@ export const ImportDatabaseModal = ({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

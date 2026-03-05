@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import MonacoEditor from '@monaco-editor/react';
 import { useTheme } from '../../hooks/useTheme';
+import { Modal } from '../ui/Modal';
 
 interface QueryModalProps {
   isOpen: boolean;
@@ -49,10 +50,8 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-elevated border border-default rounded-xl shadow-2xl w-full max-w-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">{title}</h3>
@@ -117,6 +116,6 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

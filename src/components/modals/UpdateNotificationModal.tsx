@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Modal } from "../ui/Modal";
 import { X, Download, ExternalLink, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -17,7 +18,7 @@ interface UpdateNotificationModalProps {
       size: number;
       platform: string;
     }>;
-  };
+  } | null;
   isDownloading: boolean;
   downloadProgress: number;
   onDownloadAndInstall: () => void;
@@ -35,14 +36,14 @@ export const UpdateNotificationModal = ({
 }: UpdateNotificationModalProps) => {
   const { t } = useTranslation();
 
-  if (!isOpen) return null;
-
   const handleViewRelease = async () => {
     await openUrl(updateInfo.releaseUrl);
   };
 
+  if (!updateInfo) return null;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose}>
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
 
         {/* Header */}
@@ -163,6 +164,6 @@ export const UpdateNotificationModal = ({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

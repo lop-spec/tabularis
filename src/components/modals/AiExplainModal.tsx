@@ -3,6 +3,7 @@ import { X, Loader2, BookOpen } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
+import { Modal } from "../ui/Modal";
 import MonacoEditor from "@monaco-editor/react";
 
 interface AiExplainModalProps {
@@ -52,10 +53,8 @@ export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) 
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-elevated border border-strong rounded-xl w-[700px] shadow-2xl flex flex-col max-h-[85vh]">
         
         {/* Header */}
@@ -131,6 +130,6 @@ export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) 
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
