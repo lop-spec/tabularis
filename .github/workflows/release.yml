@@ -18,7 +18,7 @@ jobs:
             args: "--target aarch64-apple-darwin"
           - platform: "macos-15-intel" # for Intel
             args: "--target x86_64-apple-darwin"
-          - platform: "ubuntu-22.04"
+          - platform: "ubuntu-24.04"
             args: ""
           - platform: "windows-latest"
             args: ""
@@ -39,7 +39,7 @@ jobs:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
 
       - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-24.04'
         # You can remove libayatana-appindicator3-dev if you don't use the system tray feature.
         run: |
           sudo apt-get update
@@ -47,20 +47,13 @@ jobs:
 
       - name: install frontend dependencies
         run: npm install
-        
-      
-      # Experimental truly-portable AppImage bundler
-      # https://github.com/tauri-apps/tauri/pull/12491
-      - name: Install experimental tauri-cli (portable AppImage)
-        if: runner.os == 'Linux'
-        run: cargo install tauri-cli --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage
-      
+
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v0.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: ${{ runner.os == 'Linux' && 'true' || '' }}

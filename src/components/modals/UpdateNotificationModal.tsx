@@ -36,11 +36,11 @@ export const UpdateNotificationModal = ({
 }: UpdateNotificationModalProps) => {
   const { t } = useTranslation();
 
+  if (!updateInfo) return null;
+
   const handleViewRelease = async () => {
     await openUrl(updateInfo.releaseUrl);
   };
-
-  if (!updateInfo) return null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
