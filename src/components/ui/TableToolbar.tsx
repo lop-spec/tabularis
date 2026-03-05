@@ -252,12 +252,20 @@ const TableToolbarInternal: React.FC<TableToolbarInternalProps> = ({
     initialLimit && initialLimit > 0 ? String(initialLimit) : ""
   );
 
-  // Autocomplete state
+  // Autocomplete state — WHERE
   const [autocompleteOpen, setAutocompleteOpen] = useState(false);
   const [autocompleteItems, setAutocompleteItems] = useState<TableColumn[]>([]);
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
   const filterInputRef = useRef<HTMLInputElement>(null);
   const autocompleteMouseDown = useRef(false);
+
+  // Autocomplete state — ORDER BY
+  const [sortAcOpen, setSortAcOpen] = useState(false);
+  const [sortAcItems, setSortAcItems] = useState<TableColumn[]>([]);
+  const [sortAcIndex, setSortAcIndex] = useState(0);
+  const sortInputRef = useRef<HTMLInputElement>(null);
+  const sortAcMouseDown = useRef(false);
+
   const panelRef = useRef<HTMLDivElement>(null);
   const filtersButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -478,9 +486,58 @@ const TableToolbarInternal: React.FC<TableToolbarInternalProps> = ({
     commitSql(filterInput, sortInput, limitInput);
   };
 
+  // ── ORDER BY autocomplete ────────────────────────────────────────────────────
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSortInput(value);
+    if (!hasColumns) return;
+    const cursorPos = e.target.selectionStart ?? value.length;
+    const prefix = getCurrentWordPrefix(value, cursorPos);
+    if (prefix.length > 0) {
+      const suggestions = filterColumnSuggestions(columns, prefix);
+      setSortAcItems(suggestions);
+      setSortAcIndex(0);
+      setSortAcOpen(suggestions.length > 0);
+    } else {
+      setSortAcOpen(false);
+    }
+  };
+
+  const acceptSortSuggestion = (col: TableColumn) => {
+    const input = sortInputRef.current;
+    const cursorPos = input?.selectionStart ?? sortInput.length;
+    const newValue = replaceCurrentWord(sortInput, cursorPos, col.name);
+    setSortInput(newValue);
+    setSortAcOpen(false);
+    setTimeout(() => {
+      if (input) {
+        input.focus();
+        const before = sortInput.slice(0, cursorPos);
+        const wordMatch = before.match(/[a-zA-Z0-9_]+$/);
+        const wordStart = wordMatch ? cursorPos - wordMatch[0].length : cursorPos;
+        input.setSelectionRange(wordStart + col.name.length, wordStart + col.name.length);
+      }
+    }, 0);
+  };
+
+  const handleSortKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (sortAcOpen) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setSortAcIndex((i) => Math.min(i + 1, sortAcItems.length - 1)); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setSortAcIndex((i) => Math.max(i - 1, 0)); return; }
+      if (e.key === "Enter") { e.preventDefault(); acceptSortSuggestion(sortAcItems[sortAcIndex]); return; }
+      if (e.key === "Escape") { setSortAcOpen(false); return; }
+    }
+    if (e.key === "Enter") {
+      if (!panelOpen) { commitSql(filterInput, sortInput, limitInput); } else { handleApplyAll(); }
+    }
+  };
+
   // ── shared ORDER BY / LIMIT ─────────────────────────────────────────────────
 
   const handleSortBlur = () => {
+    if (sortAcMouseDown.current) return;
+    setSortAcOpen(false);
     if (!panelOpen) {
       commitSql(filterInput, sortInput, limitInput);
     } else {
@@ -588,18 +645,42 @@ const TableToolbarInternal: React.FC<TableToolbarInternalProps> = ({
         )}
 
         {/* ORDER BY */}
-        <div className="flex items-center gap-1.5 flex-1 bg-base border border-default rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
+        <div className="relative flex items-center gap-1.5 flex-1 bg-base border border-default rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
           <ArrowUpDown size={14} className="text-muted shrink-0" />
           <span className="text-xs text-blue-400 font-mono shrink-0">ORDER BY</span>
           <input
+            ref={sortInputRef}
             type="text"
             value={sortInput}
-            onChange={(e) => setSortInput(e.target.value)}
+            onChange={handleSortChange}
             onBlur={handleSortBlur}
-            onKeyDown={handleSortLimitKeyDown}
+            onKeyDown={handleSortKeyDown}
             className="bg-transparent border-none outline-none text-xs text-secondary w-full placeholder:text-surface-tertiary font-mono"
             placeholder={`${placeholderSort} DESC`}
           />
+
+          {sortAcOpen && sortAcItems.length > 0 && (
+            <ul
+              className="absolute left-0 top-full mt-1 z-50 bg-elevated border border-default rounded-lg shadow-xl min-w-52 max-h-52 overflow-y-auto"
+              onMouseDown={() => { sortAcMouseDown.current = true; }}
+              onMouseUp={() => { sortAcMouseDown.current = false; }}
+            >
+              {sortAcItems.map((col, idx) => (
+                <li
+                  key={col.name}
+                  className={`flex items-center justify-between px-3 py-1.5 text-xs cursor-pointer transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                    idx === sortAcIndex
+                      ? "bg-blue-600/25 text-blue-200"
+                      : "text-secondary hover:bg-surface-secondary"
+                  }`}
+                  onMouseDown={(e) => { e.preventDefault(); acceptSortSuggestion(col); }}
+                >
+                  <span className="font-mono">{col.name}</span>
+                  <span className="text-muted ml-4 text-[10px] uppercase tracking-wide">{col.data_type}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* LIMIT */}
