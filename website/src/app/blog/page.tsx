@@ -7,6 +7,7 @@ import { PostCard } from "@/components/PostCard";
 import { PostTagBadge } from "@/components/PostTagBadge";
 import { Pagination } from "@/components/Pagination";
 import { getPaginatedPosts, getAllTags } from "@/lib/posts";
+import { OG_IMAGE_URL } from "@/lib/siteConfig";
 
 export const metadata: Metadata = {
   title: "Blog | Tabularis",
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
     description:
       "Release notes and updates from the Tabularis project — one post per release.",
     images: [
-      "https://raw.githubusercontent.com/debba/tabularis/main/website/img/og.png",
+      OG_IMAGE_URL,
     ],
   },
   twitter: {
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
     description:
       "Release notes and updates from the Tabularis project — one post per release.",
     images: [
-      "https://raw.githubusercontent.com/debba/tabularis/main/website/img/og.png",
+      OG_IMAGE_URL,
     ],
   },
 };

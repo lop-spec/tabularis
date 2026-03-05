@@ -5,6 +5,7 @@ import { SearchModal } from "@/components/SearchModal";
 import { getAllPosts } from "@/lib/posts";
 import { getAllWikiPages } from "@/lib/wiki";
 import { getAllPlugins } from "@/lib/plugins";
+import { OG_IMAGE_URL } from "@/lib/siteConfig";
 import "./globals.css";
 import "highlight.js/styles/atom-one-dark.css";
 
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
     description:
       "A lightweight, developer-focused database management tool, built with Tauri and React.",
     images: [
-      "https://raw.githubusercontent.com/debba/tabularis/main/website/img/og.png",
+      OG_IMAGE_URL,
     ],
   },
   twitter: {
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
     description:
       "A lightweight, developer-focused database management tool, built with Tauri and React.",
     images: [
-      "https://raw.githubusercontent.com/debba/tabularis/main/website/img/og.png",
+      OG_IMAGE_URL,
     ],
   },
 };
