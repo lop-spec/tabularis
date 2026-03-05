@@ -84,7 +84,7 @@
       "description": "Redis key-value store with Hash and RedisJSON row storage",
       "author": "nicholas-papachriston <https://github.com/nicholas-papachriston>",
       "homepage": "https://github.com/nicholas-papachriston/tabularis-redis-plugin",
-      "latest_version": "0.1.0",
+      "latest_version": "0.2.0",
       "releases": [
         {
           "version": "0.2.0",
