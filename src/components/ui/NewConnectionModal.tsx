@@ -85,6 +85,9 @@ const FieldInput = ({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       autoFocus={autoFocus}
+      autoCorrect="off"
+      autoCapitalize="off"
+      spellCheck={false}
       className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
     />
   </div>
@@ -318,6 +321,9 @@ export const NewConnectionModal = ({
               type="text"
               value={typeof formData.database === "string" ? formData.database : ""}
               onChange={(e) => updateField("database", e.target.value)}
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               className="flex-1 px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
               placeholder={activeDriver.capabilities.folder_based ? t("newConnection.folderPathPlaceholder") : t("newConnection.filePathPlaceholder")}
             />
@@ -402,6 +408,9 @@ export const NewConnectionModal = ({
                   type="text"
                   value={typeof formData.database === "string" ? formData.database : ""}
                   onChange={(e) => updateField("database", e.target.value)}
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
                   placeholder={t("newConnection.dbNamePlaceholder")}
                 />
@@ -462,6 +471,9 @@ export const NewConnectionModal = ({
               value={dbSearchQuery}
               onChange={(e) => setDbSearchQuery(e.target.value)}
               placeholder={t("common.search")}
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               className="flex-1 bg-transparent text-xs text-primary placeholder:text-muted outline-none"
             />
             <button
@@ -649,6 +661,9 @@ export const NewConnectionModal = ({
                     value={formData.ssh_password ?? ""}
                     onChange={(e) => { setSshPasswordDirty(true); updateField("ssh_password", e.target.value); }}
                     placeholder={initialConnection && !sshPasswordDirty && !formData.ssh_password ? "••••••••" : t("newConnection.sshPasswordPlaceholder")}
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
                   />
                   {formData.save_in_keychain && sshPasswordDirty && !formData.ssh_password && (
@@ -691,6 +706,9 @@ export const NewConnectionModal = ({
             onChange={(e) => setName(e.target.value)}
             placeholder={t("newConnection.namePlaceholder")}
             autoFocus
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             className="flex-1 bg-transparent text-base font-semibold text-primary placeholder:text-muted/50 outline-none"
           />
           <span className="text-xs text-muted bg-surface-secondary px-2 py-0.5 rounded-full font-medium capitalize">
