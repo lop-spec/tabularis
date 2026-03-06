@@ -1,4 +1,28 @@
 {
+  "toolbar": {
+    "filters": "Filtri",
+    "toggleFilterPanel": "Pannello filtri strutturati",
+    "filterConditions": "Condizioni filtro",
+    "activeOf": "{{active}} di {{total}} attivi",
+    "noFilters": "Nessun filtro —",
+    "addFirstFilter": "aggiungi il primo filtro",
+    "noActiveFilters": "nessun filtro attivo",
+    "closePanelEsc": "Chiudi pannello filtri (ESC)",
+    "unset": "Rimuovi",
+    "sql": "SQL",
+    "addFilter": "Aggiungi filtro",
+    "applyAll": "Applica tutti",
+    "apply": "Applica",
+    "applied": "Applicato",
+    "switchToSql": "Passa all'input SQL WHERE",
+    "duplicateFilter": "Duplica filtro",
+    "removeFilter": "Rimuovi filtro",
+    "deselectFromApplyAll": "Deseleziona da Applica tutti",
+    "selectForApplyAll": "Seleziona per Applica tutti",
+    "valuePlaceholder": "valore",
+    "fromPlaceholder": "da",
+    "toPlaceholder": "a"
+  },
   "common": {
     "save": "Salva",
     "close": "Chiudi",

@@ -1952,6 +1952,7 @@ export const Editor = () => {
               placeholderColumn={placeholders.column}
               placeholderSort={placeholders.sort}
               defaultLimit={settings.resultPageSize || 100}
+              columnMetadata={activeTab?.columnMetadata}
               onUpdate={handleToolbarUpdate}
             />
           ) : (
