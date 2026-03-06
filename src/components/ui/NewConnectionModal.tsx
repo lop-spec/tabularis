@@ -87,6 +87,7 @@ const FieldInput = ({
       autoFocus={autoFocus}
       autoCorrect="off"
       autoCapitalize="off"
+      autoComplete="off"
       spellCheck={false}
       className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
     />
@@ -323,6 +324,7 @@ export const NewConnectionModal = ({
               onChange={(e) => updateField("database", e.target.value)}
               autoCorrect="off"
               autoCapitalize="off"
+              autoComplete="off"
               spellCheck={false}
               className="flex-1 px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
               placeholder={activeDriver.capabilities.folder_based ? t("newConnection.folderPathPlaceholder") : t("newConnection.filePathPlaceholder")}
@@ -410,6 +412,7 @@ export const NewConnectionModal = ({
                   onChange={(e) => updateField("database", e.target.value)}
                   autoCorrect="off"
                   autoCapitalize="off"
+                  autoComplete="off"
                   spellCheck={false}
                   className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
                   placeholder={t("newConnection.dbNamePlaceholder")}
@@ -473,6 +476,7 @@ export const NewConnectionModal = ({
               placeholder={t("common.search")}
               autoCorrect="off"
               autoCapitalize="off"
+              autoComplete="off"
               spellCheck={false}
               className="flex-1 bg-transparent text-xs text-primary placeholder:text-muted outline-none"
             />
@@ -663,6 +667,7 @@ export const NewConnectionModal = ({
                     placeholder={initialConnection && !sshPasswordDirty && !formData.ssh_password ? "••••••••" : t("newConnection.sshPasswordPlaceholder")}
                     autoCorrect="off"
                     autoCapitalize="off"
+                    autoComplete="off"
                     spellCheck={false}
                     className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
                   />
@@ -708,6 +713,7 @@ export const NewConnectionModal = ({
             autoFocus
             autoCorrect="off"
             autoCapitalize="off"
+            autoComplete="off"
             spellCheck={false}
             className="flex-1 bg-transparent text-base font-semibold text-primary placeholder:text-muted/50 outline-none"
           />
