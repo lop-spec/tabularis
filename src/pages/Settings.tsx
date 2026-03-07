@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation, Trans } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
@@ -26,6 +27,7 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronRight,
+  Check,
   ExternalLink,
   Activity,
   Keyboard,
@@ -661,6 +663,120 @@ const ShortcutsTab = () => {
           );
         })}
       </div>
+    </>
+  );
+};
+
+interface VersionOption {
+  version: string;
+  isInstalled: boolean;
+  isLatest: boolean;
+}
+
+const VersionDropdown = ({
+  options,
+  value,
+  onChange,
+  isDowngrade,
+  label,
+}: {
+  options: VersionOption[];
+  value: string;
+  onChange: (v: string) => void;
+  isDowngrade: boolean;
+  label: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, minWidth: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  const updatePos = () => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left, minWidth: Math.max(r.width, 160) });
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (!btnRef.current?.contains(e.target as Node) && !dropRef.current?.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false); };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isOpen]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => { updatePos(); setIsOpen((o) => !o); }}
+        className={clsx(
+          "flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] bg-surface-tertiary transition-colors cursor-pointer select-none",
+          isDowngrade
+            ? "border-amber-500/30 text-amber-400/80 hover:border-amber-500/60 hover:text-amber-400"
+            : isOpen
+            ? "border-blue-500/60 text-primary"
+            : "border-surface-quaternary text-secondary hover:border-blue-500/50 hover:text-primary"
+        )}
+      >
+        <RotateCcw size={9} />
+        <span>{label}</span>
+        <ChevronDown size={9} className={clsx("transition-transform duration-150", isOpen && "rotate-180")} />
+      </button>
+
+      {isOpen && createPortal(
+        <div
+          ref={dropRef}
+          style={{ top: pos.top, left: pos.left, minWidth: pos.minWidth }}
+          className="fixed z-[200] bg-elevated border border-strong rounded-lg shadow-xl overflow-hidden"
+        >
+          {options.map((opt) => (
+            <button
+              key={opt.version}
+              type="button"
+              onClick={() => { onChange(opt.version); setIsOpen(false); }}
+              className={clsx(
+                "w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors",
+                opt.isInstalled
+                  ? "bg-green-500/10 hover:bg-green-500/20"
+                  : opt.version === value
+                  ? "bg-surface-secondary"
+                  : "hover:bg-surface-secondary"
+              )}
+            >
+              <span className="w-3 shrink-0 flex items-center justify-center">
+                {opt.isInstalled && <Check size={10} className="text-green-400" />}
+              </span>
+              <span className={clsx("font-mono", opt.isInstalled ? "text-green-300" : "text-primary")}>
+                v{opt.version}
+              </span>
+              <span className="ml-auto flex items-center gap-1">
+                {opt.isInstalled && (
+                  <span className="text-[9px] font-medium bg-green-500/20 text-green-400 px-1.5 py-px rounded">
+                    installed
+                  </span>
+                )}
+                {opt.isLatest && (
+                  <span className="text-[9px] font-medium bg-blue-500/20 text-blue-400 px-1.5 py-px rounded">
+                    latest
+                  </span>
+                )}
+              </span>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
     </>
   );
 };
@@ -1759,37 +1875,25 @@ export const Settings = () => {
                               )}
 
                               {/* Version picker — for downgrades when at latest, or between multiple installable versions */}
-                              {showVersionPicker && (
-                                <div className="relative inline-flex items-center">
-                                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] bg-surface-tertiary transition-colors pointer-events-none select-none ${
-                                    isDowngrade
-                                      ? "border-amber-500/30 text-amber-400/80"
-                                      : "border-surface-quaternary text-secondary hover:border-blue-500/50 hover:text-primary"
-                                  }`}>
-                                    <RotateCcw size={9} />
-                                    <span>{isAtLatest && isSelectedInstalled ? t("settings.plugins.olderVersions") : `v${selectedVer}`}</span>
-                                    <ChevronDown size={9} />
-                                  </div>
-                                  <select
+                              {showVersionPicker && (() => {
+                                const dropdownOptions: VersionOption[] = [
+                                  ...(isAtLatest ? [{ version: plugin.latest_version!, isInstalled: true, isLatest: true }] : []),
+                                  ...[...installableReleases].reverse().map((r) => ({
+                                    version: r.version,
+                                    isInstalled: false,
+                                    isLatest: r.version === plugin.latest_version,
+                                  })),
+                                ];
+                                return (
+                                  <VersionDropdown
+                                    options={dropdownOptions}
                                     value={selectedVer}
-                                    onChange={(e) =>
-                                      setSelectedVersions((prev) => ({ ...prev, [plugin.id]: e.target.value }))
-                                    }
-                                    className="absolute inset-0 w-full opacity-0 cursor-pointer"
-                                  >
-                                    {isAtLatest && (
-                                      <option value={plugin.latest_version} className="bg-surface-secondary text-primary">
-                                        v{plugin.latest_version} (installed, latest)
-                                      </option>
-                                    )}
-                                    {[...installableReleases].reverse().map((r) => (
-                                      <option key={r.version} value={r.version} className="bg-surface-secondary text-primary">
-                                        v{r.version}{r.version === plugin.latest_version ? " (latest)" : ""}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
+                                    onChange={(v) => setSelectedVersions((prev) => ({ ...prev, [plugin.id]: v }))}
+                                    isDowngrade={isDowngrade}
+                                    label={isAtLatest && isSelectedInstalled ? t("settings.plugins.olderVersions") : `v${selectedVer}`}
+                                  />
+                                );
+                              })()}
                             </>
                           )
                         }
