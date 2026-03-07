@@ -1739,7 +1739,7 @@ pre {
     text-decoration: none;
     color: var(--text-bright);
     transition: border-color 0.15s, background 0.15s, transform 0.15s;
-    min-width: 88px;
+    width: 100px;
 }
 
 .contributor-item:hover {
@@ -1749,12 +1749,16 @@ pre {
     color: var(--accent);
 }
 
-.contributor-avatar {
+.contributor-avatar,
+.post-content .contributor-avatar {
     width: 52px;
     height: 52px;
-    border-radius: 50%;
+    border-radius: 8px;
     border: 2px solid var(--border);
     display: block;
+    object-fit: cover;
+    margin: 0;
+    box-shadow: none;
     transition: border-color 0.15s;
 }
 
@@ -1767,6 +1771,9 @@ pre {
     font-size: 0.75rem;
     font-weight: 500;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 /* SEARCH OVERLAY */

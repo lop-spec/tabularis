@@ -156,7 +156,7 @@ function renderContributorsHtml(usernames: string[], release?: string): string {
     .map(
       (u) =>
         `<a class="contributor-item" href="https://github.com/${u}" target="_blank" rel="noopener noreferrer">` +
-        `<img src="https://github.com/${u}.png?size=64" alt="${u}" class="contributor-avatar" />` +
+        `<img src="https://github.com/${u}.png?size=64" alt="${u}" class="contributor-avatar" width="52" height="52" />` +
         `<span class="contributor-name">@${u}</span>` +
         `</a>`,
     )
