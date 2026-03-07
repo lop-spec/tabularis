@@ -1,3 +1,23 @@
+## [0.9.6](https://github.com/debba/tabularis/compare/v0.9.5...v0.9.6) (2026-03-07)
+
+
+### Bug Fixes
+
+* add autoComplete="off" to all connection dialog inputs ([573380b](https://github.com/debba/tabularis/commit/573380b6f01888e4ddadc3b5a597de454b2e413a)), closes [#64](https://github.com/debba/tabularis/issues/64)
+* disable macOS autocorrect on connection dialog inputs ([481f7fe](https://github.com/debba/tabularis/commit/481f7fe4bb081c8424fe2ab3050986d547ea26f7)), closes [#64](https://github.com/debba/tabularis/issues/64)
+* **website:** scope badge image rule to shields.io only ([af7dfb7](https://github.com/debba/tabularis/commit/af7dfb7cf1bfa6933be1617af11a2b8fea2b89fd))
+
+
+### Features
+
+* **editor:** add close tab keyboard shortcut ([167de6e](https://github.com/debba/tabularis/commit/167de6e9409f121b58622556954d8f17e9c9db10))
+* **filters:** add structured filter utils and toolbar UI ([150e08f](https://github.com/debba/tabularis/commit/150e08f323bcedc477ba605a89eec6d513ce9130))
+* **plugins:** add clickhouse plugin to registry ([1a78418](https://github.com/debba/tabularis/commit/1a78418c41b509195d3e8672582f8892f660c008))
+* **plugins:** add install error modal and improve installer logging ([db2d0de](https://github.com/debba/tabularis/commit/db2d0ded454b5f2be9110d0279dc6b3ec8cdccd0))
+* **plugins:** add Redis plugin to registry with version 0.1.0 and download links ([848b530](https://github.com/debba/tabularis/commit/848b530010306b3087fe1604dc20cf5ca24375b0))
+* **plugins:** update redis plugin assets and add download logging ([204175f](https://github.com/debba/tabularis/commit/204175f4a2370df23bc81a6a1b7fc0b7014ed7de))
+* **table-toolbar:** add ORDER BY autocomplete ([ed58068](https://github.com/debba/tabularis/commit/ed58068e127842a9784c3d3788df283049411f71))
+
 ## [0.9.5](https://github.com/debba/tabularis/compare/v0.9.4...v0.9.5) (2026-03-04)
 
 
