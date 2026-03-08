@@ -837,6 +837,7 @@
     "noGroups": "No groups yet",
     "createFirst": "Create your first group to organize connections",
     "groupName": "Group name",
-    "dragHint": "Drag connections here"
+    "dragHint": "Drag connections here",
+    "createError": "Failed to create group"
   }
 }

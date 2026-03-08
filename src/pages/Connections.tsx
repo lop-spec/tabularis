@@ -161,9 +161,9 @@ export const Connections = () => {
 
   const loadConnections = async () => {
     try {
-      const result = await invoke<SavedConnection[]>('get_connections');
-      setConnections(result);
-      // Also reload from context to get groups
+      const result = await invoke<{ connections: SavedConnection[]; groups: unknown }>('get_connections_with_groups');
+      setConnections(result.connections);
+      // Also reload from context to sync groups
       await reloadConnections();
     } catch (e) {
       console.error('Failed to load connections:', e);
@@ -522,7 +522,7 @@ export const Connections = () => {
                     value={newGroupName}
                     onChange={e => setNewGroupName(e.target.value)}
                     onKeyDown={e => {
-                      if (e.key === 'Enter') handleCreateGroup();
+                      if (e.key === 'Enter') void handleCreateGroup();
                       if (e.key === 'Escape') {
                         setIsCreatingGroup(false);
                         setNewGroupName('');
@@ -604,7 +604,7 @@ export const Connections = () => {
                       {/* Group header */}
                       <div
                         className="flex items-center gap-2 group cursor-pointer"
-                        onClick={() => handleToggleGroupCollapsed(group.id)}
+                        onClick={() => void handleToggleGroupCollapsed(group.id)}
                         onContextMenu={(e) => {
                           e.preventDefault();
                           setGroupContextMenu({ x: e.clientX, y: e.clientY, groupId: group.id });
@@ -627,9 +627,9 @@ export const Connections = () => {
                             type="text"
                             value={editGroupName}
                             onChange={(e) => setEditGroupName(e.target.value)}
-                            onBlur={() => handleRenameGroup(group.id)}
+                            onBlur={() => void handleRenameGroup(group.id)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleRenameGroup(group.id);
+                              if (e.key === 'Enter') void handleRenameGroup(group.id);
                               if (e.key === 'Escape') setEditingGroupId(null);
                             }}
                             onClick={(e) => e.stopPropagation()}
@@ -812,7 +812,7 @@ export const Connections = () => {
                   </div>
                 )}
 
-                {filtered.length === 0 && search && (
+                {Object.keys(filteredGroupedConnections).length === 0 && filteredUngroupedConnections.length === 0 && search && (
                   <div className="text-center py-12 text-sm text-muted">
                     {t('connections.noSearchResults', { query: search })}
                   </div>
