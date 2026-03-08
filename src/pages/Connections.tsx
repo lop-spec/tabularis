@@ -933,26 +933,33 @@ export const Connections = () => {
       )}
 
       {/* Connection context menu for moving to groups */}
-      {connectionContextMenu && (
-        <ContextMenu
-          x={connectionContextMenu.x}
-          y={connectionContextMenu.y}
-          items={[
-            ...sortedGroups.map(group => ({
-              label: group.name,
-              icon: Folder,
-              action: () => void handleMoveToGroup(connectionContextMenu.connId, group.id),
-            })),
-            ...(sortedGroups.length > 0 ? [{ separator: true as const }] : []),
-            {
-              label: t('groups.removeFromGroup'),
-              icon: X,
-              action: () => void handleMoveToGroup(connectionContextMenu.connId, null),
-            },
-          ]}
-          onClose={() => setConnectionContextMenu(null)}
-        />
-      )}
+      {connectionContextMenu && (() => {
+        const conn = connections.find(c => c.id === connectionContextMenu.connId);
+        const isInGroup = !!conn?.group_id;
+        return (
+          <ContextMenu
+            x={connectionContextMenu.x}
+            y={connectionContextMenu.y}
+            items={[
+              ...sortedGroups.map(group => ({
+                label: group.name,
+                icon: Folder,
+                action: () => void handleMoveToGroup(connectionContextMenu.connId, group.id),
+              })),
+              // Only show "Remove from Group" if the connection is in a group
+              ...(isInGroup ? [
+                ...(sortedGroups.length > 0 ? [{ separator: true as const }] : []),
+                {
+                  label: t('groups.removeFromGroup'),
+                  icon: X,
+                  action: () => void handleMoveToGroup(connectionContextMenu.connId, null),
+                },
+              ] : []),
+            ]}
+            onClose={() => setConnectionContextMenu(null)}
+          />
+        );
+      })()}
     </div>
   );
 };

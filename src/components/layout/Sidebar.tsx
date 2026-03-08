@@ -216,15 +216,15 @@ export const Sidebar = () => {
                     connections={nonSplitConns}
                     allDrivers={allDrivers}
                     selectedConnectionIds={selectedConnectionIds}
-                    onToggleCollapsed={() => toggleGroupCollapsed(group.id)}
-                    onRename={(newName) => updateGroup(group.id, { name: newName })}
-                    onDelete={() => deleteGroup(group.id)}
+                    onToggleCollapsed={() => void toggleGroupCollapsed(group.id)}
+                    onRename={(newName) => void updateGroup(group.id, { name: newName })}
+                    onDelete={() => void deleteGroup(group.id)}
                     onSwitch={handleSwitchOrSetExplorer}
                     onOpenInEditor={handleOpenInEditor}
                     onDisconnect={handleDisconnectConnection}
                     onToggleSelect={toggleSelection}
                     onActivateSplit={activateSplit}
-                    onDropConnection={(connId) => moveConnectionToGroup(connId, group.id)}
+                    onDropConnection={(connId) => void moveConnectionToGroup(connId, group.id)}
                     showShortcutHints={showShortcutHints}
                   />
                 );
