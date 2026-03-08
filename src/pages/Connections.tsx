@@ -141,12 +141,14 @@ export const Connections = () => {
     deleteGroup,
     moveConnectionToGroup,
     toggleGroupCollapsed,
-    loadConnections: reloadConnections,
+    loadConnections,
+    connections: contextConnections,
   } = useDatabase();
   const { drivers, allDrivers } = useDrivers();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingConnection, setEditingConnection] = useState<SavedConnection | null>(null);
-  const [connections, setConnections] = useState<SavedConnection[]>([]);
+  // Use connections from context, cast to local SavedConnection type for SSH fields
+  const connections = contextConnections as SavedConnection[];
   const [error, setError] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -159,18 +161,7 @@ export const Connections = () => {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editGroupName, setEditGroupName] = useState('');
 
-  const loadConnections = async () => {
-    try {
-      const result = await invoke<{ connections: SavedConnection[]; groups: unknown }>('get_connections_with_groups');
-      setConnections(result.connections);
-      // Also reload from context to sync groups
-      await reloadConnections();
-    } catch (e) {
-      console.error('Failed to load connections:', e);
-    }
-  };
-
-  useEffect(() => { void loadConnections(); }, []);
+  useEffect(() => { void loadConnections(); }, [loadConnections]);
 
   // Initialize collapsed groups from saved state
   useEffect(() => {
@@ -280,7 +271,7 @@ export const Connections = () => {
   }, [location.state]);
 
   const handleSave = () => {
-    loadConnections();
+    void loadConnections();
     setIsModalOpen(false);
     setEditingConnection(null);
   };
@@ -323,7 +314,7 @@ export const Connections = () => {
       try {
         if (isConnectionOpen(id)) await disconnect(id);
         await invoke('delete_connection', { id });
-        loadConnections();
+        void loadConnections();
       } catch (e) {
         console.error(e);
       }
@@ -342,7 +333,7 @@ export const Connections = () => {
     try {
       const newConn = await invoke<SavedConnection>('duplicate_connection', { id });
       await loadConnections();
-      openEdit(newConn);
+      void openEdit(newConn);
     } catch (e) {
       console.error(e);
       setError(t('connections.failDuplicate'));
@@ -533,7 +524,7 @@ export const Connections = () => {
                     className="w-40 px-3 py-2 bg-elevated border border-strong rounded-xl text-sm text-primary placeholder:text-muted focus:border-amber-500/70 focus:outline-none transition-colors"
                   />
                   <button
-                    onClick={handleCreateGroup}
+                    onClick={() => void handleCreateGroup()}
                     disabled={!newGroupName.trim()}
                     className="p-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
@@ -933,7 +924,7 @@ export const Connections = () => {
             {
               label: t('groups.delete'),
               icon: Trash2,
-              action: () => handleDeleteGroup(groupContextMenu.groupId),
+              action: () => void handleDeleteGroup(groupContextMenu.groupId),
               danger: true,
             },
           ]}
@@ -950,13 +941,13 @@ export const Connections = () => {
             ...sortedGroups.map(group => ({
               label: group.name,
               icon: Folder,
-              action: () => handleMoveToGroup(connectionContextMenu.connId, group.id),
+              action: () => void handleMoveToGroup(connectionContextMenu.connId, group.id),
             })),
             ...(sortedGroups.length > 0 ? [{ separator: true as const }] : []),
             {
               label: t('groups.removeFromGroup'),
               icon: X,
-              action: () => handleMoveToGroup(connectionContextMenu.connId, null),
+              action: () => void handleMoveToGroup(connectionContextMenu.connId, null),
             },
           ]}
           onClose={() => setConnectionContextMenu(null)}
