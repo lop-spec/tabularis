@@ -23,7 +23,6 @@ import {
   Folder,
   FolderOpen,
   ChevronRight,
-  GripVertical,
   MoreVertical,
 } from 'lucide-react';
 import { getDriverColor, getDriverIcon } from '../utils/driverUI';
@@ -31,7 +30,6 @@ import { useDatabase } from '../hooks/useDatabase';
 import { useDrivers } from '../hooks/useDrivers';
 import clsx from 'clsx';
 import { isLocalDriver, getCapabilitiesForDriver } from '../utils/driverCapabilities';
-import type { ConnectionGroup, SavedConnection as ContextSavedConnection } from '../contexts/DatabaseContext';
 import { ContextMenu } from '../components/ui/ContextMenu';
 
 interface SavedConnection {

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { ChevronRight, Folder, FolderOpen, MoreVertical, Edit2, Trash2, FolderPlus } from "lucide-react";
+import { ChevronRight, Folder, FolderOpen, Edit2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionGroup } from "../../../contexts/DatabaseContext";
 import type { ConnectionStatus } from "../../../hooks/useConnectionManager";
@@ -112,7 +112,6 @@ export const ConnectionGroupFolder = ({
     },
   ];
 
-  const activeCount = connections.filter(c => c.isActive).length;
   const connectedCount = connections.filter(c => c.isConnected).length;
 
   return (
