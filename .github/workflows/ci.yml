@@ -34,9 +34,6 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         name: Install pnpm
-        with:
-          version: 10
-          cache: true
 
       - name: Install Rust/Tauri dependencies
         run: |
