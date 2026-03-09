@@ -737,6 +737,7 @@ mod tests {
             port: None,
             username: None,
             password: None,
+            ssl_mode: None,
             ssh_enabled: None,
             ssh_connection_id: None,
             ssh_host: None,
