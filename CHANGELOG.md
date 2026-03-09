@@ -1,3 +1,27 @@
+## [0.9.7](https://github.com/debba/tabularis/compare/v0.9.6...v0.9.7) (2026-03-09)
+
+
+### Bug Fixes
+
+* build alerts ([c5cf57a](https://github.com/debba/tabularis/commit/c5cf57a16efc41e4b3644372fa779794c2b2cf6d))
+* merged code ([c430a5b](https://github.com/debba/tabularis/commit/c430a5b00a24b733dec3b35b6c312391459cebd9))
+* **tabs:** prefer loaded activeTabId or null, avoid implicit fallback ([297138b](https://github.com/debba/tabularis/commit/297138b702b51134d91f9f0b487f867a6c667546))
+* use SqliteConnectOptions for reliable WAL mode database opening ([b0d0a4f](https://github.com/debba/tabularis/commit/b0d0a4f44ed8ec929daa5745bbb0e701e8c2201e))
+
+
+### Features
+
+* add connections group ([1e91768](https://github.com/debba/tabularis/commit/1e91768d3171f1a08b8b80e81fc269e2684510bc))
+* **credential-cache:** add credential cache to reduce keychain calls, ([ca2e668](https://github.com/debba/tabularis/commit/ca2e668763491032d5b109105889b76ad49e5de5))
+* **credentials:** fetch connection credentials when editing connections ([e580ccf](https://github.com/debba/tabularis/commit/e580ccfd5f62466679fbcd288d6d8acd5db16071))
+* **modals:** add ConfirmModal and replace inline confirm dialogs ([0ceddda](https://github.com/debba/tabularis/commit/0cedddad723105ffb16e08a02f17570754e83bda))
+* **new-connection-modal:** preselect databases from initial connection ([53d10c9](https://github.com/debba/tabularis/commit/53d10c91ec2260023b564a66ac635e0f68f55875))
+* **plugins:** add per-plugin interpreter settings with error modal ([64ed30c](https://github.com/debba/tabularis/commit/64ed30cab6e980f78ad4c29c3e67841451857d74))
+* **plugins:** add plugin remove modal and integrate into Settings ([e2d38f5](https://github.com/debba/tabularis/commit/e2d38f5292c61dd7ce14dfd8fb912846692ef7f7))
+* **plugins:** add plugin settings and no_connection_required flag ([7097190](https://github.com/debba/tabularis/commit/70971909c34fc73b3c59ab743cb183654e54e63f))
+* **select:** add Select component and replace SearchableSelect ([3be733a](https://github.com/debba/tabularis/commit/3be733a176b3265a7d2bd06a7dc2f4cd271556fa))
+* **settings:** add portal-based plugin version dropdown ([9f4f82c](https://github.com/debba/tabularis/commit/9f4f82c2ce90bada6d091fe08e1042ead58f98b9))
+
 ## [0.9.6](https://github.com/debba/tabularis/compare/v0.9.5...v0.9.6) (2026-03-07)
 
 
