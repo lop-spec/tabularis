@@ -66,9 +66,7 @@ fn build_postgres_connectoptions(params: &ConnectionParams) -> PgConnectOptions 
 fn build_sqlite_connectoptions(params: &ConnectionParams) -> SqliteConnectOptions {
     let url = format!("sqlite://{}", params.database);
     SqliteConnectOptions::from_str(&url)
-        .unwrap_or_else(|_| SqliteConnectOptions::new().filename(&params.database))
-        .read_only(true)
-        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .unwrap_or_else(|_| SqliteConnectOptions::new().filename(params.database.to_string()))
 }
 
 pub async fn get_mysql_pool(params: &ConnectionParams) -> Result<Pool<MySql>, String> {
