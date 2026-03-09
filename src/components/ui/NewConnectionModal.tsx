@@ -172,8 +172,18 @@ export const NewConnectionModal = ({
         request: { params: { ...listParams }, connection_id: initialConnection?.id },
       });
       setAvailableDatabases(databases);
-      // Preserve existing selections that are valid in the new list
-      setSelectedDatabasesState((prev) => prev.filter((db) => databases.includes(db)));
+      if (initialConnection) {
+        // Pre-select databases already associated with the connection
+        const existing = Array.isArray(initialConnection.params.database)
+          ? initialConnection.params.database
+          : initialConnection.params.database
+            ? [initialConnection.params.database as string]
+            : [];
+        setSelectedDatabasesState((prev) => {
+          const merged = Array.from(new Set([...existing, ...prev]));
+          return merged.filter((db) => databases.includes(db));
+        });
+      }
     } catch (err) {
       const errorMsg =
         typeof err === "string" ? err : err instanceof Error ? err.message : t("newConnection.failLoadDatabases");
