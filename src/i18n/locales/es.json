@@ -322,6 +322,22 @@
         "details": "Detalles del error",
         "copy": "Copiar",
         "copied": "¡Copiado!"
+      },
+      "startError": {
+        "title": "El Plugin no se pudo iniciar",
+        "subtitle": "No se pudo lanzar el proceso del plugin. Revisa los detalles del error.",
+        "interpreterHint": "Este plugin puede requerir un intérprete (p.ej. Python). Usa Configuración del Plugin para establecer la ruta del intérprete.",
+        "details": "Detalles del Error",
+        "copy": "Copiar",
+        "copied": "¡Copiado!",
+        "configure": "Configurar Intérprete"
+      },
+      "pluginSettings": {
+        "title": "Configuración del Plugin",
+        "interpreter": "Intérprete",
+        "interpreterDesc": "Opcional. Especifica el ejecutable para iniciar este plugin (p.ej. python3 en macOS/Linux, python o ruta completa en Windows). Deja en blanco para usar el valor predeterminado.",
+        "interpreterPlaceholder": "p.ej. python3",
+        "browse": "Explorar..."
       }
     },
     "shortcuts": {

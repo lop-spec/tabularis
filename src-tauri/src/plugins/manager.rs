@@ -1,12 +1,31 @@
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
 
 use directories::ProjectDirs;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
 
 use crate::drivers::driver_trait::{DriverCapabilities, PluginManifest};
 use crate::models::DataTypeInfo;
 use crate::plugins::driver::RpcDriver;
+
+/// Errors that occurred during startup plugin loading, to be fetched by the frontend.
+static STARTUP_ERRORS: Lazy<Mutex<Vec<PluginLoadError>>> =
+    Lazy::new(|| Mutex::new(Vec::new()));
+
+#[derive(Serialize, Clone)]
+pub struct PluginLoadError {
+    pub plugin_id: String,
+    pub error: String,
+}
+
+#[tauri::command]
+pub fn get_plugin_startup_errors() -> Vec<PluginLoadError> {
+    let mut guard = STARTUP_ERRORS.lock().unwrap_or_else(|e| e.into_inner());
+    std::mem::take(&mut *guard)
+}
 
 #[derive(Serialize, Deserialize)]
 struct ConfigManifest {
@@ -24,6 +43,8 @@ struct ConfigManifest {
     pub color: String,
     #[serde(default)]
     pub icon: String,
+    #[serde(default)]
+    pub interpreter: Option<String>,
 }
 
 /// Load installed plugins at startup.
@@ -31,7 +52,11 @@ struct ConfigManifest {
 /// `enabled_ids` controls which plugins are started:
 /// - `None`  → load all installed plugins (first-run or no preference saved).
 /// - `Some(ids)` → load only the plugins whose directory name (= plugin ID) is in `ids`.
-pub async fn load_plugins(enabled_ids: Option<&[String]>) {
+pub async fn load_plugins<R: tauri::Runtime>(app: &AppHandle<R>, enabled_ids: Option<&[String]>) {
+    let plugin_configs = crate::config::load_config_internal(app)
+        .plugins
+        .unwrap_or_default();
+
     let proj_dirs = match ProjectDirs::from("com", "debba", "tabularis") {
         Some(d) => d,
         None => return,
@@ -69,13 +94,27 @@ pub async fn load_plugins(enabled_ids: Option<&[String]>) {
             }
         }
 
-        if let Err(e) = load_plugin_from_dir(&path).await {
+        let interpreter_override = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|dir_name| plugin_configs.get(dir_name))
+            .and_then(|c| c.interpreter.clone());
+
+        if let Err(e) = load_plugin_from_dir(&path, interpreter_override).await {
             log::error!("Failed to load plugin {:?}: {}", path, e);
+            let plugin_id = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            if let Ok(mut guard) = STARTUP_ERRORS.lock() {
+                guard.push(PluginLoadError { plugin_id, error: e });
+            }
         }
     }
 }
 
-pub async fn load_plugin_from_dir(path: &Path) -> Result<(), String> {
+pub async fn load_plugin_from_dir(path: &Path, interpreter_override: Option<String>) -> Result<(), String> {
     let manifest_path = path.join("manifest.json");
     if !manifest_path.exists() {
         return Err(format!("manifest.json not found in {:?}", path));
@@ -115,7 +154,20 @@ pub async fn load_plugin_from_dir(path: &Path) -> Result<(), String> {
         icon: config.icon,
     };
 
-    let driver = RpcDriver::new(manifest, exec_path, config.data_types).await?;
+    let interpreter = interpreter_override
+        .or(config.interpreter)
+        .or_else(|| {
+            if exec_path.extension().map(|e| e == "py").unwrap_or(false) {
+                #[cfg(windows)]
+                { Some("python".to_string()) }
+                #[cfg(not(windows))]
+                { Some("python3".to_string()) }
+            } else {
+                None
+            }
+        });
+
+    let driver = RpcDriver::new(manifest, exec_path, interpreter, config.data_types).await?;
     crate::drivers::registry::register_driver(driver).await;
     Ok(())
 }

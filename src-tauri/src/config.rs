@@ -9,6 +9,14 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct PluginConfig {
+    pub interpreter: Option<String>,
+    #[serde(default)]
+    pub settings: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     pub theme: Option<String>,
     pub language: Option<String>,
@@ -31,6 +39,7 @@ pub struct AppConfig {
     pub max_blob_size: Option<u64>,
     pub active_external_drivers: Option<Vec<String>>,
     pub custom_registry_url: Option<String>,
+    pub plugins: Option<HashMap<String, PluginConfig>>,
 }
 
 pub fn get_config_dir<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
@@ -128,6 +137,9 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.active_external_drivers.is_some() {
             existing_config.active_external_drivers = config.active_external_drivers;
+        }
+        if config.plugins.is_some() {
+            existing_config.plugins = config.plugins;
         }
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;

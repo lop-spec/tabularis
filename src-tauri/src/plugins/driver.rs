@@ -24,13 +24,20 @@ pub struct PluginProcess {
 }
 
 impl PluginProcess {
-    async fn new(executable_path: PathBuf) -> Result<Self, String> {
+    async fn new(executable_path: PathBuf, interpreter: Option<String>) -> Result<Self, String> {
         let (tx, rx) = mpsc::channel::<(JsonRpcRequest, oneshot::Sender<Result<Value, String>>)>(100);
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
         // Spawn the child process directly in the async context so that any
         // spawn failure is immediately propagated as an error (no silent panic).
-        let child = Command::new(&executable_path)
+        let mut cmd = if let Some(ref interp) = interpreter {
+            let mut c = Command::new(interp);
+            c.arg(&executable_path);
+            c
+        } else {
+            Command::new(&executable_path)
+        };
+        let child = cmd
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::inherit())
@@ -155,10 +162,10 @@ pub struct RpcDriver {
 }
 
 impl RpcDriver {
-    pub async fn new(manifest: PluginManifest, executable_path: PathBuf, data_types: Vec<DataTypeInfo>) -> Result<Self, String> {
+    pub async fn new(manifest: PluginManifest, executable_path: PathBuf, interpreter: Option<String>, data_types: Vec<DataTypeInfo>) -> Result<Self, String> {
         Ok(Self {
             manifest,
-            process: Arc::new(PluginProcess::new(executable_path).await?),
+            process: Arc::new(PluginProcess::new(executable_path, interpreter).await?),
             data_types,
         })
     }

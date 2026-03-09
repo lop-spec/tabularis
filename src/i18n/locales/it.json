@@ -322,6 +322,22 @@
         "details": "Dettagli errore",
         "copy": "Copia",
         "copied": "Copiato!"
+      },
+      "startError": {
+        "title": "Plugin non avviato",
+        "subtitle": "Impossibile avviare il processo del plugin. Controlla i dettagli dell'errore.",
+        "interpreterHint": "Questo plugin potrebbe richiedere un interprete (es. Python). Usa le Impostazioni Plugin per configurare il percorso dell'interprete.",
+        "details": "Dettagli Errore",
+        "copy": "Copia",
+        "copied": "Copiato!",
+        "configure": "Configura Interprete"
+      },
+      "pluginSettings": {
+        "title": "Impostazioni Plugin",
+        "interpreter": "Interprete",
+        "interpreterDesc": "Opzionale. Specifica l'eseguibile usato per avviare questo plugin (es. python3 su macOS/Linux, python o percorso completo su Windows). Lascia vuoto per usare il valore predefinito.",
+        "interpreterPlaceholder": "es. python3",
+        "browse": "Sfoglia..."
       }
     },
     "shortcuts": {

@@ -335,19 +335,24 @@ pub async fn kill_plugin_process(plugin_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn restart_plugin_process(plugin_id: String) -> Result<(), String> {
+pub async fn restart_plugin_process(app: tauri::AppHandle, plugin_id: String) -> Result<(), String> {
     registry::unregister_driver(&plugin_id).await;
 
     // Give the OS a moment to release process resources before respawning.
     sleep(Duration::from_millis(500)).await;
 
+    let interpreter_override = crate::config::load_config_internal(&app)
+        .plugins
+        .as_ref()
+        .and_then(|m| m.get(&plugin_id))
+        .and_then(|c| c.interpreter.clone());
     let plugins_dir = installer::get_plugins_dir()
         .map_err(|e| format!("Could not locate plugins directory: {}", e))?;
     let plugin_dir = plugins_dir.join(&plugin_id);
     if !plugin_dir.exists() {
         return Err(format!("Plugin '{}' is not installed", plugin_id));
     }
-    load_plugin_from_dir(&plugin_dir).await
+    load_plugin_from_dir(&plugin_dir, interpreter_override).await
         .map_err(|e| format!("Failed to restart plugin '{}': {}", plugin_id, e))?;
 
     Ok(())

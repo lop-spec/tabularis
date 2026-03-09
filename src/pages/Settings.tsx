@@ -37,7 +37,7 @@ import {
 import clsx from "clsx";
 import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
-import type { AppLanguage, AiProvider } from "../contexts/SettingsContext";
+import type { AppLanguage, AiProvider, PluginConfig } from "../contexts/SettingsContext";
 import { DEFAULT_SETTINGS } from "../contexts/SettingsContext";
 import { APP_VERSION } from "../version";
 import { message, ask, save } from "@tauri-apps/plugin-dialog";
@@ -51,6 +51,8 @@ import { parseAuthor, versionGte } from "../utils/plugins";
 import type { PluginManifest } from "../types/plugins";
 import { Select } from "../components/ui/Select";
 import { PluginInstallErrorModal } from "../components/modals/PluginInstallErrorModal";
+import { PluginSettingsModal } from "../components/modals/PluginSettingsModal";
+import { PluginStartErrorModal } from "../components/modals/PluginStartErrorModal";
 import { useUpdate } from "../hooks/useUpdate";
 import { useKeybindings } from "../hooks/useKeybindings";
 import { formatEvent, formatMatch, parseCombo } from "../utils/keybindings";
@@ -796,18 +798,42 @@ export const Settings = () => {
   const { openConnectionIds, connectionDataMap, disconnect } = useDatabase();
   const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
   const [pluginInstallError, setPluginInstallError] = useState<{ pluginId: string; error: string } | null>(null);
+  const [pluginSettingsModal, setPluginSettingsModal] = useState<{ pluginId: string; pluginName: string } | null>(null);
+  const [pluginStartError, setPluginStartError] = useState<{ pluginId: string; pluginName: string; error: string } | null>(null);
   const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const [uninstallingPluginId, setUninstallingPluginId] = useState<string | null>(null);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [explainPrompt, setExplainPrompt] = useState("");
   
   const { currentTheme, allThemes, setTheme } = useTheme();
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const updateSettingRef = useRef(updateSetting);
+  updateSettingRef.current = updateSetting;
   
   // Initialize customFont from settings if it's a custom font
   const [customFont, setCustomFont] = useState(() => {
     const isPredefinedFont = AVAILABLE_FONTS.some(f => f.name === settings.fontFamily);
     return !isPredefinedFont && settings.fontFamily ? settings.fontFamily : "";
   });
+
+  const handleSavePluginConfig = useCallback(async (pluginId: string, pluginName: string, config: PluginConfig) => {
+    const current = settings.plugins ?? {};
+    updateSetting("plugins", { ...current, [pluginId]: config });
+    const isRunning = allDrivers.some(d => d.id === pluginId);
+    if (isRunning) {
+      try {
+        await invoke("disable_plugin", { pluginId });
+        await invoke("enable_plugin", { pluginId });
+        refreshDrivers();
+      } catch (err) {
+        const activeExt = settings.activeExternalDrivers ?? [];
+        updateSetting("activeExternalDrivers", activeExt.filter(id => id !== pluginId));
+        refreshDrivers();
+        setPluginStartError({ pluginId, pluginName, error: String(err) });
+      }
+    }
+  }, [settings.plugins, settings.activeExternalDrivers, updateSetting, allDrivers, refreshDrivers]);
 
   const loadModels = useCallback(async (force: boolean = false) => {
     try {
@@ -933,6 +959,18 @@ export const Settings = () => {
     loadSystemPrompt();
     loadExplainPrompt();
     loadModels(false);
+    invoke<Array<{ plugin_id: string; error: string }>>("get_plugin_startup_errors").then((errors) => {
+      if (errors.length > 0) {
+        const failedIds = errors.map(e => e.plugin_id);
+        const activeExt = settingsRef.current.activeExternalDrivers ?? [];
+        const cleaned = activeExt.filter(id => !failedIds.includes(id));
+        if (cleaned.length !== activeExt.length) {
+          updateSettingRef.current("activeExternalDrivers", cleaned);
+        }
+        const first = errors[0];
+        setPluginStartError({ pluginId: first.plugin_id, pluginName: first.plugin_id, error: first.error });
+      }
+    }).catch(() => {/* ignore */});
   }, [loadModels]);
 
 
@@ -1950,7 +1988,7 @@ export const Settings = () => {
                                     updateSetting("activeExternalDrivers", [...activeExt, driver.id]);
                                   }
                                 } catch (err) {
-                                  await message(String(err), { title: t("common.error"), kind: "error" });
+                                  setPluginStartError({ pluginId: driver.id, pluginName: driver.name, error: String(err) });
                                 }
                               }}
                               disabled={isBuiltin}
@@ -1961,6 +1999,16 @@ export const Settings = () => {
                             >
                               <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition duration-200 ease-in-out ${isEnabled ? "translate-x-4" : "translate-x-0"}`} />
                             </button>
+                          {/* Plugin settings */}
+                          {!isBuiltin && (
+                            <button
+                              onClick={() => setPluginSettingsModal({ pluginId: driver.id, pluginName: driver.name })}
+                              className="p-1.5 text-secondary hover:text-primary transition-colors"
+                              title={t("settings.plugins.pluginSettings.title")}
+                            >
+                              <SettingsIcon size={15} />
+                            </button>
+                          )}
                           {/* Remove link */}
                           {!isBuiltin && (
                             <button
@@ -2020,7 +2068,7 @@ export const Settings = () => {
                                     updateSetting("activeExternalDrivers", [...activeExt, plugin.id]);
                                     refreshDrivers();
                                   } catch (err) {
-                                    await message(String(err), { title: t("common.error"), kind: "error" });
+                                    setPluginStartError({ pluginId: plugin.id, pluginName: plugin.name, error: String(err) });
                                   }
                                 }}
                                 aria-label="Enable plugin"
@@ -2028,6 +2076,15 @@ export const Settings = () => {
                               >
                                 <span className="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition duration-200 ease-in-out translate-x-0" />
                               </button>
+                            {/* Remove link */}
+                            {/* Plugin settings */}
+                            <button
+                              onClick={() => setPluginSettingsModal({ pluginId: plugin.id, pluginName: plugin.name })}
+                              className="p-1.5 text-secondary hover:text-primary transition-colors"
+                              title={t("settings.plugins.pluginSettings.title")}
+                            >
+                              <SettingsIcon size={15} />
+                            </button>
                             {/* Remove link */}
                             <button
                               onClick={async () => {
@@ -2322,6 +2379,22 @@ export const Settings = () => {
         onClose={() => setPluginInstallError(null)}
         pluginId={pluginInstallError?.pluginId ?? ""}
         error={pluginInstallError?.error ?? ""}
+      />
+      <PluginSettingsModal
+        key={pluginSettingsModal?.pluginId}
+        isOpen={pluginSettingsModal !== null}
+        onClose={() => setPluginSettingsModal(null)}
+        pluginId={pluginSettingsModal?.pluginId ?? ""}
+        pluginName={pluginSettingsModal?.pluginName ?? ""}
+        currentConfig={settings.plugins?.[pluginSettingsModal?.pluginId ?? ""]}
+        onSave={(config) => handleSavePluginConfig(pluginSettingsModal?.pluginId ?? "", pluginSettingsModal?.pluginName ?? "", config)}
+      />
+      <PluginStartErrorModal
+        isOpen={pluginStartError !== null}
+        onClose={() => setPluginStartError(null)}
+        pluginId={pluginStartError?.pluginId ?? ""}
+        error={pluginStartError?.error ?? ""}
+        onConfigureInterpreter={pluginStartError ? () => setPluginSettingsModal({ pluginId: pluginStartError.pluginId, pluginName: pluginStartError.pluginName }) : undefined}
       />
     </div>
   );

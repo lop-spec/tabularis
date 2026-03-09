@@ -95,9 +95,13 @@ pub async fn install_plugin(app: AppHandle, plugin_id: String, version: Option<S
     installer::download_and_install(&plugin_id, download_url).await?;
 
     // Hot-register the new driver (no restart needed)
+    let interpreter_override = config.plugins
+        .as_ref()
+        .and_then(|m| m.get(&plugin_id))
+        .and_then(|c| c.interpreter.clone());
     let plugins_dir = installer::get_plugins_dir()?;
     let plugin_dir = plugins_dir.join(&plugin_id);
-    crate::plugins::manager::load_plugin_from_dir(&plugin_dir).await
+    crate::plugins::manager::load_plugin_from_dir(&plugin_dir, interpreter_override).await
         .map_err(|e| format!("Plugin installed but failed to load: {}", e))?;
 
     Ok(())
@@ -129,12 +133,17 @@ pub async fn disable_plugin(plugin_id: String) -> Result<(), String> {
 
 /// Loads the plugin from disk and registers its driver, starting the plugin process.
 #[tauri::command]
-pub async fn enable_plugin(plugin_id: String) -> Result<(), String> {
+pub async fn enable_plugin(app: AppHandle, plugin_id: String) -> Result<(), String> {
+    let config = crate::config::load_config_internal(&app);
+    let interpreter_override = config.plugins
+        .as_ref()
+        .and_then(|m| m.get(&plugin_id))
+        .and_then(|c| c.interpreter.clone());
     let plugins_dir = installer::get_plugins_dir()?;
     let plugin_dir = plugins_dir.join(&plugin_id);
     if !plugin_dir.exists() {
         return Err(format!("Plugin '{}' is not installed", plugin_id));
     }
-    crate::plugins::manager::load_plugin_from_dir(&plugin_dir).await?;
+    crate::plugins::manager::load_plugin_from_dir(&plugin_dir, interpreter_override).await?;
     Ok(())
 }

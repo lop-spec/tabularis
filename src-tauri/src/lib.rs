@@ -156,7 +156,7 @@ pub fn run() {
                 drivers::registry::register_driver(drivers::sqlite::SqliteDriver::new()).await;
 
                 // Load only enabled external plugins (or all if no preference saved).
-                crate::plugins::manager::load_plugins(active_ext_drivers.as_deref()).await;
+                crate::plugins::manager::load_plugins(&app.handle(), active_ext_drivers.as_deref()).await;
             });
 
             // Open devtools automatically in debug mode
@@ -308,6 +308,7 @@ pub fn run() {
             plugins::commands::get_installed_plugins,
             plugins::commands::disable_plugin,
             plugins::commands::enable_plugin,
+            plugins::manager::get_plugin_startup_errors,
             // Task Manager
             task_manager::get_process_list,
             task_manager::get_system_stats,
