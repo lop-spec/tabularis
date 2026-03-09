@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod commands;
+pub mod credential_cache;
 pub mod config;
 pub mod dump_commands; // Added
 pub mod dump_utils;
@@ -141,6 +142,7 @@ pub fn run() {
         .manage(export::ExportCancellationState::default())
         .manage(dump_commands::DumpCancellationState::default())
         .manage(log_buffer)
+        .manage(std::sync::Arc::new(credential_cache::CredentialCache::default()))
         .setup(move |app| {
             // Read persisted config to know which external plugins are enabled.
             // `None` means no preference has been saved yet → load all installed plugins.

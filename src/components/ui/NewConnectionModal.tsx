@@ -17,7 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { SshConnectionsModal } from "../modals/SshConnectionsModal";
-import { SearchableSelect } from "./SearchableSelect";
+import { Select } from "./Select";
 import { useDrivers } from "../../hooks/useDrivers";
 import { Modal } from "./Modal";
 import type { PluginManifest } from "../../types/plugins";
@@ -32,6 +32,7 @@ interface ConnectionParams {
   username?: string;
   password?: string;
   database: string | string[];
+  ssl_mode?: string;
   // SSH
   ssh_enabled?: boolean;
   ssh_connection_id?: string;
@@ -89,7 +90,7 @@ const FieldInput = ({
       autoCapitalize="off"
       autoComplete="off"
       spellCheck={false}
-      className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+      className="w-full px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
     />
   </div>
 );
@@ -113,6 +114,7 @@ export const NewConnectionModal = ({
     port: 3306,
     username: "",
     database: "",
+    ssl_mode: "",
     ssh_enabled: false,
     ssh_port: 22,
   });
@@ -334,7 +336,7 @@ export const NewConnectionModal = ({
               autoCapitalize="off"
               autoComplete="off"
               spellCheck={false}
-              className="flex-1 px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+              className="flex-1 px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
               placeholder={activeDriver.capabilities.folder_based ? t("newConnection.folderPathPlaceholder") : t("newConnection.filePathPlaceholder")}
             />
             <button
@@ -343,7 +345,7 @@ export const NewConnectionModal = ({
                 const selected = await open({ multiple: false, directory: activeDriver.capabilities.folder_based });
                 if (selected) updateField("database", selected);
               }}
-              className="px-2.5 py-1.5 bg-base hover:bg-surface-secondary border border-strong rounded-md text-muted hover:text-primary transition-colors"
+              className="px-3 py-2 bg-base hover:bg-surface-secondary border border-strong rounded-md text-muted hover:text-primary transition-colors"
               title={activeDriver.capabilities.folder_based ? t("newConnection.browseFolder") : t("newConnection.browseFile")}
             >
               <FolderOpen size={15} />
@@ -353,7 +355,7 @@ export const NewConnectionModal = ({
       ) : (
         <>
           {/* Host + Port */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className={clsx("grid gap-3", driver === "postgres" ? "grid-cols-4" : "grid-cols-3")}>
             <FieldInput
               className="col-span-2"
               label={t("newConnection.host")}
@@ -368,6 +370,25 @@ export const NewConnectionModal = ({
               type="number"
               placeholder={driver === "mysql" ? "3306" : "5432"}
             />
+            {driver === "postgres" && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+                  {t("newConnection.sslMode", { defaultValue: "SSL Mode" })}
+                </label>
+                <Select
+                  value={formData.ssl_mode || "prefer"}
+                  options={["disable", "allow", "prefer", "require"]}
+                  labels={{
+                    disable: t("newConnection.sslModes.disable"),
+                    allow: t("newConnection.sslModes.allow"),
+                    prefer: t("newConnection.sslModes.prefer"),
+                    require: t("newConnection.sslModes.require"),
+                  }}
+                  onChange={(v) => updateField("ssl_mode", v)}
+                  searchable={false}
+                />
+              </div>
+            )}
           </div>
 
           {/* User + Password */}
@@ -405,7 +426,7 @@ export const NewConnectionModal = ({
                 </button>
               </div>
               {availableDatabases.length > 0 ? (
-                <SearchableSelect
+                <Select
                   value={typeof formData.database === "string" ? formData.database || null : null}
                   options={availableDatabases}
                   onChange={(val) => updateField("database", val)}
@@ -422,7 +443,7 @@ export const NewConnectionModal = ({
                   autoCapitalize="off"
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+                  className="w-full px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
                   placeholder={t("newConnection.dbNamePlaceholder")}
                 />
               )}
@@ -610,7 +631,7 @@ export const NewConnectionModal = ({
                 <select
                   value={formData.ssh_connection_id || ""}
                   onChange={(e) => updateField("ssh_connection_id", e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary focus:border-blue-500 focus:outline-none appearance-auto cursor-pointer transition-colors"
+                  className="w-full px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary focus:border-blue-500 focus:outline-none appearance-auto cursor-pointer transition-colors"
                 >
                   <option value="">
                     {sshConnections.length === 0
@@ -674,7 +695,7 @@ export const NewConnectionModal = ({
                     autoCapitalize="off"
                     autoComplete="off"
                     spellCheck={false}
-                    className="w-full px-2.5 py-1.5 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
                   />
                   {formData.save_in_keychain && sshPasswordDirty && !formData.ssh_password && (
                     <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
