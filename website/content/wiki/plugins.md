@@ -84,6 +84,7 @@ Every plugin must include a `manifest.json` that tells Tabularis its capabilitie
 | `alter_column` | bool | `true` to enable ALTER TABLE MODIFY COLUMN operations in the schema editor. |
 | `create_foreign_keys` | bool | `true` to enable FK constraint creation in the schema editor. |
 | `folder_based` | bool | `true` for databases that target a folder rather than a file or host (e.g., CSV plugin). Replaces host/port with a folder picker. |
+| `no_connection_required` | bool | `true` for API-based plugins that need no host, port, or credentials (e.g. a public REST API). Hides the entire connection form — the user only fills in the connection name. |
 
 ### Data Type Categories
 
@@ -96,6 +97,67 @@ Every plugin must include a `manifest.json` that tells Tabularis its capabilitie
 | `json` | JSON, JSONB |
 | `spatial` | GEOMETRY, POINT |
 | `other` | BOOLEAN, UUID |
+
+## Plugin Settings
+
+Plugins can declare custom configuration fields in their `manifest.json`. Tabularis renders these fields in **Settings → gear icon** next to the plugin. Users fill them in, the values are persisted in `config.json`, and Tabularis delivers them to the plugin at startup.
+
+### Declaring settings in `manifest.json`
+
+Add an optional `settings` array to your manifest:
+
+```json
+{
+  "id": "my-plugin",
+  "settings": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "type": "string",
+      "required": true,
+      "description": "Your API key for authentication."
+    },
+    {
+      "key": "region",
+      "label": "Region",
+      "type": "select",
+      "options": ["us-east-1", "eu-west-1"],
+      "default": "us-east-1"
+    },
+    {
+      "key": "max_connections",
+      "label": "Max Connections",
+      "type": "number",
+      "default": 10
+    },
+    {
+      "key": "ssl",
+      "label": "Enable SSL",
+      "type": "boolean",
+      "default": true
+    }
+  ]
+}
+```
+
+Supported setting types: `"string"`, `"boolean"`, `"number"`, `"select"`.
+
+### The `initialize` call
+
+After spawning the plugin process, Tabularis immediately sends an `initialize` JSON-RPC call with the user's saved settings:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "initialize",
+  "params": { "settings": { "api_key": "abc", "region": "eu-west-1" } },
+  "id": 1
+}
+```
+
+Returning an error from `initialize` is safe — Tabularis ignores it silently. Plugins that do not implement `initialize` are completely unaffected.
+
+For the full developer reference (field schema, code examples in Rust and Python), see the [Plugin Guide](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md).
 
 ## Protocol Specification
 

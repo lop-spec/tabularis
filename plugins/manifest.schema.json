@@ -103,6 +103,33 @@
           "type": "boolean",
           "default": false,
           "description": "true if the driver properly supports creating foreign key constraints."
+        },
+        "no_connection_required": {
+          "type": "boolean",
+          "default": false,
+          "description": "true for API-based plugins that need no host/port/credentials (e.g. public REST APIs). Hides the entire connection form and skips database validation."
+        }
+      }
+    },
+    "interpreter": {
+      "type": "string",
+      "description": "Optional interpreter for script-based plugins (e.g. python3)."
+    },
+    "settings": {
+      "type": "array",
+      "description": "Optional list of configuration fields the plugin exposes to the user.",
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "key":         { "type": "string" },
+          "label":       { "type": "string" },
+          "type":        { "type": "string", "enum": ["string", "boolean", "number", "select"] },
+          "default":     {},
+          "description": { "type": "string" },
+          "required":    { "type": "boolean", "default": false },
+          "options":     { "type": "array", "items": { "type": "string" } }
         }
       }
     },

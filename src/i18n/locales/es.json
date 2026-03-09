@@ -337,7 +337,8 @@
         "interpreter": "Intérprete",
         "interpreterDesc": "Opcional. Especifica el ejecutable para iniciar este plugin (p.ej. python3 en macOS/Linux, python o ruta completa en Windows). Deja en blanco para usar el valor predeterminado.",
         "interpreterPlaceholder": "p.ej. python3",
-        "browse": "Explorar..."
+        "browse": "Explorar...",
+        "fieldRequired": "{{label}} es obligatorio"
       }
     },
     "shortcuts": {

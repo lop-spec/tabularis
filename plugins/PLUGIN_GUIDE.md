@@ -99,6 +99,8 @@ The manifest tells Tabularis everything about your plugin.
 | `views` | bool | `true` if the database supports views. Enables the views section in the explorer. |
 | `routines` | bool | `true` if the database supports stored procedures/functions. |
 | `file_based` | bool | `true` for local file databases (e.g., SQLite, DuckDB). Replaces host/port with a file path input in the connection form. |
+| `folder_based` | bool | `true` for plugins that connect to a directory rather than a single file (e.g. CSV plugin). Replaces host/port with a folder picker. |
+| `no_connection_required` | bool | `true` for API-based plugins that need no host, port, or credentials (e.g. a public REST API). Hides the entire connection form — the user only fills in the connection name. |
 | `identifier_quote` | string | Character used to quote SQL identifiers. Use `"\""` for ANSI standard or `` "`" `` for MySQL style. |
 | `alter_primary_key` | bool | `true` if the database supports altering primary keys after table creation. |
 
@@ -128,7 +130,120 @@ Each entry in `data_types` describes a type the driver supports for column creat
 
 ---
 
-## 3. Implementing the JSON-RPC Interface
+## 3. Plugin Settings
+
+Plugins can declare custom configuration fields that Tabularis renders in the **Settings → gear icon** modal for that plugin. Users fill in the values, Tabularis persists them in `config.json`, and passes them to the plugin at startup via an `initialize` RPC call.
+
+### Declaring settings in `manifest.json`
+
+Add an optional `settings` array at the top level of your manifest:
+
+```json
+{
+  "id": "my-plugin",
+  "name": "My Plugin",
+  "version": "1.0.0",
+  "description": "A custom plugin with settings",
+  "executable": "my-plugin",
+  "capabilities": { ... },
+  "data_types": [ ... ],
+  "settings": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "type": "string",
+      "required": true,
+      "description": "Your API key for authentication."
+    },
+    {
+      "key": "region",
+      "label": "Region",
+      "type": "select",
+      "options": ["us-east-1", "eu-west-1", "ap-southeast-1"],
+      "default": "us-east-1",
+      "description": "Deployment region."
+    },
+    {
+      "key": "max_connections",
+      "label": "Max Connections",
+      "type": "number",
+      "default": 10
+    },
+    {
+      "key": "ssl",
+      "label": "Enable SSL",
+      "type": "boolean",
+      "default": true
+    }
+  ]
+}
+```
+
+### Setting definition fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string | yes | Unique identifier used as the key in the settings map. |
+| `label` | string | yes | Human-readable label shown in the UI. |
+| `type` | string | yes | One of: `"string"`, `"boolean"`, `"number"`, `"select"`. |
+| `default` | any | no | Default value pre-filled when no saved value exists. |
+| `description` | string | no | Optional hint displayed below the field. |
+| `required` | boolean | no | If `true`, saving the modal is blocked until the field is filled. |
+| `options` | string[] | no | For `"select"` type: the list of choices shown in the dropdown. |
+
+### The `initialize` RPC method
+
+Immediately after spawning the plugin process, Tabularis sends an `initialize` call:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "initialize",
+  "params": {
+    "settings": {
+      "api_key": "abc123",
+      "region": "eu-west-1",
+      "max_connections": 10,
+      "ssl": true
+    }
+  },
+  "id": 1
+}
+```
+
+- The `settings` object contains only the keys the user has configured (merged with defaults).
+- Returning an error response is safe — Tabularis silently ignores any `initialize` failure.
+- Plugins that do not implement `initialize` are unaffected (the error is ignored).
+- Use `initialize` to store settings in your plugin's state before any query arrives.
+
+#### Handling `initialize` in Rust
+
+```rust
+"initialize" => {
+    let settings = &params["settings"];
+    // Store settings in your plugin state, e.g.:
+    // API_KEY.set(settings["api_key"].as_str().unwrap_or("").to_string());
+    json!({
+        "jsonrpc": "2.0",
+        "result": null,
+        "id": id
+    })
+}
+```
+
+#### Handling `initialize` in Python
+
+```python
+elif method == "initialize":
+    settings = params.get("settings", {})
+    # Store settings for later use:
+    # api_key = settings.get("api_key", "")
+    send_response({"result": None, "id": req_id})
+```
+
+---
+
+## 4. Implementing the JSON-RPC Interface
 
 Your plugin must run an event loop that:
 1. Reads one JSON line from `stdin`.
@@ -197,7 +312,7 @@ The `params.params` object is a `ConnectionParams` — the same values the user 
 
 ---
 
-## 4. Required Methods
+## 5. Required Methods
 
 Your plugin must respond to the following JSON-RPC methods. For unsupported features, return an empty array `[]` or a `-32601` (Method not found) error.
 
@@ -612,7 +727,7 @@ These methods generate SQL statements. Tabularis may display the SQL to the user
 
 ---
 
-## 5. Example: Building a Minimal Plugin in Rust
+## 6. Example: Building a Minimal Plugin in Rust
 
 Here is a minimal but functional skeleton for a plugin executable in Rust.
 
@@ -719,7 +834,7 @@ serde_json = "1"
 
 ---
 
-## 6. Testing Your Plugin
+## 7. Testing Your Plugin
 
 ### Manual Testing via Shell
 
@@ -746,7 +861,7 @@ You should see a valid JSON-RPC response on stdout.
 
 ---
 
-## 7. Publishing Your Plugin
+## 8. Publishing Your Plugin
 
 To make your plugin available in the official registry:
 

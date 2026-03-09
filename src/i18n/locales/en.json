@@ -337,7 +337,8 @@
         "interpreter": "Interpreter",
         "interpreterDesc": "Optional. Specify the executable used to run this plugin (e.g. python3 on macOS/Linux, python or a full path on Windows). Leave blank to use the default.",
         "interpreterPlaceholder": "e.g. python3",
-        "browse": "Browse..."
+        "browse": "Browse...",
+        "fieldRequired": "{{label}} is required"
       }
     },
     "shortcuts": {

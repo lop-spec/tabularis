@@ -51,6 +51,10 @@ pub struct DriverCapabilities {
     /// Supports creating foreign key constraints (properly enforced).
     #[serde(default)]
     pub create_foreign_keys: bool,
+    /// API-based plugin that requires no host, port, or credentials.
+    /// When `true`, the connection form is hidden and database validation is skipped.
+    #[serde(default)]
+    pub no_connection_required: bool,
 }
 
 fn default_double_quote() -> String {
@@ -59,6 +63,23 @@ fn default_double_quote() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+/// A single user-configurable setting declared in a plugin's manifest.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct PluginSettingDefinition {
+    pub key: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub setting_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default)]
+    pub options: Vec<String>,
 }
 
 /// Metadata describing a registered driver plugin.
@@ -90,6 +111,9 @@ pub struct PluginManifest {
     /// Lucide-compatible icon name (e.g. `"network"`, `"database"`). Empty string falls back to a generic icon.
     #[serde(default)]
     pub icon: String,
+    /// Plugin-declared settings definitions. Empty for built-in drivers.
+    #[serde(default)]
+    pub settings: Vec<PluginSettingDefinition>,
 }
 
 /// The complete interface every database driver plugin must implement.

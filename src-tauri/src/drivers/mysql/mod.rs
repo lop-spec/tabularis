@@ -1048,11 +1048,13 @@ impl MysqlDriver {
                     inline_pk: false,
                     alter_column: true,
                     create_foreign_keys: true,
+                    no_connection_required: false,
                 },
                 is_builtin: true,
                 default_username: "root".to_string(),
                 color: "#f97316".to_string(),
                 icon: "mysql".to_string(),
+                settings: vec![],
             },
         }
     }

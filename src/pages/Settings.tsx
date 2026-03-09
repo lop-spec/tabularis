@@ -799,6 +799,7 @@ export const Settings = () => {
   const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
   const [pluginInstallError, setPluginInstallError] = useState<{ pluginId: string; error: string } | null>(null);
   const [pluginSettingsModal, setPluginSettingsModal] = useState<{ pluginId: string; pluginName: string } | null>(null);
+  const [openModalManifest, setOpenModalManifest] = useState<PluginManifest | undefined>(undefined);
   const [pluginStartError, setPluginStartError] = useState<{ pluginId: string; pluginName: string; error: string } | null>(null);
   const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const [uninstallingPluginId, setUninstallingPluginId] = useState<string | null>(null);
@@ -834,6 +835,21 @@ export const Settings = () => {
       }
     }
   }, [settings.plugins, settings.activeExternalDrivers, updateSetting, allDrivers, refreshDrivers]);
+
+  const handleOpenPluginSettings = useCallback(async (pluginId: string, pluginName: string) => {
+    setPluginSettingsModal({ pluginId, pluginName });
+    const runningDriver = allDrivers.find((d) => d.id === pluginId);
+    if (runningDriver) {
+      setOpenModalManifest(runningDriver);
+    } else {
+      try {
+        const manifest = await invoke<PluginManifest>("get_plugin_manifest", { pluginId });
+        setOpenModalManifest(manifest);
+      } catch {
+        setOpenModalManifest(undefined);
+      }
+    }
+  }, [allDrivers]);
 
   const loadModels = useCallback(async (force: boolean = false) => {
     try {
@@ -2002,7 +2018,7 @@ export const Settings = () => {
                           {/* Plugin settings */}
                           {!isBuiltin && (
                             <button
-                              onClick={() => setPluginSettingsModal({ pluginId: driver.id, pluginName: driver.name })}
+                              onClick={() => handleOpenPluginSettings(driver.id, driver.name)}
                               className="p-1.5 text-secondary hover:text-primary transition-colors"
                               title={t("settings.plugins.pluginSettings.title")}
                             >
@@ -2079,7 +2095,7 @@ export const Settings = () => {
                             {/* Remove link */}
                             {/* Plugin settings */}
                             <button
-                              onClick={() => setPluginSettingsModal({ pluginId: plugin.id, pluginName: plugin.name })}
+                              onClick={() => handleOpenPluginSettings(plugin.id, plugin.name)}
                               className="p-1.5 text-secondary hover:text-primary transition-colors"
                               title={t("settings.plugins.pluginSettings.title")}
                             >
@@ -2383,10 +2399,11 @@ export const Settings = () => {
       <PluginSettingsModal
         key={pluginSettingsModal?.pluginId}
         isOpen={pluginSettingsModal !== null}
-        onClose={() => setPluginSettingsModal(null)}
+        onClose={() => { setPluginSettingsModal(null); setOpenModalManifest(undefined); }}
         pluginId={pluginSettingsModal?.pluginId ?? ""}
         pluginName={pluginSettingsModal?.pluginName ?? ""}
         currentConfig={settings.plugins?.[pluginSettingsModal?.pluginId ?? ""]}
+        manifest={openModalManifest}
         onSave={(config) => handleSavePluginConfig(pluginSettingsModal?.pluginId ?? "", pluginSettingsModal?.pluginName ?? "", config)}
       />
       <PluginStartErrorModal
@@ -2394,7 +2411,7 @@ export const Settings = () => {
         onClose={() => setPluginStartError(null)}
         pluginId={pluginStartError?.pluginId ?? ""}
         error={pluginStartError?.error ?? ""}
-        onConfigureInterpreter={pluginStartError ? () => setPluginSettingsModal({ pluginId: pluginStartError.pluginId, pluginName: pluginStartError.pluginName }) : undefined}
+        onConfigureInterpreter={pluginStartError ? () => handleOpenPluginSettings(pluginStartError.pluginId, pluginStartError.pluginName) : undefined}
       />
     </div>
   );

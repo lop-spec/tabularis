@@ -143,7 +143,9 @@ export const NewConnectionModal = ({
   const [testResult, setTestResult] = useState<"success" | "error" | null>(null);
 
   // ── capabilities ──
+  const noConnectionRequired = activeDriver?.capabilities?.no_connection_required === true;
   const isNetworkDriver =
+    !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
     !activeDriver?.capabilities?.folder_based;
   const isMultiDb = isMultiDatabaseCapable(activeDriver?.capabilities);
@@ -296,7 +298,7 @@ export const NewConnectionModal = ({
       if (selectedDatabasesState.length === 0) {
         setStatus("error"); setMessage(t("newConnection.noDatabasesSelected")); setTestResult("error"); return;
       }
-    } else if (!formData.database || (typeof formData.database === "string" && !formData.database.trim())) {
+    } else if (!noConnectionRequired && (!formData.database || (typeof formData.database === "string" && !formData.database.trim()))) {
       setStatus("error"); setMessage(t("newConnection.dbNameRequired")); setTestResult("error"); return;
     }
     setStatus("saving"); setMessage(""); setTestResult(null);
@@ -327,8 +329,8 @@ export const NewConnectionModal = ({
   // ── rendered general tab content ──
   const generalTabContent = (
     <div className="space-y-4">
-      {/* File / folder based */}
-      {activeDriver?.capabilities?.file_based === true || activeDriver?.capabilities?.folder_based === true ? (
+      {/* API-based: no connection form needed */}
+      {noConnectionRequired ? null : activeDriver?.capabilities?.file_based === true || activeDriver?.capabilities?.folder_based === true ? (
         <div className="flex flex-col gap-1">
           <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
             {activeDriver.capabilities.folder_based ? t("newConnection.folderPath") : t("newConnection.filePath")}

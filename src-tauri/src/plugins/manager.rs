@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
@@ -7,7 +8,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use crate::drivers::driver_trait::{DriverCapabilities, PluginManifest};
+use crate::drivers::driver_trait::{DriverCapabilities, PluginManifest, PluginSettingDefinition};
 use crate::models::DataTypeInfo;
 use crate::plugins::driver::RpcDriver;
 
@@ -28,7 +29,7 @@ pub fn get_plugin_startup_errors() -> Vec<PluginLoadError> {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ConfigManifest {
+pub struct ConfigManifest {
     pub id: String,
     pub name: String,
     pub version: String,
@@ -45,6 +46,8 @@ struct ConfigManifest {
     pub icon: String,
     #[serde(default)]
     pub interpreter: Option<String>,
+    #[serde(default)]
+    pub settings: Vec<PluginSettingDefinition>,
 }
 
 /// Load installed plugins at startup.
@@ -94,13 +97,17 @@ pub async fn load_plugins<R: tauri::Runtime>(app: &AppHandle<R>, enabled_ids: Op
             }
         }
 
-        let interpreter_override = path
+        let plugin_config = path
             .file_name()
             .and_then(|n| n.to_str())
-            .and_then(|dir_name| plugin_configs.get(dir_name))
-            .and_then(|c| c.interpreter.clone());
+            .and_then(|dir_name| plugin_configs.get(dir_name));
 
-        if let Err(e) = load_plugin_from_dir(&path, interpreter_override).await {
+        let interpreter_override = plugin_config.and_then(|c| c.interpreter.clone());
+        let settings = plugin_config
+            .map(|c| c.settings.clone())
+            .unwrap_or_default();
+
+        if let Err(e) = load_plugin_from_dir(&path, interpreter_override, settings).await {
             log::error!("Failed to load plugin {:?}: {}", path, e);
             let plugin_id = path
                 .file_name()
@@ -114,7 +121,7 @@ pub async fn load_plugins<R: tauri::Runtime>(app: &AppHandle<R>, enabled_ids: Op
     }
 }
 
-pub async fn load_plugin_from_dir(path: &Path, interpreter_override: Option<String>) -> Result<(), String> {
+pub async fn load_plugin_from_dir(path: &Path, interpreter_override: Option<String>, settings: HashMap<String, serde_json::Value>) -> Result<(), String> {
     let manifest_path = path.join("manifest.json");
     if !manifest_path.exists() {
         return Err(format!("manifest.json not found in {:?}", path));
@@ -152,6 +159,7 @@ pub async fn load_plugin_from_dir(path: &Path, interpreter_override: Option<Stri
         default_username: config.default_username.unwrap_or_default(),
         color: config.color,
         icon: config.icon,
+        settings: config.settings,
     };
 
     let interpreter = interpreter_override
@@ -167,7 +175,7 @@ pub async fn load_plugin_from_dir(path: &Path, interpreter_override: Option<Stri
             }
         });
 
-    let driver = RpcDriver::new(manifest, exec_path, interpreter, config.data_types).await?;
+    let driver = RpcDriver::new(manifest, exec_path, interpreter, config.data_types, settings).await?;
     crate::drivers::registry::register_driver(driver).await;
     Ok(())
 }

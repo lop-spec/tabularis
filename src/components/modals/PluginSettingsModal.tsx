@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Settings, X, FolderOpen } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Modal } from "../ui/Modal";
-import { resolvePluginConfig, getDisplayInterpreter } from "../../utils/pluginConfig";
+import { Select } from "../ui/Select";
+import { resolvePluginConfig, getDisplayInterpreter, resolveSettingsWithDefaults, validateSettings } from "../../utils/pluginConfig";
 import type { PluginConfig } from "../../contexts/SettingsContext";
+import type { PluginManifest, PluginSettingDefinition } from "../../types/plugins";
 
 interface PluginSettingsModalProps {
   isOpen: boolean;
@@ -12,6 +14,7 @@ interface PluginSettingsModalProps {
   pluginId: string;
   pluginName: string;
   currentConfig?: PluginConfig;
+  manifest?: PluginManifest;
   onSave: (config: PluginConfig) => void;
 }
 
@@ -20,19 +23,101 @@ export const PluginSettingsModal = ({
   onClose,
   pluginId,
   currentConfig,
+  manifest,
   onSave,
 }: PluginSettingsModalProps) => {
   const { t } = useTranslation();
   const [interpreter, setInterpreter] = useState(getDisplayInterpreter(currentConfig));
+
+  const definitions = manifest?.settings ?? [];
+
+  const [dynamicValues, setDynamicValues] = useState<Record<string, unknown>>(() =>
+    resolveSettingsWithDefaults(definitions, currentConfig?.settings),
+  );
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleBrowse = async () => {
     const selected = await open({ multiple: false, directory: false });
     if (selected) setInterpreter(selected);
   };
 
+  const handleDynamicChange = useCallback((key: string, value: unknown) => {
+    setDynamicValues((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
   const handleSave = () => {
-    onSave(resolvePluginConfig(currentConfig, interpreter));
+    const validationErrors = validateSettings(definitions, dynamicValues);
+    if (Object.keys(validationErrors).length > 0) {
+      const errorMessages: Record<string, string> = {};
+      for (const [key, label] of Object.entries(validationErrors)) {
+        errorMessages[key] = t("settings.plugins.pluginSettings.fieldRequired", { label });
+      }
+      setErrors(errorMessages);
+      return;
+    }
+
+    const baseConfig = resolvePluginConfig(currentConfig, interpreter);
+    const mergedSettings =
+      definitions.length > 0
+        ? { ...(baseConfig.settings ?? {}), ...dynamicValues }
+        : baseConfig.settings;
+
+    onSave({ ...baseConfig, settings: mergedSettings });
     onClose();
+  };
+
+  const renderField = (def: PluginSettingDefinition) => {
+    const value = dynamicValues[def.key];
+    const inputClass =
+      "bg-base border-default text-primary placeholder:text-muted focus:border-blue-500/50 focus:outline-none";
+
+    if (def.type === "boolean") {
+      return (
+        <input
+          type="checkbox"
+          checked={typeof value === "boolean" ? value : false}
+          onChange={(e) => handleDynamicChange(def.key, e.target.checked)}
+          className="w-4 h-4 accent-blue-500"
+        />
+      );
+    }
+
+    if (def.type === "select" && def.options && def.options.length > 0) {
+      return (
+        <Select
+          value={typeof value === "string" ? value : null}
+          options={def.options}
+          onChange={(v) => handleDynamicChange(def.key, v)}
+          hasError={!!errors[def.key]}
+        />
+      );
+    }
+
+    if (def.type === "number") {
+      return (
+        <input
+          type="number"
+          value={typeof value === "number" ? value : ""}
+          onChange={(e) => handleDynamicChange(def.key, e.target.value === "" ? undefined : Number(e.target.value))}
+          className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
+        />
+      );
+    }
+
+    return (
+      <input
+        type="text"
+        value={typeof value === "string" ? value : ""}
+        onChange={(e) => handleDynamicChange(def.key, e.target.value)}
+        className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
+      />
+    );
   };
 
   return (
@@ -58,6 +143,7 @@ export const PluginSettingsModal = ({
 
         {/* Content */}
         <div className="p-6 space-y-6 overflow-y-auto">
+          {/* Interpreter */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-primary">
               {t("settings.plugins.pluginSettings.interpreter")}
@@ -83,6 +169,23 @@ export const PluginSettingsModal = ({
               </button>
             </div>
           </div>
+
+          {/* Dynamic plugin settings */}
+          {definitions.map((def) => (
+            <div key={def.key} className="space-y-1.5">
+              <label className="text-sm font-medium text-primary flex items-center gap-1">
+                {def.label}
+                {def.required && <span className="text-red-400">*</span>}
+              </label>
+              {def.description && (
+                <p className="text-xs text-secondary">{def.description}</p>
+              )}
+              {renderField(def)}
+              {errors[def.key] && (
+                <p className="text-xs text-red-400">{errors[def.key]}</p>
+              )}
+            </div>
+          ))}
         </div>
 
         {/* Footer */}

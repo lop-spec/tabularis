@@ -337,7 +337,8 @@
         "interpreter": "Interprete",
         "interpreterDesc": "Opzionale. Specifica l'eseguibile usato per avviare questo plugin (es. python3 su macOS/Linux, python o percorso completo su Windows). Lascia vuoto per usare il valore predefinito.",
         "interpreterPlaceholder": "es. python3",
-        "browse": "Sfoglia..."
+        "browse": "Sfoglia...",
+        "fieldRequired": "{{label}} è obbligatorio"
       }
     },
     "shortcuts": {

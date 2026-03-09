@@ -1,4 +1,8 @@
+use std::fs;
+
+use crate::drivers::driver_trait::PluginManifest;
 use crate::plugins::installer::{self, InstalledPluginInfo};
+use crate::plugins::manager::ConfigManifest;
 use crate::plugins::registry::{
     self, RegistryPluginWithStatus, RegistryReleaseWithStatus,
 };
@@ -95,13 +99,16 @@ pub async fn install_plugin(app: AppHandle, plugin_id: String, version: Option<S
     installer::download_and_install(&plugin_id, download_url).await?;
 
     // Hot-register the new driver (no restart needed)
-    let interpreter_override = config.plugins
+    let plugin_cfg = config.plugins
         .as_ref()
-        .and_then(|m| m.get(&plugin_id))
-        .and_then(|c| c.interpreter.clone());
+        .and_then(|m| m.get(&plugin_id));
+    let interpreter_override = plugin_cfg.and_then(|c| c.interpreter.clone());
+    let settings = plugin_cfg
+        .map(|c| c.settings.clone())
+        .unwrap_or_default();
     let plugins_dir = installer::get_plugins_dir()?;
     let plugin_dir = plugins_dir.join(&plugin_id);
-    crate::plugins::manager::load_plugin_from_dir(&plugin_dir, interpreter_override).await
+    crate::plugins::manager::load_plugin_from_dir(&plugin_dir, interpreter_override, settings).await
         .map_err(|e| format!("Plugin installed but failed to load: {}", e))?;
 
     Ok(())
@@ -135,15 +142,46 @@ pub async fn disable_plugin(plugin_id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn enable_plugin(app: AppHandle, plugin_id: String) -> Result<(), String> {
     let config = crate::config::load_config_internal(&app);
-    let interpreter_override = config.plugins
+    let plugin_cfg = config.plugins
         .as_ref()
-        .and_then(|m| m.get(&plugin_id))
-        .and_then(|c| c.interpreter.clone());
+        .and_then(|m| m.get(&plugin_id));
+    let interpreter_override = plugin_cfg.and_then(|c| c.interpreter.clone());
+    let settings = plugin_cfg
+        .map(|c| c.settings.clone())
+        .unwrap_or_default();
     let plugins_dir = installer::get_plugins_dir()?;
     let plugin_dir = plugins_dir.join(&plugin_id);
     if !plugin_dir.exists() {
         return Err(format!("Plugin '{}' is not installed", plugin_id));
     }
-    crate::plugins::manager::load_plugin_from_dir(&plugin_dir, interpreter_override).await?;
+    crate::plugins::manager::load_plugin_from_dir(&plugin_dir, interpreter_override, settings).await?;
     Ok(())
+}
+
+/// Reads a plugin's manifest.json from disk and returns a PluginManifest.
+/// Useful for retrieving setting definitions for disabled plugins.
+#[tauri::command]
+pub async fn get_plugin_manifest(plugin_id: String) -> Result<PluginManifest, String> {
+    let plugins_dir = installer::get_plugins_dir()?;
+    let manifest_path = plugins_dir.join(&plugin_id).join("manifest.json");
+
+    let manifest_str = fs::read_to_string(&manifest_path)
+        .map_err(|e| format!("Failed to read manifest for '{}': {}", plugin_id, e))?;
+
+    let config: ConfigManifest = serde_json::from_str(&manifest_str)
+        .map_err(|e| format!("Failed to parse manifest for '{}': {}", plugin_id, e))?;
+
+    Ok(PluginManifest {
+        id: config.id,
+        name: config.name,
+        version: config.version,
+        description: config.description,
+        default_port: config.default_port,
+        capabilities: config.capabilities,
+        is_builtin: false,
+        default_username: config.default_username.unwrap_or_default(),
+        color: config.color,
+        icon: config.icon,
+        settings: config.settings,
+    })
 }

@@ -6,6 +6,7 @@ import type { DriverCapabilities } from '../types/plugins';
  */
 export function isMultiDatabaseCapable(capabilities: DriverCapabilities | null | undefined): boolean {
   if (!capabilities) return false;
+  if (capabilities.no_connection_required) return false;
   return (
     capabilities.file_based === false &&
     !capabilities.folder_based &&

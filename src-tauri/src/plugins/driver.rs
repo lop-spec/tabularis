@@ -162,10 +162,13 @@ pub struct RpcDriver {
 }
 
 impl RpcDriver {
-    pub async fn new(manifest: PluginManifest, executable_path: PathBuf, interpreter: Option<String>, data_types: Vec<DataTypeInfo>) -> Result<Self, String> {
+    pub async fn new(manifest: PluginManifest, executable_path: PathBuf, interpreter: Option<String>, data_types: Vec<DataTypeInfo>, settings: HashMap<String, serde_json::Value>) -> Result<Self, String> {
+        let process = Arc::new(PluginProcess::new(executable_path, interpreter).await?);
+        // Send initialize RPC with settings; silently ignore any error or non-response.
+        let _ = process.call("initialize", json!({ "settings": settings })).await;
         Ok(Self {
             manifest,
-            process: Arc::new(PluginProcess::new(executable_path, interpreter).await?),
+            process,
             data_types,
         })
     }

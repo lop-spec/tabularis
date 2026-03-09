@@ -308,6 +308,7 @@ pub fn run() {
             plugins::commands::get_installed_plugins,
             plugins::commands::disable_plugin,
             plugins::commands::enable_plugin,
+            plugins::commands::get_plugin_manifest,
             plugins::manager::get_plugin_startup_errors,
             // Task Manager
             task_manager::get_process_list,
