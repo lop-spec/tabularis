@@ -49,7 +49,7 @@ import { useDatabase } from "../hooks/useDatabase";
 import { findConnectionsForDrivers } from "../utils/connectionManager";
 import { parseAuthor, versionGte } from "../utils/plugins";
 import type { PluginManifest } from "../types/plugins";
-import { SearchableSelect } from "../components/ui/SearchableSelect";
+import { Select } from "../components/ui/Select";
 import { PluginInstallErrorModal } from "../components/modals/PluginInstallErrorModal";
 import { useUpdate } from "../hooks/useUpdate";
 import { useKeybindings } from "../hooks/useKeybindings";
@@ -1603,7 +1603,7 @@ export const Settings = () => {
                                 <>
                                     <div className="flex gap-2">
                                         <div className="flex-1">
-                                            <SearchableSelect
+                                            <Select
                                                 value={settings.aiModel}
                                                 onChange={(val) => updateSetting("aiModel", val)}
                                                 options={currentModels}

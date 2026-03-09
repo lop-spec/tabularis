@@ -17,7 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { SshConnectionsModal } from "../modals/SshConnectionsModal";
-import { SearchableSelect } from "./SearchableSelect";
+import { Select } from "./Select";
 import { useDrivers } from "../../hooks/useDrivers";
 import { Modal } from "./Modal";
 import type { PluginManifest } from "../../types/plugins";
@@ -367,10 +367,17 @@ export const NewConnectionModal = ({
                 <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
                   {t("newConnection.sslMode", { defaultValue: "SSL Mode" })}
                 </label>
-                <SearchableSelect
+                <Select
                   value={formData.ssl_mode || "prefer"}
                   options={["disable", "allow", "prefer", "require"]}
+                  labels={{
+                    disable: t("newConnection.sslModes.disable"),
+                    allow: t("newConnection.sslModes.allow"),
+                    prefer: t("newConnection.sslModes.prefer"),
+                    require: t("newConnection.sslModes.require"),
+                  }}
                   onChange={(v) => updateField("ssl_mode", v)}
+                  searchable={false}
                 />
               </div>
             )}
@@ -411,7 +418,7 @@ export const NewConnectionModal = ({
                 </button>
               </div>
               {availableDatabases.length > 0 ? (
-                <SearchableSelect
+                <Select
                   value={typeof formData.database === "string" ? formData.database || null : null}
                   options={availableDatabases}
                   onChange={(val) => updateField("database", val)}

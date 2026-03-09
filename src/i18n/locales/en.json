@@ -435,7 +435,14 @@
     "useSshConnection": "Use Existing SSH Connection",
     "createInlineSsh": "Configure SSH Inline",
     "manageSshConnections": "Manage SSH Connections",
-    "noSshConnections": "No SSH connections available"
+    "noSshConnections": "No SSH connections available",
+    "sslMode": "SSL Mode",
+    "sslModes": {
+      "disable": "Disable",
+      "allow": "Allow",
+      "prefer": "Prefer",
+      "require": "Require"
+    }
   },
   "sshConnections": {
     "title": "SSH Connections",
