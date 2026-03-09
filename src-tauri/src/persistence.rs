@@ -3,7 +3,9 @@ use crate::models::{ConnectionGroup, ConnectionsFile, SavedConnection};
 use std::fs;
 use std::path::Path;
 
-/// Load connections file, supporting both old format (array of connections) and new format (with groups)
+/// Load connections file (raw, no keychain reads).
+/// Supports both old format (array of connections) and new format (with groups).
+/// Use `load_connections` or `load_connections_with_passwords` when passwords are needed.
 pub fn load_connections_file(path: &Path) -> Result<ConnectionsFile, String> {
     if !path.exists() {
         return Ok(ConnectionsFile::default());
@@ -12,24 +14,20 @@ pub fn load_connections_file(path: &Path) -> Result<ConnectionsFile, String> {
 
     // Try parsing as the new format first
     if let Ok(file) = serde_json::from_str::<ConnectionsFile>(&content) {
-        let mut result = file;
-        populate_keychain_passwords(&mut result.connections);
-        return Ok(result);
+        return Ok(file);
     }
 
     // Fall back to old format (array of connections)
     let connections: Vec<SavedConnection> = serde_json::from_str(&content)
         .map_err(|_| "Failed to parse connections file".to_string())?;
 
-    let mut result = ConnectionsFile {
+    Ok(ConnectionsFile {
         groups: Vec::new(),
         connections,
-    };
-    populate_keychain_passwords(&mut result.connections);
-    Ok(result)
+    })
 }
 
-/// Legacy function for backward compatibility
+/// Load connections list (raw, no keychain reads) — for listing UI.
 pub fn load_connections(path: &Path) -> Result<Vec<SavedConnection>, String> {
     let file = load_connections_file(path)?;
     Ok(file.connections)
@@ -38,7 +36,7 @@ pub fn load_connections(path: &Path) -> Result<Vec<SavedConnection>, String> {
 fn populate_keychain_passwords(connections: &mut [SavedConnection]) {
     for conn in connections {
         if conn.params.save_in_keychain.unwrap_or(false) {
-            match keychain_utils::get_db_password(&conn.id) {
+            match keychain_utils::get_db_password(&conn.id, &conn.name) {
                 Ok(pwd) => conn.params.password = Some(pwd),
                 Err(e) => eprintln!(
                     "[Keyring Error] Failed to get DB password for {}: {}",
@@ -46,7 +44,7 @@ fn populate_keychain_passwords(connections: &mut [SavedConnection]) {
                 ),
             }
             if conn.params.ssh_enabled.unwrap_or(false) {
-                if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
+                if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id, &conn.name) {
                     if !ssh_pwd.trim().is_empty() {
                         conn.params.ssh_password = Some(ssh_pwd);
                     }

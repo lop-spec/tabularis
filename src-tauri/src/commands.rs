@@ -200,7 +200,7 @@ pub fn find_connection_by_id<R: Runtime>(
 
     // Load passwords from keychain if needed (like get_connections in v0.8.8)
     if conn.params.save_in_keychain.unwrap_or(false) {
-        match keychain_utils::get_db_password(&conn.id) {
+        match keychain_utils::get_db_password(&conn.id, &conn.name) {
             Ok(pwd) => conn.params.password = Some(pwd),
             Err(e) => eprintln!(
                 "[Keyring Error] Failed to get DB password for {}: {}",
@@ -208,12 +208,12 @@ pub fn find_connection_by_id<R: Runtime>(
             ),
         }
         if conn.params.ssh_enabled.unwrap_or(false) {
-            if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
+            if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id, &conn.name) {
                 if !ssh_pwd.trim().is_empty() {
                     conn.params.ssh_password = Some(ssh_pwd);
                 }
             }
-            if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
+            if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&conn.id, &conn.name) {
                 if !ssh_passphrase.trim().is_empty() {
                     conn.params.ssh_key_passphrase = Some(ssh_passphrase);
                 }
@@ -493,16 +493,16 @@ pub async fn duplicate_connection<R: Runtime>(
 
     // Recover passwords if in keychain
     if original.params.save_in_keychain.unwrap_or(false) {
-        if let Ok(pwd) = keychain_utils::get_db_password(&original.id) {
+        if let Ok(pwd) = keychain_utils::get_db_password(&original.id, &original.name) {
             original.params.password = Some(pwd);
         }
         if original.params.ssh_enabled.unwrap_or(false) {
-            if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&original.id) {
+            if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&original.id, &original.name) {
                 if !ssh_pwd.trim().is_empty() {
                     original.params.ssh_password = Some(ssh_pwd);
                 }
             }
-            if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&original.id) {
+            if let Ok(ssh_passphrase) = keychain_utils::get_ssh_key_passphrase(&original.id, &original.name) {
                 if !ssh_passphrase.trim().is_empty() {
                     original.params.ssh_key_passphrase = Some(ssh_passphrase);
                 }
@@ -625,12 +625,12 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
 
                     // Migrate credentials from connection keychain to SSH keychain
                     if conn.params.save_in_keychain.unwrap_or(false) {
-                        if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id) {
+                        if let Ok(ssh_pwd) = keychain_utils::get_ssh_password(&conn.id, &conn.name) {
                             if !ssh_pwd.trim().is_empty() {
                                 keychain_utils::set_ssh_password(&new_ssh_id, &ssh_pwd).ok();
                             }
                         }
-                        if let Ok(ssh_pass) = keychain_utils::get_ssh_key_passphrase(&conn.id) {
+                        if let Ok(ssh_pass) = keychain_utils::get_ssh_key_passphrase(&conn.id, &conn.name) {
                             if !ssh_pass.trim().is_empty() {
                                 keychain_utils::set_ssh_key_passphrase(&new_ssh_id, &ssh_pass).ok();
                             }
@@ -724,12 +724,12 @@ pub async fn get_ssh_connections<R: Runtime>(
         }
 
         if ssh.save_in_keychain.unwrap_or(false) {
-            if let Ok(pwd) = keychain_utils::get_ssh_password(&ssh.id) {
+            if let Ok(pwd) = keychain_utils::get_ssh_password(&ssh.id, "") {
                 if !pwd.trim().is_empty() {
                     ssh.password = Some(pwd);
                 }
             }
-            if let Ok(passphrase) = keychain_utils::get_ssh_key_passphrase(&ssh.id) {
+            if let Ok(passphrase) = keychain_utils::get_ssh_key_passphrase(&ssh.id, "") {
                 if !passphrase.trim().is_empty() {
                     ssh.key_passphrase = Some(passphrase);
                 }
@@ -903,7 +903,7 @@ pub async fn test_ssh_connection<R: Runtime>(
                 serde_json::from_str(&content).unwrap_or_default();
             connections.into_iter().find(|c| c.id == conn_id)
         },
-        |conn_id| keychain_utils::get_ssh_password(conn_id),
+        |conn_id| keychain_utils::get_ssh_password(conn_id, ""),
     );
 
     // Resolve passphrase using same logic
@@ -920,7 +920,7 @@ pub async fn test_ssh_connection<R: Runtime>(
                 serde_json::from_str(&content).unwrap_or_default();
             connections.into_iter().find(|c| c.id == conn_id)
         },
-        |conn_id| keychain_utils::get_ssh_key_passphrase(conn_id),
+        |conn_id| keychain_utils::get_ssh_key_passphrase(conn_id, ""),
         |conn| {
             conn.key_passphrase
                 .as_ref()
@@ -958,7 +958,7 @@ pub async fn test_connection<R: Runtime>(
         };
         expanded_params.password =
             resolve_test_connection_password(&request.params, saved_conn.as_ref(), |conn_id| {
-                keychain_utils::get_db_password(conn_id)
+                keychain_utils::get_db_password(conn_id, "")
             });
     }
 
@@ -1475,7 +1475,7 @@ pub async fn list_databases<R: Runtime>(
         };
         expanded_params.password =
             resolve_test_connection_password(&request.params, saved_conn.as_ref(), |conn_id| {
-                keychain_utils::get_db_password(conn_id)
+                keychain_utils::get_db_password(conn_id, "")
             });
     }
 
