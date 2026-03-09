@@ -51,6 +51,7 @@ import { parseAuthor, versionGte } from "../utils/plugins";
 import type { PluginManifest } from "../types/plugins";
 import { Select } from "../components/ui/Select";
 import { PluginInstallErrorModal } from "../components/modals/PluginInstallErrorModal";
+import { PluginRemoveModal } from "../components/modals/PluginRemoveModal";
 import { PluginSettingsModal } from "../components/modals/PluginSettingsModal";
 import { PluginStartErrorModal } from "../components/modals/PluginStartErrorModal";
 import { useUpdate } from "../hooks/useUpdate";
@@ -803,6 +804,7 @@ export const Settings = () => {
   const [pluginStartError, setPluginStartError] = useState<{ pluginId: string; pluginName: string; error: string } | null>(null);
   const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const [uninstallingPluginId, setUninstallingPluginId] = useState<string | null>(null);
+  const [pluginRemoveConfirm, setPluginRemoveConfirm] = useState<{ pluginId: string; pluginName: string; onConfirm: () => Promise<void> } | null>(null);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [explainPrompt, setExplainPrompt] = useState("");
   
@@ -2028,25 +2030,25 @@ export const Settings = () => {
                           {/* Remove link */}
                           {!isBuiltin && (
                             <button
-                              onClick={async () => {
-                                const confirmed = await ask(
-                                  t("settings.plugins.confirmRemove", { name: driver.name }),
-                                  { title: t("settings.plugins.removeTitle"), kind: "warning" }
-                                );
-                                if (!confirmed) return;
-                                setUninstallingPluginId(driver.id);
-                                try {
-                                  const toDisconnect = findConnectionsForDrivers(openConnectionIds, connectionDataMap, [driver.id]);
-                                  await Promise.all(toDisconnect.map(id => disconnect(id)));
-                                  await invoke("uninstall_plugin", { pluginId: driver.id });
-                                  refreshDrivers();
-                                  refreshRegistry();
-                                } catch (err) {
-                                  await message(String(err), { title: t("common.error"), kind: "error" });
-                                } finally {
-                                  setUninstallingPluginId(null);
-                                }
-                              }}
+                              onClick={() => setPluginRemoveConfirm({
+                                pluginId: driver.id,
+                                pluginName: driver.name,
+                                onConfirm: async () => {
+                                  setUninstallingPluginId(driver.id);
+                                  setPluginRemoveConfirm(null);
+                                  try {
+                                    const toDisconnect = findConnectionsForDrivers(openConnectionIds, connectionDataMap, [driver.id]);
+                                    await Promise.all(toDisconnect.map(id => disconnect(id)));
+                                    await invoke("uninstall_plugin", { pluginId: driver.id });
+                                    refreshDrivers();
+                                    refreshRegistry();
+                                  } catch (err) {
+                                    setPluginInstallError({ pluginId: driver.id, error: String(err) });
+                                  } finally {
+                                    setUninstallingPluginId(null);
+                                  }
+                                },
+                              })}
                               disabled={uninstallingPluginId === driver.id}
                               className="flex items-center gap-1 text-[11px] text-red-500/70 hover:text-red-400 disabled:opacity-50 transition-colors"
                             >
@@ -2103,24 +2105,24 @@ export const Settings = () => {
                             </button>
                             {/* Remove link */}
                             <button
-                              onClick={async () => {
-                                const confirmed = await ask(
-                                  t("settings.plugins.confirmRemove", { name: plugin.name }),
-                                  { title: t("settings.plugins.removeTitle"), kind: "warning" }
-                                );
-                                if (!confirmed) return;
-                                setUninstallingPluginId(plugin.id);
-                                try {
-                                  await invoke("uninstall_plugin", { pluginId: plugin.id });
-                                  updateSetting("activeExternalDrivers", activeExt.filter(id => id !== plugin.id));
-                                  refreshDrivers();
-                                  refreshRegistry();
-                                } catch (err) {
-                                  await message(String(err), { title: t("common.error"), kind: "error" });
-                                } finally {
-                                  setUninstallingPluginId(null);
-                                }
-                              }}
+                              onClick={() => setPluginRemoveConfirm({
+                                pluginId: plugin.id,
+                                pluginName: plugin.name,
+                                onConfirm: async () => {
+                                  setUninstallingPluginId(plugin.id);
+                                  setPluginRemoveConfirm(null);
+                                  try {
+                                    await invoke("uninstall_plugin", { pluginId: plugin.id });
+                                    updateSetting("activeExternalDrivers", activeExt.filter(id => id !== plugin.id));
+                                    refreshDrivers();
+                                    refreshRegistry();
+                                  } catch (err) {
+                                    setPluginInstallError({ pluginId: plugin.id, error: String(err) });
+                                  } finally {
+                                    setUninstallingPluginId(null);
+                                  }
+                                },
+                              })}
                               disabled={uninstallingPluginId === plugin.id}
                               className="flex items-center gap-1 text-[11px] text-red-500/70 hover:text-red-400 disabled:opacity-50 transition-colors"
                             >
@@ -2395,6 +2397,12 @@ export const Settings = () => {
         onClose={() => setPluginInstallError(null)}
         pluginId={pluginInstallError?.pluginId ?? ""}
         error={pluginInstallError?.error ?? ""}
+      />
+      <PluginRemoveModal
+        isOpen={pluginRemoveConfirm !== null}
+        onClose={() => setPluginRemoveConfirm(null)}
+        pluginName={pluginRemoveConfirm?.pluginName ?? ""}
+        onConfirm={() => pluginRemoveConfirm?.onConfirm()}
       />
       <PluginSettingsModal
         key={pluginSettingsModal?.pluginId}
