@@ -723,7 +723,6 @@ mod tests {
     use super::*;
     use crate::models::{ConnectionParams, DatabaseSelection};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-    use std::str::FromStr;
     use tempfile::NamedTempFile;
 
     async fn setup_test_db() -> (ConnectionParams, NamedTempFile) {
@@ -751,10 +750,9 @@ mod tests {
         };
 
         // Initialize DB with a table
-        // We use create_if_missing=true to ensure it works even if tempfile behavior varies
-        let url = format!("sqlite://{}", path);
-        let options = SqliteConnectOptions::from_str(&url)
-            .unwrap()
+        // Use .filename() to handle Windows paths correctly (avoids backslash issues in URLs)
+        let options = SqliteConnectOptions::new()
+            .filename(&path)
             .create_if_missing(true);
 
         let pool = SqlitePoolOptions::new()
@@ -892,7 +890,21 @@ impl DatabaseDriver for SqliteDriver {
     }
 
     fn build_connection_url(&self, params: &crate::models::ConnectionParams) -> Result<String, String> {
-        Ok(format!("sqlite://{}", params.database))
+        // Normalize path separators for URL format (Windows backslashes → forward slashes)
+        let path = params.database.to_string().replace('\\', "/");
+        // Windows absolute paths (e.g. C:/path/file) need sqlite:///C:/... (3 slashes = empty authority + abs path)
+        // Unix absolute paths already start with / so sqlite:// + /path = sqlite:///path
+        if path.len() >= 2 && path.chars().nth(1) == Some(':') {
+            Ok(format!("sqlite:///{}", path))
+        } else {
+            Ok(format!("sqlite://{}", path))
+        }
+    }
+
+    async fn test_connection(&self, params: &crate::models::ConnectionParams) -> Result<(), String> {
+        // Use pool manager directly to avoid URL formatting issues with Windows paths
+        crate::pool_manager::get_sqlite_pool(params).await?;
+        Ok(())
     }
 
     async fn get_databases(&self, params: &crate::models::ConnectionParams) -> Result<Vec<String>, String> {

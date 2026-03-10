@@ -4,7 +4,6 @@ use sqlx::{postgres::PgConnectOptions, sqlite::SqliteConnectOptions, MySql, Pool
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::str::FromStr;
 use urlencoding::encode;
 
 type PoolMap<T> = Arc<RwLock<HashMap<String, Pool<T>>>>;
@@ -64,9 +63,7 @@ fn build_postgres_connectoptions(params: &ConnectionParams) -> PgConnectOptions 
 }
 
 fn build_sqlite_connectoptions(params: &ConnectionParams) -> SqliteConnectOptions {
-    let url = format!("sqlite://{}", params.database);
-    SqliteConnectOptions::from_str(&url)
-        .unwrap_or_else(|_| SqliteConnectOptions::new().filename(params.database.to_string()))
+    SqliteConnectOptions::new().filename(params.database.to_string())
 }
 
 pub async fn get_mysql_pool(params: &ConnectionParams) -> Result<Pool<MySql>, String> {
