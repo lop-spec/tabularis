@@ -19,7 +19,7 @@ jobs:
             args: "--target aarch64-apple-darwin"
           - platform: "macos-15-intel" # for Intel
             args: "--target x86_64-apple-darwin"
-          - platform: "ubuntu-24.04"
+          - platform: "ubuntu-25.04"
             args: ""
           - platform: "windows-latest"
             args: ""
@@ -35,7 +35,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -44,7 +44,7 @@ jobs:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
 
       - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-25.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -74,15 +74,15 @@ jobs:
         uses: swatinem/rust-cache@v2.8.2
         with:
           workspaces: src-tauri
-          
+
       - name: Override tauri-cli with custom AppImage format (Linux)
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-25.04'
         run: cargo install tauri-cli --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage --force
 
       - uses: tauri-apps/tauri-action@v0.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: 'true'
+          TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: "true"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
