@@ -353,28 +353,109 @@ pre {
     margin: 1.5rem 0;
 }
 
-.btn-download {
+/* SPLIT DOWNLOAD BUTTON */
+.download-wrap {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    margin: 1.5rem 0;
+}
+
+.download-split {
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 10px;
+    overflow: visible;
+}
+
+.download-split__main {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.4rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px 0 0 10px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.download-split__main:hover {
+    background: #2563eb;
+}
+
+.download-split__main:active {
+    transform: scale(0.98);
+}
+
+.download-split__chevron {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
-    padding: 1rem;
-    background-color: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text-bright);
-    font-family: inherit;
-    font-size: inherit;
-    font-weight: 600;
-    box-shadow: var(--shadow-sm);
+    width: 2.4rem;
+    background: #2563eb;
+    color: rgba(255,255,255,0.85);
+    border: none;
+    border-left: 1px solid rgba(255,255,255,0.15);
+    border-radius: 0 10px 10px 0;
     cursor: pointer;
+    transition: background 0.15s, color 0.15s;
 }
 
-.btn-download:hover {
-    border-color: var(--accent);
-    background-color: var(--card-hover);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+.download-split__chevron:hover {
+    background: #1d4ed8;
+    color: #fff;
+}
+
+.download-split__chevron svg {
+    transition: transform 0.2s;
+}
+
+.download-split__chevron--open svg {
+    transform: rotate(180deg);
+}
+
+.download-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 100%;
+    background: var(--card-bg);
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    overflow: hidden;
+    z-index: 100;
+}
+
+.download-dropdown__item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.65rem 1.1rem;
+    background: none;
+    border: none;
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+}
+
+.download-dropdown__item:hover {
+    background: var(--card-hover);
+    color: var(--text-bright);
+}
+
+.download-dropdown__item + .download-dropdown__item {
+    border-top: 1px solid var(--border);
 }
 
 /* DOWNLOAD MODAL */
