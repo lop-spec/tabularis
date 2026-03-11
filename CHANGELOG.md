@@ -1,3 +1,24 @@
+## [0.9.8](https://github.com/debba/tabularis/compare/v0.9.7...v0.9.8) (2026-03-11)
+
+
+### Bug Fixes
+
+* **new-connection-modal:** avoid returning promise from onClick ([14f644e](https://github.com/debba/tabularis/commit/14f644e7878249b471a2cb1c48a1c25bedbb747b))
+* **new-connection-modal:** reset tab on close and UI tweaks ([7a1f2fb](https://github.com/debba/tabularis/commit/7a1f2fbeb6301c89b588a59cdeb0a8f4f739a285))
+* **sqlite:** resolve SQLITE_CANTOPEN (error code 14) on Windows ([c8e5734](https://github.com/debba/tabularis/commit/c8e5734dbdf5920294bfdf24e76c8c8ef249e163))
+* **visual-query:** replace HTML5 drag-and-drop with pointer events for ([3afee6b](https://github.com/debba/tabularis/commit/3afee6ba61188f4bdb70096927c2311c45b1c8e8))
+
+
+### Features
+
+* **download-buttons:** add split download button with platform dropdown ([542961c](https://github.com/debba/tabularis/commit/542961cf34e3b8d0723af752f6ef96242b59818e))
+* **download:** add download modal and wire up download buttons ([f2cc6ab](https://github.com/debba/tabularis/commit/f2cc6ab146ea6d3313e1e175784fce0f04667ed3))
+* **drivers:** add connection string parser and import UI ([2258ba3](https://github.com/debba/tabularis/commit/2258ba39a4c84bdf0567bd12dd3716bccd2cf096))
+* **plugins:** add hackernews plugin to registry ([6635124](https://github.com/debba/tabularis/commit/663512496c25f88c5e03c413f34e30fb8db1fc1f))
+* use ubuntu 25.04 for building linux ([5f80a89](https://github.com/debba/tabularis/commit/5f80a89d4d31564af0f9da82b189917dcab02c09))
+
+
+
 ## [0.9.7](https://github.com/debba/tabularis/compare/v0.9.6...v0.9.7) (2026-03-09)
 
 
