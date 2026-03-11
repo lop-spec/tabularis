@@ -691,7 +691,9 @@ export const NewConnectionModal = ({
                 </label>
                 <button
                   type="button"
-                  onClick={loadDatabases}
+                  onClick={() => {
+                    void loadDatabases();
+                  }}
                   disabled={
                     loadingDatabases || !formData.host || !formData.username
                   }
@@ -775,7 +777,9 @@ export const NewConnectionModal = ({
         </p>
         <button
           type="button"
-          onClick={loadDatabases}
+          onClick={() => {
+            void loadDatabases();
+          }}
           disabled={loadingDatabases || !formData.host || !formData.username}
           className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors shrink-0"
         >
