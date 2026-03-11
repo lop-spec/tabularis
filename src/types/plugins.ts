@@ -4,6 +4,14 @@ export interface DriverCapabilities {
   routines: boolean;
   file_based: boolean;
   folder_based: boolean;
+  /** Optional flag to enable/disable connection string import UI for network drivers. Defaults to true when omitted. */
+  connection_string?: boolean;
+  /** CamelCase alias accepted for plugin compatibility. */
+  connectionString?: boolean;
+  /** Optional placeholder example shown in the connection string input. */
+  connection_string_example?: string;
+  /** CamelCase alias accepted for plugin compatibility. */
+  connectionStringExample?: string;
   identifier_quote: string;
   alter_primary_key: boolean;
   // SQL generation capabilities (optional, default to '' / false when not present)

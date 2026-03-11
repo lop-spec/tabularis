@@ -4,7 +4,14 @@
   "title": "Tabularis Plugin Manifest",
   "description": "Schema for the manifest.json file required by every Tabularis database driver plugin.",
   "type": "object",
-  "required": ["id", "name", "version", "executable", "capabilities", "data_types"],
+  "required": [
+    "id",
+    "name",
+    "version",
+    "executable",
+    "capabilities",
+    "data_types"
+  ],
   "additionalProperties": false,
   "properties": {
     "id": {
@@ -46,7 +53,14 @@
     "capabilities": {
       "type": "object",
       "description": "Feature flags that control which UI elements Tabularis renders for this driver.",
-      "required": ["schemas", "views", "routines", "file_based", "identifier_quote", "alter_primary_key"],
+      "required": [
+        "schemas",
+        "views",
+        "routines",
+        "file_based",
+        "identifier_quote",
+        "alter_primary_key"
+      ],
       "additionalProperties": false,
       "properties": {
         "schemas": {
@@ -69,6 +83,26 @@
           "type": "boolean",
           "default": false,
           "description": "true for plugins that connect to a directory rather than a single file (e.g. CSV plugin). Replaces host/port fields with a folder picker."
+        },
+        "connection_string": {
+          "type": "boolean",
+          "default": true,
+          "description": "Optional capability for network drivers. Set false to hide connection string import in the UI."
+        },
+        "connectionString": {
+          "type": "boolean",
+          "default": true,
+          "description": "CamelCase alias of connection_string. Optional capability for network drivers."
+        },
+        "connection_string_example": {
+          "type": "string",
+          "default": "",
+          "description": "Optional placeholder example shown in the connection string field (e.g. \"postgres://user:pass@localhost:5432/db\")."
+        },
+        "connectionStringExample": {
+          "type": "string",
+          "default": "",
+          "description": "CamelCase alias of connection_string_example."
         },
         "identifier_quote": {
           "type": "string",
@@ -123,13 +157,16 @@
         "required": ["key", "label", "type"],
         "additionalProperties": false,
         "properties": {
-          "key":         { "type": "string" },
-          "label":       { "type": "string" },
-          "type":        { "type": "string", "enum": ["string", "boolean", "number", "select"] },
-          "default":     {},
+          "key": { "type": "string" },
+          "label": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["string", "boolean", "number", "select"]
+          },
+          "default": {},
           "description": { "type": "string" },
-          "required":    { "type": "boolean", "default": false },
-          "options":     { "type": "array", "items": { "type": "string" } }
+          "required": { "type": "boolean", "default": false },
+          "options": { "type": "array", "items": { "type": "string" } }
         }
       }
     },
@@ -138,7 +175,12 @@
       "description": "List of SQL data types supported by this driver for column creation in the UI.",
       "items": {
         "type": "object",
-        "required": ["name", "category", "requires_length", "requires_precision"],
+        "required": [
+          "name",
+          "category",
+          "requires_length",
+          "requires_precision"
+        ],
         "additionalProperties": false,
         "properties": {
           "name": {
@@ -147,7 +189,15 @@
           },
           "category": {
             "type": "string",
-            "enum": ["numeric", "string", "date", "binary", "json", "spatial", "other"],
+            "enum": [
+              "numeric",
+              "string",
+              "date",
+              "binary",
+              "json",
+              "spatial",
+              "other"
+            ],
             "description": "UI grouping category for this type."
           },
           "requires_length": {

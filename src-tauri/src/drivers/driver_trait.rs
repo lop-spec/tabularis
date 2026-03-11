@@ -26,6 +26,13 @@ pub struct DriverCapabilities {
     /// Folder-based database (e.g. CSV directory); connection points to a directory instead of a file.
     #[serde(default)]
     pub folder_based: bool,
+    /// Enables connection string import input in the connection modal.
+    /// Defaults to `true` for backward compatibility.
+    #[serde(default = "default_true", alias = "connectionString")]
+    pub connection_string: bool,
+    /// Optional placeholder example shown for connection string input.
+    #[serde(default, alias = "connectionStringExample")]
+    pub connection_string_example: String,
     /// Character used to quote identifiers (e.g. `"` for PostgreSQL, `` ` `` for MySQL).
     #[serde(default = "default_double_quote")]
     pub identifier_quote: String,

@@ -862,6 +862,8 @@ impl SqliteDriver {
                     routines: false,
                     file_based: true,
                     folder_based: false,
+                    connection_string: false,
+                    connection_string_example: String::new(),
                     identifier_quote: "\"".into(),
                     alter_primary_key: true,
                     auto_increment_keyword: "AUTOINCREMENT".into(),

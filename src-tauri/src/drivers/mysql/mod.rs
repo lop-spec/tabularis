@@ -1041,6 +1041,8 @@ impl MysqlDriver {
                     routines: true,
                     file_based: false,
                     folder_based: false,
+                    connection_string: true,
+                    connection_string_example: "mysql://user:pass@localhost:3306/db".into(),
                     identifier_quote: "`".into(),
                     alter_primary_key: true,
                     auto_increment_keyword: "AUTO_INCREMENT".into(),
