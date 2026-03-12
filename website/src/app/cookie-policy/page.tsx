@@ -91,6 +91,17 @@ export default function CookiePolicyPage() {
                   </td>
                   <td>Session only</td>
                 </tr>
+                <tr>
+                  <td>
+                    <code>_GRECAPTCHA</code>
+                  </td>
+                  <td>google.com</td>
+                  <td>
+                    Google reCAPTCHA — spam and bot protection on the{" "}
+                    <Link href="/sponsors">sponsors</Link> contact form
+                  </td>
+                  <td>6 months</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -162,10 +173,61 @@ export default function CookiePolicyPage() {
               <h3>Marketing</h3>
             </div>
             <p>
-              Marketing cookies are used to deliver relevant advertisements and
-              track campaign performance. This website does not currently use
-              any marketing cookies.
+              These cookies are set by third-party services used on this
+              website. The{" "}
+              <Link href="/sponsors">sponsors</Link> page uses{" "}
+              <a
+                href="https://www.emailchef.com"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                EmailChef
+              </a>{" "}
+              to manage sponsorship contact form submissions. By submitting the
+              form you agree to EmailChef&apos;s{" "}
+              <a
+                href="https://www.emailchef.com/privacy-policy/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Privacy Policy
+              </a>
+              .
             </p>
+            <table className="cookie-policy-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Provider</th>
+                  <th>Purpose</th>
+                  <th>Expiry</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>ec_*</code>
+                  </td>
+                  <td>emailchef.com</td>
+                  <td>
+                    Tracks form submission state and prevents duplicate
+                    submissions on the sponsors contact form
+                  </td>
+                  <td>Session</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>_ec_visitor</code>
+                  </td>
+                  <td>emailchef.com</td>
+                  <td>
+                    Identifies the visitor for EmailChef analytics and
+                    mailing list management
+                  </td>
+                  <td>1 year</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
 

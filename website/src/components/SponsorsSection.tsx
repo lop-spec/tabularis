@@ -2,117 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface SponsorFeature {
-  icon: string;
-  text: string;
-}
-
-interface SponsorOffer {
-  title: string;
-  description: string;
-}
-
-interface Sponsor {
-  id: string;
-  name: string;
-  tagline: string;
-  url: string;
-  accentColor: string;
-  highlightColor?: string;
-  ctaTextColor?: string;
-  logoImg?: string;
-  logoImgCompact?: string;
-  logoImgBg?: string;
-  logoChar?: string;
-  logoBg?: string;
-  modalDescription?: string;
-  features?: SponsorFeature[];
-  offer?: SponsorOffer;
-}
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const SPONSORS: Sponsor[] = [
-  {
-    id: "turbosmtp",
-    name: "turboSMTP",
-    tagline: "Professional SMTP relay — your emails delivered straight to the inbox, never to spam",
-    url: "https://www.serversmtp.com",
-    accentColor: "#1a6fb5",
-    logoImg: "/img/sponsors/turbosmtp.png",
-    logoImgCompact: "/img/sponsors/turbosmtp_compact.png",
-    logoImgBg: "#ffffff",
-    modalDescription:
-      "turboSMTP is a professional SMTP relay service trusted by 100,000+ businesses worldwide. Its infrastructure spans Europe, USA, Middle East and Asia, ensuring your transactional emails, notifications, and newsletters land in the inbox — not the spam folder. Built for developers who need email to just work, with real-time tracking, webhooks, and 24/7 multilingual support.",
-    features: [
-      { icon: "📬", text: "Industry-leading deliverability vs. standard providers" },
-      { icon: "🌍", text: "Global infrastructure — EU, USA, Middle East, Asia" },
-      { icon: "🔒", text: "GDPR compliant with full email authentication" },
-      { icon: "📊", text: "Real-time tracking, reporting & webhooks" },
-      { icon: "💬", text: "24/7 support via chat, ticket & phone" },
-    ],
-    offer: {
-      title: "Free account for Tabularis developers",
-      description:
-        "Every developer who joins Tabularis gets a free turboSMTP account to send emails from their own platform — reliably and without ending up in spam.",
-    },
-  },
-  {
-    id: "kilocode",
-    name: "Kilo Code",
-    tagline: "Open source AI coding agent — build, ship, and iterate faster with 500+ models",
-    url: "https://www.kilo.ai",
-    accentColor: "#f5d800",
-    ctaTextColor: "#000000",
-    logoImg: "/img/sponsors/kilocode.png",
-    logoImgCompact: "/img/sponsors/kilocode_compact.png",
-    modalDescription:
-      "Kilo Code is the most popular open source AI coding agent, running directly inside VS Code and JetBrains IDEs. It gives you access to 500+ models from any provider, supports local execution for full privacy, and never trains on your code. From quick edits to long-running cloud agents, it adapts to how you actually work — with zero telemetry by default.",
-    features: [
-      { icon: "🔓", text: "100% open source — Apache 2.0, fully inspectable" },
-      { icon: "🤖", text: "500+ models — OpenAI, Anthropic, Gemini, Ollama and more" },
-      { icon: "🔒", text: "Privacy-first — no telemetry, never trains on your code" },
-      { icon: "🧠", text: "Agentic modes: Ask, Architect, Code, Debug, Orchestrator" },
-      { icon: "⚡", text: "Works in VS Code & JetBrains with no forks required" },
-    ],
-    offer: {
-      title: "Free & open source for every developer",
-      description:
-        "Kilo Code is free to use for all Tabularis developers. Install it in your IDE, bring your own API keys at zero markup, and start shipping faster today.",
-    },
-  },
-  {
-    id: "usero",
-    name: "Usero",
-    tagline: "Feedback becomes code. Automatically.",
-    url: "https://usero.io",
-    accentColor: "#0c0c31",
-    highlightColor: "#7c3aed",
-    logoImg: "/img/sponsors/usero.png",
-    logoImgCompact: "/img/sponsors/usero_compact.png",
-    modalDescription:
-      "Usero turns user feedback into merged pull requests. Collect feedback through a lightweight widget, GitHub Issues, or API. AI clusters duplicates, prioritizes what matters, then Claude reads your codebase and opens a PR with the actual fix.",
-    features: [
-      { icon: "🧩", text: "Multiple inputs — embed widget (7.6KB), GitHub Issues, or API" },
-      { icon: "🧠", text: "AI clustering & prioritization — surfaces what matters from the noise" },
-      { icon: "⚙️", text: "AI-powered PRs — Claude reads your code and writes real fixes, not tickets" },
-      { icon: "✅", text: "96% success rate on targeted bugs (typos, broken links, UI glitches)" },
-      { icon: "🎁", text: "Free tier — 5 PRs/month, 1,000 feedback items" },
-    ],
-    offer: {
-      title: "Free for all Tabularis developers",
-      description:
-        "Connect your repo and let AI handle the bug fixes your users report. Free tier included — no credit card required.",
-    },
-  },
-];
+import { SPONSORS, type Sponsor } from "@/lib/sponsors";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function withUtm(url: string): string {
+export function withUtm(url: string): string {
   const u = new URL(url);
   u.searchParams.set("utm_source", "tabularis");
   u.searchParams.set("utm_medium", "referral");
@@ -122,7 +16,7 @@ function withUtm(url: string): string {
 
 // ─── Shared icons ─────────────────────────────────────────────────────────────
 
-function IconExternalLink({ size = 13 }: { size?: number }) {
+export function IconExternalLink({ size = 13 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -132,7 +26,7 @@ function IconExternalLink({ size = 13 }: { size?: number }) {
   );
 }
 
-function IconArrow({ size = 12 }: { size?: number }) {
+export function IconArrow({ size = 12 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M5 12h14M12 5l7 7-7 7" />
@@ -158,7 +52,7 @@ function IconStar() {
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
-function SponsorLogo({ sponsor, size, imgOverride }: { sponsor: Sponsor; size: number; imgOverride?: string }) {
+export function SponsorLogo({ sponsor, size, imgOverride }: { sponsor: Sponsor; size: number; imgOverride?: string }) {
   const containerStyle = sponsor.logoImgBg
     ? { background: sponsor.logoImgBg, borderRadius: "10px", padding: "0.4rem" }
     : undefined;
@@ -228,8 +122,8 @@ function SponsorModalBody({ sponsor }: { sponsor: Sponsor }) {
         <div
           className="sponsor-modal-offer"
           style={{
-            borderColor: `color-mix(in srgb, ${sponsor.accentColor} 40%, transparent)`,
-            background: `color-mix(in srgb, ${sponsor.accentColor} 6%, transparent)`,
+            borderColor: `color-mix(in srgb, ${sponsor.highlightColor ?? sponsor.accentColor} 40%, transparent)`,
+            background: `color-mix(in srgb, ${sponsor.highlightColor ?? sponsor.accentColor} 6%, transparent)`,
           }}
         >
           <div className="sponsor-modal-offer-title">
@@ -245,7 +139,7 @@ function SponsorModalBody({ sponsor }: { sponsor: Sponsor }) {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-function SponsorModal({ sponsor, onClose }: { sponsor: Sponsor | null; onClose: () => void }) {
+export function SponsorModal({ sponsor, onClose }: { sponsor: Sponsor | null; onClose: () => void }) {
   const open = sponsor !== null;
 
   useEffect(() => {
@@ -314,7 +208,7 @@ function SponsorModal({ sponsor, onClose }: { sponsor: Sponsor | null; onClose: 
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
-function SponsorCard({ sponsor, onLearnMore }: { sponsor: Sponsor; onLearnMore: () => void }) {
+export function SponsorCard({ sponsor, onLearnMore }: { sponsor: Sponsor; onLearnMore: () => void }) {
   return (
     <div
       className="sponsor-card"
@@ -356,7 +250,7 @@ function SponsorCard({ sponsor, onLearnMore }: { sponsor: Sponsor; onLearnMore: 
   );
 }
 
-// ─── Section ──────────────────────────────────────────────────────────────────
+// ─── Section (homepage) ───────────────────────────────────────────────────────
 
 export function SponsorsSection() {
   const [activeSponsor, setActiveSponsor] = useState<Sponsor | null>(null);
@@ -435,7 +329,7 @@ export function SponsorsSection() {
 
         <p className="sponsor-footnote">
           Interested in sponsoring Tabularis?{" "}
-          <a href="https://github.com/debba/tabularis" target="_blank" rel="noopener noreferrer">
+          <a href="/sponsors">
             Get in touch →
           </a>
         </p>
