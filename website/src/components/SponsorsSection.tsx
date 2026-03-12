@@ -21,6 +21,7 @@ interface Sponsor {
   tagline: string;
   url: string;
   accentColor: string;
+  highlightColor?: string;
   ctaTextColor?: string;
   logoImg?: string;
   logoImgCompact?: string;
@@ -89,6 +90,7 @@ const SPONSORS: Sponsor[] = [
     tagline: "Feedback becomes code. Automatically.",
     url: "https://usero.io",
     accentColor: "#0c0c31",
+    highlightColor: "#7c3aed",
     logoImg: "/img/sponsors/usero.png",
     logoImgCompact: "/img/sponsors/usero_compact.png",
     modalDescription:
@@ -270,7 +272,7 @@ function SponsorModal({ sponsor, onClose }: { sponsor: Sponsor | null; onClose: 
           role="dialog"
           aria-modal="true"
           aria-label={`About ${sponsor.name}`}
-          style={{ "--sponsor-accent": sponsor.accentColor } as React.CSSProperties}
+          style={{ "--sponsor-accent": sponsor.highlightColor ?? sponsor.accentColor } as React.CSSProperties}
         >
           <div className="sponsor-modal-header">
             <div className="sponsor-modal-brand">
@@ -316,7 +318,7 @@ function SponsorCard({ sponsor, onLearnMore }: { sponsor: Sponsor; onLearnMore: 
   return (
     <div
       className="sponsor-card"
-      style={{ "--sponsor-accent": sponsor.accentColor } as React.CSSProperties}
+      style={{ "--sponsor-accent": sponsor.highlightColor ?? sponsor.accentColor } as React.CSSProperties}
     >
       <div className="sponsor-card-glow" />
 
