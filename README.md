@@ -35,8 +35,21 @@ A lightweight, developer-focused database management tool, built with Tauri and 
 
 [![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.9.8/tabularis_0.9.8_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.9.8/tabularis_0.9.8_x64.dmg) [![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.9.8/tabularis_0.9.8_amd64.AppImage) [![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/debba/tabularis/releases/download/v0.9.8/tabularis_0.9.8_amd64.deb) [![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/debba/tabularis/releases/download/v0.9.8/tabularis-0.9.7-1.x86_64.rpm)
 
+<!-- SPONSORS:START -->
+
+## Sponsors
+
+- <img src="website/public/img/sponsors/turbosmtp_compact.png" height="28" alt="turboSMTP" /> **[turboSMTP](https://www.serversmtp.com)** — Professional SMTP relay — your emails delivered straight to the inbox, never to spam
+- <img src="website/public/img/sponsors/kilocode_compact.png" height="28" alt="Kilo Code" /> **[Kilo Code](https://www.kilo.ai)** — Open source AI coding agent — build, ship, and iterate faster with 500+ models
+- <img src="website/public/img/sponsors/usero_compact.png" height="28" alt="Usero" /> **[Usero](https://usero.io)** — Feedback becomes code. Automatically.
+
+_[Become a sponsor →](https://tabularis.dev/sponsors)_
+
+<!-- SPONSORS:END -->
+
 ## Table of Contents
 
+- [Sponsors](#sponsors)
 - [Installation](#installation)
   - [Windows](#windows)
   - [macOS](#macos)
@@ -378,17 +391,6 @@ npm run tauri build
 - [ ] [Query History](https://github.com/debba/tabularis/issues/18)
 - [ ] [Better SQLite Support](https://github.com/debba/tabularis/issues/17)
 - [ ] [Better PostgreSQL Support](https://github.com/debba/tabularis/issues/16)
-<!-- SPONSORS:START -->
-
-## Sponsors
-
-- <img src="website/public/img/sponsors/turbosmtp_compact.png" height="28" alt="turboSMTP" /> **[turboSMTP](https://www.serversmtp.com)** — Professional SMTP relay — your emails delivered straight to the inbox, never to spam
-- <img src="website/public/img/sponsors/kilocode_compact.png" height="28" alt="Kilo Code" /> **[Kilo Code](https://www.kilo.ai)** — Open source AI coding agent — build, ship, and iterate faster with 500+ models
-- <img src="website/public/img/sponsors/usero_compact.png" height="28" alt="Usero" /> **[Usero](https://usero.io)** — Feedback becomes code. Automatically.
-
-_[Become a sponsor →](https://tabularis.dev/sponsors)_
-
-<!-- SPONSORS:END -->
 
 ## License
 
