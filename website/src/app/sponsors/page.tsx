@@ -6,7 +6,20 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Sponsors | Tabularis",
-  description: "Companies supporting Tabularis development. Interested in sponsoring? Get in touch.",
+  description:
+    "Companies supporting Tabularis development. Interested in sponsoring? Get in touch.",
+  openGraph: {
+    title: "Sponsors | Tabularis",
+    description:
+      "Companies supporting Tabularis development. Interested in sponsoring? Get in touch.",
+    url: "https://tabularis.dev/sponsors",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sponsors | Tabularis",
+    description:
+      "Companies supporting Tabularis development. Interested in sponsoring? Get in touch.",
+  },
 };
 
 export default function SponsorsPage() {
