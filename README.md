@@ -378,6 +378,18 @@ npm run tauri build
 - [ ] [Query History](https://github.com/debba/tabularis/issues/18)
 - [ ] [Better SQLite Support](https://github.com/debba/tabularis/issues/17)
 - [ ] [Better PostgreSQL Support](https://github.com/debba/tabularis/issues/16)
+<!-- SPONSORS:START -->
+
+## Sponsors
+
+- <img src="website/public/img/sponsors/turbosmtp_compact.png" height="28" alt="turboSMTP" /> **[turboSMTP](https://www.serversmtp.com)** — Professional SMTP relay — your emails delivered straight to the inbox, never to spam
+- <img src="website/public/img/sponsors/kilocode_compact.png" height="28" alt="Kilo Code" /> **[Kilo Code](https://www.kilo.ai)** — Open source AI coding agent — build, ship, and iterate faster with 500+ models
+- <img src="website/public/img/sponsors/usero_compact.png" height="28" alt="Usero" /> **[Usero](https://usero.io)** — Feedback becomes code. Automatically.
+
+_[Become a sponsor →](https://tabularis.dev/sponsors)_
+
+<!-- SPONSORS:END -->
+
 ## License
 
 Apache License 2.0
