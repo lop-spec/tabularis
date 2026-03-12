@@ -25,6 +25,14 @@ try {
 
 console.log(`🔄 Syncing ${sponsors.length} sponsors...`);
 
+function withUtm(url) {
+  const u = new URL(url);
+  u.searchParams.set("utm_source", "tabularis");
+  u.searchParams.set("utm_medium", "referral");
+  u.searchParams.set("utm_campaign", "sponsor");
+  return u.toString();
+}
+
 // --- Generate SPONSORS.md ---
 const lines = [
   "# Sponsors",
@@ -44,14 +52,14 @@ for (const s of sponsors) {
     const logoPath = `website/public${s.logoImg}`;
     const bg = s.logoImgBg ? ` style="background:${s.logoImgBg};padding:6px;"` : "";
     lines.push(
-      `<a href="${s.url}" target="_blank"><img src="${logoPath}" height="40" alt="${s.name}"${bg} /></a>`,
+      `<a href="${withUtm(s.url)}" target="_blank"><img src="${logoPath}" height="40" alt="${s.name}"${bg} /></a>`,
     );
     lines.push("");
   }
 
   lines.push(`**${s.tagline}**`);
   lines.push("");
-  lines.push(`🔗 [${s.url}](${s.url})`);
+  lines.push(`🔗 [${s.url}](${withUtm(s.url)})`);
   lines.push("");
 
   if (s.features && s.features.length > 0) {
@@ -90,9 +98,9 @@ const readmeBlock = [
   ...sponsors.map((s) => {
     const logo = s.logoImgCompact ?? s.logoImg;
     const imgTag = logo
-      ? `<img src="website/public${logo}" height="28" alt="${s.name}" /> `
+      ? `<a href="${withUtm(s.url)}" target="_blank"><img src="website/public${logo}" height="28" alt="${s.name}" /></a> `
       : "";
-    return `- ${imgTag}**[${s.name}](${s.url})** — ${s.tagline}`;
+    return `- ${imgTag}**[${s.name}](${withUtm(s.url)})** — ${s.tagline}`;
   }),
   "",
   "_[Become a sponsor →](https://tabularis.dev/sponsors)_",

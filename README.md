@@ -39,9 +39,9 @@ A lightweight, developer-focused database management tool, built with Tauri and 
 
 ## Sponsors
 
-- <img src="website/public/img/sponsors/turbosmtp_compact.png" height="28" alt="turboSMTP" /> **[turboSMTP](https://www.serversmtp.com)** — Professional SMTP relay — your emails delivered straight to the inbox, never to spam
-- <img src="website/public/img/sponsors/kilocode_compact.png" height="28" alt="Kilo Code" /> **[Kilo Code](https://www.kilo.ai)** — Open source AI coding agent — build, ship, and iterate faster with 500+ models
-- <img src="website/public/img/sponsors/usero_compact.png" height="28" alt="Usero" /> **[Usero](https://usero.io)** — Feedback becomes code. Automatically.
+- <a href="https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/turbosmtp_compact.png" height="28" alt="turboSMTP" /></a> **[turboSMTP](https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Professional SMTP relay — your emails delivered straight to the inbox, never to spam
+- <a href="https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/kilocode_compact.png" height="28" alt="Kilo Code" /></a> **[Kilo Code](https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Open source AI coding agent — build, ship, and iterate faster with 500+ models
+- <a href="https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/usero_compact.png" height="28" alt="Usero" /></a> **[Usero](https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Feedback becomes code. Automatically.
 
 _[Become a sponsor →](https://tabularis.dev/sponsors)_
 
@@ -379,8 +379,8 @@ npm run tauri build
 
 ## Roadmap
 
+- [x] [[Feat]: Allow loading of multiple Databases per connection](https://github.com/debba/tabularis/issues/47)
 - [x] [Plugin System](https://github.com/debba/tabularis/issues/19)
-- [ ] [[Feat]: Allow loading of multiple Databases per connection](https://github.com/debba/tabularis/issues/47)
 - [ ] [Feature: Remote Control](https://github.com/debba/tabularis/issues/46)
 - [ ] [Command Palette](https://github.com/debba/tabularis/issues/25)
 - [ ] [JSON/JSONB Editor & Viewer](https://github.com/debba/tabularis/issues/24)
@@ -391,7 +391,6 @@ npm run tauri build
 - [ ] [Query History](https://github.com/debba/tabularis/issues/18)
 - [ ] [Better SQLite Support](https://github.com/debba/tabularis/issues/17)
 - [ ] [Better PostgreSQL Support](https://github.com/debba/tabularis/issues/16)
-
 ## License
 
 Apache License 2.0

@@ -7,11 +7,11 @@ Interested in sponsoring? [Get in touch →](https://tabularis.dev/sponsors)
 
 ## turboSMTP
 
-<a href="https://www.serversmtp.com" target="_blank"><img src="website/public/img/sponsors/turbosmtp.png" height="40" alt="turboSMTP" style="background:#ffffff;padding:6px;" /></a>
+<a href="https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/turbosmtp.png" height="40" alt="turboSMTP" style="background:#ffffff;padding:6px;" /></a>
 
 **Professional SMTP relay — your emails delivered straight to the inbox, never to spam**
 
-🔗 [https://www.serversmtp.com](https://www.serversmtp.com)
+🔗 [https://www.serversmtp.com](https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)
 
 - 📬 Industry-leading deliverability vs. standard providers
 - 🌍 Global infrastructure — EU, USA, Middle East, Asia
@@ -26,11 +26,11 @@ Interested in sponsoring? [Get in touch →](https://tabularis.dev/sponsors)
 
 ## Kilo Code
 
-<a href="https://www.kilo.ai" target="_blank"><img src="website/public/img/sponsors/kilocode.png" height="40" alt="Kilo Code" /></a>
+<a href="https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/kilocode.png" height="40" alt="Kilo Code" /></a>
 
 **Open source AI coding agent — build, ship, and iterate faster with 500+ models**
 
-🔗 [https://www.kilo.ai](https://www.kilo.ai)
+🔗 [https://www.kilo.ai](https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)
 
 - 🔓 100% open source — Apache 2.0, fully inspectable
 - 🤖 500+ models — OpenAI, Anthropic, Gemini, Ollama and more
@@ -45,11 +45,11 @@ Interested in sponsoring? [Get in touch →](https://tabularis.dev/sponsors)
 
 ## Usero
 
-<a href="https://usero.io" target="_blank"><img src="website/public/img/sponsors/usero.png" height="40" alt="Usero" /></a>
+<a href="https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/usero.png" height="40" alt="Usero" /></a>
 
 **Feedback becomes code. Automatically.**
 
-🔗 [https://usero.io](https://usero.io)
+🔗 [https://usero.io](https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)
 
 - 🧩 Multiple inputs — embed widget (7.6KB), GitHub Issues, or API
 - 🧠 AI clustering & prioritization — surfaces what matters from the noise
