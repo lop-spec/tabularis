@@ -71,6 +71,7 @@ _[Become a sponsor →](https://tabularis.dev/sponsors)_
   - [Plugin System](#plugin-system)
 - [Configuration Storage](#configuration-storage)
   - [AI Features (Optional)](#ai-features-optional)
+  - [MCP Server — AI Agent Integration](#mcp-server--ai-agent-integration)
 - [Tech Stack](#tech-stack)
 - [Development](#development)
 - [Roadmap](#roadmap)
@@ -355,7 +356,61 @@ Tabularis automatically fetches the latest available models from your configured
 - **Cache:** Model lists are cached locally for 24h to ensure fast startup.
 - **Validation:** Visual feedback if the selected model is not available for the current provider.
 
-Includes a built-in **MCP Server** (`tabularis --mcp`) to expose connections to external agents (Claude Desktop, Cursor).
+### MCP Server — AI Agent Integration
+
+Tabularis includes a built-in **MCP (Model Context Protocol) server** that lets AI agents read your database schema and execute queries directly from their chat interface.
+
+```bash
+tabularis --mcp
+```
+
+#### Supported clients
+
+| Client | One-click install | Manual config |
+|--------|------------------|---------------|
+| **Claude Desktop** | Yes (Settings → MCP) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| **Cursor** | Yes (Settings → MCP) | `~/.cursor/mcp.json` |
+| **Windsurf** | Yes (Settings → MCP) | `~/.codeium/windsurf/mcp_config.json` |
+
+#### Setup (one-click)
+
+1. Open **Settings → MCP Server Integration** in Tabularis
+2. Click **Install Config** next to your AI client
+3. Restart the client
+
+#### Manual setup
+
+Add this to your client's MCP config file:
+
+```json
+{
+  "mcpServers": {
+    "tabularis": {
+      "command": "/path/to/tabularis",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+#### Available tools
+
+Once connected, your AI agent can:
+
+| Tool | Description |
+|------|-------------|
+| `list_connections` | List all saved database connections |
+| `list_tables` | List tables in a connection (with optional schema filter) |
+| `describe_table` | Get full schema: columns, indexes, foreign keys |
+| `run_query` | Execute any SQL query and return results |
+
+#### Example prompts
+
+> "Show me all tables in my production database and describe the `orders` table"
+
+> "Write and run a query to find the top 10 customers by total order value this month"
+
+> "Check if there are any missing indexes on the `users` table"
 
 ## Tech Stack
 
