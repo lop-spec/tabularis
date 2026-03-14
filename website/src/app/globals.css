@@ -1296,6 +1296,7 @@ pre {
         gap: 1rem;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
+        padding-top: 0.5rem;
         padding-bottom: 0.5rem;
         /* break out of container padding so cards reach viewport edges */
         margin-left: -1rem;
@@ -2537,13 +2538,20 @@ pre {
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.2s ease-in-out;
+    -webkit-backdrop-filter: blur(5px);
     backdrop-filter: blur(5px);
+    overscroll-behavior: contain;
+    touch-action: pan-x;
 }
 
 .lightbox-overlay.active {
     display: flex;
-    opacity: 1;
+    animation: lightbox-fadein 0.2s ease forwards;
+}
+
+@keyframes lightbox-fadein {
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 .lightbox-img {
@@ -2557,8 +2565,8 @@ pre {
 
 .lightbox-close {
     position: absolute;
-    top: 1.5rem;
-    right: 2rem;
+    top: max(1.5rem, env(safe-area-inset-top, 1.5rem));
+    right: max(2rem, env(safe-area-inset-right, 2rem));
     color: var(--text-muted);
     font-size: 3rem;
     line-height: 1;
@@ -2566,6 +2574,8 @@ pre {
     border: none;
     cursor: pointer;
     z-index: 1001;
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .lightbox-close:hover {
@@ -2605,7 +2615,7 @@ pre {
 
 .lightbox-footer {
     position: absolute;
-    bottom: 1.5rem;
+    bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem));
     left: 50%;
     transform: translateX(-50%);
     display: flex;

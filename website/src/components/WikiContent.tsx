@@ -12,6 +12,7 @@ interface LightboxState {
 export function WikiContent({ html }: { html: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -60,6 +61,26 @@ export function WikiContent({ html }: { html: string }) {
     return () => window.removeEventListener("keydown", handleKey);
   }, [lightbox, close, prev, next]);
 
+  useEffect(() => {
+    if (!lightbox) return;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, [lightbox]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const diff = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(diff) > 50) {
+      if (diff < 0) next();
+      else prev();
+    }
+    touchStartX.current = null;
+  }, [next, prev]);
+
   return (
     <>
       <article
@@ -68,7 +89,12 @@ export function WikiContent({ html }: { html: string }) {
         dangerouslySetInnerHTML={{ __html: html }}
       />
       {lightbox && (
-        <div className="lightbox-overlay active" onClick={close}>
+        <div
+          className="lightbox-overlay active"
+          onClick={close}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           {lightbox.images.length > 1 && (
             <button
               className="lightbox-nav lightbox-prev"

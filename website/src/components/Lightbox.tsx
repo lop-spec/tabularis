@@ -14,6 +14,12 @@ export function LightboxImage({ src, alt }: { src: string; alt: string }) {
     return () => window.removeEventListener("keydown", handleKey);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
   return (
     <>
       <img
@@ -81,6 +87,12 @@ export function LightboxGallery({ items }: LightboxGalleryProps) {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [activeIndex, prev, next, close]);
+
+  useEffect(() => {
+    if (activeIndex === null) return;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, [activeIndex]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
