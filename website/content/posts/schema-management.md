@@ -1,6 +1,6 @@
 ---
 title: "Schema Management Gets Serious"
-date: "2026-01-27"
+date: "2026-01-27T12:00:00"
 release: "v0.5.0"
 tags: ["schema", "ddl", "sql", "ux"]
 excerpt: "v0.5.0 turns the sidebar into a full schema editor. Create tables, modify columns, manage indexes and foreign keys — all without writing DDL by hand."

@@ -1,6 +1,6 @@
 ---
 title: "Talk to Your Database: AI Assistant Lands in v0.8.0"
-date: "2026-01-29"
+date: "2026-01-29T12:00:00"
 release: "v0.8.0"
 tags: ["ai", "mcp", "sql", "productivity"]
 excerpt: "Sometimes you know what you want but not exactly how to write the SQL. v0.8.0 brings an AI assistant that generates queries from plain English — locally or in the cloud."

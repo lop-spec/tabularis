@@ -1,6 +1,6 @@
 ---
 title: "Smarter Filters, Close Tab, and a Better Plugin Install: v0.9.6"
-date: "2026-03-07 12:30"
+date: "2026-03-07T12:30:00"
 release: "v0.9.6"
 tags: ["release", "filters", "plugins", "ux", "bugfix"]
 excerpt: "v0.9.6 ships a structured filter toolbar with ORDER BY autocomplete, a close-tab keyboard shortcut, a cleaner plugin install error experience, and a handful of focused bug fixes."

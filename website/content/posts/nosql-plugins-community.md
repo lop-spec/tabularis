@@ -1,6 +1,6 @@
 ---
 title: "Tabularis Goes NoSQL: Redis Ships, MongoDB and ClickHouse Need You"
-date: "2026-03-07"
+date: "2026-03-07T12:00:00"
 tags: ["nosql", "plugins", "community", "redis", "open-source", "extensibility"]
 excerpt: "The plugin ecosystem is growing beyond SQL. Two Redis drivers have already shipped thanks to community contributors. Now we need experts to push DuckDB, MongoDB, and ClickHouse across the finish line."
 og:

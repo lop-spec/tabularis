@@ -1,6 +1,6 @@
 ---
 title: "Passwords in the Keychain, Queries in Three Languages"
-date: "2026-01-28"
+date: "2026-01-28T12:00:00"
 release: "v0.6.0"
 tags: ["security", "i18n", "keychain", "ux"]
 excerpt: "v0.6.0 integrates system keychain storage for credentials and ships the full UI in English, Italian, and Spanish."
