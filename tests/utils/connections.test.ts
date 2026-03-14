@@ -6,10 +6,14 @@ import {
   getDriverLabel,
   hasSSH,
   generateConnectionName,
+  connectionSubtitle,
+  hasConnectionMenuItems,
+  getCardClass,
   type ConnectionParams,
   type DatabaseDriver,
 } from '../../src/utils/connections';
 import type { DriverCapabilities } from '../../src/types/plugins';
+import type { SavedConnection, ConnectionGroup } from '../../src/contexts/DatabaseContext';
 
 const makeFileCaps = (): DriverCapabilities => ({
   schemas: false, views: false, routines: false,
@@ -429,6 +433,106 @@ describe('connections', () => {
       const result = validateConnectionParams(params, makeFileCaps());
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Driver is required');
+    });
+  });
+
+  describe('connectionSubtitle', () => {
+    const makeConn = (overrides: Partial<SavedConnection['params']> = {}): SavedConnection => ({
+      id: '1',
+      name: 'test',
+      params: { driver: 'postgres', host: 'db.host', port: 5432, database: 'mydb', ...overrides },
+    });
+
+    it('should return file path for local driver', () => {
+      const conn = makeConn({ database: '/path/to/db.sqlite' });
+      expect(connectionSubtitle(conn, makeFileCaps())).toBe('/path/to/db.sqlite');
+    });
+
+    it('should return first element when database is array and driver is local', () => {
+      const conn = makeConn({ database: ['/path/to/db.sqlite', '/path/other.sqlite'] });
+      expect(connectionSubtitle(conn, makeFileCaps())).toBe('/path/to/db.sqlite');
+    });
+
+    it('should return empty string when database array is empty and driver is local', () => {
+      const conn = makeConn({ database: [] });
+      expect(connectionSubtitle(conn, makeFileCaps())).toBe('');
+    });
+
+    it('should return host:port · db for remote driver', () => {
+      const conn = makeConn({ host: 'db.host', port: 5432, database: 'mydb' });
+      expect(connectionSubtitle(conn, makeRemoteCaps())).toBe('db.host:5432  ·  mydb');
+    });
+
+    it('should use localhost when host is undefined for remote driver', () => {
+      const conn = makeConn({ host: undefined, port: 3306, database: 'mydb' });
+      expect(connectionSubtitle(conn, makeRemoteCaps())).toBe('localhost:3306  ·  mydb');
+    });
+
+    it('should show count when database is an array for remote driver', () => {
+      const conn = makeConn({ host: 'db.host', port: 5432, database: ['db1', 'db2', 'db3'] });
+      expect(connectionSubtitle(conn, makeRemoteCaps())).toBe('db.host:5432  ·  3 databases');
+    });
+
+    it('should treat null capabilities as remote driver', () => {
+      const conn = makeConn({ host: 'db.host', port: 5432, database: 'mydb' });
+      expect(connectionSubtitle(conn, null)).toBe('db.host:5432  ·  mydb');
+    });
+  });
+
+  describe('hasConnectionMenuItems', () => {
+    const makeGroup = (id: string): ConnectionGroup => ({
+      id, name: id, collapsed: false, sort_order: 0,
+    });
+
+    it('should return false when no groups and connection is not in a group', () => {
+      expect(hasConnectionMenuItems([], undefined)).toBe(false);
+    });
+
+    it('should return true when there are groups and connection is not in any', () => {
+      expect(hasConnectionMenuItems([makeGroup('g1'), makeGroup('g2')], undefined)).toBe(true);
+    });
+
+    it('should return true when connection is in a group (can be removed)', () => {
+      expect(hasConnectionMenuItems([], 'g1')).toBe(true);
+    });
+
+    it('should return true when connection is the only group and is already in it (can be removed)', () => {
+      expect(hasConnectionMenuItems([makeGroup('g1')], 'g1')).toBe(true);
+    });
+
+    it('should return true when connection is in one group and another exists', () => {
+      expect(hasConnectionMenuItems([makeGroup('g1'), makeGroup('g2')], 'g1')).toBe(true);
+    });
+  });
+
+  describe('getCardClass', () => {
+    const isOpen = (id: string) => id === 'open-conn';
+
+    it('should return active class when connId matches activeConnectionId', () => {
+      const cls = getCardClass('conn-1', 'conn-1', isOpen);
+      expect(cls).toContain('border-blue-500/40');
+    });
+
+    it('should return open class when connection is open but not active', () => {
+      const cls = getCardClass('open-conn', 'other', isOpen);
+      expect(cls).toContain('border-green-500/35');
+    });
+
+    it('should return default class when connection is neither active nor open', () => {
+      const cls = getCardClass('closed-conn', 'other', isOpen);
+      expect(cls).toContain('border-strong');
+    });
+
+    it('should prioritize active over open when both could apply', () => {
+      const isOpenAndActive = (id: string) => id === 'conn-1';
+      const cls = getCardClass('conn-1', 'conn-1', isOpenAndActive);
+      expect(cls).toContain('border-blue-500/40');
+      expect(cls).not.toContain('border-green-500/35');
+    });
+
+    it('should return default class when activeConnectionId is null', () => {
+      const cls = getCardClass('conn-1', null, isOpen);
+      expect(cls).toContain('border-strong');
     });
   });
 

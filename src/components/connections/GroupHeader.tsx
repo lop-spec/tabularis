@@ -1,0 +1,84 @@
+import type { RefObject } from 'react';
+import { ChevronRight, Folder, FolderOpen, MoreVertical } from 'lucide-react';
+import clsx from 'clsx';
+import type { ConnectionGroup } from '../../contexts/DatabaseContext';
+
+export interface GroupHeaderProps {
+  group: ConnectionGroup;
+  connCount: number;
+  isCollapsed: boolean;
+  editingGroupId: string | null;
+  editGroupName: string;
+  isRenameCancelledRef: RefObject<boolean>;
+  onToggleCollapse: () => void;
+  onOpenContextMenu: (x: number, y: number, groupId: string) => void;
+  setEditGroupName: (name: string) => void;
+  setEditingGroupId: (id: string | null) => void;
+  onRenameConfirm: (groupId: string) => void;
+}
+
+export const GroupHeader = ({
+  group,
+  connCount,
+  isCollapsed,
+  editingGroupId,
+  editGroupName,
+  isRenameCancelledRef,
+  onToggleCollapse,
+  onOpenContextMenu,
+  setEditGroupName,
+  setEditingGroupId,
+  onRenameConfirm,
+}: GroupHeaderProps) => (
+  <div
+    className="flex items-center gap-2 group cursor-pointer"
+    onClick={onToggleCollapse}
+    onContextMenu={(e) => {
+      e.preventDefault();
+      onOpenContextMenu(e.clientX, e.clientY, group.id);
+    }}
+  >
+    <ChevronRight
+      size={14}
+      className={clsx('text-muted transition-transform', !isCollapsed && 'rotate-90')}
+    />
+    {isCollapsed ? (
+      <Folder size={16} className="text-amber-400/70" />
+    ) : (
+      <FolderOpen size={16} className="text-amber-400" />
+    )}
+    {editingGroupId === group.id ? (
+      <input
+        type="text"
+        value={editGroupName}
+        onChange={(e) => setEditGroupName(e.target.value)}
+        onBlur={() => {
+          if (!isRenameCancelledRef.current) onRenameConfirm(group.id);
+          isRenameCancelledRef.current = false;
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onRenameConfirm(group.id);
+          if (e.key === 'Escape') {
+            isRenameCancelledRef.current = true;
+            setEditingGroupId(null);
+          }
+        }}
+        onClick={(e) => e.stopPropagation()}
+        autoFocus
+        className="px-2 py-0.5 bg-elevated border border-strong rounded text-sm text-primary focus:border-amber-500/70 focus:outline-none"
+      />
+    ) : (
+      <span className="text-sm font-semibold text-primary">{group.name}</span>
+    )}
+    <span className="text-xs text-muted">({connCount})</span>
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpenContextMenu(e.clientX, e.clientY, group.id);
+      }}
+      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-surface-secondary transition-all"
+    >
+      <MoreVertical size={12} className="text-muted" />
+    </button>
+  </div>
+);

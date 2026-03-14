@@ -4,6 +4,7 @@
  */
 
 import type { DriverCapabilities } from "../types/plugins";
+import type { SavedConnection, ConnectionGroup } from "../contexts/DatabaseContext";
 import { isLocalDriver } from "./driverCapabilities";
 
 export type DatabaseDriver = string;
@@ -194,6 +195,48 @@ export function getDriverLabel(driver: DatabaseDriver): string {
  */
 export function hasSSH(params: ConnectionParams): boolean {
   return params.ssh_enabled === true;
+}
+
+/**
+ * Build the subtitle shown below a connection name (host:port · db or file path).
+ */
+export function connectionSubtitle(
+  conn: SavedConnection,
+  capabilities: DriverCapabilities | null | undefined,
+): string {
+  if (isLocalDriver(capabilities)) {
+    const db = conn.params.database;
+    return Array.isArray(db) ? db[0] ?? '' : db;
+  }
+  const db = conn.params.database;
+  const dbStr = Array.isArray(db) ? `${db.length} databases` : db;
+  return `${conn.params.host ?? 'localhost'}:${conn.params.port ?? ''}  ·  ${dbStr}`;
+}
+
+/**
+ * Returns true when a connection's context menu would have at least one item
+ * (i.e. there are groups to move to, or the connection is already in a group).
+ */
+export function hasConnectionMenuItems(
+  sortedGroups: ConnectionGroup[],
+  groupId: string | undefined,
+): boolean {
+  return sortedGroups.filter(g => g.id !== groupId).length > 0 || !!groupId;
+}
+
+/**
+ * CSS class string for a connection card/row based on its active/open state.
+ */
+export function getCardClass(
+  connId: string,
+  activeConnectionId: string | null,
+  isConnectionOpen: (id: string) => boolean,
+): string {
+  if (activeConnectionId === connId)
+    return 'border-blue-500/40 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-lg shadow-blue-500/8';
+  if (isConnectionOpen(connId))
+    return 'border-green-500/35 bg-green-500/4 ring-1 ring-green-500/15 shadow-md shadow-green-500/6';
+  return 'border-strong bg-elevated hover:border-blue-400/30 hover:bg-surface-primary hover:shadow-md hover:shadow-black/10';
 }
 
 /**
