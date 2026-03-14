@@ -1,3 +1,25 @@
+## [0.9.9](https://github.com/debba/tabularis/compare/v0.9.8...v0.9.9) (2026-03-14)
+
+
+### Bug Fixes
+
+* **connections:** show menu only when groups exist or connection grouped ([0e71482](https://github.com/debba/tabularis/commit/0e71482a83fd4553b210c8bbf6e7dedf299a6c0a))
+* **sponsors:** set dynamic to force-static for OG image ([862b49d](https://github.com/debba/tabularis/commit/862b49db50e33594aed0c87e5f95329068d5ff0f))
+* **ui:** improve connection card styling ([29d1bcc](https://github.com/debba/tabularis/commit/29d1bccc7998c5f20ecbb4619145faafcf3bd7bd))
+* **website:** constrain sponsor modal height and enable scrolling ([a8a8025](https://github.com/debba/tabularis/commit/a8a802545a7f2d4e049c7d3717c39d13b01ff1b1))
+
+
+### Features
+
+* **auth:** add validation for connection name and databases selection ([3fffa04](https://github.com/debba/tabularis/commit/3fffa047bc04db6afc599f1170167fdc00bf0683))
+* **mcp:** add MCP server docs, client icons, and UI integration ([78c22e5](https://github.com/debba/tabularis/commit/78c22e55348c6eb7f8575313c50e5dc7202f0fff))
+* **plugins:** add connection_string and connection_string_example flags ([2de0297](https://github.com/debba/tabularis/commit/2de0297cffb7f5feffd319f513445e93f34cfc29))
+* **sponsors:** add Open Graph image and page metadata ([5c5c124](https://github.com/debba/tabularis/commit/5c5c124bc51873b0adf5d76f7e746e55bd622193))
+* **sponsors:** add optional highlightColor for sponsor accents ([2139848](https://github.com/debba/tabularis/commit/2139848128a6939f03d067251cb2761ff34ee6e8))
+* **sponsors:** add sponsor sync script and generated docs ([9e82f9a](https://github.com/debba/tabularis/commit/9e82f9a943dc7d35ad30c5938dca2a71f1c6126f))
+* **sponsors:** add sponsors page, contact form, grid, and confirm page ([6b592b6](https://github.com/debba/tabularis/commit/6b592b668bf64ef22931df5d91bb1f7de97eb09e))
+* **sponsors:** add sponsors section and assets to website ([cc802fd](https://github.com/debba/tabularis/commit/cc802fded81a59920bad008d2c8c80daf259ebb6))
+
 ## [0.9.8](https://github.com/debba/tabularis/compare/v0.9.7...v0.9.8) (2026-03-11)
 
 
