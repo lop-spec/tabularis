@@ -827,81 +827,217 @@ export const Connections = () => {
               </div>
             ) : (
               /* ── List view ──────────────────────────────────────────────── */
-              <div className="flex flex-col gap-1.5">
-                {filtered.map(conn => {
-                  const isOpen = isConnectionOpen(conn.id);
-                  const isConnecting = connectingId === conn.id;
-                  const capabilities = getCapabilitiesForDriver(conn.params.driver, allDrivers);
-                  const driverManifest = allDrivers.find(d => d.id === conn.params.driver);
-                  const isDriverEnabled = drivers.some(d => d.id === conn.params.driver);
-                  const subtitle = connectionSubtitle(conn, capabilities);
-                  const driverColor = getDriverColor(driverManifest);
+              <div className="space-y-6">
+                {/* Groups */}
+                {sortedGroups.map(group => {
+                  const groupConns = filteredGroupedConnections[group.id] || [];
+                  if (groupConns.length === 0 && search.trim()) return null;
+
+                  const isCollapsed = collapsedGroups.has(group.id);
 
                   return (
-                    <div
-                      key={conn.id}
-                      onDoubleClick={() => isDriverEnabled && !isConnecting && handleConnect(conn)}
-                      className={clsx(
-                        'group flex items-center gap-3 px-3.5 py-2 rounded-xl border transition-all duration-150 cursor-pointer select-none',
-                        !isDriverEnabled && 'opacity-60 cursor-not-allowed',
-                        isConnecting && 'pointer-events-none',
-                        cardClass(conn),
-                      )}
-                    >
-                      {/* Driver icon */}
+                    <div key={group.id} className="space-y-2">
+                      {/* Group header — identical to grid view */}
                       <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm"
-                        style={{ backgroundColor: driverColor }}
+                        className="flex items-center gap-2 group cursor-pointer"
+                        onClick={() => void handleToggleGroupCollapsed(group.id)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setGroupContextMenu({ x: e.clientX, y: e.clientY, groupId: group.id });
+                        }}
                       >
-                        {getDriverIcon(driverManifest, 14)}
-                      </div>
-
-                      {/* Name + subtitle stacked */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-primary truncate leading-snug">
-                          {conn.name}
-                        </p>
-                        <p className="text-[11px] text-muted truncate leading-snug mt-0.5">
-                          {subtitle}
-                        </p>
-                      </div>
-
-                      {/* Badges — visible on hover or when status is set */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <StatusBadge conn={conn} />
-                        <span className="text-[10px] font-semibold text-secondary bg-surface-secondary border border-strong/40 px-1.5 py-0.5 rounded-md capitalize">
-                          {conn.params.driver}
-                        </span>
-                        {conn.params.ssh_enabled && (
-                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-md">
-                            <Shield size={8} /> SSH
-                          </span>
-                        )}
-                        {!isDriverEnabled && (
-                          <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded-md">
-                            <PlugZap size={8} /> {t('connections.pluginDisabled')}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Actions — always visible */}
-                      <div className="flex items-center gap-0.5 shrink-0 pl-1 border-l border-default/50">
-                        <ActionButtons
-                          conn={conn}
-                          isOpen={isOpen}
-                          isDriverEnabled={isDriverEnabled}
-                          onConnect={() => handleConnect(conn)}
-                          onDisconnect={() => handleDisconnect(conn.id)}
-                          onEdit={() => void openEdit(conn)}
-                          onDuplicate={() => handleDuplicate(conn.id)}
-                          onDelete={() => handleDelete(conn.id)}
+                        <ChevronRight
+                          size={14}
+                          className={clsx('text-muted transition-transform', !isCollapsed && 'rotate-90')}
                         />
+                        {isCollapsed ? (
+                          <Folder size={16} className="text-amber-400/70" />
+                        ) : (
+                          <FolderOpen size={16} className="text-amber-400" />
+                        )}
+                        {editingGroupId === group.id ? (
+                          <input
+                            type="text"
+                            value={editGroupName}
+                            onChange={(e) => setEditGroupName(e.target.value)}
+                            onBlur={() => {
+                              if (!isRenameCancelledRef.current) void handleRenameGroup(group.id);
+                              isRenameCancelledRef.current = false;
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') void handleRenameGroup(group.id);
+                              if (e.key === 'Escape') {
+                                isRenameCancelledRef.current = true;
+                                setEditingGroupId(null);
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                            className="px-2 py-0.5 bg-elevated border border-strong rounded text-sm text-primary focus:border-amber-500/70 focus:outline-none"
+                          />
+                        ) : (
+                          <span className="text-sm font-semibold text-primary">{group.name}</span>
+                        )}
+                        <span className="text-xs text-muted">({groupConns.length})</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setGroupContextMenu({ x: e.clientX, y: e.clientY, groupId: group.id });
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-surface-secondary transition-all"
+                        >
+                          <MoreVertical size={12} className="text-muted" />
+                        </button>
                       </div>
+
+                      {/* Group connections in list format */}
+                      {!isCollapsed && (
+                        <div className="flex flex-col gap-1.5 pl-6">
+                          {groupConns.map(conn => {
+                            const isOpen = isConnectionOpen(conn.id);
+                            const isConnecting = connectingId === conn.id;
+                            const capabilities = getCapabilitiesForDriver(conn.params.driver, allDrivers);
+                            const driverManifest = allDrivers.find(d => d.id === conn.params.driver);
+                            const isDriverEnabled = drivers.some(d => d.id === conn.params.driver);
+                            const subtitle = connectionSubtitle(conn, capabilities);
+                            const driverColor = getDriverColor(driverManifest);
+
+                            return (
+                              <div
+                                key={conn.id}
+                                onDoubleClick={() => isDriverEnabled && !isConnecting && handleConnect(conn)}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  const hasItems = sortedGroups.filter(g => g.id !== conn.group_id).length > 0 || !!conn.group_id;
+                                  if (!hasItems) return;
+                                  setConnectionContextMenu({ x: e.clientX, y: e.clientY, connId: conn.id });
+                                }}
+                                className={clsx(
+                                  'group flex items-center gap-3 px-3.5 py-2 rounded-xl border transition-all duration-150 cursor-pointer select-none',
+                                  !isDriverEnabled && 'opacity-60 cursor-not-allowed',
+                                  isConnecting && 'pointer-events-none',
+                                  cardClass(conn),
+                                )}
+                              >
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm" style={{ backgroundColor: driverColor }}>
+                                  {getDriverIcon(driverManifest, 14)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm text-primary truncate leading-snug">{conn.name}</p>
+                                  <p className="text-[11px] text-muted truncate leading-snug mt-0.5">{subtitle}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <StatusBadge conn={conn} />
+                                  <span className="text-[10px] font-semibold text-secondary bg-surface-secondary border border-strong/40 px-1.5 py-0.5 rounded-md capitalize">{conn.params.driver}</span>
+                                  {conn.params.ssh_enabled && (
+                                    <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-md">
+                                      <Shield size={8} /> SSH
+                                    </span>
+                                  )}
+                                  {!isDriverEnabled && (
+                                    <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded-md">
+                                      <PlugZap size={8} /> {t('connections.pluginDisabled')}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-0.5 shrink-0 pl-1 border-l border-default/50">
+                                  <ActionButtons
+                                    conn={conn}
+                                    isOpen={isOpen}
+                                    isDriverEnabled={isDriverEnabled}
+                                    onConnect={() => handleConnect(conn)}
+                                    onDisconnect={() => handleDisconnect(conn.id)}
+                                    onEdit={() => void openEdit(conn)}
+                                    onDuplicate={() => handleDuplicate(conn.id)}
+                                    onDelete={() => handleDelete(conn.id)}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
 
-                {filtered.length === 0 && search && (
+                {/* Ungrouped connections */}
+                {filteredUngroupedConnections.length > 0 && (
+                  <div className="space-y-2">
+                    {sortedGroups.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-muted">{t('groups.ungrouped')}</span>
+                        <span className="text-xs text-muted">({filteredUngroupedConnections.length})</span>
+                      </div>
+                    )}
+                    <div className={clsx('flex flex-col gap-1.5', sortedGroups.length > 0 && 'pl-6')}>
+                      {filteredUngroupedConnections.map(conn => {
+                        const isOpen = isConnectionOpen(conn.id);
+                        const isConnecting = connectingId === conn.id;
+                        const capabilities = getCapabilitiesForDriver(conn.params.driver, allDrivers);
+                        const driverManifest = allDrivers.find(d => d.id === conn.params.driver);
+                        const isDriverEnabled = drivers.some(d => d.id === conn.params.driver);
+                        const subtitle = connectionSubtitle(conn, capabilities);
+                        const driverColor = getDriverColor(driverManifest);
+
+                        return (
+                          <div
+                            key={conn.id}
+                            onDoubleClick={() => isDriverEnabled && !isConnecting && handleConnect(conn)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              const hasItems = sortedGroups.filter(g => g.id !== conn.group_id).length > 0 || !!conn.group_id;
+                              if (!hasItems) return;
+                              setConnectionContextMenu({ x: e.clientX, y: e.clientY, connId: conn.id });
+                            }}
+                            className={clsx(
+                              'group flex items-center gap-3 px-3.5 py-2 rounded-xl border transition-all duration-150 cursor-pointer select-none',
+                              !isDriverEnabled && 'opacity-60 cursor-not-allowed',
+                              isConnecting && 'pointer-events-none',
+                              cardClass(conn),
+                            )}
+                          >
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm" style={{ backgroundColor: driverColor }}>
+                              {getDriverIcon(driverManifest, 14)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm text-primary truncate leading-snug">{conn.name}</p>
+                              <p className="text-[11px] text-muted truncate leading-snug mt-0.5">{subtitle}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <StatusBadge conn={conn} />
+                              <span className="text-[10px] font-semibold text-secondary bg-surface-secondary border border-strong/40 px-1.5 py-0.5 rounded-md capitalize">{conn.params.driver}</span>
+                              {conn.params.ssh_enabled && (
+                                <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-md">
+                                  <Shield size={8} /> SSH
+                                </span>
+                              )}
+                              {!isDriverEnabled && (
+                                <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded-md">
+                                  <PlugZap size={8} /> {t('connections.pluginDisabled')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-0.5 shrink-0 pl-1 border-l border-default/50">
+                              <ActionButtons
+                                conn={conn}
+                                isOpen={isOpen}
+                                isDriverEnabled={isDriverEnabled}
+                                onConnect={() => handleConnect(conn)}
+                                onDisconnect={() => handleDisconnect(conn.id)}
+                                onEdit={() => void openEdit(conn)}
+                                onDuplicate={() => handleDuplicate(conn.id)}
+                                onDelete={() => handleDelete(conn.id)}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {Object.keys(filteredGroupedConnections).length === 0 && filteredUngroupedConnections.length === 0 && search && (
                   <div className="text-center py-12 text-sm text-muted">
                     {t('connections.noSearchResults', { query: search })}
                   </div>
