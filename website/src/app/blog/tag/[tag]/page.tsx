@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { GitHubIcon, DiscordIcon } from "@/components/Icons";
 import { PostCard } from "@/components/PostCard";
+import { TagFilter } from "@/components/TagFilter";
 import { getAllTags, getPostsByTag } from "@/lib/posts";
 
 export function generateStaticParams() {
@@ -29,6 +30,7 @@ export default async function TagPage({
 }) {
   const { tag } = await params;
   const posts = getPostsByTag(tag);
+  const allTags = getAllTags();
 
   if (!posts.length) notFound();
 
@@ -42,12 +44,11 @@ export default async function TagPage({
       />
 
       <section>
-        <div className="tag-page-header">
-          <span className="tag-page-label">
-            {posts.length} {posts.length === 1 ? "post" : "posts"} tagged
-          </span>
-          <span className="post-tag tag-page-tag">{tag}</span>
-        </div>
+        <TagFilter tags={allTags} activeTag={tag} />
+
+        <p className="tag-page-count">
+          {posts.length} {posts.length === 1 ? "post" : "posts"}
+        </p>
 
         <div className="post-list">
           {posts.map((p) => (
