@@ -1,12 +1,12 @@
 ---
 title: "MCP Server"
 order: 9
-excerpt: "Use Tabularis as an MCP server to let Claude Desktop, Cursor, and other AI agents query your local databases."
+excerpt: "Use Tabularis as an MCP server to let Claude Desktop, Claude Code, Cursor, Windsurf, Antigravity, and other AI agents query your local databases."
 ---
 
 # MCP Server
 
-Tabularis includes a built-in **Model Context Protocol (MCP)** server. Once configured, external AI assistants like **Claude Desktop** or **Cursor** can list your saved connections, read database schemas, and run SQL queries — all without leaving their chat interface.
+Tabularis includes a built-in **Model Context Protocol (MCP)** server. Once configured, external AI assistants — including **Claude Desktop**, **Claude Code**, **Cursor**, **Windsurf**, and **Antigravity** — can list your saved connections, read database schemas, and run SQL queries, all without leaving their chat interface.
 
 ## How It Works
 
@@ -19,27 +19,32 @@ Tabularis exposes:
 
 No network port is opened. All communication happens locally via the process's stdio pipe.
 
-## Quick Setup (Claude Desktop)
+## Quick Setup (One-Click Install)
 
-The fastest way to configure the integration is directly from Tabularis:
+Starting with v0.9.9, Tabularis detects all supported AI clients automatically and lets you install the MCP configuration in a single click:
 
-1. Open **Settings → AI** (or **Settings → MCP**).
-2. Click **Install for Claude Desktop**.
-3. Tabularis automatically writes the required entry to Claude's config file and shows a confirmation.
+1. Open **Settings → MCP** (or click the plug icon in the sidebar).
+2. The **MCP Server Integration** panel lists every detected AI client alongside the resolved path to its config file.
+3. Click **Install Config** next to the client you want to connect. Tabularis writes (or patches) the required `mcpServers` entry directly into that config file.
+4. Restart the target AI client. It will immediately see Tabularis as an available MCP server.
 
-To verify: open Claude Desktop, start a new conversation, and ask it to list your databases. It will use the `tabularis://connections` resource automatically.
+### Supported AI Clients
+
+| Client | Config file (Linux) |
+|--------|---------------------|
+| **Claude Desktop** | `~/.config/Claude/claude_desktop_config.json` |
+| **Claude Code** | `~/.claude.json` |
+| **Cursor** | `~/.cursor/mcp.json` |
+| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` |
+| **Antigravity** | `~/.gemini/antigravity/mcp_config.json` |
+
+On macOS and Windows the paths are resolved automatically to their platform equivalents.
 
 ## Manual Configuration
 
-If you prefer to configure it manually, add the following block to your Claude Desktop config file:
+If you prefer to configure it manually, the **Manual Configuration** section at the bottom of the integration panel shows the exact JSON block to paste, with the correct binary path pre-filled for your system.
 
-**Config file locations:**
-
-| Platform | Path |
-|----------|------|
-| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Linux | `~/.config/Claude/claude_desktop_config.json` |
+The block to add looks like:
 
 ```json
 {
@@ -52,7 +57,15 @@ If you prefer to configure it manually, add the following block to your Claude D
 }
 ```
 
-Replace `/path/to/tabularis` with the actual path to the Tabularis binary on your system. After saving the file, restart Claude Desktop.
+**Config file locations by platform:**
+
+| Platform | Claude Desktop | Claude Code |
+|----------|---------------|-------------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` | `~/.claude.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` | `%USERPROFILE%\.claude.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` | `~/.claude.json` |
+
+Replace `/path/to/tabularis` with the actual path to the Tabularis binary on your system. After saving the file, restart the AI client.
 
 ## Resources
 
@@ -97,10 +110,15 @@ Executes a SQL query on a specific connection and returns the results.
 
 **Returns:** query results as JSON with `columns`, `rows`, `total_count`, and `execution_time_ms`.
 
-**Example prompt to Claude:**
-> "Show me the last 5 orders from my Production PG database"
+**Example prompts:**
 
-Claude will call `run_query` with `connection_id: "Production PG"` and an appropriate `SELECT` statement.
+> "List all tables in my Production PG database."
+
+> "Show me the last 10 orders placed today, joining `orders` with `customers`."
+
+> "Which indexes are missing on the `events` table in my analytics database?"
+
+Claude (or any connected AI) will call `run_query` with the appropriate `connection_id` and SQL statement, then format the results into a readable answer.
 
 ## Security Considerations
 
@@ -112,13 +130,17 @@ Claude will call `run_query` with `connection_id: "Production PG"` and an approp
 
 ## Troubleshooting
 
-**Claude Desktop doesn't see Tabularis as a server**
-- Verify the path in `claude_desktop_config.json` points to the correct Tabularis binary.
-- Restart Claude Desktop after editing the config file.
+**The AI client doesn't see Tabularis as a server**
+- Verify the path in the config file points to the correct Tabularis binary.
+- Restart the AI client after editing the config file.
 - Check that the binary is executable (`chmod +x tabularis` on Linux/macOS).
+- Use the **Install Config** button in Tabularis to let it write the correct path automatically.
 
 **`run_query` returns "Connection not found"**
 - The `connection_id` must match a name or UUID in your saved connections. Use the `tabularis://connections` resource to list available IDs.
 
-**No resources appear in Claude**
+**No resources appear in the AI client**
 - Tabularis reads connections from `connections.json` at the standard app data path. If you haven't saved any connections yet, the resource list will be empty.
+
+**The Install Config button is greyed out**
+- The config file for that client does not exist yet. Start the AI client at least once so it creates its config directory, then try again.

@@ -81,6 +81,11 @@ const GALLERY_ITEMS = [
     alt: "Task Manager",
     caption: "Task Manager",
   },
+  {
+    src: "/img/screenshot-11.png",
+    alt: "MCP Server Integration",
+    caption: "MCP Server Integration",
+  },
 ];
 
 const THEMES = [
