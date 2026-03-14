@@ -161,6 +161,10 @@ export const NewConnectionModal = ({
     null,
   );
 
+  // ── validation errors ──
+  const [nameError, setNameError] = useState(false);
+  const [databasesTabError, setDatabasesTabError] = useState(false);
+
   // ── capabilities ──
   const noConnectionRequired =
     activeDriver?.capabilities?.no_connection_required === true;
@@ -267,6 +271,8 @@ export const NewConnectionModal = ({
       setDbSearchQuery("");
       setConnectionString("");
       setConnectionStringError(null);
+      setNameError(false);
+      setDatabasesTabError(false);
 
       if (initialConnection) {
         setName(initialConnection.name);
@@ -342,6 +348,8 @@ export const NewConnectionModal = ({
     setActiveTab("general");
     setConnectionString("");
     setConnectionStringError(null);
+    setNameError(false);
+    setDatabasesTabError(false);
   };
 
   const testConnection = async () => {
@@ -396,6 +404,7 @@ export const NewConnectionModal = ({
       setStatus("error");
       setMessage(t("newConnection.nameRequired"));
       setTestResult("error");
+      setNameError(true);
       return;
     }
     if (isMultiDb) {
@@ -403,6 +412,8 @@ export const NewConnectionModal = ({
         setStatus("error");
         setMessage(t("newConnection.noDatabasesSelected"));
         setTestResult("error");
+        setActiveTab("databases");
+        setDatabasesTabError(true);
         return;
       }
     } else if (
@@ -829,6 +840,7 @@ export const NewConnectionModal = ({
                   setSelectedDatabasesState((prev) =>
                     Array.from(new Set([...prev, ...filteredDbs])),
                   );
+                  if (databasesTabError) setDatabasesTabError(false);
                 }
               }}
               className="text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap shrink-0"
@@ -852,11 +864,12 @@ export const NewConnectionModal = ({
                 return (
                   <div
                     key={db}
-                    onClick={() =>
+                    onClick={() => {
                       setSelectedDatabasesState((prev) =>
                         sel ? prev.filter((d) => d !== db) : [...prev, db],
-                      )
-                    }
+                      );
+                      if (databasesTabError && !sel) setDatabasesTabError(false);
+                    }}
                     className={clsx(
                       "flex items-center gap-2 px-2.5 py-1.5 cursor-pointer text-sm transition-colors hover:bg-surface-secondary select-none",
                       sel ? "text-primary" : "text-muted",
@@ -1092,14 +1105,22 @@ export const NewConnectionModal = ({
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (nameError) setNameError(false);
+            }}
             placeholder={t("newConnection.namePlaceholder")}
             autoFocus
             autoCorrect="off"
             autoCapitalize="off"
             autoComplete="off"
             spellCheck={false}
-            className="flex-1 bg-transparent text-base font-semibold text-primary placeholder:text-muted/50 outline-none"
+            className={clsx(
+              "flex-1 bg-transparent text-base font-semibold outline-none",
+              nameError
+                ? "text-red-400 placeholder:text-red-400/60"
+                : "text-primary placeholder:text-muted/50",
+            )}
           />
           <span className="text-xs text-muted bg-surface-secondary px-2 py-0.5 rounded-full font-medium capitalize">
             {activeDriver?.name ?? driver}
@@ -1207,6 +1228,11 @@ export const NewConnectionModal = ({
                       <span className="ml-1.5 text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">
                         {selectedDatabasesState.length}
                       </span>
+                    )}
+                  {tab.id === "databases" &&
+                    databasesTabError &&
+                    selectedDatabasesState.length === 0 && (
+                      <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
                     )}
                 </button>
               ))}
