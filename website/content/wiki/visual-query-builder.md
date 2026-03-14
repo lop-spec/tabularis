@@ -8,6 +8,8 @@ excerpt: "Construct complex SQL queries visually by dragging tables and drawing 
 
 Not every query needs to be handwritten. For exploring data, generating reporting views, or learning SQL structures, the **Visual Query Builder** provides an intuitive, drag-and-drop canvas for generating robust SQL statements.
 
+![Visual Query Builder](/img/screenshot-5.png)
+
 ## Workflow: Point, Click, Query
 
 1. **Canvas Setup**: Open a new Query Builder tab. Drag tables from the left sidebar directly onto the infinite canvas.

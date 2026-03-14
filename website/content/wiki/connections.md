@@ -8,6 +8,8 @@ excerpt: "Learn how to manage your database connections securely with SSH tunnel
 
 Tabularis stores connection profiles as JSON (non-sensitive fields) and delegates all secrets to the OS keychain — Keychain Access on macOS, Windows Credential Manager on Windows, and libsecret (GNOME Keyring / KWallet) on Linux.
 
+![Connection Manager](/img/screenshot-1.png)
+
 ## Supported Drivers
 
 The following drivers are registered at startup and available natively, with no plugin required:

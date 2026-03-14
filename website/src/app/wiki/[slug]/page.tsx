@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { GitHubIcon, DiscordIcon } from "@/components/Icons";
 import { ShareButton } from "@/components/ShareButton";
 import { getAllWikiPages, getWikiPageBySlug, getAdjacentWikiPages } from "@/lib/wiki";
+import { WikiContent } from "@/components/WikiContent";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -68,10 +69,7 @@ export default async function WikiPageDetail({ params }: PageProps) {
         crumbs={[{ label: "wiki", href: "/wiki" }, { label: crumbTitle }]}
       />
 
-      <article
-        className="post-content"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      <WikiContent html={html} />
 
       <div className="wiki-edit-link-container">
         <a 

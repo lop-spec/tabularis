@@ -4,7 +4,6 @@ import path from "path";
 import { marked } from "@/lib/markdown";
 import { Footer } from "@/components/Footer";
 import { DiscordIcon } from "@/components/Icons";
-import { LightboxGallery } from "@/components/Lightbox";
 import { getAllPosts } from "@/lib/posts";
 import { PostCard } from "@/components/PostCard";
 import { APP_VERSION } from "@/lib/version";
@@ -13,6 +12,8 @@ import { getAllPlugins } from "@/lib/plugins";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DownloadButtons } from "@/components/DownloadButtons";
 import { SponsorsSection } from "@/components/SponsorsSection";
+import { LightboxImage } from "@/components/Lightbox";
+import { CarouselGrid } from "@/components/CarouselGrid";
 
 const GITHUB_EDIT_HOME_URL =
   "https://github.com/debba/tabularis/edit/main/website/content/home.md";
@@ -37,56 +38,6 @@ function getHomeContent() {
 
   return sections;
 }
-
-const GALLERY_ITEMS = [
-  {
-    src: "/img/screenshot-1.png",
-    alt: "Connection Manager",
-    caption: "Connection Manager",
-  },
-  {
-    src: "/img/screenshot-2.png",
-    alt: "SQL Editor",
-    caption: "Data Grid & Editor",
-  },
-  {
-    src: "/img/screenshot-3.png",
-    alt: "Table Wizard",
-    caption: "Schema Creation Wizard",
-  },
-  {
-    src: "/img/screenshot-4.png",
-    alt: "New Connection",
-    caption: "Connection Setup",
-  },
-  { src: "/img/screenshot-8.png", alt: "AI Settings", caption: "AI Settings" },
-  {
-    src: "/img/screenshot-6.png",
-    alt: "ER Diagram",
-    caption: "ER Diagram Viewer",
-  },
-  {
-    src: "/img/screenshot-7.png",
-    alt: "Theme System",
-    caption: "Theme System & Settings",
-  },
-  {
-    src: "/img/screenshot-5.png",
-    alt: "Visual Query Builder",
-    caption: "Visual Query Builder",
-  },
-  { src: "/img/screenshot-9.png", alt: "Plugins", caption: "Plugins" },
-  {
-    src: "/img/screenshot-10.png",
-    alt: "Task Manager",
-    caption: "Task Manager",
-  },
-  {
-    src: "/img/screenshot-11.png",
-    alt: "MCP Server Integration",
-    caption: "MCP Server Integration",
-  },
-];
 
 const THEMES = [
   {
@@ -279,40 +230,121 @@ export default function HomePage() {
       {/* CAPABILITIES */}
       <section className="section">
         <h2>_capabilities</h2>
-        <div className="features-grid">
-          <article className="feature-card">
-            <h3>🔌 Multi-Database</h3>
-            <p>
-              First-class support for <strong>PostgreSQL</strong> (with
-              multi-schema support), <strong>MySQL/MariaDB</strong>, and{" "}
-              <strong>SQLite</strong>. Manage multiple connection profiles with
-              secure local persistence.
-            </p>
+        <CarouselGrid className="features-grid">
+          <article className="feature-card has-screenshot">
+            <div className="feature-card-screenshot">
+              <LightboxImage src="/img/screenshot-1.png" alt="Connection Manager" />
+            </div>
+            <div className="feature-card-body">
+              <h3>🔌 Multi-Database</h3>
+              <p>
+                First-class support for <strong>PostgreSQL</strong> (with
+                multi-schema support), <strong>MySQL/MariaDB</strong>, and{" "}
+                <strong>SQLite</strong>. Manage multiple connection profiles with
+                secure local persistence.
+              </p>
+              <Link href="/wiki/connections" className="feature-card-link">Learn More →</Link>
+            </div>
           </article>
-          <article className="feature-card">
-            <h3>🤖 AI Assistance (Experimental)</h3>
-            <p>
-              Generate SQL from natural language (&quot;Show me active
-              users&quot;) and get explanations for complex queries. Securely
-              integrated with OpenAI, Anthropic, OpenRouter, and{" "}
-              <strong>Ollama (Local LLM)</strong> for total privacy.
-            </p>
+          <article className="feature-card has-screenshot">
+            <div className="feature-card-screenshot">
+              <LightboxImage src="/img/screenshot-8.png" alt="AI Assistant" />
+            </div>
+            <div className="feature-card-body">
+              <h3>🤖 AI Assistance (Experimental)</h3>
+              <p>
+                Generate SQL from natural language (&quot;Show me active
+                users&quot;) and get explanations for complex queries. Securely
+                integrated with OpenAI, Anthropic, OpenRouter, and{" "}
+                <strong>Ollama (Local LLM)</strong> for total privacy.
+              </p>
+              <Link href="/wiki/ai-assistant" className="feature-card-link">Learn More →</Link>
+            </div>
           </article>
-          <article className="feature-card">
-            <h3>🔌 MCP Server</h3>
-            <p>
-              Built-in <strong>Model Context Protocol</strong> support. Expose
-              your database schemas and run queries directly from Claude or
-              other MCP-compatible AI agents.
-            </p>
+          <article className="feature-card has-screenshot">
+            <div className="feature-card-screenshot">
+              <LightboxImage src="/img/screenshot-11.png" alt="MCP Server Integration" />
+            </div>
+            <div className="feature-card-body">
+              <h3>🔌 MCP Server</h3>
+              <p>
+                Built-in <strong>Model Context Protocol</strong> support. Expose
+                your database schemas and run queries directly from Claude or
+                other MCP-compatible AI agents.
+              </p>
+              <Link href="/wiki/mcp-server" className="feature-card-link">Learn More →</Link>
+            </div>
           </article>
-          <article className="feature-card">
-            <h3>🎨 Visual Query Builder</h3>
-            <p>
-              Construct complex queries visually. Drag tables, connect columns
-              for JOINs, and let the tool write the SQL for you. Includes
-              aggregate functions and advanced filtering.
-            </p>
+          <article className="feature-card has-screenshot">
+            <div className="feature-card-screenshot">
+              <LightboxImage src="/img/screenshot-5.png" alt="Visual Query Builder" />
+            </div>
+            <div className="feature-card-body">
+              <h3>🎨 Visual Query Builder</h3>
+              <p>
+                Construct complex queries visually. Drag tables, connect columns
+                for JOINs, and let the tool write the SQL for you. Includes
+                aggregate functions and advanced filtering.
+              </p>
+              <Link href="/wiki/visual-query-builder" className="feature-card-link">Learn More →</Link>
+            </div>
+          </article>
+          <article className="feature-card has-screenshot">
+            <div className="feature-card-screenshot">
+              <LightboxImage src="/img/screenshot-2.png" alt="SQL Editor" />
+            </div>
+            <div className="feature-card-body">
+              <h3>📝 Modern SQL Editor</h3>
+              <p>
+                Monaco-based editor with syntax highlighting, multiple tabs, and
+                DataGrip-style execution (run selected, run all).
+              </p>
+              <Link href="/wiki/editor" className="feature-card-link">Learn More →</Link>
+            </div>
+          </article>
+          <article className="feature-card has-screenshot">
+            <div className="feature-card-screenshot">
+              <LightboxImage src="/img/screenshot-6.png" alt="ER Diagram" />
+            </div>
+            <div className="feature-card-body">
+              <h3>🗄️ Schema Management</h3>
+              <p>
+                <strong>Inline editing</strong> of table and column properties
+                directly from the sidebar. GUI wizards to Create Tables, Modify
+                Columns, and Manage Indexes/Foreign Keys. Visualize your database
+                structure with an interactive <strong>ER Diagram</strong>.
+              </p>
+              <Link href="/wiki/schema-management" className="feature-card-link">Learn More →</Link>
+            </div>
+          </article>
+          <article className="feature-card has-screenshot">
+            <div className="feature-card-screenshot">
+              <LightboxImage src="/img/screenshot-10.png" alt="Task Manager" />
+            </div>
+            <div className="feature-card-body">
+              <h3>📈 Task Manager</h3>
+              <p>
+                Monitor <strong>plugin processes</strong> in real time. Track CPU,
+                RAM and disk usage for each plugin, inspect child processes, and
+                force-kill or restart any plugin directly from the built-in Task
+                Manager window.
+              </p>
+              <Link href="/wiki/task-manager" className="feature-card-link">Learn More →</Link>
+            </div>
+          </article>
+          <article className="feature-card has-screenshot">
+            <div className="feature-card-screenshot">
+              <LightboxImage src="/img/screenshot-3.png" alt="Data Grid" />
+            </div>
+            <div className="feature-card-body">
+              <h3>📊 Data Grid</h3>
+              <p>
+                Inline editing, row deletion, and easy data entry. Copy selected
+                rows to the clipboard, or export results to JSON or CSV with a
+                single click.
+              </p>
+              <Link href="/wiki/data-grid" className="feature-card-link">Learn More →</Link>
+            </div>
           </article>
           <article className="feature-card">
             <h3>🔒 SSH Tunneling &amp; Security</h3>
@@ -322,13 +354,7 @@ export default function HomePage() {
               Passwords and API Keys are stored securely in your system&apos;s
               Keychain.
             </p>
-          </article>
-          <article className="feature-card">
-            <h3>📝 Modern SQL Editor</h3>
-            <p>
-              Monaco-based editor with syntax highlighting, multiple tabs, and
-              DataGrip-style execution (run selected, run all).
-            </p>
+            <Link href="/wiki/connections" className="feature-card-link">Learn More →</Link>
           </article>
           <article className="feature-card">
             <h3>🪟 Split View</h3>
@@ -338,15 +364,7 @@ export default function HomePage() {
               the sidebar context menu and compare results across databases side
               by side.
             </p>
-          </article>
-          <article className="feature-card">
-            <h3>🗄️ Schema Management</h3>
-            <p>
-              <strong>Inline editing</strong> of table and column properties
-              directly from the sidebar. GUI wizards to Create Tables, Modify
-              Columns, and Manage Indexes/Foreign Keys. Visualize your database
-              structure with an interactive <strong>ER Diagram</strong>.
-            </p>
+            <Link href="/wiki/split-view" className="feature-card-link">Learn More →</Link>
           </article>
           <article className="feature-card">
             <h3>📦 SQL Dump &amp; Import</h3>
@@ -354,14 +372,7 @@ export default function HomePage() {
               Export full database dumps and re-import SQL with a guided flow,
               making migrations and backups fast and safe.
             </p>
-          </article>
-          <article className="feature-card">
-            <h3>📊 Data Grid</h3>
-            <p>
-              Inline editing, row deletion, and easy data entry. Copy selected
-              rows to the clipboard, or export results to JSON or CSV with a
-              single click.
-            </p>
+            <Link href="/wiki/dump-import" className="feature-card-link">Learn More →</Link>
           </article>
           <article className="feature-card">
             <h3>🔄 Seamless Updates</h3>
@@ -372,16 +383,7 @@ export default function HomePage() {
               or download the latest release from GitHub.
             </p>
           </article>
-          <article className="feature-card">
-            <h3>📈 Task Manager</h3>
-            <p>
-              Monitor <strong>plugin processes</strong> in real time. Track CPU,
-              RAM and disk usage for each plugin, inspect child processes, and
-              force-kill or restart any plugin directly from the built-in Task
-              Manager window.
-            </p>
-          </article>
-        </div>
+        </CarouselGrid>
       </section>
 
       {/* PLUGINS */}
@@ -570,12 +572,6 @@ export default function HomePage() {
             View all posts →
           </Link>
         </p>
-      </section>
-
-      {/* GALLERY */}
-      <section className="section">
-        <h2>_gallery</h2>
-        <LightboxGallery items={GALLERY_ITEMS} />
       </section>
 
       {/* COMMUNITY */}

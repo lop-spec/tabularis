@@ -2,6 +2,43 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 
+export function LightboxImage({ src, alt }: { src: string; alt: string }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [open]);
+
+  return (
+    <>
+      <img
+        src={src}
+        alt={alt}
+        onClick={() => setOpen(true)}
+        style={{ cursor: "zoom-in", display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+      />
+      {open && (
+        <div className="lightbox-overlay active" onClick={() => setOpen(false)}>
+          <img
+            src={src}
+            alt={alt}
+            className="lightbox-img"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button className="lightbox-close" onClick={() => setOpen(false)}>
+            &times;
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 interface GalleryItem {
   src: string;
   alt: string;

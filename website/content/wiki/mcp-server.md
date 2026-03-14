@@ -8,6 +8,8 @@ excerpt: "Use Tabularis as an MCP server to let Claude Desktop, Claude Code, Cur
 
 Tabularis includes a built-in **Model Context Protocol (MCP)** server. Once configured, external AI assistants — including **Claude Desktop**, **Claude Code**, **Cursor**, **Windsurf**, and **Antigravity** — can list your saved connections, read database schemas, and run SQL queries, all without leaving their chat interface.
 
+![MCP Server Integration](/img/screenshot-11.png)
+
 ## How It Works
 
 Tabularis exposes an MCP server by running its own executable in a special `--mcp` mode. The MCP host (e.g. Claude Desktop) spawns the Tabularis binary as a child process and communicates over `stdin`/`stdout` using **JSON-RPC 2.0**, following the [MCP specification](https://modelcontextprotocol.io).
