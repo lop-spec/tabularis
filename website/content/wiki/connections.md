@@ -64,6 +64,8 @@ Click **Test** before saving. Tabularis makes a real connection attempt and retu
 
 ## SSH Tunnel System
 
+![SSH Connections](/img/screenshot-15.png)
+
 Tabularis has a full SSH tunneling implementation in Rust with two backends, selected automatically based on your auth method.
 
 ### Two backends

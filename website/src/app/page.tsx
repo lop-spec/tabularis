@@ -11,8 +11,8 @@ import { getAllPlugins } from "@/lib/plugins";
 
 import { SiteHeader } from "@/components/SiteHeader";
 import { DownloadButtons } from "@/components/DownloadButtons";
-import { SponsorsSection } from "@/components/SponsorsSection";
-import { LightboxImage } from "@/components/Lightbox";
+import { SponsorsSection, IconExternalLink, IconArrow } from "@/components/SponsorsSection";
+import { ExpandableText } from "@/components/ExpandableText";
 import { CarouselGrid } from "@/components/CarouselGrid";
 
 const GITHUB_EDIT_HOME_URL =
@@ -232,156 +232,285 @@ export default function HomePage() {
         <h2>_capabilities</h2>
         <CarouselGrid className="features-grid">
           <article className="feature-card has-screenshot">
-            <div className="feature-card-screenshot">
-              <LightboxImage src="/img/screenshot-1.png" alt="Connection Manager" />
-            </div>
+            <Link href="/wiki/connections" className="feature-card-screenshot">
+              <img src="/img/screenshot-1.png" alt="Connection Manager" />
+            </Link>
             <div className="feature-card-body">
-              <h3>🔌 Multi-Database</h3>
-              <p>
+              <div className="feature-card-header">
+                <h3>🔌 Multi-Database</h3>
+                <Link href="/wiki/connections" className="sponsor-external-link" aria-label="Learn more about Multi-Database">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
                 First-class support for <strong>PostgreSQL</strong> (with
                 multi-schema support), <strong>MySQL/MariaDB</strong>, and{" "}
                 <strong>SQLite</strong>. Manage multiple connection profiles with
                 secure local persistence.
-              </p>
-              <Link href="/wiki/connections" className="feature-card-link">Learn More →</Link>
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/connections" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
             </div>
           </article>
           <article className="feature-card has-screenshot">
-            <div className="feature-card-screenshot">
-              <LightboxImage src="/img/screenshot-8.png" alt="AI Assistant" />
-            </div>
+            <Link href="/wiki/ai-assistant" className="feature-card-screenshot">
+              <img src="/img/screenshot-8.png" alt="AI Assistant" />
+            </Link>
             <div className="feature-card-body">
-              <h3>🤖 AI Assistance (Experimental)</h3>
-              <p>
+              <div className="feature-card-header">
+                <h3>🤖 AI Assistance (Experimental)</h3>
+                <Link href="/wiki/ai-assistant" className="sponsor-external-link" aria-label="Learn more about AI Assistance">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
                 Generate SQL from natural language (&quot;Show me active
                 users&quot;) and get explanations for complex queries. Securely
                 integrated with OpenAI, Anthropic, OpenRouter, and{" "}
                 <strong>Ollama (Local LLM)</strong> for total privacy.
-              </p>
-              <Link href="/wiki/ai-assistant" className="feature-card-link">Learn More →</Link>
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/ai-assistant" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
             </div>
           </article>
           <article className="feature-card has-screenshot">
-            <div className="feature-card-screenshot">
-              <LightboxImage src="/img/screenshot-11.png" alt="MCP Server Integration" />
-            </div>
+            <Link href="/wiki/mcp-server" className="feature-card-screenshot">
+              <img src="/img/screenshot-11.png" alt="MCP Server Integration" />
+            </Link>
             <div className="feature-card-body">
-              <h3>🔌 MCP Server</h3>
-              <p>
+              <div className="feature-card-header">
+                <h3>🔌 MCP Server</h3>
+                <Link href="/wiki/mcp-server" className="sponsor-external-link" aria-label="Learn more about MCP Server">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
                 Built-in <strong>Model Context Protocol</strong> support. Expose
                 your database schemas and run queries directly from Claude or
                 other MCP-compatible AI agents.
-              </p>
-              <Link href="/wiki/mcp-server" className="feature-card-link">Learn More →</Link>
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/mcp-server" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
             </div>
           </article>
           <article className="feature-card has-screenshot">
-            <div className="feature-card-screenshot">
-              <LightboxImage src="/img/screenshot-5.png" alt="Visual Query Builder" />
-            </div>
+            <Link href="/wiki/visual-query-builder" className="feature-card-screenshot">
+              <img src="/img/screenshot-5.png" alt="Visual Query Builder" />
+            </Link>
             <div className="feature-card-body">
-              <h3>🎨 Visual Query Builder</h3>
-              <p>
+              <div className="feature-card-header">
+                <h3>🎨 Visual Query Builder</h3>
+                <Link href="/wiki/visual-query-builder" className="sponsor-external-link" aria-label="Learn more about Visual Query Builder">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
                 Construct complex queries visually. Drag tables, connect columns
                 for JOINs, and let the tool write the SQL for you. Includes
                 aggregate functions and advanced filtering.
-              </p>
-              <Link href="/wiki/visual-query-builder" className="feature-card-link">Learn More →</Link>
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/visual-query-builder" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
             </div>
           </article>
           <article className="feature-card has-screenshot">
-            <div className="feature-card-screenshot">
-              <LightboxImage src="/img/screenshot-2.png" alt="SQL Editor" />
-            </div>
+            <Link href="/wiki/editor" className="feature-card-screenshot">
+              <img src="/img/screenshot-2.png" alt="SQL Editor" />
+            </Link>
             <div className="feature-card-body">
-              <h3>📝 Modern SQL Editor</h3>
-              <p>
+              <div className="feature-card-header">
+                <h3>📝 Modern SQL Editor</h3>
+                <Link href="/wiki/editor" className="sponsor-external-link" aria-label="Learn more about SQL Editor">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
                 Monaco-based editor with syntax highlighting, multiple tabs, and
                 DataGrip-style execution (run selected, run all).
-              </p>
-              <Link href="/wiki/editor" className="feature-card-link">Learn More →</Link>
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/editor" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
             </div>
           </article>
           <article className="feature-card has-screenshot">
-            <div className="feature-card-screenshot">
-              <LightboxImage src="/img/screenshot-6.png" alt="ER Diagram" />
-            </div>
+            <Link href="/wiki/schema-management" className="feature-card-screenshot">
+              <img src="/img/screenshot-6.png" alt="ER Diagram" />
+            </Link>
             <div className="feature-card-body">
-              <h3>🗄️ Schema Management</h3>
-              <p>
+              <div className="feature-card-header">
+                <h3>🗄️ Schema Management</h3>
+                <Link href="/wiki/schema-management" className="sponsor-external-link" aria-label="Learn more about Schema Management">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
                 <strong>Inline editing</strong> of table and column properties
                 directly from the sidebar. GUI wizards to Create Tables, Modify
                 Columns, and Manage Indexes/Foreign Keys. Visualize your database
                 structure with an interactive <strong>ER Diagram</strong>.
-              </p>
-              <Link href="/wiki/schema-management" className="feature-card-link">Learn More →</Link>
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/schema-management" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
             </div>
           </article>
           <article className="feature-card has-screenshot">
-            <div className="feature-card-screenshot">
-              <LightboxImage src="/img/screenshot-10.png" alt="Task Manager" />
-            </div>
+            <Link href="/wiki/task-manager" className="feature-card-screenshot">
+              <img src="/img/screenshot-10.png" alt="Task Manager" />
+            </Link>
             <div className="feature-card-body">
-              <h3>📈 Task Manager</h3>
-              <p>
+              <div className="feature-card-header">
+                <h3>📈 Task Manager</h3>
+                <Link href="/wiki/task-manager" className="sponsor-external-link" aria-label="Learn more about Task Manager">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
                 Monitor <strong>plugin processes</strong> in real time. Track CPU,
                 RAM and disk usage for each plugin, inspect child processes, and
                 force-kill or restart any plugin directly from the built-in Task
                 Manager window.
-              </p>
-              <Link href="/wiki/task-manager" className="feature-card-link">Learn More →</Link>
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/task-manager" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
             </div>
           </article>
           <article className="feature-card has-screenshot">
-            <div className="feature-card-screenshot">
-              <LightboxImage src="/img/screenshot-3.png" alt="Data Grid" />
-            </div>
+            <Link href="/wiki/data-grid" className="feature-card-screenshot">
+              <img src="/img/screenshot-2.png" alt="Data Grid" />
+            </Link>
             <div className="feature-card-body">
-              <h3>📊 Data Grid</h3>
-              <p>
+              <div className="feature-card-header">
+                <h3>📊 Data Grid</h3>
+                <Link href="/wiki/data-grid" className="sponsor-external-link" aria-label="Learn more about Data Grid">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
                 Inline editing, row deletion, and easy data entry. Copy selected
                 rows to the clipboard, or export results to JSON or CSV with a
                 single click.
-              </p>
-              <Link href="/wiki/data-grid" className="feature-card-link">Learn More →</Link>
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/data-grid" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
             </div>
           </article>
-          <article className="feature-card">
-            <h3>🔒 SSH Tunneling &amp; Security</h3>
-            <p>
-              Connect to remote databases securely through SSH tunnels and
-              manage SSH connections right from the connection manager.
-              Passwords and API Keys are stored securely in your system&apos;s
-              Keychain.
-            </p>
-            <Link href="/wiki/connections" className="feature-card-link">Learn More →</Link>
+          <article className="feature-card has-screenshot">
+            <Link href="/wiki/connections" className="feature-card-screenshot">
+              <img src="/img/screenshot-15.png" alt="SSH Tunneling & Security" />
+            </Link>
+            <div className="feature-card-body">
+              <div className="feature-card-header">
+                <h3>🔒 SSH Tunneling &amp; Security</h3>
+                <Link href="/wiki/connections" className="sponsor-external-link" aria-label="Learn more about SSH Tunneling">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
+                Connect to remote databases securely through SSH tunnels and
+                manage SSH connections right from the connection manager.
+                Passwords and API Keys are stored securely in your system&apos;s
+                Keychain.
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/connections" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
+            </div>
           </article>
-          <article className="feature-card">
-            <h3>🪟 Split View</h3>
-            <p>
-              Work with <strong>multiple connections simultaneously</strong> in
-              a resizable split-pane layout. Open any connection directly from
-              the sidebar context menu and compare results across databases side
-              by side.
-            </p>
-            <Link href="/wiki/split-view" className="feature-card-link">Learn More →</Link>
+          <article className="feature-card has-screenshot">
+            <Link href="/wiki/split-view" className="feature-card-screenshot">
+              <img src="/img/screenshot-12.png" alt="Split View" />
+            </Link>
+            <div className="feature-card-body">
+              <div className="feature-card-header">
+                <h3>🪟 Split View</h3>
+                <Link href="/wiki/split-view" className="sponsor-external-link" aria-label="Learn more about Split View">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
+                Work with <strong>multiple connections simultaneously</strong> in
+                a resizable split-pane layout. Open any connection directly from
+                the sidebar context menu and compare results across databases side
+                by side.
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/split-view" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
+            </div>
           </article>
-          <article className="feature-card">
-            <h3>📦 SQL Dump &amp; Import</h3>
-            <p>
-              Export full database dumps and re-import SQL with a guided flow,
-              making migrations and backups fast and safe.
-            </p>
-            <Link href="/wiki/dump-import" className="feature-card-link">Learn More →</Link>
+          <article className="feature-card has-screenshot">
+            <Link href="/wiki/dump-import" className="feature-card-screenshot">
+              <img src="/img/screenshot-13.png" alt="SQL Dump & Import" />
+            </Link>
+            <div className="feature-card-body">
+              <div className="feature-card-header">
+                <h3>📦 SQL Dump &amp; Import</h3>
+                <Link href="/wiki/dump-import" className="sponsor-external-link" aria-label="Learn more about SQL Dump & Import">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
+                Export full database dumps and re-import SQL with a guided flow,
+                making migrations and backups fast and safe.
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/dump-import" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
+            </div>
           </article>
-          <article className="feature-card">
-            <h3>🔄 Seamless Updates</h3>
-            <p>
-              <strong>Automatic:</strong> Tabularis checks for updates on
-              startup and notifies you when a new version is available.{" "}
-              <strong>Manual:</strong> You can always check for updates manually
-              or download the latest release from GitHub.
-            </p>
+          <article className="feature-card has-screenshot">
+            <Link href="/wiki/updates" className="feature-card-screenshot">
+              <img src="/img/screenshot-14.png" alt="Seamless Updates" />
+            </Link>
+            <div className="feature-card-body">
+              <div className="feature-card-header">
+                <h3>🔄 Seamless Updates</h3>
+                <Link href="/wiki/updates" className="sponsor-external-link" aria-label="Learn more about Updates">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
+                <strong>Automatic:</strong> Tabularis checks for updates on
+                startup and notifies you when a new version is available.{" "}
+                <strong>Manual:</strong> You can always check for updates manually
+                or download the latest release from GitHub.
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/updates" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
+            </div>
           </article>
         </CarouselGrid>
       </section>
