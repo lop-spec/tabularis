@@ -3610,6 +3610,265 @@ footer {
 }
 
 /* =====================================================
+   DOWNLOAD PAGE
+   ===================================================== */
+
+.dl-page {
+    padding-top: 2.5rem;
+    padding-bottom: 3rem;
+}
+
+.dl-page-hero {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+}
+
+.dl-page-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    flex-shrink: 0;
+}
+
+.dl-page-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.dl-page-version {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    font-family: var(--font-mono);
+    line-height: 1;
+}
+
+.dl-page-submeta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+}
+
+.dl-page-sep {
+    opacity: 0.4;
+}
+
+.dl-page-changelog-link {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.dl-page-changelog-link:hover {
+    text-decoration: underline;
+}
+
+/* Three-column grid for platforms */
+.dli-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.dli-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.dli-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.dli-platform-icon {
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+}
+
+.dli-platform-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-bright);
+}
+
+.dli-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.dli-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-bright);
+    text-decoration: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dli-option:hover {
+    border-color: var(--accent);
+    background: var(--card-hover);
+}
+
+.dli-option--command {
+    cursor: default;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.dli-option--command:hover {
+    border-color: var(--border-bright);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.dli-option-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.dli-option-label {
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.dli-option-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.dli-option-ext {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.12rem 0.4rem;
+}
+
+.dli-cmd-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.dli-cmd {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 5px;
+    padding: 0.2rem 0.5rem;
+    user-select: all;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dli-copy-btn {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem 0.35rem;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.dli-copy-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.dli-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    padding: 0.6rem 0.75rem;
+    background: rgba(245, 158, 11, 0.06);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 7px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.dli-note svg {
+    color: var(--warning);
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.dli-note code {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-bright);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
+    padding: 0.1rem 0.3rem;
+}
+
+.dl-page-footer-links {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+.dl-page-footer-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+
+.dl-page-footer-links a:hover {
+    color: var(--accent);
+}
+
+@media (max-width: 720px) {
+    .dli-grid {
+        grid-template-columns: 1fr;
+    }
+    .dl-page-hero {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+}
+
+/* =====================================================
    CHANGELOG PAGE
    ===================================================== */
 

@@ -1,121 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { APP_VERSION } from "@/lib/version";
+import { PLATFORM_CONFIG } from "@/lib/downloadConfig";
 
-export type Platform = "windows" | "macos" | "linux";
-
-const BASE = `https://github.com/debba/tabularis/releases/download/v${APP_VERSION}`;
-
-type FileOption = { kind: "file"; label: string; desc: string; ext: string; url: string };
-type CommandOption = { kind: "command"; label: string; desc: string; command: string };
-type Option = FileOption | CommandOption;
-type Note = { text: string; command?: string };
-
-const PLATFORM_CONFIG: Record<
-  Platform,
-  {
-    label: string;
-    options: Option[];
-    note?: Note;
-  }
-> = {
-  windows: {
-    label: "Windows",
-    options: [
-      {
-        kind: "command",
-        label: "WinGet",
-        desc: "Recommended — installs and auto-updates",
-        command: "winget install Debba.Tabularis",
-      },
-      {
-        kind: "file",
-        label: "Installer",
-        desc: "Direct download",
-        ext: ".exe",
-        url: `${BASE}/tabularis_${APP_VERSION}_x64-setup.exe`,
-      },
-      {
-        kind: "file",
-        label: "MSI Package",
-        desc: "Enterprise / group policy deployment",
-        ext: ".msi",
-        url: `${BASE}/tabularis_${APP_VERSION}_x64_en-US.msi`,
-      },
-    ],
-  },
-  macos: {
-    label: "macOS",
-    options: [
-      {
-        kind: "command",
-        label: "Homebrew",
-        desc: "Recommended — installs and auto-updates",
-        command: "brew install --cask tabularis",
-      },
-      {
-        kind: "file",
-        label: "Apple Silicon",
-        desc: "M1 / M2 / M3 / M4 (aarch64)",
-        ext: ".dmg",
-        url: `${BASE}/tabularis_${APP_VERSION}_aarch64.dmg`,
-      },
-      {
-        kind: "file",
-        label: "Intel",
-        desc: "x86_64",
-        ext: ".dmg",
-        url: `${BASE}/tabularis_${APP_VERSION}_x64.dmg`,
-      },
-    ],
-    note: {
-      text: "If macOS blocks the app after a direct download, run:",
-      command: "xattr -c /Applications/tabularis.app",
-    },
-  },
-  linux: {
-    label: "Linux",
-    options: [
-      {
-        kind: "command",
-        label: "Snap",
-        desc: "Ubuntu, Debian and Snap-enabled distros",
-        command: "snap install tabularis",
-      },
-      {
-        kind: "command",
-        label: "AUR",
-        desc: "Arch Linux / Manjaro",
-        command: "yay -S tabularis-bin",
-      },
-      {
-        kind: "file",
-        label: "AppImage",
-        desc: "Universal — no installation needed",
-        ext: ".AppImage",
-        url: `${BASE}/tabularis_${APP_VERSION}_amd64.AppImage`,
-      },
-      {
-        kind: "file",
-        label: "Debian / Ubuntu",
-        desc: "apt-based distros",
-        ext: ".deb",
-        url: `${BASE}/tabularis_${APP_VERSION}_amd64.deb`,
-      },
-      {
-        kind: "file",
-        label: "Fedora / RHEL",
-        desc: "rpm-based distros",
-        ext: ".rpm",
-        url: `${BASE}/tabularis-${APP_VERSION}-1.x86_64.rpm`,
-      },
-    ],
-  },
-};
+export type { Platform } from "@/lib/downloadConfig";
 
 interface DownloadModalProps {
-  platform: Platform | null;
+  platform: import("@/lib/downloadConfig").Platform | null;
   onClose: () => void;
 }
 

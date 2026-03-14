@@ -725,23 +725,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* INSTALLATION */}
-      <section className="section" id="download">
-        <h2>_installation</h2>
-
-        <div className="post-content">
-          <h3>Direct Download</h3>
-          <p>Get the pre-compiled binaries for your operating system.</p>
-        </div>
-
-        <DownloadButtons />
-
-        <div
-          className="post-content"
-          dangerouslySetInnerHTML={{ __html: home.installation || "" }}
-        />
-      </section>
-
       <Footer />
     </div>
   );

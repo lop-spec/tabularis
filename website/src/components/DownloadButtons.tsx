@@ -12,12 +12,6 @@ function detectPlatform(): Platform {
   return "windows";
 }
 
-function scrollTo(id: string) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.scrollIntoView({ behavior: "smooth", block: "start" });
-  window.history.pushState(null, "", `#${id}`);
-}
 
 const PLATFORM_LABELS: Record<Platform, string> = {
   windows: "Windows",
@@ -109,11 +103,10 @@ export function DownloadButtons({ showInstallLink = false }: { showInstallLink?:
       <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.75rem", display: "flex", gap: "1.25rem", flexWrap: "wrap" }}>
         {showInstallLink && (
           <a
-            href="#download"
-            onClick={(e) => { e.preventDefault(); scrollTo("download"); }}
+            href="/download"
             style={{ color: "var(--text-muted)", textDecoration: "none" }}
           >
-            Homebrew, Snap, AUR and more ↓
+            Homebrew, Snap, AUR and more →
           </a>
         )}
         <a
