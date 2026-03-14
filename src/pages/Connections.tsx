@@ -674,6 +674,8 @@ export const Connections = () => {
                                 onDoubleClick={() => isDriverEnabled && !isConnecting && handleConnect(conn)}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
+                                  const hasItems = sortedGroups.filter(g => g.id !== conn.group_id).length > 0 || !!conn.group_id;
+                                  if (!hasItems) return;
                                   setConnectionContextMenu({ x: e.clientX, y: e.clientY, connId: conn.id });
                                 }}
                                 className={clsx(
@@ -759,6 +761,8 @@ export const Connections = () => {
                             onDoubleClick={() => isDriverEnabled && !isConnecting && handleConnect(conn)}
                             onContextMenu={(e) => {
                               e.preventDefault();
+                              const hasItems = sortedGroups.filter(g => g.id !== conn.group_id).length > 0 || !!conn.group_id;
+                              if (!hasItems) return;
                               setConnectionContextMenu({ x: e.clientX, y: e.clientY, connId: conn.id });
                             }}
                             className={clsx(
