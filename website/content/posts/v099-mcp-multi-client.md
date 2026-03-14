@@ -1,6 +1,6 @@
 ---
 title: "MCP Multi-Client Support and Connection Improvements: v0.9.9"
-date: "2026-03-14 10:39"
+date: "2026-03-14 10:39:00"
 release: "v0.9.9"
 tags: ["release", "mcp", "connections", "ux"]
 excerpt: "v0.9.9 brings a major MCP upgrade: one-click install for Claude Desktop, Claude Code, Cursor, Windsurf, and Antigravity — plus connection UI polish and input validation."
