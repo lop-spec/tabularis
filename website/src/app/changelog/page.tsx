@@ -85,7 +85,7 @@ function VersionCard({ v }: { v: ChangelogVersion }) {
                   {entry.scope && (
                     <span className="cl-scope">{entry.scope}</span>
                   )}
-                  <span className="cl-entry-desc">{entry.description}</span>
+                  <span className="cl-entry-desc" dangerouslySetInnerHTML={{ __html: entry.description }} />
                   {entry.commitHash && entry.commitUrl && (
                     <a
                       href={entry.commitUrl}
@@ -115,7 +115,6 @@ export default function ChangelogPage() {
 
       <section className="cl-page">
         <div className="cl-page-header">
-          <h1 className="cl-page-title">Changelog</h1>
           <p className="cl-page-subtitle">
             Every release, documented. Source of truth is{" "}
             <a

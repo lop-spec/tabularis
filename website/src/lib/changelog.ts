@@ -33,12 +33,17 @@ function sectionType(title: string): SectionType {
   return "other";
 }
 
+function boldToHtml(text: string): string {
+  return text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
 function parseEntry(line: string): ChangelogEntry | null {
-  const match = line.match(/^\*\s+(?:\*\*([^*]+)\*\*:\s+)?(.+)$/);
+  // Handles both **scope:** (colon inside bold) and **scope**: (colon outside)
+  const match = line.match(/^\*\s+(?:\*\*([^*:]+):\*\*\s+|\*\*([^*]+)\*\*:\s+)?(.+)$/);
   if (!match) return null;
 
-  const scope = match[1]?.trim();
-  let description = match[2].trim();
+  const scope = (match[1] ?? match[2])?.trim();
+  let description = match[3].trim();
 
   let commitHash: string | undefined;
   let commitUrl: string | undefined;
@@ -57,7 +62,7 @@ function parseEntry(line: string): ChangelogEntry | null {
     .replace(/\(\s*\)$/, "")
     .trim();
 
-  return { description, scope, commitHash, commitUrl };
+  return { description: boldToHtml(description), scope, commitHash, commitUrl };
 }
 
 export function getChangelog(): ChangelogVersion[] {

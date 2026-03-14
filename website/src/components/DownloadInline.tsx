@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PLATFORM_CONFIG, ALL_PLATFORMS } from "@/lib/downloadConfig";
 import type { Platform } from "@/lib/downloadConfig";
 
@@ -22,6 +22,14 @@ const PLATFORM_ICONS: Record<Platform, React.ReactNode> = {
     </svg>
   ),
 };
+
+function detectPlatform(): Platform {
+  if (typeof navigator === "undefined") return "windows";
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes("mac")) return "macos";
+  if (ua.includes("linux")) return "linux";
+  return "windows";
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -50,15 +58,27 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function DownloadInline() {
+  const [detected, setDetected] = useState<Platform | null>(null);
+
+  useEffect(() => {
+    setDetected(detectPlatform());
+  }, []);
+
+  const orderedPlatforms = detected
+    ? [detected, ...ALL_PLATFORMS.filter((p) => p !== detected)]
+    : ALL_PLATFORMS;
+
   return (
     <div className="dli-grid">
-      {ALL_PLATFORMS.map((platform) => {
+      {orderedPlatforms.map((platform) => {
         const config = PLATFORM_CONFIG[platform];
+        const isDetected = platform === detected;
         return (
-          <div key={platform} className="dli-card">
+          <div key={platform} className={`dli-card${isDetected ? " dli-card--detected" : ""}`}>
             <div className="dli-card-header">
               <span className="dli-platform-icon">{PLATFORM_ICONS[platform]}</span>
               <h3 className="dli-platform-name">{config.label}</h3>
+              {isDetected && <span className="dli-detected-badge">Your OS</span>}
             </div>
 
             <div className="dli-options">

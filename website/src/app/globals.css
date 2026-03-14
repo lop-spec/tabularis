@@ -3674,6 +3674,7 @@ footer {
     grid-template-columns: repeat(3, 1fr);
     gap: 1.25rem;
     margin-bottom: 2rem;
+    align-items: stretch;
 }
 
 .dli-card {
@@ -3684,6 +3685,24 @@ footer {
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
+    height: 100%;
+}
+
+.dli-card--detected {
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.dli-detected-badge {
+    margin-left: auto;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .dli-card-header {
@@ -3698,12 +3717,20 @@ footer {
     color: var(--text-muted);
     display: flex;
     align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 0;
+}
+
+.dli-platform-icon svg {
+    display: block;
 }
 
 .dli-platform-name {
     font-size: 0.95rem;
     font-weight: 700;
     color: var(--text-bright);
+    margin-bottom: 0;
 }
 
 .dli-options {
@@ -3935,9 +3962,8 @@ footer {
 
 .cl-version-title-row {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 0.6rem;
-    flex-wrap: wrap;
 }
 
 .cl-version-title {
@@ -3945,6 +3971,7 @@ footer {
     font-weight: 700;
     color: var(--text-bright);
     font-family: var(--font-mono);
+    margin: 0;
 }
 
 .cl-version-date {
@@ -4088,14 +4115,53 @@ footer {
 }
 
 @media (max-width: 600px) {
-    .cl-section {
-        flex-direction: column;
-        gap: 0.4rem;
+    .cl-version-card {
+        padding: 0.9rem 1rem;
     }
 
     .cl-version-header {
         flex-direction: column;
         align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .cl-section {
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    /* Entry: scope + hash on first line, description on second */
+    .cl-entry {
+        flex-direction: column;
+        gap: 0.15rem;
+        align-items: flex-start;
+    }
+
+    .cl-entry-desc {
+        flex: unset;
+        width: 100%;
+        padding-left: 0;
+    }
+
+    /* Move hash inline after scope on the same row */
+    .cl-entry {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas:
+            "scope desc hash";
+        align-items: baseline;
+        column-gap: 0.4rem;
+        row-gap: 0;
+    }
+
+    .cl-scope      { grid-area: scope; }
+    .cl-entry-desc { grid-area: desc; flex: unset; }
+    .cl-commit-hash { grid-area: hash; font-size: 0.65rem; }
+
+    /* Entries without scope: desc spans full width */
+    .cl-entry:not(:has(.cl-scope)) {
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "desc hash";
     }
 }
 
