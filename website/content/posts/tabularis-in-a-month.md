@@ -1,6 +1,6 @@
 ---
 title: "One Month In — and We're Just Getting Started"
-date: "2026-02-25T12:57"
+date: "2026-02-25T12:57:00"
 tags: ["community", "milestone", "open-source"]
 excerpt: "Tabularis was born on the night of January 25th. Today marks exactly one month. Here's what we built together — and what comes next."
 og:

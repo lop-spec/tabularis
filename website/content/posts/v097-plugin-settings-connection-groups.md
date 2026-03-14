@@ -1,6 +1,6 @@
 ---
 title: "Plugin Settings, Connection Groups, and Credential Cache: v0.9.7"
-date: "2026-03-09 23:30"
+date: "2026-03-09T23:30:00"
 release: "v0.9.7"
 tags: ["release", "plugins", "connections", "ux", "bugfix"]
 excerpt: "v0.9.7 brings per-plugin interpreter settings, connection groups, a credential cache, and a robust plugin startup error flow."

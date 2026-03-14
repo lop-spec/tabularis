@@ -1,6 +1,6 @@
 ---
 title: "Build Your Own Driver: Tabularis Gets a Plugin System"
-date: "2026-02-23"
+date: "2026-02-23T12:00:00"
 release: "v0.9.0"
 tags: ["plugins", "extensibility", "architecture", "open-source"]
 excerpt: "Supporting every database in the world is an impossible task for a small team. So we built a plugin system that lets anyone add a new database driver — in any language."

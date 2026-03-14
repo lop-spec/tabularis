@@ -1,6 +1,6 @@
 ---
 title: "Connection String Import, Visual Query Builder Fix, and More: v0.9.8"
-date: "2026-03-12 12:00"
+date: "2026-03-12T12:00:00"
 release: "v0.9.8"
 tags: ["release", "connections", "plugins", "ux", "bugfix"]
 excerpt: "v0.9.8 introduces connection string import for network drivers, fixes drag-and-drop in the Visual Query Builder on Windows, and resolves an SQLite open failure on Windows."
