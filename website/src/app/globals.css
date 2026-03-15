@@ -4651,6 +4651,10 @@ footer {
   border-bottom: 1px solid var(--border);
 }
 
+.wiki-index-section-title::before {
+  display: none;
+}
+
 .wiki-index-section-title svg {
   color: var(--accent);
   flex-shrink: 0;
