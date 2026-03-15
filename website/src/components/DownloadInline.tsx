@@ -95,7 +95,7 @@ export function DownloadInline() {
                     </div>
                   </div>
                 ) : (
-                  <a key={opt.url} href={opt.url} className="dli-option" download>
+                  <a key={opt.url} href={`/download/thank-you?url=${encodeURIComponent(opt.url)}`} className="dli-option">
                     <div className="dli-option-info">
                       <span className="dli-option-label">{opt.label}</span>
                       <span className="dli-option-desc">{opt.desc}</span>

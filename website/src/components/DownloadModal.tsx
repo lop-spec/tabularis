@@ -74,7 +74,7 @@ export function DownloadModal({ platform, onClose }: DownloadModalProps) {
                   <code className="dl-option-cmd">{opt.command}</code>
                 </div>
               ) : (
-                <a key={opt.url} href={opt.url} className="dl-option" download>
+                <a key={opt.url} href={`/download/thank-you?url=${encodeURIComponent(opt.url)}`} className="dl-option">
                   <div className="dl-option-info">
                     <span className="dl-option-label">{opt.label}</span>
                     <span className="dl-option-desc">{opt.desc}</span>
