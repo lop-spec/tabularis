@@ -476,6 +476,20 @@ Each slot contribution is wrapped in a `SlotErrorBoundary`. A crashing plugin co
 
 The `ui_extensions` field is optional. Plugins without it continue to work identically. The slot anchors render nothing when no contributions are registered — zero overhead.
 
+### Built-in Example: JSON Viewer
+
+Tabularis ships with a built-in **JSON Viewer** plugin that demonstrates the slot system. It renders a formatted, collapsible JSON tree with syntax highlighting for JSON/JSONB columns in the row editor.
+
+**Slots used:** `row-editor-sidebar.field.after`, `row-edit-modal.field.after`
+
+Features:
+- Auto-detects JSON columns by name (contains "json") or by parsing the value
+- Syntax-highlighted tokens: strings (green), numbers (blue), booleans (yellow), null (red), keys (purple)
+- Collapsible objects and arrays with auto-expand for the first 2 depth levels
+- Copy-to-clipboard button for the formatted JSON
+
+Source code: [`src/plugins/examples/json-viewer/`](https://github.com/debba/tabularis/tree/main/src/plugins/examples/json-viewer)
+
 For the full specification, see the [Plugin UI Extensions Spec](/docs/plugin-ui-extensions-spec.md).
 
 ## Publishing to the Registry

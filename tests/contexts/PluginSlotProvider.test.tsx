@@ -5,6 +5,7 @@ import { PluginSlotProvider } from "../../src/contexts/PluginSlotProvider";
 import { PluginSlotContext } from "../../src/contexts/PluginSlotContext";
 import type { PluginSlotRegistryType } from "../../src/contexts/PluginSlotContext";
 import type { SlotContribution, SlotComponentProps } from "../../src/types/pluginSlots";
+import { builtinPluginContributions } from "../../src/plugins/examples";
 
 const TestComponent = ({ context: _ctx, pluginId }: SlotComponentProps) => (
   <span data-testid="slot-component">{pluginId}</span>
@@ -17,7 +18,7 @@ function RegistryConsumer({ onRegistry }: { onRegistry: (r: PluginSlotRegistryTy
 }
 
 describe("PluginSlotProvider", () => {
-  it("should provide an empty registry initially", () => {
+  it("should provide a registry with builtin contributions initially", () => {
     let registry: PluginSlotRegistryType | undefined;
 
     render(
@@ -27,11 +28,12 @@ describe("PluginSlotProvider", () => {
     );
 
     expect(registry).toBeDefined();
-    expect(registry!.contributions).toEqual([]);
+    expect(registry!.contributions).toHaveLength(builtinPluginContributions.length);
   });
 
   it("should register and unregister a contribution", () => {
     let registry: PluginSlotRegistryType | undefined;
+    const builtinCount = builtinPluginContributions.length;
 
     const { rerender } = render(
       <PluginSlotProvider>
@@ -57,7 +59,7 @@ describe("PluginSlotProvider", () => {
       </PluginSlotProvider>,
     );
 
-    expect(registry!.contributions).toHaveLength(1);
+    expect(registry!.contributions).toHaveLength(builtinCount + 1);
 
     act(() => {
       unregister!();
@@ -69,7 +71,7 @@ describe("PluginSlotProvider", () => {
       </PluginSlotProvider>,
     );
 
-    expect(registry!.contributions).toHaveLength(0);
+    expect(registry!.contributions).toHaveLength(builtinCount);
   });
 
   it("should getSlotContributions filtered by slot name and sorted by order", () => {
@@ -146,6 +148,7 @@ describe("PluginSlotProvider", () => {
 
   it("should registerAll and unregister all at once", () => {
     let registry: PluginSlotRegistryType | undefined;
+    const builtinCount = builtinPluginContributions.length;
 
     const { rerender } = render(
       <PluginSlotProvider>
@@ -167,7 +170,7 @@ describe("PluginSlotProvider", () => {
       </PluginSlotProvider>,
     );
 
-    expect(registry!.contributions).toHaveLength(2);
+    expect(registry!.contributions).toHaveLength(builtinCount + 2);
 
     act(() => {
       unregisterAll!();
@@ -179,6 +182,6 @@ describe("PluginSlotProvider", () => {
       </PluginSlotProvider>,
     );
 
-    expect(registry!.contributions).toHaveLength(0);
+    expect(registry!.contributions).toHaveLength(builtinCount);
   });
 });

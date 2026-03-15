@@ -334,6 +334,18 @@ All host interaction goes through `@tabularis/plugin-api`.
 
 Each contribution is wrapped in a `SlotErrorBoundary`. If your component throws, a small error badge is shown instead — other plugins and the host continue working normally.
 
+### Built-in Example: JSON Viewer
+
+Tabularis includes a built-in JSON Viewer plugin as a reference implementation. It registers two slot contributions (`row-editor-sidebar.field.after` and `row-edit-modal.field.after`) that render a collapsible, syntax-highlighted JSON tree for JSON/JSONB columns.
+
+Key implementation details:
+- **Detection**: Checks column name for "json" substring, or parses string values that look like JSON objects/arrays
+- **Rendering**: Recursive `JsonValue`/`JsonObject`/`JsonArray` components with expand/collapse state
+- **Conditional display**: Returns `null` for non-JSON columns (component-level filtering)
+- **Clipboard**: Copy button using `navigator.clipboard.writeText()`
+
+Source: [`src/plugins/examples/json-viewer/`](../src/plugins/examples/json-viewer/)
+
 For the full specification, see [`plugin-ui-extensions-spec.md`](../website/public/docs/plugin-ui-extensions-spec.md).
 
 ---

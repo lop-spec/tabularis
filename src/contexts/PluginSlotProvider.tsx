@@ -3,13 +3,14 @@ import { useState, useCallback, useMemo } from "react";
 import { PluginSlotContext } from "./PluginSlotContext";
 import type { PluginSlotRegistryType } from "./PluginSlotContext";
 import type { SlotContribution, SlotName, SlotContext } from "../types/pluginSlots";
+import { builtinPluginContributions } from "../plugins/examples";
 
 interface PluginSlotProviderProps {
   children: React.ReactNode;
 }
 
 export const PluginSlotProvider = ({ children }: PluginSlotProviderProps) => {
-  const [contributions, setContributions] = useState<SlotContribution[]>([]);
+  const [contributions, setContributions] = useState<SlotContribution[]>(builtinPluginContributions);
 
   const register = useCallback((contribution: SlotContribution) => {
     setContributions((prev) => [...prev, contribution]);
