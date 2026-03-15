@@ -27,7 +27,7 @@ dist-ssr
 .serena
 
 devdiary
-docs
+/docs
 coverage
 plugins/**/target
 .gitnexus

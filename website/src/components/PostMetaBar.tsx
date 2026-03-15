@@ -3,16 +3,17 @@ import { PostTagBadge } from "./PostTagBadge";
 
 interface PostMetaBarProps {
   date: string;
+  readingTime: number;
   release?: string;
   tags?: string[];
 }
 
-export function PostMetaBar({ date, release, tags = [] }: PostMetaBarProps) {
+export function PostMetaBar({ date, readingTime, release, tags = [] }: PostMetaBarProps) {
   return (
     <div className="post-meta">
       <span>{formatDate(date)}</span>
       <span>&middot;</span>
-      <span>2 min read</span>
+      <span>{readingTime} min read</span>
       {release && (
         <>
           <span>&middot;</span>

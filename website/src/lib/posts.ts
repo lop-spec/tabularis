@@ -18,6 +18,14 @@ export interface PostMeta {
   tags: string[];
   excerpt: string;
   og?: PostOg;
+  readingTime: number;
+}
+
+const WORDS_PER_MINUTE = 200;
+
+function estimateReadingTime(text: string): number {
+  const words = text.trim().split(/\s+/).length;
+  return Math.max(1, Math.round(words / WORDS_PER_MINUTE));
 }
 
 const POSTS_DIR = path.join(process.cwd(), "content", "posts");
@@ -30,7 +38,7 @@ export function getAllPosts(): PostMeta[] {
   const posts = files.map((file) => {
     const slug = file.replace(/\.md$/, "");
     const raw = fs.readFileSync(path.join(POSTS_DIR, file), "utf-8");
-    const { data } = matter(raw);
+    const { data, content } = matter(raw);
     return {
       slug,
       title: (data.title as string) ?? "",
@@ -39,6 +47,7 @@ export function getAllPosts(): PostMeta[] {
       tags: (data.tags as string[]) ?? [],
       excerpt: (data.excerpt as string) ?? "",
       og: data.og as PostOg | undefined,
+      readingTime: estimateReadingTime(content),
     } satisfies PostMeta;
   });
 
@@ -92,6 +101,7 @@ export async function getPostBySlug(
     tags: (data.tags as string[]) ?? [],
     excerpt: (data.excerpt as string) ?? "",
     og: data.og as PostOg | undefined,
+    readingTime: estimateReadingTime(content),
   };
 
   let processedContent = content;

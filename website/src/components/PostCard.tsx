@@ -9,7 +9,7 @@ interface PostCardProps {
 export function PostCard({ post }: PostCardProps) {
   return (
     <div className="post-card">
-      <PostMetaBar date={post.date} release={post.release} tags={post.tags} />
+      <PostMetaBar date={post.date} readingTime={post.readingTime} release={post.release} tags={post.tags} />
       <Link href={`/blog/${post.slug}`} className="post-card-body">
         <div className="post-title">{post.title}</div>
         <div className="post-excerpt">{post.excerpt}</div>

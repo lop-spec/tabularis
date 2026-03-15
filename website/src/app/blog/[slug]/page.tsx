@@ -66,7 +66,7 @@ export default async function BlogPostPage({ params }: PageProps) {
 
       <article className="post-content">
         {htmlBefore && <div dangerouslySetInnerHTML={{ __html: htmlBefore }} />}
-        <PostMetaBar date={meta.date} release={meta.release} tags={meta.tags} />
+        <PostMetaBar date={meta.date} readingTime={meta.readingTime} release={meta.release} tags={meta.tags} />
         {htmlAfter && <div dangerouslySetInnerHTML={{ __html: htmlAfter }} />}
       </article>
 
