@@ -23,11 +23,12 @@ const TYPE_CONFIG = {
   plugin: { label: "Plugin", color: "var(--success)", icon: "⬡" },
 } as const;
 
-const SUGGESTIONS = [
+const SUGGESTIONS: ({ label: string; query: string } | { label: string; href: string })[] = [
   { label: "Installation guide", query: "install" },
   { label: "Plugin registry", query: "plugin" },
   { label: "Configuration", query: "config" },
   { label: "Getting started", query: "getting started" },
+  { label: "Download", href: "/download" },
 ];
 
 export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
@@ -212,9 +213,16 @@ export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
             <div className="search-suggestion-chips">
               {SUGGESTIONS.map((s) => (
                 <button
-                  key={s.query}
+                  key={s.label}
                   className="search-chip"
-                  onClick={() => setQuery(s.query)}
+                  onClick={() => {
+                    if ("href" in s) {
+                      closeModal();
+                      router.push(s.href);
+                    } else {
+                      setQuery(s.query);
+                    }
+                  }}
                   type="button"
                 >
                   {s.label}
