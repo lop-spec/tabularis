@@ -4,7 +4,6 @@ title: "Installation"
 order: 1.5
 excerpt: "Download and install Tabularis on macOS, Windows, or Linux."
 ---
-category: "Getting Started"
 
 # Installation
 

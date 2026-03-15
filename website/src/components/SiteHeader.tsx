@@ -35,7 +35,7 @@ export function SiteHeader({ crumbs = [] }: SiteHeaderProps) {
   };
 
   const navLinks = [
-    { label: "Wiki", href: "/wiki" },
+    { label: "Documentation", href: "/wiki" },
     { label: "Plugins", href: "/plugins" },
     { label: "Blog", href: "/blog" },
     { label: "Download", href: "/download" },

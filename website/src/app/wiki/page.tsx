@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { WikiHeader } from "@/components/WikiHeader";
+import { SiteHeader } from "@/components/SiteHeader";
 import { WikiLayout } from "@/components/WikiLayout";
 import { Footer } from "@/components/Footer";
 import { getAllWikiPages, getWikiPagesByCategory, WIKI_CATEGORIES } from "@/lib/wiki";
@@ -34,7 +34,7 @@ export default function WikiPage() {
 
   return (
     <div className="container wiki-container">
-      <WikiHeader crumbs={[{ label: "wiki" }]} />
+      <SiteHeader crumbs={[{ label: "wiki" }]} />
 
       <WikiLayout categories={categories}>
         <div className="wiki-index">

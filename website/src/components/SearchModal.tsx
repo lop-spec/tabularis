@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import type { PostMeta } from "@/lib/posts";
 import type { WikiMeta } from "@/lib/wiki";
 import type { Plugin } from "@/lib/plugins";
@@ -32,8 +32,9 @@ const SUGGESTIONS: ({ label: string; query: string } | { label: string; href: st
 ];
 
 export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [wikiOnly, setWikiOnly] = useState(false);
+  const wikiOnly = pathname.startsWith("/wiki");
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -118,7 +119,6 @@ export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "k" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        setWikiOnly(window.location.pathname.startsWith("/wiki"));
         setOpen(true);
         setQuery("");
         setActiveIndex(-1);
@@ -131,8 +131,6 @@ export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
 
   useEffect(() => {
     function handleOpen(e: Event) {
-      const detail = (e as CustomEvent).detail;
-      setWikiOnly(!!detail?.wikiOnly);
       setOpen(true);
       setQuery("");
       setActiveIndex(-1);
