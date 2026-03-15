@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/generate-latest-posts.mjs",
+    "build": "node scripts/generate-search-index.mjs && next build && node scripts/generate-latest-posts.mjs",
     "start": "next start"
   },
   "dependencies": {
+    "@orama/orama": "^3.1.18",
     "gray-matter": "^4.0.3",
     "highlight.js": "^11.11.1",
     "marked": "^15.0.12",

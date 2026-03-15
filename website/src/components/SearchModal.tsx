@@ -1,26 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import type { PostMeta } from "@/lib/posts";
-import type { WikiMeta } from "@/lib/wiki";
-import type { Plugin } from "@/lib/plugins";
+import { searchIndex, type SearchDoc } from "@/lib/search";
 
-interface SearchModalProps {
-  posts: PostMeta[];
-  wikiPages: WikiMeta[];
-  plugins: Plugin[];
-}
-
-type SearchResult =
-  | { type: "post"; slug: string; title: string; excerpt: string; meta: string; badge?: string }
-  | { type: "wiki"; slug: string; title: string; excerpt: string; meta: string }
-  | { type: "plugin"; slug: string; title: string; excerpt: string; meta: string; badge?: string; url: string };
+type SearchResult = {
+  type: "post" | "wiki" | "plugin";
+  slug: string;
+  title: string;
+  excerpt: string;
+  meta: string;
+  badge?: string;
+  url?: string;
+  score: number;
+};
 
 const TYPE_CONFIG = {
-  post: { label: "Blog", color: "var(--warning)", icon: "✦" },
-  wiki: { label: "Wiki", color: "var(--accent)", icon: "◈" },
-  plugin: { label: "Plugin", color: "var(--success)", icon: "⬡" },
+  post: { label: "Blog", color: "var(--warning)", icon: "\u2726" },
+  wiki: { label: "Wiki", color: "var(--accent)", icon: "\u25C8" },
+  plugin: { label: "Plugin", color: "var(--success)", icon: "\u2B21" },
 } as const;
 
 const SUGGESTIONS: ({ label: string; query: string } | { label: string; href: string })[] = [
@@ -31,71 +29,18 @@ const SUGGESTIONS: ({ label: string; query: string } | { label: string; href: st
   { label: "Download", href: "/download" },
 ];
 
-export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
+export function SearchModal() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const wikiOnly = pathname.startsWith("/wiki");
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const router = useRouter();
-
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-
-    const wikiResults: SearchResult[] = wikiPages
-      .filter(
-        (p) =>
-          p.title.toLowerCase().includes(q) ||
-          p.excerpt.toLowerCase().includes(q)
-      )
-      .map((p) => ({
-        type: "wiki" as const,
-        slug: p.slug,
-        title: p.title,
-        excerpt: p.excerpt,
-        meta: "Wiki",
-      }));
-
-    if (wikiOnly) return wikiResults;
-
-    const postResults: SearchResult[] = posts
-      .filter(
-        (p) =>
-          p.title.toLowerCase().includes(q) ||
-          p.excerpt.toLowerCase().includes(q) ||
-          p.release.toLowerCase().includes(q) ||
-          p.tags.some((t) => t.toLowerCase().includes(q))
-      )
-      .map((p) => ({
-        type: "post" as const,
-        slug: p.slug,
-        title: p.title,
-        excerpt: p.excerpt,
-        meta: p.date,
-        badge: p.release,
-      }));
-
-    const pluginResults: SearchResult[] = plugins
-      .filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.description.toLowerCase().includes(q)
-      )
-      .map((p) => ({
-        type: "plugin" as const,
-        slug: p.id,
-        title: p.name,
-        excerpt: p.description,
-        meta: "Plugin",
-        badge: `v${p.latest_version}`,
-        url: p.homepage,
-      }));
-
-    return [...postResults, ...wikiResults, ...pluginResults];
-  }, [query, posts, wikiPages, plugins, wikiOnly]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const closeModal = useCallback(() => {
     setOpen(false);
@@ -105,7 +50,7 @@ export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
   const navigateResult = useCallback(
     (result: SearchResult) => {
       closeModal();
-      if (result.type === "plugin") {
+      if (result.type === "plugin" && result.url) {
         window.open(result.url, "_blank");
         return;
       }
@@ -114,6 +59,50 @@ export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
     },
     [closeModal, router]
   );
+
+  // Perform search with debounce
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const oramaResults = await searchIndex(
+          trimmed,
+          wikiOnly ? "wiki" : undefined,
+        );
+        const mapped: SearchResult[] = oramaResults.hits.map((hit) => {
+          const doc = hit.document as unknown as SearchDoc;
+          return {
+            type: doc.type,
+            slug: doc.slug,
+            title: doc.title,
+            excerpt: doc.excerpt,
+            meta: doc.meta,
+            badge: doc.badge || undefined,
+            url: doc.url || undefined,
+            score: hit.score,
+          };
+        });
+        setResults(mapped);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 150);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, wikiOnly]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -130,7 +119,7 @@ export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
   }, [closeModal]);
 
   useEffect(() => {
-    function handleOpen(e: Event) {
+    function handleOpen() {
       setOpen(true);
       setQuery("");
       setActiveIndex(-1);
@@ -173,7 +162,7 @@ export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
     if (e.target === e.currentTarget) closeModal();
   }
 
-  const isEmpty = query.trim() && results.length === 0;
+  const isEmpty = query.trim() && results.length === 0 && !searching;
   const showSuggestions = !query.trim() && !wikiOnly;
 
   return (
@@ -291,9 +280,12 @@ export function SearchModal({ posts, wikiPages, plugins }: SearchModalProps) {
 
         {/* Footer */}
         <div className="search-footer">
-          <span className="search-hint"><kbd>↑↓</kbd> navigate</span>
-          <span className="search-hint"><kbd>↵</kbd> open</span>
+          <span className="search-hint"><kbd>&uarr;&darr;</kbd> navigate</span>
+          <span className="search-hint"><kbd>&crarr;</kbd> open</span>
           <span className="search-hint"><kbd>Esc</kbd> close</span>
+          <a className="search-powered-by" href="https://orama.com" target="_blank" rel="noopener noreferrer">
+            Search by <strong>Orama</strong>
+          </a>
         </div>
       </div>
     </div>
