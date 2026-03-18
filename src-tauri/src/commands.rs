@@ -1705,10 +1705,14 @@ pub async fn delete_record<R: Runtime>(
     pk_col: String,
     pk_val: serde_json::Value,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<u64, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.delete_record(&params, &table, &pk_col, pk_val, schema.as_deref()).await
 }
@@ -1723,10 +1727,14 @@ pub async fn update_record<R: Runtime>(
     col_name: String,
     new_val: serde_json::Value,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<u64, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let max_blob_size = crate::config::get_max_blob_size(&app);
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.update_record(&params, &table, &pk_col, pk_val, &col_name, new_val, schema.as_deref(), max_blob_size).await
@@ -1939,10 +1947,14 @@ pub async fn insert_record<R: Runtime>(
     table: String,
     data: std::collections::HashMap<String, serde_json::Value>,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<u64, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let max_blob_size = crate::config::get_max_blob_size(&app);
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.insert_record(&params, &table, data, schema.as_deref(), max_blob_size).await

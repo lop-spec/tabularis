@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import { isMultiDatabaseCapable } from "../utils/database";
 import {
   generateTempId,
   initializeNewRow,
@@ -1151,6 +1152,11 @@ export const Editor = () => {
     try {
       const promises = [];
 
+      const databaseParam =
+        isMultiDatabaseCapable(activeCapabilities) && activeTab?.schema
+          ? { database: activeTab.schema }
+          : {};
+
       // Deletions
       if (deletions.length > 0) {
         promises.push(
@@ -1161,6 +1167,7 @@ export const Editor = () => {
               pkCol: pkColumn,
               pkVal,
               ...(activeSchema ? { schema: activeSchema } : {}),
+              ...databaseParam,
             }),
           ),
         );
@@ -1178,6 +1185,7 @@ export const Editor = () => {
               colName: u.colName,
               newVal: u.newVal,
               ...(activeSchema ? { schema: activeSchema } : {}),
+              ...databaseParam,
             }),
           ),
         );
@@ -1192,6 +1200,7 @@ export const Editor = () => {
               table: activeTable,
               data: insertion.data,
               ...(activeSchema ? { schema: activeSchema } : {}),
+              ...databaseParam,
             }),
           ),
         );
