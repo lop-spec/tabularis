@@ -355,6 +355,7 @@ export const NewRowModal = ({
                       driver: activeDriver,
                       columnName: col.name,
                       rowData: formData,
+                      onFieldChange: (value: unknown) => setFormData((prev) => ({ ...prev, [col.name]: value })),
                     }}
                   />
                 </div>

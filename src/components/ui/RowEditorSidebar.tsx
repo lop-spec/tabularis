@@ -157,6 +157,7 @@ export const RowEditorSidebar: React.FC<RowEditorSidebarProps> = ({
                     rowData: editedData,
                     rowIndex,
                     isInsertion,
+                    onFieldChange: (value: unknown) => updateField(column.name, value),
                   }}
                 />
               </div>

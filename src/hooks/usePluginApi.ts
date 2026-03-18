@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import { ThemeContext } from "../contexts/ThemeContext";
 import { DatabaseContext } from "../contexts/DatabaseContext";
 import { SettingsContext } from "../contexts/SettingsContext";
+import { PluginModalContext } from "../contexts/PluginModalContext";
+import type { PluginModalOptions } from "../contexts/PluginModalContext";
 
 /**
  * Hook for plugin components to execute read-only database queries.
@@ -127,6 +129,26 @@ export function usePluginSetting(pluginId: string) {
 export function usePluginTranslation(pluginId: string) {
   const { t } = useTranslation(pluginId);
   return t;
+}
+
+/**
+ * Hook for plugin components to open a modal managed by the host application.
+ */
+export function usePluginModal() {
+  const ctx = useContext(PluginModalContext);
+
+  const openModal = useCallback(
+    (options: PluginModalOptions) => {
+      ctx?.openModal(options);
+    },
+    [ctx],
+  );
+
+  const closeModal = useCallback(() => {
+    ctx?.closeModal();
+  }, [ctx]);
+
+  return useMemo(() => ({ openModal, closeModal }), [openModal, closeModal]);
 }
 
 /**
