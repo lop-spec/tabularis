@@ -1,6 +1,7 @@
 import { useState, useCallback, useContext, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { message } from "@tauri-apps/plugin-dialog";
+import { openUrl as openExternal } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 
 import { ThemeContext } from "../contexts/ThemeContext";
@@ -129,6 +130,14 @@ export function usePluginSetting(pluginId: string) {
 export function usePluginTranslation(pluginId: string) {
   const { t } = useTranslation(pluginId);
   return t;
+}
+
+/**
+ * Opens a URL in the system's default browser.
+ * Plugin components should use this instead of window.open for external URLs.
+ */
+export async function openUrl(url: string): Promise<void> {
+  await openExternal(url);
 }
 
 /**

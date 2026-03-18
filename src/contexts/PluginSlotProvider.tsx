@@ -24,6 +24,8 @@ const VALID_SLOTS = new Set<string>([
   "data-grid.context-menu.items",
   "sidebar.footer.actions",
   "settings.plugin.actions",
+  "settings.plugin.before_settings",
+  "connection-modal.connection_content",
 ]);
 
 /**
@@ -128,6 +130,7 @@ async function loadExternalPluginContributions(
           slot: entry.slot as SlotName,
           component: component as React.ComponentType<{ context: SlotContext; pluginId: string }>,
           order: entry.order,
+          when: entry.driver ? (ctx: SlotContext) => ctx.driver === entry.driver : undefined,
         });
       }
     } catch (err) {

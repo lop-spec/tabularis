@@ -64,6 +64,8 @@ export interface UIExtensionManifestEntry {
   slot: string;
   module: string;
   order?: number;
+  /** If set, the contribution is only active when context.driver matches this value. */
+  driver?: string;
 }
 
 export interface RegistryReleaseWithStatus {

@@ -11,7 +11,9 @@ export type SlotName =
   | "data-grid.toolbar.actions"
   | "data-grid.context-menu.items"
   | "sidebar.footer.actions"
-  | "settings.plugin.actions";
+  | "settings.plugin.actions"
+  | "settings.plugin.before_settings"
+  | "connection-modal.connection_content";
 
 /**
  * Context data provided to every slot component via props.
@@ -75,4 +77,6 @@ export interface UIExtensionDeclaration {
   module: string;
   /** Ordering weight */
   order?: number;
+  /** If set, the contribution is only active when context.driver matches this value */
+  driver?: string;
 }
