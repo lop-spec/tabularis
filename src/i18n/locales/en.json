@@ -410,7 +410,7 @@
     "titleEdit": "Edit Connection",
     "subtitle": "Configure database connection settings",
     "name": "Connection Name",
-    "namePlaceholder": "My Production DB",
+    "namePlaceholder": "Provide your connection name",
     "nameRequired": "Connection name is required",
     "dbNameRequired": "Database name is required",
     "dbType": "Database Type",
