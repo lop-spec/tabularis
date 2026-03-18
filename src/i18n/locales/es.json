@@ -410,7 +410,7 @@
     "titleEdit": "Editar Conexión",
     "subtitle": "Configurar los ajustes de conexión a la base de datos",
     "name": "Nombre de Conexión",
-    "namePlaceholder": "Mi BD de Producción",
+    "namePlaceholder": "Ingresa el nombre de tu conexión",
     "nameRequired": "El nombre de la conexión es requerido",
     "dbNameRequired": "El nombre de la base de datos es requerido",
     "dbType": "Tipo de Base de Datos",
