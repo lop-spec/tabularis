@@ -1696,7 +1696,7 @@ export const Editor = () => {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center p-2 border-b border-default bg-elevated gap-2 h-[50px]">
+      <div className="flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-2 h-[50px]">
         {activeTab.isLoading ? (
           <button
             onClick={stopQuery}
