@@ -90,7 +90,11 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         let title = 'tabularis';
         if (activeConnectionName && activeDatabaseName) {
           const schemaSuffix = activeSchema && activeCapabilities?.schemas === true ? `/${activeSchema}` : '';
-          title = `tabularis - ${activeConnectionName} (${activeDatabaseName}${schemaSuffix})`;
+          const dbDisplay =
+            isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1
+              ? (activeSchema ?? activeDatabaseName)
+              : activeDatabaseName;
+          title = `tabularis - ${activeConnectionName} (${dbDisplay}${schemaSuffix})`;
         }
         await invoke('set_window_title', { title });
       } catch (e) {
@@ -98,7 +102,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     updateTitle();
-  }, [activeConnectionName, activeDatabaseName, activeSchema, activeCapabilities]);
+  }, [activeConnectionName, activeDatabaseName, activeSchema, activeCapabilities, selectedDatabases]);
 
   const updateConnectionData = useCallback((connectionId: string, updates: Partial<ConnectionData>) => {
     setConnectionDataMap(prev => ({
