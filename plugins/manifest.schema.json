@@ -142,6 +142,11 @@
           "type": "boolean",
           "default": false,
           "description": "true for API-based plugins that need no host/port/credentials (e.g. public REST APIs). Hides the entire connection form and skips database validation."
+        },
+        "manage_tables": {
+          "type": "boolean",
+          "default": false,
+          "description": "true if the driver supports table and column management (CREATE TABLE, ADD/MODIFY/DROP COLUMN, DROP TABLE). Does not control index or foreign key operations. Defaults to false."
         }
       }
     },

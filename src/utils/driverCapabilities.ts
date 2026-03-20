@@ -27,6 +27,12 @@ export function findDriverManifest(
   return drivers.find((d) => d.id === driverId) ?? null;
 }
 
+export function supportsManageTables(
+  capabilities?: DriverCapabilities | null,
+): boolean {
+  return capabilities?.manage_tables === true;
+}
+
 export function getCapabilitiesForDriver(
   driverId: string,
   drivers: PluginManifest[],

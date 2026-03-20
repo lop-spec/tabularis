@@ -62,6 +62,12 @@ pub struct DriverCapabilities {
     /// When `true`, the connection form is hidden and database validation is skipped.
     #[serde(default)]
     pub no_connection_required: bool,
+    /// Whether the driver supports table and column management
+    /// (CREATE TABLE, ALTER TABLE ADD/MODIFY/DROP COLUMN, DROP TABLE).
+    /// Does NOT control index or foreign key operations (see `create_foreign_keys`).
+    /// Defaults to `false` for backward compatibility with plugins.
+    #[serde(default)]
+    pub manage_tables: bool,
 }
 
 fn default_double_quote() -> String {

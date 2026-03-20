@@ -319,8 +319,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {/* Global actions — hidden in multi-database mode (actions move to each database node) */}
-            {!isMultiDb && (sidebarWidth < 200 ? (
+            {/* Global actions — hidden in multi-database mode (actions move to each database node) and for API-based plugins */}
+            {!isMultiDb && activeCapabilities?.no_connection_required !== true && (sidebarWidth < 200 ? (
               <div className="relative">
                 <button
                   onClick={() => setIsActionsDropdownOpen(!isActionsDropdownOpen)}
@@ -953,13 +953,14 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                           }
                         }
                       }}
+                      capabilities={activeCapabilities}
                       onCreateTable={() => setIsCreateTableModalOpen(true)}
                       onCreateView={() =>
                         setViewEditorModal({ isOpen: true, isNewView: true })
                       }
-                      onDump={(db) => setDumpModal({ database: db })}
-                      onImport={(db) => handleImportDatabase(db)}
-                      onViewDiagram={async (db) => {
+                      onDump={activeCapabilities?.no_connection_required !== true ? (db) => setDumpModal({ database: db }) : undefined}
+                      onImport={activeCapabilities?.no_connection_required !== true ? (db) => handleImportDatabase(db) : undefined}
+                      onViewDiagram={activeCapabilities?.no_connection_required !== true ? async (db) => {
                         try {
                           await invoke("open_er_diagram_window", {
                             connectionId: activeConnectionId || "",
@@ -969,7 +970,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                         } catch (e) {
                           console.error("Failed to open ER Diagram window:", e);
                         }
-                      }}
+                      } : undefined}
                     />
                   ))}
                 </div>
@@ -1002,6 +1003,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                         >
                           <RefreshCw size={14} />
                         </button>
+                        {activeCapabilities?.manage_tables === true && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1012,6 +1014,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                         >
                           <Plus size={14} />
                         </button>
+                        )}
                       </div>
                     }
                   >
@@ -1057,6 +1060,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                               onContextMenu={handleContextMenu}
                               connectionId={activeConnectionId!}
                               driver={activeDriver!}
+                              canManage={activeCapabilities?.manage_tables === true}
                               onAddColumn={(t_name) =>
                                 setModifyColumnModal({ isOpen: true, tableName: t_name, column: null })
                               }
@@ -1116,6 +1120,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                   </Accordion>
 
                   {/* Views */}
+                  {activeCapabilities?.views !== false && (
                   <Accordion
                     title={`${t("sidebar.views")} (${views.length})`}
                     isOpen={viewsOpen}
@@ -1166,6 +1171,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                       </div>
                     )}
                   </Accordion>
+                  )}
 
                   {/* Routines */}
                   {activeCapabilities?.routines === true && (
@@ -1282,7 +1288,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                       icon: FileText,
                       action: () => setSchemaModal({ tableName: contextMenu.id, schema: ctxSchema }),
                     },
-                    {
+                    activeCapabilities?.no_connection_required !== true ? {
                       label: t("sidebar.viewERDiagram"),
                       icon: Network,
                       action: async () => {
@@ -1298,24 +1304,24 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                           console.error("Failed to open ER Diagram window:", e);
                         }
                       },
-                    },
-                    {
+                    } : null,
+                    activeCapabilities?.manage_tables === true ? {
                       label: t("sidebar.generateSQL"),
                       icon: FileCode,
                       action: () => setGenerateSQLModal(contextMenu.id),
-                    },
+                    } : null,
                     {
                       label: t("sidebar.copyName"),
                       icon: Copy,
                       action: () => navigator.clipboard.writeText(contextMenu.id),
                     },
-                    {
+                    activeCapabilities?.manage_tables === true ? {
                       label: t("sidebar.addColumn"),
                       icon: Plus,
                       action: () =>
                         setModifyColumnModal({ isOpen: true, tableName: contextMenu.id, column: null }),
-                    },
-                    {
+                    } : null,
+                    activeCapabilities?.manage_tables === true ? {
                       label: t("sidebar.deleteTable"),
                       icon: Trash2,
                       danger: true,
@@ -1340,8 +1346,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                           }
                         }
                       },
-                    },
-                  ];
+                    } : null,
+                  ].filter(Boolean);
                 })()
               : contextMenu.type === "index"
                 ? [
@@ -1350,7 +1356,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                       icon: Copy,
                       action: () => navigator.clipboard.writeText(contextMenu.id),
                     },
-                    {
+                    activeCapabilities?.manage_tables === true ? {
                       label: t("sidebar.deleteIndex"),
                       icon: Trash2,
                       danger: true,
@@ -1381,8 +1387,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                           }
                         }
                       },
-                    },
-                  ]
+                    } : null,
+                  ].filter(Boolean)
                 : contextMenu.type === "foreign_key"
                   ? [
                       {
@@ -1390,7 +1396,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                         icon: Copy,
                         action: () => navigator.clipboard.writeText(contextMenu.id),
                       },
-                      {
+                      activeCapabilities?.manage_tables === true ? {
                         label: t("sidebar.deleteFk"),
                         icon: Trash2,
                         danger: true,
@@ -1418,32 +1424,36 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                             }
                           }
                         },
-                      },
-                    ]
+                      } : null,
+                    ].filter(Boolean)
                   : contextMenu.type === "folder_indexes"
-                    ? [
-                        {
-                          label: t("sidebar.addIndex"),
-                          icon: Plus,
-                          action: () => {
-                            if (contextMenu.data && "tableName" in contextMenu.data) {
-                              setCreateIndexModal({ isOpen: true, tableName: contextMenu.data.tableName });
-                            }
-                          },
-                        },
-                      ]
-                    : contextMenu.type === "folder_fks"
+                    ? activeCapabilities?.manage_tables === true
                       ? [
                           {
-                            label: t("sidebar.addFk"),
+                            label: t("sidebar.addIndex"),
                             icon: Plus,
                             action: () => {
                               if (contextMenu.data && "tableName" in contextMenu.data) {
-                                setCreateForeignKeyModal({ isOpen: true, tableName: contextMenu.data.tableName });
+                                setCreateIndexModal({ isOpen: true, tableName: contextMenu.data.tableName });
                               }
                             },
                           },
                         ]
+                      : []
+                    : contextMenu.type === "folder_fks"
+                      ? activeCapabilities?.manage_tables === true
+                        ? [
+                            {
+                              label: t("sidebar.addFk"),
+                              icon: Plus,
+                              action: () => {
+                                if (contextMenu.data && "tableName" in contextMenu.data) {
+                                  setCreateForeignKeyModal({ isOpen: true, tableName: contextMenu.data.tableName });
+                                }
+                              },
+                            },
+                          ]
+                        : []
                       : contextMenu.type === "view"
                         ? (() => {
                             const viewCtxSchema = contextMenu.data && "schema" in contextMenu.data ? contextMenu.data.schema : undefined;
