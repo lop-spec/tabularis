@@ -1114,6 +1114,36 @@ export const Settings = () => {
                       </button>
                     </div>
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">
+                      {t("settings.csvDelimiter")}
+                    </label>
+                    <p className="text-xs text-muted mb-3">
+                      {t("settings.csvDelimiterDesc")}
+                    </p>
+                    <div className="flex gap-2">
+                      {[
+                        { value: ",", label: t("settings.delimiterComma") },
+                        { value: ";", label: t("settings.delimiterSemicolon") },
+                        { value: "\t", label: t("settings.delimiterTab") },
+                        { value: "|", label: t("settings.delimiterPipe") },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => updateSetting("csvDelimiter", opt.value)}
+                          className={clsx(
+                            "px-4 py-2 rounded-lg text-sm font-medium transition-all border",
+                            (settings.csvDelimiter ?? ",") === opt.value
+                              ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20"
+                              : "bg-base border-default text-muted hover:border-strong hover:text-primary",
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 

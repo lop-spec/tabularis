@@ -90,6 +90,12 @@ interface ExportProgress {
   rows_processed: number;
 }
 
+const CHEVRON_SELECT_STYLE: React.CSSProperties = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right center',
+};
+
 export const Editor = () => {
   const { t } = useTranslation();
   const { activeConnectionId, tables, activeDriver, activeSchema, activeCapabilities } = useDatabase();
@@ -212,6 +218,9 @@ export const Editor = () => {
   const [applyToAll, setApplyToAll] = useState(false);
   const [copyFormat, setCopyFormat] = useState<"csv" | "json">(
     settings.copyFormat ?? "csv",
+  );
+  const [csvDelimiter, setCsvDelimiter] = useState(
+    settings.csvDelimiter ?? ",",
   );
 
   const activeTabType = activeTab?.type;
@@ -1545,6 +1554,7 @@ export const Editor = () => {
         query,
         filePath,
         format,
+        csvDelimiter: format === "csv" ? csvDelimiter : undefined,
       });
 
       // Success: update modal state instead of showing toast
@@ -2158,7 +2168,7 @@ export const Editor = () => {
 
                     <div className="w-[1px] h-4 bg-surface-secondary mx-1"></div>
 
-                    <div className="flex items-center gap-1.5 text-secondary">
+                    <div className="flex items-center gap-1 text-secondary">
                       <Copy size={13} className="shrink-0" />
                       <select
                         value={copyFormat}
@@ -2167,11 +2177,25 @@ export const Editor = () => {
                         }
                         className="bg-transparent border-none text-[11px] text-secondary hover:text-primary focus:outline-none cursor-pointer appearance-none pr-3 font-medium uppercase tracking-wide"
                         title={t("settings.copyFormat")}
-                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right center' }}
+                        style={CHEVRON_SELECT_STYLE}
                       >
                         <option value="csv">CSV</option>
                         <option value="json">JSON</option>
                       </select>
+                      {copyFormat === "csv" && (
+                        <select
+                          value={csvDelimiter}
+                          onChange={(e) => setCsvDelimiter(e.target.value)}
+                          className="bg-transparent border-none text-[11px] text-secondary hover:text-primary focus:outline-none cursor-pointer appearance-none pr-3 font-medium tracking-wide"
+                          title={t("settings.csvDelimiter")}
+                          style={CHEVRON_SELECT_STYLE}
+                        >
+                          <option value=",">{t("settings.delimiterComma")}</option>
+                          <option value=";">{t("settings.delimiterSemicolon")}</option>
+                          <option value={"\t"}>{t("settings.delimiterTab")}</option>
+                          <option value="|">{t("settings.delimiterPipe")}</option>
+                        </select>
+                      )}
                     </div>
 
                     {/* Separator */}
@@ -2247,6 +2271,7 @@ export const Editor = () => {
                     selectedRows={new Set(activeTab.selectedRows || [])}
                     onSelectionChange={handleSelectionChange}
                     copyFormat={copyFormat}
+                    csvDelimiter={csvDelimiter}
                     sortClause={activeTab.sortClause}
                     onSort={activeTab.type === "table" && (activeTab.result?.rows.length ?? 0) > 0 ? handleSort : undefined}
                   />

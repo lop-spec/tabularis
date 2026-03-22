@@ -32,6 +32,7 @@ export interface Settings {
   maxLogEntries?: number;
   erDiagramDefaultLayout?: ERDiagramLayout;
   copyFormat?: CopyFormat;
+  csvDelimiter?: string;
   activeExternalDrivers?: string[];
   plugins?: Record<string, PluginConfig>;
 }
@@ -61,5 +62,6 @@ export const DEFAULT_SETTINGS: Settings = {
   loggingEnabled: true,
   maxLogEntries: 1000,
   copyFormat: "csv",
+  csvDelimiter: ",",
   erDiagramDefaultLayout: "LR",
 };

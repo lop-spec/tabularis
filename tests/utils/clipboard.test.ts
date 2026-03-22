@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  rowToTSV,
-  rowsToTSV,
+  rowToCSV,
+  rowsToCSV,
   rowToJSON,
   rowsToJSON,
   getSelectedRows,
@@ -9,52 +9,67 @@ import {
 } from '../../src/utils/clipboard';
 
 describe('clipboard utils', () => {
-  describe('rowToTSV', () => {
-    it('should convert a simple row to TSV format', () => {
+  describe('rowToCSV', () => {
+    it('should convert a simple row with default comma delimiter', () => {
       const row = [1, 'test', true];
-      expect(rowToTSV(row)).toBe('1\ttest\ttrue');
+      expect(rowToCSV(row)).toBe('1,test,true');
     });
 
     it('should handle null values with default label', () => {
       const row = [1, null, 'test'];
-      expect(rowToTSV(row)).toBe('1\tnull\ttest');
+      expect(rowToCSV(row)).toBe('1,null,test');
     });
 
     it('should handle null values with custom label', () => {
       const row = [1, null, 'test'];
-      expect(rowToTSV(row, 'NULL')).toBe('1\tNULL\ttest');
+      expect(rowToCSV(row, 'NULL')).toBe('1,NULL,test');
     });
 
     it('should handle undefined values', () => {
       const row = [1, undefined, 'test'];
-      expect(rowToTSV(row)).toBe('1\tnull\ttest');
+      expect(rowToCSV(row)).toBe('1,null,test');
     });
 
     it('should handle empty row', () => {
       const row: unknown[] = [];
-      expect(rowToTSV(row)).toBe('');
+      expect(rowToCSV(row)).toBe('');
     });
 
     it('should handle objects by converting to JSON', () => {
       const row = [1, { name: 'test' }, 'value'];
-      expect(rowToTSV(row)).toBe('1\t{"name":"test"}\tvalue');
+      expect(rowToCSV(row)).toBe('1,{"name":"test"},value');
     });
 
     it('should handle boolean values', () => {
       const row = [true, false, null];
-      expect(rowToTSV(row)).toBe('true\tfalse\tnull');
+      expect(rowToCSV(row)).toBe('true,false,null');
+    });
+
+    it('should use tab delimiter', () => {
+      const row = [1, 'test', true];
+      expect(rowToCSV(row, 'null', '\t')).toBe('1\ttest\ttrue');
+    });
+
+    it('should use semicolon delimiter', () => {
+      const row = [1, 'test', true];
+      expect(rowToCSV(row, 'null', ';')).toBe('1;test;true');
+    });
+
+    it('should use pipe delimiter', () => {
+      const row = [1, 'test', true];
+      expect(rowToCSV(row, 'null', '|')).toBe('1|test|true');
     });
   });
 
-  describe('rowsToTSV', () => {
-    it('should convert multiple rows to TSV with newlines', () => {
+  describe('rowsToCSV', () => {
+    it('should convert multiple rows with default comma delimiter', () => {
       const rows = [
         [1, 'Alice', 25],
         [2, 'Bob', 30],
         [3, 'Charlie', 35]
       ];
-      expect(rowsToTSV(rows)).toBe(
-        '1\tAlice\t25\n2\tBob\t30\n3\tCharlie\t35'
+      expect(rowsToCSV(rows)).toBe(
+        '1,Alice,25\n2,Bob,30\n3,Charlie,35'
       );
     });
 
@@ -63,17 +78,17 @@ describe('clipboard utils', () => {
         [1, null, 'test'],
         [2, 'value', null]
       ];
-      expect(rowsToTSV(rows)).toBe('1\tnull\ttest\n2\tvalue\tnull');
+      expect(rowsToCSV(rows)).toBe('1,null,test\n2,value,null');
     });
 
     it('should handle empty rows array', () => {
       const rows: unknown[][] = [];
-      expect(rowsToTSV(rows)).toBe('');
+      expect(rowsToCSV(rows)).toBe('');
     });
 
     it('should handle single row', () => {
       const rows = [[1, 'test', true]];
-      expect(rowsToTSV(rows)).toBe('1\ttest\ttrue');
+      expect(rowsToCSV(rows)).toBe('1,test,true');
     });
 
     it('should use custom null label', () => {
@@ -81,7 +96,23 @@ describe('clipboard utils', () => {
         [1, null],
         [2, 'value']
       ];
-      expect(rowsToTSV(rows, 'NULL')).toBe('1\tNULL\n2\tvalue');
+      expect(rowsToCSV(rows, 'NULL')).toBe('1,NULL\n2,value');
+    });
+
+    it('should use semicolon delimiter', () => {
+      const rows = [
+        [1, 'Alice'],
+        [2, 'Bob']
+      ];
+      expect(rowsToCSV(rows, 'null', ';')).toBe('1;Alice\n2;Bob');
+    });
+
+    it('should use tab delimiter', () => {
+      const rows = [
+        [1, 'Alice'],
+        [2, 'Bob']
+      ];
+      expect(rowsToCSV(rows, 'null', '\t')).toBe('1\tAlice\n2\tBob');
     });
   });
 
@@ -163,7 +194,7 @@ describe('clipboard utils', () => {
     it('should return selected rows in sorted order', () => {
       const selected = new Set([2, 0, 4]);
       const result = getSelectedRows(data, selected);
-      
+
       expect(result).toEqual([
         [1, 'row1'],
         [3, 'row3'],
@@ -174,28 +205,28 @@ describe('clipboard utils', () => {
     it('should handle single selection', () => {
       const selected = new Set([2]);
       const result = getSelectedRows(data, selected);
-      
+
       expect(result).toEqual([[3, 'row3']]);
     });
 
     it('should handle empty selection', () => {
       const selected = new Set<number>();
       const result = getSelectedRows(data, selected);
-      
+
       expect(result).toEqual([]);
     });
 
     it('should handle all rows selected', () => {
       const selected = new Set([0, 1, 2, 3, 4]);
       const result = getSelectedRows(data, selected);
-      
+
       expect(result).toEqual(data);
     });
 
     it('should sort indices even if provided out of order', () => {
       const selected = new Set([4, 1, 3]);
       const result = getSelectedRows(data, selected);
-      
+
       expect(result).toEqual([
         [2, 'row2'],
         [4, 'row4'],

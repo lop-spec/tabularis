@@ -1,14 +1,14 @@
 import { formatCellValue } from './dataGrid';
 
-export function rowToTSV(row: unknown[], nullLabel: string = "null"): string {
+export function rowToCSV(row: unknown[], nullLabel: string = "null", delimiter: string = ","): string {
   return row
     .map((cell) => formatCellValue(cell, nullLabel))
-    .join("\t");
+    .join(delimiter);
 }
 
-export function rowsToTSV(rows: unknown[][], nullLabel: string = "null"): string {
+export function rowsToCSV(rows: unknown[][], nullLabel: string = "null", delimiter: string = ","): string {
   return rows
-    .map((row) => rowToTSV(row, nullLabel))
+    .map((row) => rowToCSV(row, nullLabel, delimiter))
     .join("\n");
 }
 

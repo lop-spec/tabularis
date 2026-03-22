@@ -30,6 +30,81 @@ struct ExportProgress {
     rows_processed: u64,
 }
 
+fn value_to_string(val: serde_json::Value) -> String {
+    match val {
+        serde_json::Value::String(s) => s,
+        serde_json::Value::Null => "NULL".to_string(),
+        v => v.to_string(),
+    }
+}
+
+macro_rules! export_rows {
+    ($rows:expr, $extract_fn:expr, $format:expr, $delimiter_byte:expr, $writer:expr, $app:expr) => {{
+        let mut count = 0u64;
+
+        if $format == "csv" {
+            let mut csv_wtr = csv::WriterBuilder::new()
+                .delimiter($delimiter_byte)
+                .from_writer($writer);
+            let mut headers_written = false;
+
+            while let Some(row_res) = $rows.next().await {
+                let row = row_res.map_err(|e| e.to_string())?;
+
+                if !headers_written {
+                    let headers: Vec<String> =
+                        row.columns().iter().map(|c| c.name().to_string()).collect();
+                    csv_wtr.write_record(&headers).map_err(|e| e.to_string())?;
+                    headers_written = true;
+                }
+
+                let record: Vec<String> = (0..row.columns().len())
+                    .map(|i| value_to_string($extract_fn(&row, i)))
+                    .collect();
+                csv_wtr.write_record(&record).map_err(|e| e.to_string())?;
+
+                count += 1;
+                if count % 100 == 0 {
+                    $app.emit("export_progress", ExportProgress { rows_processed: count })
+                        .unwrap_or(());
+                }
+            }
+            csv_wtr.flush().map_err(|e| e.to_string())?;
+        } else {
+            let mut writer = $writer;
+            writer.write_all(b"[").map_err(|e| e.to_string())?;
+            let mut first = true;
+
+            while let Some(row_res) = $rows.next().await {
+                let row = row_res.map_err(|e| e.to_string())?;
+
+                if !first {
+                    writer.write_all(b",").map_err(|e| e.to_string())?;
+                }
+                first = false;
+
+                let mut obj = serde_json::Map::new();
+                for i in 0..row.columns().len() {
+                    let name = row.column(i).name().to_string();
+                    let val = $extract_fn(&row, i);
+                    obj.insert(name, val);
+                }
+                serde_json::to_writer(&mut writer, &obj).map_err(|e| e.to_string())?;
+
+                count += 1;
+                if count % 100 == 0 {
+                    $app.emit("export_progress", ExportProgress { rows_processed: count })
+                        .unwrap_or(());
+                }
+            }
+            writer.write_all(b"]").map_err(|e| e.to_string())?;
+            writer.flush().map_err(|e| e.to_string())?;
+        }
+
+        Ok::<(), String>(())
+    }};
+}
+
 #[tauri::command]
 pub async fn cancel_export(
     state: State<'_, ExportCancellationState>,
@@ -52,250 +127,39 @@ pub async fn export_query_to_file<R: Runtime>(
     query: String,
     file_path: String,
     format: String,
+    csv_delimiter: Option<String>,
 ) -> Result<(), String> {
     let sanitized_query = query.trim().trim_end_matches(';').to_string();
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let params = resolve_connection_params(&saved_conn.params)?;
     let driver = saved_conn.params.driver.clone();
 
+    let delimiter_byte = csv_delimiter
+        .and_then(|d| d.bytes().next())
+        .unwrap_or(b',');
+
     let task = tokio::spawn(async move {
         let file = File::create(&file_path).map_err(|e| e.to_string())?;
-        let mut writer = BufWriter::new(file);
-        let mut count = 0u64;
+        let writer = BufWriter::new(file);
 
         match driver.as_str() {
             "mysql" => {
                 let pool = get_mysql_pool(&params).await?;
                 let mut rows = sqlx::query(&sanitized_query).fetch(&pool);
-
-                if format == "csv" {
-                    let mut csv_wtr = csv::WriterBuilder::new().from_writer(writer);
-                    let mut headers_written = false;
-
-                    while let Some(row_res) = rows.next().await {
-                        let row = row_res.map_err(|e| e.to_string())?;
-
-                        if !headers_written {
-                            let headers: Vec<String> =
-                                row.columns().iter().map(|c| c.name().to_string()).collect();
-                            csv_wtr.write_record(&headers).map_err(|e| e.to_string())?;
-                            headers_written = true;
-                        }
-
-                        let mut record = Vec::new();
-                        for i in 0..row.columns().len() {
-                            let val = extract_mysql_value(&row, i);
-                            match val {
-                                serde_json::Value::String(s) => record.push(s),
-                                serde_json::Value::Null => record.push("NULL".to_string()),
-                                v => record.push(v.to_string()),
-                            }
-                        }
-                        csv_wtr.write_record(&record).map_err(|e| e.to_string())?;
-
-                        count += 1;
-                        if count % 100 == 0 {
-                            app.emit(
-                                "export_progress",
-                                ExportProgress {
-                                    rows_processed: count,
-                                },
-                            )
-                            .unwrap_or(());
-                        }
-                    }
-                    csv_wtr.flush().map_err(|e| e.to_string())?;
-                } else {
-                    writer.write_all(b"[").map_err(|e| e.to_string())?;
-                    let mut first = true;
-
-                    while let Some(row_res) = rows.next().await {
-                        let row = row_res.map_err(|e| e.to_string())?;
-
-                        if !first {
-                            writer.write_all(b",").map_err(|e| e.to_string())?;
-                        }
-                        first = false;
-
-                        let mut obj = serde_json::Map::new();
-                        for i in 0..row.columns().len() {
-                            let name = row.column(i).name().to_string();
-                            let val = extract_mysql_value(&row, i);
-                            obj.insert(name, val);
-                        }
-                        serde_json::to_writer(&mut writer, &obj).map_err(|e| e.to_string())?;
-
-                        count += 1;
-                        if count % 100 == 0 {
-                            app.emit(
-                                "export_progress",
-                                ExportProgress {
-                                    rows_processed: count,
-                                },
-                            )
-                            .unwrap_or(());
-                        }
-                    }
-                    writer.write_all(b"]").map_err(|e| e.to_string())?;
-                    writer.flush().map_err(|e| e.to_string())?;
-                }
+                export_rows!(rows, extract_mysql_value, format, delimiter_byte, writer, app)
             }
             "postgres" => {
                 let pool = get_postgres_pool(&params).await?;
                 let mut rows = sqlx::query(&sanitized_query).fetch(&pool);
-
-                if format == "csv" {
-                    let mut csv_wtr = csv::WriterBuilder::new().from_writer(writer);
-                    let mut headers_written = false;
-
-                    while let Some(row_res) = rows.next().await {
-                        let row = row_res.map_err(|e| e.to_string())?;
-
-                        if !headers_written {
-                            let headers: Vec<String> =
-                                row.columns().iter().map(|c| c.name().to_string()).collect();
-                            csv_wtr.write_record(&headers).map_err(|e| e.to_string())?;
-                            headers_written = true;
-                        }
-
-                        let mut record = Vec::new();
-                        for i in 0..row.columns().len() {
-                            let val = extract_postgres_value(&row, i);
-                            match val {
-                                serde_json::Value::String(s) => record.push(s),
-                                serde_json::Value::Null => record.push("NULL".to_string()),
-                                v => record.push(v.to_string()),
-                            }
-                        }
-                        csv_wtr.write_record(&record).map_err(|e| e.to_string())?;
-
-                        count += 1;
-                        if count % 100 == 0 {
-                            app.emit(
-                                "export_progress",
-                                ExportProgress {
-                                    rows_processed: count,
-                                },
-                            )
-                            .unwrap_or(());
-                        }
-                    }
-                    csv_wtr.flush().map_err(|e| e.to_string())?;
-                } else {
-                    writer.write_all(b"[").map_err(|e| e.to_string())?;
-                    let mut first = true;
-
-                    while let Some(row_res) = rows.next().await {
-                        let row = row_res.map_err(|e| e.to_string())?;
-
-                        if !first {
-                            writer.write_all(b",").map_err(|e| e.to_string())?;
-                        }
-                        first = false;
-
-                        let mut obj = serde_json::Map::new();
-                        for i in 0..row.columns().len() {
-                            let name = row.column(i).name().to_string();
-                            let val = extract_postgres_value(&row, i);
-                            obj.insert(name, val);
-                        }
-                        serde_json::to_writer(&mut writer, &obj).map_err(|e| e.to_string())?;
-
-                        count += 1;
-                        if count % 100 == 0 {
-                            app.emit(
-                                "export_progress",
-                                ExportProgress {
-                                    rows_processed: count,
-                                },
-                            )
-                            .unwrap_or(());
-                        }
-                    }
-                    writer.write_all(b"]").map_err(|e| e.to_string())?;
-                    writer.flush().map_err(|e| e.to_string())?;
-                }
+                export_rows!(rows, extract_postgres_value, format, delimiter_byte, writer, app)
             }
             "sqlite" => {
                 let pool = get_sqlite_pool(&params).await?;
                 let mut rows = sqlx::query(&sanitized_query).fetch(&pool);
-
-                if format == "csv" {
-                    let mut csv_wtr = csv::WriterBuilder::new().from_writer(writer);
-                    let mut headers_written = false;
-
-                    while let Some(row_res) = rows.next().await {
-                        let row = row_res.map_err(|e| e.to_string())?;
-
-                        if !headers_written {
-                            let headers: Vec<String> =
-                                row.columns().iter().map(|c| c.name().to_string()).collect();
-                            csv_wtr.write_record(&headers).map_err(|e| e.to_string())?;
-                            headers_written = true;
-                        }
-
-                        let mut record = Vec::new();
-                        for i in 0..row.columns().len() {
-                            let val = extract_sqlite_value(&row, i);
-                            match val {
-                                serde_json::Value::String(s) => record.push(s),
-                                serde_json::Value::Null => record.push("NULL".to_string()),
-                                v => record.push(v.to_string()),
-                            }
-                        }
-                        csv_wtr.write_record(&record).map_err(|e| e.to_string())?;
-
-                        count += 1;
-                        if count % 100 == 0 {
-                            app.emit(
-                                "export_progress",
-                                ExportProgress {
-                                    rows_processed: count,
-                                },
-                            )
-                            .unwrap_or(());
-                        }
-                    }
-                    csv_wtr.flush().map_err(|e| e.to_string())?;
-                } else {
-                    writer.write_all(b"[").map_err(|e| e.to_string())?;
-                    let mut first = true;
-
-                    while let Some(row_res) = rows.next().await {
-                        let row = row_res.map_err(|e| e.to_string())?;
-
-                        if !first {
-                            writer.write_all(b",").map_err(|e| e.to_string())?;
-                        }
-                        first = false;
-
-                        let mut obj = serde_json::Map::new();
-                        for i in 0..row.columns().len() {
-                            let name = row.column(i).name().to_string();
-                            let val = extract_sqlite_value(&row, i);
-                            obj.insert(name, val);
-                        }
-                        serde_json::to_writer(&mut writer, &obj).map_err(|e| e.to_string())?;
-
-                        count += 1;
-                        if count % 100 == 0 {
-                            app.emit(
-                                "export_progress",
-                                ExportProgress {
-                                    rows_processed: count,
-                                },
-                            )
-                            .unwrap_or(());
-                        }
-                    }
-                    writer.write_all(b"]").map_err(|e| e.to_string())?;
-                    writer.flush().map_err(|e| e.to_string())?;
-                }
+                export_rows!(rows, extract_sqlite_value, format, delimiter_byte, writer, app)
             }
-            _ => return Err("Unsupported driver".into()),
+            _ => Err("Unsupported driver".into()),
         }
-
-        Ok(())
     });
 
     let abort_handle = task.abort_handle();

@@ -49,7 +49,7 @@ import { DateInput } from "./DateInput";
 import { RowEditorSidebar } from "./RowEditorSidebar";
 import { useDatabase } from "../../hooks/useDatabase";
 import {
-  rowsToTSV,
+  rowsToCSV,
   rowsToJSON,
   getSelectedRows,
   copyTextToClipboard,
@@ -85,6 +85,7 @@ interface DataGridProps {
   selectedRows?: Set<number>;
   onSelectionChange?: (indices: Set<number>) => void;
   copyFormat?: "csv" | "json";
+  csvDelimiter?: string;
   sortClause?: string;
   onSort?: (colName: string) => void;
 }
@@ -112,6 +113,7 @@ export const DataGrid = React.memo(
     selectedRows: externalSelectedRows,
     onSelectionChange,
     copyFormat,
+    csvDelimiter = ",",
     sortClause,
     onSort,
   }: DataGridProps) => {
@@ -749,22 +751,24 @@ export const DataGrid = React.memo(
       [t],
     );
 
+    const formatRows = useCallback(
+      (rows: unknown[][]) =>
+        copyFormat === "json"
+          ? rowsToJSON(rows, columns)
+          : rowsToCSV(rows, "null", csvDelimiter),
+      [columns, copyFormat, csvDelimiter],
+    );
+
     const copySelectedOrContextRow = useCallback(async () => {
       if (!contextMenu) return;
 
-      // Copy all selected rows if any, otherwise fall back to the right-clicked row
       const rows =
         selectedRowIndices.size > 0
           ? getSelectedRows(data, selectedRowIndices)
           : [contextMenu.row];
 
-      const text =
-        copyFormat === "json"
-          ? rowsToJSON(rows, columns)
-          : rowsToTSV(rows, "null");
-
-      await copyToClipboard(text);
-    }, [contextMenu, selectedRowIndices, data, columns, copyFormat, copyToClipboard]);
+      await copyToClipboard(formatRows(rows));
+    }, [contextMenu, selectedRowIndices, data, formatRows, copyToClipboard]);
 
     const copyHeaderName = useCallback(async () => {
       if (!headerContextMenu) return;
@@ -787,16 +791,8 @@ export const DataGrid = React.memo(
 
     const copySelectedCells = useCallback(async () => {
       if (selectedRowIndices.size === 0) return;
-
-      const selectedRows = getSelectedRows(data, selectedRowIndices);
-
-      const text =
-        copyFormat === "json"
-          ? rowsToJSON(selectedRows, columns)
-          : rowsToTSV(selectedRows, "null");
-
-      await copyToClipboard(text);
-    }, [selectedRowIndices, data, columns, copyFormat, copyToClipboard]);
+      await copyToClipboard(formatRows(getSelectedRows(data, selectedRowIndices)));
+    }, [selectedRowIndices, data, formatRows, copyToClipboard]);
 
     // Handle keyboard shortcuts
     useEffect(() => {
