@@ -83,9 +83,29 @@ export function extractTableName(sql: string): string | null {
     return null;
   }
 
-  // Check if it's an aggregate query (COUNT, SUM, AVG, MIN, MAX, GROUP BY)
+  // DISTINCT removes duplicates - editing a row could affect deduplication
+  if (/\bSELECT\s+DISTINCT\b/i.test(cleaned)) {
+    return null;
+  }
+
+  // Check if it's an aggregate query (COUNT, SUM, AVG, MIN, MAX, GROUP BY, HAVING)
   // These don't return table rows, so we shouldn't fetch PK
-  if (/\b(COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(cleaned) || /\bGROUP\s+BY\b/i.test(cleaned)) {
+  if (/\b(COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(cleaned) || /\bGROUP\s+BY\b/i.test(cleaned) || /\bHAVING\b/i.test(cleaned)) {
+    return null;
+  }
+
+  // JOINs produce rows from multiple tables - not safely editable against a single table
+  if (/\bJOIN\b/i.test(cleaned)) {
+    return null;
+  }
+
+  // Set operations combine results from multiple queries
+  if (/\b(UNION|INTERSECT|EXCEPT)\b/i.test(cleaned)) {
+    return null;
+  }
+
+  // Subquery in FROM clause (derived table)
+  if (/\bFROM\s*\(/i.test(cleaned)) {
     return null;
   }
 

@@ -52,5 +52,32 @@ describe('sql utils', () => {
         expect(extractTableName('SELECT SUM(price) FROM orders')).toBeNull();
         expect(extractTableName('SELECT * FROM users GROUP BY type')).toBeNull();
     });
+
+    it('should return null for DISTINCT queries', () => {
+        expect(extractTableName('SELECT DISTINCT name FROM users')).toBeNull();
+        expect(extractTableName('SELECT DISTINCT * FROM orders')).toBeNull();
+    });
+
+    it('should return null for HAVING queries', () => {
+        expect(extractTableName('SELECT type, COUNT(*) FROM users GROUP BY type HAVING COUNT(*) > 1')).toBeNull();
+    });
+
+    it('should return null for JOIN queries', () => {
+        expect(extractTableName('SELECT u.* FROM users u JOIN orders o ON u.id = o.user_id')).toBeNull();
+        expect(extractTableName('SELECT * FROM users LEFT JOIN posts ON users.id = posts.user_id')).toBeNull();
+        expect(extractTableName('SELECT * FROM users INNER JOIN orders ON users.id = orders.uid')).toBeNull();
+        expect(extractTableName('SELECT * FROM a RIGHT JOIN b ON a.id = b.a_id')).toBeNull();
+    });
+
+    it('should return null for UNION/INTERSECT/EXCEPT queries', () => {
+        expect(extractTableName('SELECT * FROM users UNION SELECT * FROM admins')).toBeNull();
+        expect(extractTableName('SELECT * FROM users UNION ALL SELECT * FROM admins')).toBeNull();
+        expect(extractTableName('SELECT id FROM users INTERSECT SELECT id FROM admins')).toBeNull();
+        expect(extractTableName('SELECT id FROM users EXCEPT SELECT id FROM admins')).toBeNull();
+    });
+
+    it('should return null for subquery in FROM clause', () => {
+        expect(extractTableName('SELECT * FROM (SELECT * FROM users WHERE active = 1) sub')).toBeNull();
+    });
   });
 });

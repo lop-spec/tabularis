@@ -98,7 +98,7 @@ const CHEVRON_SELECT_STYLE: React.CSSProperties = {
 
 export const Editor = () => {
   const { t } = useTranslation();
-  const { activeConnectionId, tables, activeDriver, activeSchema, activeCapabilities } = useDatabase();
+  const { activeConnectionId, tables, views, activeDriver, activeSchema, activeCapabilities } = useDatabase();
   const { explorerConnectionId } = useConnectionLayoutContext();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
@@ -507,7 +507,11 @@ export const Editor = () => {
 
         // If not a table tab, try to extract table name from the query
         if (!tableName && textToRun) {
-          tableName = extractTableName(textToRun) || undefined;
+          const extracted = extractTableName(textToRun);
+          // Reject views — they may not be updatable
+          if (extracted && !views.some((v) => v.name === extracted)) {
+            tableName = extracted;
+          }
         }
 
         if (tableName) {
@@ -527,6 +531,7 @@ export const Editor = () => {
           result: resultWithCount,
           executionTime: end - start,
           isLoading: false,
+          activeTable: tableName || null,
         });
       } catch (err) {
         updateTab(targetTabId, {
@@ -535,7 +540,7 @@ export const Editor = () => {
         });
       }
     },
-    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t, activeDriver, activeSchema, activeCapabilities?.schemas],
+    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t, activeDriver, activeSchema, activeCapabilities?.schemas, views],
   );
 
   const loadCount = useCallback(async () => {
@@ -2257,7 +2262,7 @@ export const Editor = () => {
                     autoIncrementColumns={activeTab.autoIncrementColumns}
                     defaultValueColumns={activeTab.defaultValueColumns}
                     nullableColumns={activeTab.nullableColumns}
-                    columnMetadata={activeTab.type === 'table' ? activeTab.columnMetadata : undefined}
+                    columnMetadata={activeTab.columnMetadata}
                     connectionId={activeConnectionId}
                     onRefresh={handleRefresh}
                     pendingChanges={activeTab.pendingChanges}
