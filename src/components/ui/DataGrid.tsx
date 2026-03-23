@@ -50,8 +50,8 @@ import { DateInput } from "./DateInput";
 import { RowEditorSidebar } from "./RowEditorSidebar";
 import { useDatabase } from "../../hooks/useDatabase";
 import {
-  rowToTSV,
-  rowsToTSV,
+  rowsToCSV,
+  rowsToJSON,
   getSelectedRows,
   copyTextToClipboard,
 } from "../../utils/clipboard";
@@ -85,6 +85,8 @@ interface DataGridProps {
   onMarkForDeletion?: (pkVal: unknown) => void;
   selectedRows?: Set<number>;
   onSelectionChange?: (indices: Set<number>) => void;
+  copyFormat?: "csv" | "json";
+  csvDelimiter?: string;
   sortClause?: string;
   onSort?: (colName: string) => void;
 }
@@ -111,6 +113,8 @@ export const DataGrid = React.memo(
     onMarkForDeletion,
     selectedRows: externalSelectedRows,
     onSelectionChange,
+    copyFormat,
+    csvDelimiter = ",",
     sortClause,
     onSort,
   }: DataGridProps) => {
@@ -748,14 +752,24 @@ export const DataGrid = React.memo(
       [t],
     );
 
-    const copyCellValue = useCallback(async () => {
+    const formatRows = useCallback(
+      (rows: unknown[][]) =>
+        copyFormat === "json"
+          ? rowsToJSON(rows, columns)
+          : rowsToCSV(rows, "null", csvDelimiter),
+      [columns, copyFormat, csvDelimiter],
+    );
+
+    const copySelectedOrContextRow = useCallback(async () => {
       if (!contextMenu) return;
 
-      // Copy the entire row as TSV (Tab-Separated Values)
-      const rowText = rowToTSV(contextMenu.row, "null");
+      const rows =
+        selectedRowIndices.size > 0
+          ? getSelectedRows(data, selectedRowIndices)
+          : [contextMenu.row];
 
-      await copyToClipboard(rowText);
-    }, [contextMenu, copyToClipboard]);
+      await copyToClipboard(formatRows(rows));
+    }, [contextMenu, selectedRowIndices, data, formatRows, copyToClipboard]);
 
     const copyHeaderName = useCallback(async () => {
       if (!headerContextMenu) return;
@@ -778,14 +792,8 @@ export const DataGrid = React.memo(
 
     const copySelectedCells = useCallback(async () => {
       if (selectedRowIndices.size === 0) return;
-
-      const selectedRows = getSelectedRows(data, selectedRowIndices);
-
-      // Format as TSV for easy pasting into spreadsheets
-      const text = rowsToTSV(selectedRows, "null");
-
-      await copyToClipboard(text);
-    }, [selectedRowIndices, data, copyToClipboard]);
+      await copyToClipboard(formatRows(getSelectedRows(data, selectedRowIndices)));
+    }, [selectedRowIndices, data, formatRows, copyToClipboard]);
 
     // Handle keyboard shortcuts
     useEffect(() => {
@@ -1234,9 +1242,9 @@ export const DataGrid = React.memo(
 
             menuItems.push(
               {
-                label: t("dataGrid.copyRow"),
+                label: t("dataGrid.copySelectedRows"),
                 icon: Copy,
-                action: copyCellValue,
+                action: copySelectedOrContextRow,
               },
               {
                 label: t("contextMenu.openSidebar"),

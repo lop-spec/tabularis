@@ -1,6 +1,7 @@
 import { createContext } from "react";
 
 export type AppLanguage = "auto" | "en" | "it" | "es";
+export type CopyFormat = "csv" | "json";
 export type AiProvider =
   | "openai"
   | "anthropic"
@@ -30,6 +31,8 @@ export interface Settings {
   loggingEnabled?: boolean;
   maxLogEntries?: number;
   erDiagramDefaultLayout?: ERDiagramLayout;
+  copyFormat?: CopyFormat;
+  csvDelimiter?: string;
   activeExternalDrivers?: string[];
   plugins?: Record<string, PluginConfig>;
 }
@@ -58,5 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   aiCustomOpenaiModel: "",
   loggingEnabled: true,
   maxLogEntries: 1000,
+  copyFormat: "csv",
+  csvDelimiter: ",",
   erDiagramDefaultLayout: "LR",
 };

@@ -37,6 +37,8 @@ pub struct AppConfig {
     pub schema_preferences: Option<HashMap<String, String>>,
     pub selected_schemas: Option<HashMap<String, Vec<String>>>,
     pub max_blob_size: Option<u64>,
+    pub copy_format: Option<String>,
+    pub csv_delimiter: Option<String>,
     pub active_external_drivers: Option<Vec<String>>,
     pub custom_registry_url: Option<String>,
     pub plugins: Option<HashMap<String, PluginConfig>>,
@@ -134,6 +136,12 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.max_blob_size.is_some() {
             existing_config.max_blob_size = config.max_blob_size;
+        }
+        if config.copy_format.is_some() {
+            existing_config.copy_format = config.copy_format;
+        }
+        if config.csv_delimiter.is_some() {
+            existing_config.csv_delimiter = config.csv_delimiter;
         }
         if config.active_external_drivers.is_some() {
             existing_config.active_external_drivers = config.active_external_drivers;

@@ -39,6 +39,7 @@ import {
   BookOpen,
   Hash,
   Loader2,
+  Copy,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -89,9 +90,15 @@ interface ExportProgress {
   rows_processed: number;
 }
 
+const CHEVRON_SELECT_STYLE: React.CSSProperties = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right center',
+};
+
 export const Editor = () => {
   const { t } = useTranslation();
-  const { activeConnectionId, tables, activeDriver, activeSchema, activeCapabilities } = useDatabase();
+  const { activeConnectionId, tables, views, activeDriver, activeSchema, activeCapabilities } = useDatabase();
   const { explorerConnectionId } = useConnectionLayoutContext();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
@@ -209,6 +216,12 @@ export const Editor = () => {
   const [tempPage, setTempPage] = useState("1");
   const [isCountLoading, setIsCountLoading] = useState(false);
   const [applyToAll, setApplyToAll] = useState(false);
+  const [copyFormat, setCopyFormat] = useState<"csv" | "json">(
+    settings.copyFormat ?? "csv",
+  );
+  const [csvDelimiter, setCsvDelimiter] = useState(
+    settings.csvDelimiter ?? ",",
+  );
 
   const activeTabType = activeTab?.type;
   const activeTabQuery = activeTab?.query;
@@ -494,7 +507,11 @@ export const Editor = () => {
 
         // If not a table tab, try to extract table name from the query
         if (!tableName && textToRun) {
-          tableName = extractTableName(textToRun) || undefined;
+          const extracted = extractTableName(textToRun);
+          // Reject views — they may not be updatable
+          if (extracted && !views.some((v) => v.name === extracted)) {
+            tableName = extracted;
+          }
         }
 
         if (tableName) {
@@ -514,6 +531,7 @@ export const Editor = () => {
           result: resultWithCount,
           executionTime: end - start,
           isLoading: false,
+          activeTable: tableName || null,
         });
       } catch (err) {
         updateTab(targetTabId, {
@@ -522,7 +540,7 @@ export const Editor = () => {
         });
       }
     },
-    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t, activeDriver, activeSchema, activeCapabilities?.schemas],
+    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t, activeDriver, activeSchema, activeCapabilities?.schemas, views],
   );
 
   const loadCount = useCallback(async () => {
@@ -1541,6 +1559,7 @@ export const Editor = () => {
         query,
         filePath,
         format,
+        csvDelimiter: format === "csv" ? csvDelimiter : undefined,
       });
 
       // Success: update modal state instead of showing toast
@@ -1696,7 +1715,7 @@ export const Editor = () => {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center p-2 border-b border-default bg-elevated gap-2 h-[50px]">
+      <div className="flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-2 h-[50px]">
         {activeTab.isLoading ? (
           <button
             onClick={stopQuery}
@@ -2152,6 +2171,38 @@ export const Editor = () => {
                       </button>
                     </div>
 
+                    <div className="w-[1px] h-4 bg-surface-secondary mx-1"></div>
+
+                    <div className="flex items-center gap-1 text-secondary">
+                      <Copy size={13} className="shrink-0" />
+                      <select
+                        value={copyFormat}
+                        onChange={(e) =>
+                          setCopyFormat(e.target.value as "csv" | "json")
+                        }
+                        className="bg-transparent border-none text-[11px] text-secondary hover:text-primary focus:outline-none cursor-pointer appearance-none pr-3 font-medium uppercase tracking-wide"
+                        title={t("settings.copyFormat")}
+                        style={CHEVRON_SELECT_STYLE}
+                      >
+                        <option value="csv">CSV</option>
+                        <option value="json">JSON</option>
+                      </select>
+                      {copyFormat === "csv" && (
+                        <select
+                          value={csvDelimiter}
+                          onChange={(e) => setCsvDelimiter(e.target.value)}
+                          className="bg-transparent border-none text-[11px] text-secondary hover:text-primary focus:outline-none cursor-pointer appearance-none pr-3 font-medium tracking-wide"
+                          title={t("settings.csvDelimiter")}
+                          style={CHEVRON_SELECT_STYLE}
+                        >
+                          <option value=",">{t("settings.delimiterComma")}</option>
+                          <option value=";">{t("settings.delimiterSemicolon")}</option>
+                          <option value={"\t"}>{t("settings.delimiterTab")}</option>
+                          <option value="|">{t("settings.delimiterPipe")}</option>
+                        </select>
+                      )}
+                    </div>
+
                     {/* Separator */}
                     {hasPendingChanges && (
                       <div className="w-[1px] h-4 bg-surface-secondary mx-1"></div>
@@ -2211,7 +2262,7 @@ export const Editor = () => {
                     autoIncrementColumns={activeTab.autoIncrementColumns}
                     defaultValueColumns={activeTab.defaultValueColumns}
                     nullableColumns={activeTab.nullableColumns}
-                    columnMetadata={activeTab.type === 'table' ? activeTab.columnMetadata : undefined}
+                    columnMetadata={activeTab.columnMetadata}
                     connectionId={activeConnectionId}
                     onRefresh={handleRefresh}
                     pendingChanges={activeTab.pendingChanges}
@@ -2224,6 +2275,8 @@ export const Editor = () => {
                     onMarkForDeletion={handleMarkForDeletion}
                     selectedRows={new Set(activeTab.selectedRows || [])}
                     onSelectionChange={handleSelectionChange}
+                    copyFormat={copyFormat}
+                    csvDelimiter={csvDelimiter}
                     sortClause={activeTab.sortClause}
                     onSort={activeTab.type === "table" && (activeTab.result?.rows.length ?? 0) > 0 ? handleSort : undefined}
                   />

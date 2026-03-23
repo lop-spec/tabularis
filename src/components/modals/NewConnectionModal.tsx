@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   X,
@@ -165,6 +165,7 @@ export const NewConnectionModal = ({
 
   // ── validation errors ──
   const [nameError, setNameError] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [databasesTabError, setDatabasesTabError] = useState(false);
 
   // ── capabilities ──
@@ -422,6 +423,7 @@ export const NewConnectionModal = ({
       setMessage(t("newConnection.nameRequired"));
       setTestResult("error");
       setNameError(true);
+      nameInputRef.current?.focus();
       return;
     }
     if (isMultiDb) {
@@ -1127,6 +1129,7 @@ export const NewConnectionModal = ({
             style={getDriverColorStyle(activeDriver)}
           />
           <input
+            ref={nameInputRef}
             type="text"
             value={name}
             onChange={(e) => {

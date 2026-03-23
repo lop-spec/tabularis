@@ -1,3 +1,28 @@
+## [0.9.10](https://github.com/debba/tabularis/compare/v0.9.9...v0.9.10) (2026-03-18)
+
+
+### Bug Fixes
+
+* **blog:** make tag filter dropdown inline instead of overlay ([96dbf96](https://github.com/debba/tabularis/commit/96dbf961924bcc39a59e0b23369a28e1a4decc09))
+* **database-provider:** reflect multi-db selection in window title ([85548f8](https://github.com/debba/tabularis/commit/85548f8d4ce2ddd098de7caa4f7d0c3a3c5cb7c0))
+* **index:** update gitnexus version in AGENTS.md ([d3c3130](https://github.com/debba/tabularis/commit/d3c3130dedb4ed062ed76cf4f1f75367aa4b8ae3))
+* **modals:** focus name input on validation and update placeholder ([eac063f](https://github.com/debba/tabularis/commit/eac063f43fb761ab98ac5aa090aef907edebc577))
+* normalize blog post dates to ISO 8601 format (YYYY-MM-DDTHH:MM:SS) ([5510dba](https://github.com/debba/tabularis/commit/5510dbac65825c8dd1e7a26439deed718f292b03))
+
+
+### Features
+
+* **blog:** replace tag cloud with collapsible "Filter by tag" dropdown ([6926bd4](https://github.com/debba/tabularis/commit/6926bd49197e70cf66102c2275396c529bfdf122))
+* **commands:** allow selecting database for record operations ([e12efdd](https://github.com/debba/tabularis/commit/e12efddd6d57ac217d00234eb0fa7e25c2a931f7))
+* Display platform detection badge ([7b55b58](https://github.com/debba/tabularis/commit/7b55b58479f4bf50e20c634437a9ce71863e7974))
+* **docs:** add changelog page and rename screenshots ([fe78037](https://github.com/debba/tabularis/commit/fe78037a504442e8982d5f0ce14f7f3ff2617e3a))
+* **download:** add download thank you page with auto-trigger and ([b1e78c3](https://github.com/debba/tabularis/commit/b1e78c36c5059ebbbc7798ebfaf9c5109974b624))
+* **mcp:** add multi-client support and connection improvements ([d9655e6](https://github.com/debba/tabularis/commit/d9655e68de33ab83e6b124a3e4e2cf4fd50705cc))
+* **search:** add client-side search functionality ([652b3e4](https://github.com/debba/tabularis/commit/652b3e4ef74dc484ddcd7019a9155d55a76f1b47))
+* website - add reading time to PostCard ([d08cc02](https://github.com/debba/tabularis/commit/d08cc0277d55eca545476533c07d83df20708e69))
+
+
+
 ## [0.9.9](https://github.com/debba/tabularis/compare/v0.9.8...v0.9.9) (2026-03-14)
 
 
