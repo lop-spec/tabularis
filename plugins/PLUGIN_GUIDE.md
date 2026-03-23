@@ -248,9 +248,9 @@ elif method == "initialize":
 
 ---
 
-## 3b. UI Extensions (Phase 2)
+## 3b. UI Extensions
 
-Starting with Tabularis v0.9.15, plugins can inject custom React components into the host UI through a **slot-based extension system**. This is entirely optional — plugins without UI extensions continue to work as before.
+Plugins can inject custom React components into the host UI through a **slot-based extension system**. This is entirely optional — plugins without UI extensions continue to work as before.
 
 ### Declaring UI Extensions
 
@@ -264,43 +264,116 @@ Add an optional `ui_extensions` array to your `manifest.json`:
   "ui_extensions": [
     {
       "slot": "row-editor-sidebar.field.after",
-      "module": "./ui/FieldPreview.tsx",
+      "module": "ui/field-preview.js",
       "order": 50
     },
     {
       "slot": "data-grid.toolbar.actions",
-      "module": "./ui/ExportButton.tsx"
+      "module": "ui/export-button.js"
     },
     {
-      "slot": "settings.plugin.actions",
-      "module": "./ui/DiagnosticsButton.tsx"
+      "slot": "settings.plugin.before_settings",
+      "module": "ui/auth-panel.js",
+      "driver": "my-plugin"
     }
   ]
 }
 ```
 
+#### Extension entry fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `slot` | string | yes | Target slot name (see table below). |
+| `module` | string | yes | Relative path to the pre-built IIFE JavaScript bundle inside the plugin folder. |
+| `order` | number | no | Sort order within the slot. Lower values render first. Default: `100`. |
+| `driver` | string | no | If set, the contribution is only active when the active connection's driver matches this value. Useful for plugins that should only appear for their own driver. |
+
 ### Available Slots
 
-| Slot Name | Location | Use Cases |
-|-----------|----------|-----------|
-| `row-edit-modal.field.after` | After each field in New Row modal | Validation hints, previews |
-| `row-edit-modal.footer.before` | Before Save/Cancel buttons | Batch actions, templates |
-| `row-editor-sidebar.field.after` | After each field in Row Editor sidebar | Field-level previews, lookups |
-| `row-editor-sidebar.header.actions` | Sidebar header area | "Copy as JSON", audit links |
-| `data-grid.toolbar.actions` | Table toolbar (after LIMIT) | Export, analysis buttons |
-| `data-grid.context-menu.items` | Right-click menu on grid rows | Row-level actions |
-| `sidebar.footer.actions` | Main sidebar footer | Status indicators, quick actions |
-| `settings.plugin.actions` | Per-plugin actions in Settings | Diagnostics, config shortcuts |
+| Slot Name | Location | Context Data | Use Cases |
+|-----------|----------|--------------|-----------|
+| `row-edit-modal.field.after` | After each field in New Row modal | `connectionId`, `tableName`, `schema`, `driver`, `columnName`, `rowData`, `isInsertion` | Validation hints, field previews |
+| `row-edit-modal.footer.before` | Before Save/Cancel in New Row modal | `connectionId`, `tableName`, `schema`, `driver`, `rowData`, `isInsertion` | Batch actions, templates |
+| `row-editor-sidebar.field.after` | After each field in Row Editor sidebar | `connectionId`, `tableName`, `schema`, `driver`, `columnName`, `rowData`, `rowIndex` | Field-level previews, lookups |
+| `row-editor-sidebar.header.actions` | Sidebar header action buttons | `connectionId`, `tableName`, `schema`, `driver`, `rowData`, `rowIndex` | "Copy as JSON", audit links |
+| `data-grid.toolbar.actions` | Table toolbar (right side) | `connectionId`, `tableName`, `schema`, `driver` | Export buttons, analysis tools |
+| `data-grid.context-menu.items` | Right-click context menu on grid rows | `connectionId`, `tableName`, `schema`, `driver`, `columnName`, `rowIndex`, `rowData` | Row-level custom actions |
+| `sidebar.footer.actions` | Explorer sidebar footer | `connectionId`, `driver` | Status indicators, quick actions |
+| `settings.plugin.actions` | Per-plugin actions in Settings modal | `targetPluginId` | Diagnostics, re-auth buttons |
+| `settings.plugin.before_settings` | Content above plugin settings form | `targetPluginId` | OAuth panels, status banners |
+| `connection-modal.connection_content` | Inside the connection form | `driver` | Custom connection fields |
+
+### SlotContext
+
+Every slot component receives a `context` object with the fields listed above. The available fields depend on the slot — for example, `rowData` is only present for row-level slots. All fields are optional.
+
+```typescript
+interface SlotContext {
+  connectionId?: string | null;
+  tableName?: string | null;
+  schema?: string | null;
+  driver?: string | null;
+  rowData?: Record<string, unknown>;
+  columnName?: string;
+  rowIndex?: number;
+  isInsertion?: boolean;
+  targetPluginId?: string;
+}
+```
+
+### Building UI Extension Bundles
+
+Plugin UI components must be pre-built as **IIFE bundles** (Immediately Invoked Function Expression). The host provides `React`, `ReactJSXRuntime`, and the plugin API as globals — your bundle must **not** bundle its own copies of these.
+
+#### Vite configuration example
+
+```typescript
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    lib: {
+      entry: "src/MyComponent.tsx",
+      formats: ["iife"],
+      name: "__tabularis_plugin__",
+      fileName: () => "ui/my-component.js",
+    },
+    rollupOptions: {
+      external: ["react", "react/jsx-runtime", "@tabularis/plugin-api"],
+      output: {
+        globals: {
+          react: "React",
+          "react/jsx-runtime": "ReactJSXRuntime",
+          "@tabularis/plugin-api": "__TABULARIS_API__",
+        },
+      },
+    },
+  },
+});
+```
+
+> **Key points:**
+> - The `name` field **must** be `"__tabularis_plugin__"` — the host looks for this global.
+> - The component must be the **default export** of the entry file.
+> - Multiple slots can reference the same `module` file.
 
 ### Writing a Slot Component
 
-Each slot component is a standard React component that receives `context` (slot-specific data) and `pluginId` as props:
+Each component receives `context` (slot-specific data) and `pluginId` as props:
 
 ```tsx
-// ui/FieldPreview.tsx
-import type { SlotComponentProps } from "@tabularis/plugin-api";
+// src/FieldPreview.tsx
+import { usePluginConnection } from "@tabularis/plugin-api";
 
-export default function FieldPreview({ context, pluginId }: SlotComponentProps) {
+export default function FieldPreview({ context, pluginId }: {
+  context: Record<string, unknown>;
+  pluginId: string;
+}) {
+  const { driver } = usePluginConnection();
   if (context.columnName !== "geometry") return null;
 
   return (
@@ -315,13 +388,62 @@ export default function FieldPreview({ context, pluginId }: SlotComponentProps) 
 
 Slot components can import these hooks from `@tabularis/plugin-api`:
 
-| Hook | Purpose |
-|------|---------|
-| `usePluginQuery()` | Execute read-only queries on the active connection |
-| `usePluginConnection()` | Access connection metadata (ID, driver, schema) |
-| `usePluginToast()` | Show info/error/warning dialogs |
-| `usePluginSetting(pluginId)` | Read/write plugin settings |
-| `usePluginTheme()` | Access theme info (dark/light, colors) |
+| Hook | Returns | Purpose |
+|------|---------|---------|
+| `usePluginQuery()` | `(query: string) => Promise<{ columns, rows }>` | Execute read-only queries on the active connection |
+| `usePluginConnection()` | `{ connectionId, driver, schema }` | Access active connection metadata |
+| `usePluginToast()` | `{ showInfo(), showError(), showWarning() }` | Show toast notifications |
+| `usePluginModal()` | `{ openModal(options), closeModal() }` | Open host-managed modals with custom content |
+| `usePluginSetting(pluginId)` | `{ getSetting(key), setSetting(key, value) }` | Read/write plugin settings |
+| `usePluginTheme()` | `{ themeId, themeName, isDark, colors }` | Access current theme info |
+| `usePluginTranslation(pluginId)` | `t(key)` | Access plugin-specific i18n translations |
+| `openUrl(url)` | `Promise<void>` | Open a URL in the system browser |
+
+#### Plugin Modal
+
+`usePluginModal()` lets you open a host-managed modal from within a slot component:
+
+```tsx
+const { openModal, closeModal } = usePluginModal();
+
+openModal({
+  title: "OAuth Setup",
+  content: <MyOAuthForm onDone={closeModal} />,
+  size: "md",  // "sm" | "md" | "lg" | "xl"
+});
+```
+
+#### Plugin Translations
+
+Plugins can ship locale files at `locales/{lang}.json` inside their plugin folder. The host loads them automatically and registers them under the plugin's namespace.
+
+```
+my-plugin/
+├── manifest.json
+├── my-plugin-binary
+├── locales/
+│   ├── en.json
+│   └── it.json
+└── ui/
+    └── my-component.js
+```
+
+Use `usePluginTranslation("my-plugin")` in components to access translations via `t("key")`.
+
+### Conditional Rendering
+
+You can control when a contribution appears using two mechanisms:
+
+1. **`driver` field in manifest**: Set `"driver": "my-plugin"` to only render when the active connection uses that driver.
+2. **Component-level filtering**: Return `null` from your component based on `context` values.
+
+```tsx
+export default function PostgresOnly({ context }: SlotComponentProps) {
+  // Only render for PostgreSQL connections
+  if (context.driver !== "postgres") return null;
+  return <div>PostgreSQL-specific action</div>;
+}
+```
 
 ### Security Restrictions
 
@@ -335,18 +457,6 @@ All host interaction goes through `@tabularis/plugin-api`.
 ### Error Isolation
 
 Each contribution is wrapped in a `SlotErrorBoundary`. If your component throws, a small error badge is shown instead — other plugins and the host continue working normally.
-
-### Built-in Example: JSON Viewer
-
-Tabularis includes a built-in JSON Viewer plugin as a reference implementation. It registers two slot contributions (`row-editor-sidebar.field.after` and `row-edit-modal.field.after`) that render a collapsible, syntax-highlighted JSON tree for JSON/JSONB columns.
-
-Key implementation details:
-- **Detection**: Checks column name for "json" substring, or parses string values that look like JSON objects/arrays
-- **Rendering**: Recursive `JsonValue`/`JsonObject`/`JsonArray` components with expand/collapse state
-- **Conditional display**: Returns `null` for non-JSON columns (component-level filtering)
-- **Clipboard**: Copy button using `navigator.clipboard.writeText()`
-
-Source: [`src/plugins/examples/json-viewer/`](../src/plugins/examples/json-viewer/)
 
 For the full specification, see [`plugin-ui-extensions-spec.md`](../website/public/docs/plugin-ui-extensions-spec.md).
 
@@ -705,14 +815,14 @@ Update a single field in a row.
   "params": ConnectionParams,
   "schema": null,
   "table": "users",
-  "primary_key_column": "id",
-  "primary_key_value": "42",
-  "column": "name",
-  "value": "Robert"
+  "pk_col": "id",
+  "pk_val": 42,
+  "col_name": "name",
+  "new_val": "Robert"
 }
 ```
 
-**Result:** `null` on success, or an error.
+**Result:** Number of affected rows (e.g. `1`), or an error.
 
 ---
 
@@ -726,12 +836,12 @@ Delete a row from a table.
   "params": ConnectionParams,
   "schema": null,
   "table": "users",
-  "primary_key_column": "id",
-  "primary_key_value": "42"
+  "pk_col": "id",
+  "pk_val": 42
 }
 ```
 
-**Result:** `null` on success, or an error.
+**Result:** Number of affected rows (e.g. `1`), or an error.
 
 ---
 
