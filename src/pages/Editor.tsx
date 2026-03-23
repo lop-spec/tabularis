@@ -50,6 +50,7 @@ import { QuerySelectionModal } from "../components/modals/QuerySelectionModal";
 import { TabSwitcherModal } from "../components/modals/TabSwitcherModal";
 import { QueryModal } from "../components/modals/QueryModal";
 import { QueryParamsModal } from "../components/modals/QueryParamsModal";
+import { ErrorModal } from "../components/modals/ErrorModal";
 import { VisualQueryBuilder } from "../components/ui/VisualQueryBuilder";
 import { ContextMenu } from "../components/ui/ContextMenu";
 import {
@@ -65,7 +66,7 @@ import { formatDuration } from "../utils/formatTime";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
 import { registerSqlAutocomplete } from "../utils/autocomplete";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
-import { save, message } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
 import { useDatabase } from "../hooks/useDatabase";
 import { useSavedQueries } from "../hooks/useSavedQueries";
 import { useSettings } from "../hooks/useSettings";
@@ -124,6 +125,11 @@ export const Editor = () => {
     y: number;
     tabId: string;
   } | null>(null);
+
+  const [errorModal, setErrorModal] = useState<{
+    isOpen: boolean;
+    message: string;
+  }>({ isOpen: false, message: "" });
 
   const [exportState, setExportState] = useState<{
     isOpen: boolean;
@@ -1041,10 +1047,7 @@ export const Editor = () => {
       updateTab(activeTabIdRef.current, updates);
     } catch (err) {
       console.error("Failed to create new row:", err);
-      await message(t("editor.failedCreateRow") + String(err), {
-        title: t("general.error"),
-        kind: "error",
-      });
+      setErrorModal({ isOpen: true, message: t("editor.failedCreateRow") + String(err) });
     }
   }, [activeConnectionId, activeTab, updateTab, t, settings.resultPageSize, activeSchema]);
 
@@ -1154,10 +1157,7 @@ export const Editor = () => {
         }
       } catch (err) {
         console.error("Failed to process insertions:", err);
-        await message(t("editor.failedProcessInsertions") + String(err), {
-          title: t("common.error"),
-          kind: "error",
-        });
+        setErrorModal({ isOpen: true, message: t("editor.failedProcessInsertions") + String(err) });
         return;
       }
     }
@@ -1273,10 +1273,7 @@ export const Editor = () => {
     } catch (e) {
       console.error("Batch update failed", e);
       updateActiveTab({ isLoading: false });
-      await message(t("dataGrid.updateFailed") + String(e), {
-        title: t("common.error"),
-        kind: "error",
-      });
+      setErrorModal({ isOpen: true, message: t("dataGrid.updateFailed") + String(e) });
     }
   }, [activeTab, activeConnectionId, updateActiveTab, runQuery, t, applyToAll, activeSchema]);
 
@@ -2401,6 +2398,11 @@ export const Editor = () => {
           ]}
         />
       )}
+      <ErrorModal
+        isOpen={errorModal.isOpen}
+        onClose={() => setErrorModal({ isOpen: false, message: "" })}
+        message={errorModal.message}
+      />
       <ExportProgressModal
         isOpen={exportState.isOpen}
         status={exportState.status}

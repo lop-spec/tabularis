@@ -29,7 +29,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { message } from "@tauri-apps/plugin-dialog";
+import { ErrorModal } from "../modals/ErrorModal";
 import {
   USE_DEFAULT_SENTINEL,
   formatCellValue,
@@ -152,6 +152,11 @@ export const DataGrid = React.memo(
       rowIndex: number;
       focusField?: string;
     } | null>(null);
+    const [errorModal, setErrorModal] = useState<{
+      isOpen: boolean;
+      message: string;
+    }>({ isOpen: false, message: "" });
+
     const [internalSelectedRowIndices, setInternalSelectedRowIndices] =
       useState<Set<number>>(new Set());
     const [lastSelectedRowIndex, setLastSelectedRowIndex] = useState<
@@ -402,10 +407,7 @@ export const DataGrid = React.memo(
           if (onRefresh) onRefresh();
         } catch (e) {
           console.error("Update failed:", e);
-          await message(t("dataGrid.updateFailed") + e, {
-            title: t("common.error"),
-            kind: "error",
-          });
+          setErrorModal({ isOpen: true, message: t("dataGrid.updateFailed") + e });
         }
         setEditingCell(null);
       } finally {
@@ -743,13 +745,10 @@ export const DataGrid = React.memo(
           // await message(t("dataGrid.copied"), { title: t("common.success"), kind: "info" });
         } catch (e) {
           console.error("Copy failed:", e);
-          await message(t("common.error") + ": " + e, {
-            title: t("common.error"),
-            kind: "error",
-          });
+          setErrorModal({ isOpen: true, message: t("common.error") + ": " + e });
         }
       },
-      [t],
+      [t, setErrorModal],
     );
 
     const formatRows = useCallback(
@@ -823,6 +822,12 @@ export const DataGrid = React.memo(
     }
 
     return (
+      <>
+      <ErrorModal
+        isOpen={errorModal.isOpen}
+        onClose={() => setErrorModal({ isOpen: false, message: "" })}
+        message={errorModal.message}
+      />
       <div
         ref={parentRef}
         className="h-full overflow-auto border border-default rounded bg-elevated relative"
@@ -1377,6 +1382,7 @@ export const DataGrid = React.memo(
             );
           })()}
       </div>
+      </>
     );
   },
 );
