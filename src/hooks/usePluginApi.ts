@@ -9,6 +9,7 @@ import { DatabaseContext } from "../contexts/DatabaseContext";
 import { SettingsContext } from "../contexts/SettingsContext";
 import { PluginModalContext } from "../contexts/PluginModalContext";
 import type { PluginModalOptions } from "../contexts/PluginModalContext";
+import { toErrorMessage } from "../utils/errors";
 
 /**
  * Hook for plugin components to execute read-only database queries.
@@ -35,7 +36,7 @@ export function usePluginQuery() {
         });
         return result;
       } catch (err) {
-        const msg = String(err);
+        const msg = toErrorMessage(err);
         setError(msg);
         throw new Error(msg);
       } finally {

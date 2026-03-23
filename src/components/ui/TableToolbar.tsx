@@ -45,7 +45,7 @@ interface TableToolbarInternalProps extends TableToolbarProps {
 
 // ─── Internal toolbar ─────────────────────────────────────────────────────────
 
-const TableToolbarInternal: React.FC<TableToolbarInternalProps> = ({
+const TableToolbarInternal = ({
   initialFilter,
   initialSort,
   initialLimit,
@@ -62,7 +62,7 @@ const TableToolbarInternal: React.FC<TableToolbarInternalProps> = ({
   onResetApplied,
   onResetAllApplied,
   onUpdate,
-}) => {
+}: TableToolbarInternalProps) => {
   const { t } = useTranslation();
   const [filterInput, setFilterInput] = useState(initialFilter || "");
   const [sortInput, setSortInput] = useState(initialSort || "");
@@ -625,7 +625,7 @@ const TableToolbarInternal: React.FC<TableToolbarInternalProps> = ({
 
 // ─── Public wrapper — panel state and filters lifted here to survive key-driven remounts ─────
 
-export const TableToolbar: React.FC<TableToolbarProps> = (props) => {
+export const TableToolbar = (props: TableToolbarProps) => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [structuredFilters, setStructuredFilters] = useState<StructuredFilter[]>([]);
   const [appliedFilters, setAppliedFilters] = useState<Record<string, boolean>>({});

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { FieldEditor } from "./FieldEditor";
@@ -24,7 +24,7 @@ interface RowEditorSidebarProps {
   schema?: string | null;
 }
 
-export const RowEditorSidebar: React.FC<RowEditorSidebarProps> = ({
+export const RowEditorSidebar = ({
   isOpen,
   onClose,
   rowData,
@@ -40,7 +40,7 @@ export const RowEditorSidebar: React.FC<RowEditorSidebarProps> = ({
   tableName,
   pkColumn,
   schema,
-}) => {
+}: RowEditorSidebarProps) => {
   const { t } = useTranslation();
   const { editedData, updateField } = useRowEditor({
     initialData: rowData,

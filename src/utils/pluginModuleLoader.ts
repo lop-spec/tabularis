@@ -1,21 +1,7 @@
 import type { ComponentType } from "react";
 import type { UIExtensionManifestEntry, PluginManifest } from "../types/plugins";
 import type { SlotContribution, SlotComponentProps, SlotName } from "../types/pluginSlots";
-
-/**
- * Validates that a slot name from a manifest entry is a known slot.
- * Returns the name cast to SlotName if valid, null otherwise.
- */
-const VALID_SLOTS: Set<string> = new Set([
-  "row-edit-modal.field.after",
-  "row-edit-modal.footer.before",
-  "row-editor-sidebar.field.after",
-  "row-editor-sidebar.header.actions",
-  "data-grid.toolbar.actions",
-  "data-grid.context-menu.items",
-  "sidebar.footer.actions",
-  "settings.plugin.actions",
-]);
+import { VALID_SLOTS } from "../types/pluginSlots";
 
 function validateSlotName(slot: string): SlotName | null {
   return VALID_SLOTS.has(slot) ? (slot as SlotName) : null;

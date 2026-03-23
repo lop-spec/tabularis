@@ -7,6 +7,7 @@ import i18n from "i18next";
 import { PluginSlotContext } from "./PluginSlotContext";
 import type { PluginSlotRegistryType } from "./PluginSlotContext";
 import type { SlotContribution, SlotName, SlotContext } from "../types/pluginSlots";
+import { VALID_SLOTS } from "../types/pluginSlots";
 import type { PluginManifest } from "../types/plugins";
 import * as pluginApi from "../pluginApi";
 import { useSettings } from "../hooks/useSettings";
@@ -14,19 +15,6 @@ import { useSettings } from "../hooks/useSettings";
 interface PluginSlotProviderProps {
   children: React.ReactNode;
 }
-
-const VALID_SLOTS = new Set<string>([
-  "row-edit-modal.field.after",
-  "row-edit-modal.footer.before",
-  "row-editor-sidebar.field.after",
-  "row-editor-sidebar.header.actions",
-  "data-grid.toolbar.actions",
-  "data-grid.context-menu.items",
-  "sidebar.footer.actions",
-  "settings.plugin.actions",
-  "settings.plugin.before_settings",
-  "connection-modal.connection_content",
-]);
 
 /**
  * Expose host globals so external plugin bundles (IIFE format) can access
@@ -122,7 +110,6 @@ async function loadExternalPluginContributions(
 
       for (const entry of entries) {
         if (!VALID_SLOTS.has(entry.slot)) {
-          console.warn(`[PluginSlot] Plugin "${manifest.id}" declares unknown slot "${entry.slot}". Skipping.`);
           continue;
         }
         contributions.push({

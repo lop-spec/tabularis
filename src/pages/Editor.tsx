@@ -465,13 +465,6 @@ export const Editor = () => {
         textToRun = interpolateQueryParams(textToRun, storedParams);
       }
 
-      // Log query from Visual Query Builder
-      if (targetTab?.type === "query_builder") {
-        console.log("🔍 Visual Query Builder - Executing Query:");
-        console.log(textToRun);
-        console.log("─".repeat(80));
-      }
-
       // Automatically open results panel when running a query
       setIsResultsCollapsed(false);
 
