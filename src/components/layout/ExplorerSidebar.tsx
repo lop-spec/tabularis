@@ -34,7 +34,7 @@ import { toErrorMessage } from "../../utils/errors";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useSavedQueries } from "../../hooks/useSavedQueries";
 import type { SavedQuery } from "../../contexts/SavedQueriesContext";
-import { ContextMenu } from "../ui/ContextMenu";
+import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { SchemaModal } from "../modals/SchemaModal";
 import { CreateTableModal } from "../modals/CreateTableModal";
 import { QueryModal } from "../modals/QueryModal";
@@ -1347,7 +1347,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                         }
                       },
                     } : null,
-                  ].filter(Boolean);
+                  ].filter(Boolean) as ContextMenuItem[];
                 })()
               : contextMenu.type === "index"
                 ? [
@@ -1388,7 +1388,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                         }
                       },
                     } : null,
-                  ].filter(Boolean)
+                  ].filter(Boolean) as ContextMenuItem[]
                 : contextMenu.type === "foreign_key"
                   ? [
                       {
@@ -1425,7 +1425,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                           }
                         },
                       } : null,
-                    ].filter(Boolean)
+                    ].filter(Boolean) as ContextMenuItem[]
                   : contextMenu.type === "folder_indexes"
                     ? activeCapabilities?.manage_tables === true
                       ? [

@@ -36,9 +36,9 @@ let globalsExposed = false;
 function exposePluginGlobals() {
   if (globalsExposed) return;
   globalsExposed = true;
-  (window as Record<string, unknown>).React = React;
-  (window as Record<string, unknown>).ReactJSXRuntime = ReactJSXRuntime;
-  (window as Record<string, unknown>).__TABULARIS_API__ = pluginApi;
+  (window as unknown as Record<string, unknown>).React = React;
+  (window as unknown as Record<string, unknown>).ReactJSXRuntime = ReactJSXRuntime;
+  (window as unknown as Record<string, unknown>).__TABULARIS_API__ = pluginApi;
 }
 
 /**

@@ -1285,7 +1285,7 @@ export const DataGrid = React.memo(
                     schema: activeSchema,
                     columnName: contextMenu.colName,
                     rowIndex: contextMenu.rowIndex,
-                    rowData: mergedRows[contextMenu.rowIndex]?.rowData,
+                    rowData: mergedRows[contextMenu.rowIndex]?.rowData as unknown as Record<string, unknown> | undefined,
                   }}
                   className="border-t border-default mt-1 pt-1"
                 />
