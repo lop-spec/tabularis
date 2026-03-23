@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
 import { isMultiDatabaseCapable } from "../utils/database";
+import { isReadonly } from "../utils/driverCapabilities";
 import {
   generateTempId,
   initializeNewRow,
@@ -119,6 +120,8 @@ export const Editor = () => {
   const location = useLocation();
   const { matchesShortcut } = useKeybindings();
   const navigate = useNavigate();
+
+  const driverReadonly = isReadonly(activeCapabilities);
 
   const [tabContextMenu, setTabContextMenu] = useState<{
     x: number;
@@ -2147,6 +2150,7 @@ export const Editor = () => {
                 {/* Data Manipulation Toolbar (Below Header) */}
                 {activeTab.activeTable && activeTab.result && (
                   <div className="p-1 px-2 bg-elevated border-b border-default flex items-center gap-2">
+                    {!driverReadonly && (
                     <div className="flex items-center gap-1">
                       <button
                         onClick={handleNewRow}
@@ -2167,6 +2171,7 @@ export const Editor = () => {
                         <Minus size={16} />
                       </button>
                     </div>
+                    )}
 
                     <div className="w-[1px] h-4 bg-surface-secondary mx-1"></div>
 
@@ -2276,6 +2281,7 @@ export const Editor = () => {
                     csvDelimiter={csvDelimiter}
                     sortClause={activeTab.sortClause}
                     onSort={activeTab.type === "table" && (activeTab.result?.rows.length ?? 0) > 0 ? handleSort : undefined}
+                    readonly={driverReadonly}
                   />
                 </div>
               </div>

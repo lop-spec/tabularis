@@ -68,6 +68,12 @@ pub struct DriverCapabilities {
     /// Defaults to `true`.
     #[serde(default = "default_true")]
     pub manage_tables: bool,
+    /// When `true`, the driver is read-only: all data modification operations
+    /// (INSERT, UPDATE, DELETE) are disabled in the UI.
+    /// Table/column management is also hidden regardless of `manage_tables`.
+    /// Defaults to `false`.
+    #[serde(default)]
+    pub readonly: bool,
 }
 
 fn default_double_quote() -> String {

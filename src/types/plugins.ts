@@ -25,6 +25,8 @@ export interface DriverCapabilities {
   no_connection_required?: boolean;
   /** Whether the driver supports table and column management (CREATE TABLE, ADD/MODIFY/DROP COLUMN, DROP TABLE). Does not control index or FK operations. Defaults to true. */
   manage_tables?: boolean;
+  /** When true, the driver is read-only: all data modification operations (INSERT, UPDATE, DELETE) are disabled in the UI. Table/column management is also hidden regardless of manage_tables. Defaults to false. */
+  readonly?: boolean;
 }
 
 export type PluginSettingType = "string" | "boolean" | "number" | "select";

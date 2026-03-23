@@ -27,9 +27,16 @@ export function findDriverManifest(
   return drivers.find((d) => d.id === driverId) ?? null;
 }
 
+export function isReadonly(
+  capabilities?: DriverCapabilities | null,
+): boolean {
+  return capabilities?.readonly === true;
+}
+
 export function supportsManageTables(
   capabilities?: DriverCapabilities | null,
 ): boolean {
+  if (capabilities?.readonly === true) return false;
   return capabilities?.manage_tables !== false;
 }
 

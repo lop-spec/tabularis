@@ -89,6 +89,7 @@ interface DataGridProps {
   csvDelimiter?: string;
   sortClause?: string;
   onSort?: (colName: string) => void;
+  readonly?: boolean;
 }
 
 export const DataGrid = React.memo(
@@ -117,6 +118,7 @@ export const DataGrid = React.memo(
     csvDelimiter = ",",
     sortClause,
     onSort,
+    readonly: readonlyProp,
   }: DataGridProps) => {
     const { t } = useTranslation();
     const { activeSchema } = useDatabase();
@@ -285,7 +287,7 @@ export const DataGrid = React.memo(
       colIndex: number,
       value: unknown,
     ) => {
-      if (!tableName) return;
+      if (!tableName || readonlyProp) return;
 
       const mergedRow = mergedRows[rowIndex];
       if (!mergedRow) return;
@@ -1207,42 +1209,44 @@ export const DataGrid = React.memo(
             // Build menu items dynamically
             const menuItems: ContextMenuItem[] = [];
 
-            // Cell value manipulation options (shown first for cell context)
-            // SET GENERATED only for insertion rows, not for existing rows
-            if (isAutoIncrement && isInsertion) {
-              menuItems.push({
-                label: t("dataGrid.setGenerate"),
-                icon: Sparkles,
-                action: setCellGenerate,
-              });
-            }
-            if (isNullable) {
-              menuItems.push({
-                label: t("dataGrid.setNull"),
-                icon: Ban,
-                action: setCellNull,
-              });
-            }
-            if (hasDefault) {
-              menuItems.push({
-                label: t("dataGrid.setDefault"),
-                icon: FileDigit,
-                action: setCellDefault,
-              });
-            }
-            // Always allow setting empty string, except for BLOB columns
-            const colDataType = columnTypeMap?.get(colName) ?? "";
-            if (!isBlobColumn(colDataType, columnLengthMap?.get(colName))) {
-              menuItems.push({
-                label: t("dataGrid.setEmpty"),
-                icon: Copy,
-                action: setCellEmpty,
-              });
-            }
+            if (!readonlyProp) {
+              // Cell value manipulation options (shown first for cell context)
+              // SET GENERATED only for insertion rows, not for existing rows
+              if (isAutoIncrement && isInsertion) {
+                menuItems.push({
+                  label: t("dataGrid.setGenerate"),
+                  icon: Sparkles,
+                  action: setCellGenerate,
+                });
+              }
+              if (isNullable) {
+                menuItems.push({
+                  label: t("dataGrid.setNull"),
+                  icon: Ban,
+                  action: setCellNull,
+                });
+              }
+              if (hasDefault) {
+                menuItems.push({
+                  label: t("dataGrid.setDefault"),
+                  icon: FileDigit,
+                  action: setCellDefault,
+                });
+              }
+              // Always allow setting empty string, except for BLOB columns
+              const colDataType = columnTypeMap?.get(colName) ?? "";
+              if (!isBlobColumn(colDataType, columnLengthMap?.get(colName))) {
+                menuItems.push({
+                  label: t("dataGrid.setEmpty"),
+                  icon: Copy,
+                  action: setCellEmpty,
+                });
+              }
 
-            // Separator and row actions
-            if (menuItems.length > 0) {
-              menuItems.push({ separator: true });
+              // Separator before row actions
+              if (menuItems.length > 0) {
+                menuItems.push({ separator: true });
+              }
             }
 
             menuItems.push(
@@ -1251,24 +1255,29 @@ export const DataGrid = React.memo(
                 icon: Copy,
                 action: copySelectedOrContextRow,
               },
-              {
-                label: t("contextMenu.openSidebar"),
-                icon: Edit,
-                action: openSidebarEditor,
-              },
-              {
-                label: t("dataGrid.deleteRow"),
-                icon: Trash2,
-                danger: true,
-                action: deleteSelectedRow,
-              },
-              {
-                label: t("dataGrid.revertSelected"),
-                icon: Undo,
-                action: revertSelectedRow,
-                disabled: !canRevert,
-              },
             );
+
+            if (!readonlyProp) {
+              menuItems.push(
+                {
+                  label: t("contextMenu.openSidebar"),
+                  icon: Edit,
+                  action: openSidebarEditor,
+                },
+                {
+                  label: t("dataGrid.deleteRow"),
+                  icon: Trash2,
+                  danger: true,
+                  action: deleteSelectedRow,
+                },
+                {
+                  label: t("dataGrid.revertSelected"),
+                  icon: Undo,
+                  action: revertSelectedRow,
+                  disabled: !canRevert,
+                },
+              );
+            }
 
             return (
               <ContextMenu

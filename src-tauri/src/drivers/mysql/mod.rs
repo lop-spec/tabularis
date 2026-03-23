@@ -1052,6 +1052,7 @@ impl MysqlDriver {
                     create_foreign_keys: true,
                     no_connection_required: false,
                     manage_tables: true,
+                    readonly: false,
                 },
                 is_builtin: true,
                 default_username: "root".to_string(),

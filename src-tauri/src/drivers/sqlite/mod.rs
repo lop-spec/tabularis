@@ -873,6 +873,7 @@ impl SqliteDriver {
                     create_foreign_keys: false,
                     no_connection_required: false,
                     manage_tables: true,
+                    readonly: false,
                 },
                 is_builtin: true,
                 default_username: String::new(),
