@@ -23,7 +23,7 @@
 
 A lightweight, developer-focused database management tool, built with Tauri and React.
 
-**Available in:** English, Italian, Spanish
+**Available in:** English, Italian, Spanish, Chinese (Simplified)
 
 **Discord** - [Join our discord server](https://discord.gg/YrZPHAwMSG) and chat with the maintainers.
 
@@ -305,7 +305,7 @@ This approach ensures fast startup times while preserving your workspace layout 
 - `theme`: Theme ID (e.g., `"tabularis-dark"`, `"monokai"`).
 - `fontFamily`: Editor font family.
 - `fontSize`: Editor font size (px).
-- `language`: `"auto"`, `"en"` (English), `"it"` (Italian), `"es"` (Spanish).
+- `language`: `"auto"`, `"en"` (English), `"it"` (Italian), `"es"` (Spanish), `"zh"` (Chinese Simplified).
 - `resultPageSize`: Default rows per page.
 - `aiEnabled`: Enable/Disable AI features.
 - `customRegistryUrl`: Custom URL for the plugin registry (overrides the default official registry).
