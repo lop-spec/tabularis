@@ -216,6 +216,7 @@ fn get_simple_array_field_or_null(
         };
     }
 
+    decode_if_compatible!(i8,);
     decode_if_compatible!(i16,);
     decode_if_compatible!(i32,);
     decode_if_compatible!(i64,);
@@ -267,6 +268,7 @@ fn get_simple_array_or_null(sub_ty: PgTypeInfo, val_ref: PgValueRef<'_>) -> Json
         };
     }
 
+    decode_if_compatible!(i8,);
     decode_if_compatible!(i16,);
     decode_if_compatible!(i32,);
     decode_if_compatible!(i64,);
