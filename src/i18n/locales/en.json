@@ -579,6 +579,7 @@
     "noValidQueries": "No valid queries found",
     "queryFailed": "Query failed.",
     "newVisualQuery": "New Visual Query",
+    "activeDatabase": "Active database",
     "tabSwitcher": {
       "title": "Open Tabs",
       "hint": "Ctrl+Tab",

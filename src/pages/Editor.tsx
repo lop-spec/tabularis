@@ -98,7 +98,7 @@ const CHEVRON_SELECT_STYLE: React.CSSProperties = {
 
 export const Editor = () => {
   const { t } = useTranslation();
-  const { activeConnectionId, tables, views, activeDriver, activeSchema, activeCapabilities } = useDatabase();
+  const { activeConnectionId, tables, views, activeDriver, activeSchema, activeCapabilities, selectedDatabases, activeConnectionName, activeDatabaseName } = useDatabase();
   const { explorerConnectionId } = useConnectionLayoutContext();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
@@ -210,6 +210,7 @@ export const Editor = () => {
     useState(false);
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
+  const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isAiExplainModalOpen, setIsAiExplainModalOpen] = useState(false);
   const [isEditingPage, setIsEditingPage] = useState(false);
@@ -226,8 +227,32 @@ export const Editor = () => {
   const activeTabType = activeTab?.type;
   const activeTabQuery = activeTab?.query;
   const isTableTab = activeTab?.type === "table";
+  const isMultiDb = isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
   const isEditorOpen =
     !isTableTab && (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
+
+  // Update window title when the active tab changes
+  useEffect(() => {
+    const updateTitle = async () => {
+      try {
+        let title = 'tabularis';
+        if (activeConnectionName && activeDatabaseName) {
+          const schemaSuffix = activeSchema && activeCapabilities?.schemas === true ? `/${activeSchema}` : '';
+          let dbDisplay: string;
+          if (isMultiDb) {
+            dbDisplay = activeTab?.schema ?? selectedDatabases[0] ?? activeDatabaseName;
+          } else {
+            dbDisplay = activeDatabaseName;
+          }
+          title = `tabularis - ${activeConnectionName} (${dbDisplay}${schemaSuffix})`;
+        }
+        await invoke('set_window_title', { title });
+      } catch (e) {
+        console.error('Failed to update window title', e);
+      }
+    };
+    updateTitle();
+  }, [activeTabId, activeTab?.schema, activeConnectionName, activeDatabaseName, activeSchema, activeCapabilities, isMultiDb, selectedDatabases]);
 
   // Define updateActiveTab first to be used in handleQueryChange
   const updateActiveTab = useCallback(
@@ -1677,7 +1702,14 @@ export const Editor = () => {
               ) : (
                 <FileCode size={12} className="text-green-500 shrink-0" />
               )}
-              <span className="truncate flex-1">{tab.title}</span>
+              <span className="truncate flex-1 flex items-center gap-1">
+                <span className="truncate">{tab.title}</span>
+                {tab.type === "console" && isMultiDb && (
+                  <span className="text-muted shrink-0">
+                    ({tab.schema || selectedDatabases[0]})
+                  </span>
+                )}
+              </span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1699,7 +1731,7 @@ export const Editor = () => {
           ))}
         </div>
         <button
-          onClick={() => addTab({ type: "console" })}
+          onClick={() => addTab({ type: "console", ...(isMultiDb ? { schema: selectedDatabases[0] } : {}) })}
           className="flex items-center justify-center w-9 h-full text-muted hover:text-white hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
           title={t("editor.newConsole")}
         >
@@ -1813,7 +1845,6 @@ export const Editor = () => {
           </button>
         )}
 
-
         <div className="relative ml-auto">
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
@@ -1845,11 +1876,50 @@ export const Editor = () => {
             </>
           )}
         </div>
-        <span className="text-xs text-muted ml-2">
-          {activeConnectionId
-            ? t("editor.connected")
-            : t("editor.disconnected")}
-        </span>
+        {!isTableTab && isMultiDb && activeTab.type !== "query_builder" ? (
+          <div className="relative ml-2">
+            <button
+              onClick={() => setIsDbDropdownOpen((v) => !v)}
+              className="flex items-center gap-1.5 px-2 py-1 bg-surface-secondary border border-strong rounded text-xs text-primary hover:bg-surface transition-colors h-[30px]"
+              title={t("editor.activeDatabase")}
+            >
+              <Database size={12} className="text-muted shrink-0" />
+              <span className="max-w-[120px] truncate">{activeTab.schema || selectedDatabases[0]}</span>
+              <ChevronDown size={12} className="text-muted shrink-0" />
+            </button>
+            {isDbDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsDbDropdownOpen(false)} />
+                <div className="absolute top-full right-0 mt-1 min-w-[140px] bg-surface-secondary border border-strong rounded shadow-xl z-50 flex flex-col py-1">
+                  {selectedDatabases.map((db) => (
+                    <button
+                      key={db}
+                      onClick={() => {
+                        updateActiveTab({ schema: db });
+                        setIsDbDropdownOpen(false);
+                      }}
+                      className={clsx(
+                        "text-left px-3 py-1.5 text-xs hover:bg-surface transition-colors flex items-center gap-2",
+                        (activeTab.schema || selectedDatabases[0]) === db
+                          ? "text-white font-medium"
+                          : "text-secondary",
+                      )}
+                    >
+                      <Database size={11} className="text-muted shrink-0" />
+                      {db}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-muted ml-2">
+            {activeConnectionId
+              ? t("editor.connected")
+              : t("editor.disconnected")}
+          </span>
+        )}
       </div>
 
       {/* Render all non-table tabs to prevent Monaco remounting */}

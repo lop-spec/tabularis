@@ -572,6 +572,7 @@
     "noValidQueries": "No se encontraron consultas válidas",
     "queryFailed": "La consulta falló.",
     "newVisualQuery": "Nueva Consulta Visual",
+    "activeDatabase": "Base de datos activa",
     "tabSwitcher": {
       "title": "Pestañas Abiertas",
       "hint": "Ctrl+Tab",
