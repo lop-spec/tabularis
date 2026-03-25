@@ -37,7 +37,8 @@ import {
 import clsx from "clsx";
 import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
-import type { AppLanguage, AiProvider, PluginConfig } from "../contexts/SettingsContext";
+import type { AiProvider, PluginConfig } from "../contexts/SettingsContext";
+import { SUPPORTED_LANGUAGES, type AppLanguage } from "../i18n/config";
 import { DEFAULT_SETTINGS } from "../contexts/SettingsContext";
 import { APP_VERSION } from "../version";
 import { message, ask, save } from "@tauri-apps/plugin-dialog";
@@ -1011,9 +1012,7 @@ export const Settings = () => {
     label: string;
   }> = [
     { id: "auto", label: t("settings.auto") },
-    { id: "en", label: t("settings.english") },
-    { id: "it", label: t("settings.italian") },
-    { id: "es", label: t("settings.spanish") },
+    ...SUPPORTED_LANGUAGES.map(({ id, label }) => ({ id, label })),
   ];
 
   const providers: Array<{ id: AiProvider; label: string }> = [
