@@ -7,16 +7,28 @@ import it from './locales/it.json';
 import es from './locales/es.json';
 import zh from './locales/zh.json';
 
+/**
+ * Single source of truth for supported languages.
+ * To add a new language: import the locale above, then add an entry here.
+ */
+export const SUPPORTED_LANGUAGES = [
+  { id: "en", label: "English", translation: en },
+  { id: "it", label: "Italiano", translation: it },
+  { id: "es", label: "Español", translation: es },
+  { id: "zh", label: "中文", translation: zh },
+] as const;
+
+export type AppLanguage = "auto" | (typeof SUPPORTED_LANGUAGES)[number]["id"];
+
+const resources = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map(({ id, translation }) => [id, { translation }]),
+);
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    resources: {
-      en: { translation: en },
-      it: { translation: it },
-      es: { translation: es },
-      zh: { translation: zh },
-    },
+    resources,
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false,
