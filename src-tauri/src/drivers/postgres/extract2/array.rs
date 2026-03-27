@@ -134,3 +134,122 @@ fn extract_elem(ty: &Type, buf: &mut &[u8]) -> Result<JsonValue, ()> {
         _ => Ok(JsonValue::Null),
     }
 }
+
+mod tests {
+    #[allow(unused_imports)]
+    use super::*;
+
+    #[test]
+    fn test_simple_1d_pg_array_extraction() {
+        let arr = [
+            0, 0, 0, 1, // dimenstions 1
+            0, 0, 0, 0, // has nulls 0: false, 1: true
+            0, 0, 0, 17, // oid 17 = INT4
+            0, 0, 0, 3, // array length
+            0, 0, 0, 1, // lower bound
+            // the following is a sequance of element length and element bytes
+            0, 0, 0, 4, // length 4 bytes
+            0, 0, 0, 1, // element
+            0, 0, 0, 4, // length
+            0, 0, 0, 2, // element
+            0, 0, 0, 4, // length
+            0, 0, 0, 3, // element
+        ];
+        let mut buf = &arr[..];
+        let json = extract_or_null(&Type::INT4, &mut buf);
+        assert_eq!(
+            json,
+            Ok(JsonValue::Array(vec![
+                JsonValue::Number(1.into()),
+                JsonValue::Number(2.into()),
+                JsonValue::Number(3.into())
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_simple_2dim_pg_array_extraction() {
+        let arr = [
+            0, 0, 0, 2, // dimensions 2
+            0, 0, 0, 0, // has nulls 0: false, 1: true
+            0, 0, 0, 17, // oid 17 = INT4
+            0, 0, 0, 2, // outer array length: we have 2 sub arrays
+            0, 0, 0, 1, // lower bound
+            0, 0, 0, 2, // inner array lengths: each sub array has 2 elements
+            0, 0, 0, 1, // lower bound
+            // the following is a sequance of element length and element bytes for each array
+            // beginning of first array
+            0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2,
+            // end of first array
+            // beginning of second array
+            0, 0, 0, 4, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 4,
+        ];
+        let mut buf = &arr[..];
+        let json = extract_or_null(&Type::INT4, &mut buf);
+        assert_eq!(
+            json,
+            Ok(JsonValue::Array(vec![
+                JsonValue::Array(vec![
+                    JsonValue::Number(1.into()),
+                    JsonValue::Number(2.into()),
+                ]),
+                JsonValue::Array(vec![
+                    JsonValue::Number(3.into()),
+                    JsonValue::Number(4.into()),
+                ]),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_simple_3dim_pg_array_extraction() {
+        let arr = [
+            0, 0, 0, 3, // dimensions: 3 dimensions
+            0, 0, 0, 0, // has nulls 0: false, 1: true
+            0, 0, 0, 17, // oid 17 = INT4
+            0, 0, 0, 2, // main array length: we have 2 sub arrays
+            0, 0, 0, 1, // lower bound
+            0, 0, 0, 2, // level 1 array lengths: each level 1 array has 2 elements
+            0, 0, 0, 1, // lower bound
+            0, 0, 0, 2, // level 2 array lengths: each level 2 array has 2 elements
+            0, 0, 0, 1, // lower bound
+            // beginning of (level 1 first array -> level 2 first array)
+            0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2,
+            // end
+            // beginning of (level 1 first array -> level 2 second array)
+            0, 0, 0, 4, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 4,
+            // beginning of (level 1 second array -> level 2 first array)
+            0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2,
+            // end
+            // beginning of (level 1 second array -> level 2 second array)
+            0, 0, 0, 4, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 4,
+        ];
+        let mut buf = &arr[..];
+        let json = extract_or_null(&Type::INT4, &mut buf);
+        assert_eq!(
+            json,
+            Ok(JsonValue::Array(vec![
+                JsonValue::Array(vec![
+                    JsonValue::Array(vec![
+                        JsonValue::Number(1.into()),
+                        JsonValue::Number(2.into()),
+                    ]),
+                    JsonValue::Array(vec![
+                        JsonValue::Number(3.into()),
+                        JsonValue::Number(4.into()),
+                    ]),
+                ]),
+                JsonValue::Array(vec![
+                    JsonValue::Array(vec![
+                        JsonValue::Number(1.into()),
+                        JsonValue::Number(2.into()),
+                    ]),
+                    JsonValue::Array(vec![
+                        JsonValue::Number(3.into()),
+                        JsonValue::Number(4.into()),
+                    ]),
+                ])
+            ]))
+        );
+    }
+}
