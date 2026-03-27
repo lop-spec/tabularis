@@ -2,8 +2,6 @@ pub mod types;
 
 pub mod extract;
 
-pub mod extract2;
-
 use crate::models::{
     ConnectionParams, ForeignKey, Index, Pagination, QueryResult, RoutineInfo, RoutineParameter,
     TableColumn, TableInfo, ViewInfo,
@@ -924,9 +922,10 @@ pub async fn execute_query(
             .map_err(|e| e.to_string())?;
     }
 
+    let params: Vec<i32> = vec![];
     // Stream data rows while COUNT runs in the background
-    let rows_stream = std::pin::pin!(client
-        .query_raw(&final_query, &[])
+    let mut rows_stream = std::pin::pin!(client
+        .query_raw(&final_query, &params)
         .await
         .map_err(|e| e.to_string())?);
 
