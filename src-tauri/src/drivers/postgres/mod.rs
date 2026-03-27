@@ -2,6 +2,8 @@ pub mod types;
 
 pub mod extract;
 
+pub mod extract2;
+
 use crate::models::{
     ConnectionParams, ForeignKey, Index, Pagination, QueryResult, RoutineInfo, RoutineParameter,
     TableColumn, TableInfo, ViewInfo,
@@ -46,9 +48,7 @@ fn json_array_to_pg_literal(arr: &[serde_json::Value]) -> Result<String, String>
                 let escaped = s.replace('\'', "''");
                 parts.push(format!("'{}'", escaped));
             }
-            serde_json::Value::Bool(b) => {
-                parts.push(if *b { "TRUE" } else { "FALSE" }.to_string())
-            }
+            serde_json::Value::Bool(b) => parts.push(if *b { "TRUE" } else { "FALSE" }.to_string()),
             serde_json::Value::Null => parts.push("NULL".to_string()),
             serde_json::Value::Array(nested) => {
                 parts.push(json_array_to_pg_literal(nested)?);
@@ -63,7 +63,9 @@ fn json_array_to_pg_literal(arr: &[serde_json::Value]) -> Result<String, String>
 fn try_parse_pg_array(s: &str) -> Option<Result<String, String>> {
     let trimmed = s.trim();
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
-        if let Ok(serde_json::Value::Array(arr)) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        if let Ok(serde_json::Value::Array(arr)) =
+            serde_json::from_str::<serde_json::Value>(trimmed)
+        {
             return Some(json_array_to_pg_literal(&arr));
         }
     }
@@ -186,11 +188,11 @@ pub async fn get_columns(
             let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
             let default_val: String = r.try_get("column_default").unwrap_or_default();
             let is_identity: String = r.try_get("is_identity").unwrap_or_default(); // YES/NO
-            let character_maximum_length: Option<u64> =
-                r.try_get::<Option<i64>, _>("character_maximum_length")
-                    .ok()
-                    .flatten()
-                    .and_then(|v| u64::try_from(v).ok());
+            let character_maximum_length: Option<u64> = r
+                .try_get::<Option<i64>, _>("character_maximum_length")
+                .ok()
+                .flatten()
+                .and_then(|v| u64::try_from(v).ok());
 
             let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -313,11 +315,11 @@ pub async fn get_all_columns_batch(
         let is_pk: bool = row.try_get("is_pk").unwrap_or(false);
         let default_val: String = row.try_get("column_default").unwrap_or_default();
         let is_identity: String = row.try_get("is_identity").unwrap_or_default();
-        let character_maximum_length: Option<u64> =
-            row.try_get::<Option<i64>, _>("character_maximum_length")
-                .ok()
-                .flatten()
-                .and_then(|v| u64::try_from(v).ok());
+        let character_maximum_length: Option<u64> = row
+            .try_get::<Option<i64>, _>("character_maximum_length")
+            .ok()
+            .flatten()
+            .and_then(|v| u64::try_from(v).ok());
 
         let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -850,12 +852,17 @@ pub async fn execute_query(
             let query_without_order = remove_order_by(query);
             format!(
                 "SELECT * FROM ({}) as data_wrapper {} LIMIT {} OFFSET {}",
-                query_without_order, order_by_clause, l + 1, offset
+                query_without_order,
+                order_by_clause,
+                l + 1,
+                offset
             )
         } else {
             format!(
                 "SELECT * FROM ({}) as data_wrapper LIMIT {} OFFSET {}",
-                query, l + 1, offset
+                query,
+                l + 1,
+                offset
             )
         };
 
@@ -1088,11 +1095,11 @@ pub async fn get_view_columns(
             let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
             let default_val: String = r.try_get("column_default").unwrap_or_default();
             let is_identity: String = r.try_get("is_identity").unwrap_or_default();
-            let character_maximum_length: Option<u64> =
-                r.try_get::<Option<i64>, _>("character_maximum_length")
-                    .ok()
-                    .flatten()
-                    .and_then(|v| u64::try_from(v).ok());
+            let character_maximum_length: Option<u64> = r
+                .try_get::<Option<i64>, _>("character_maximum_length")
+                .ok()
+                .flatten()
+                .and_then(|v| u64::try_from(v).ok());
 
             let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -1306,109 +1313,274 @@ impl PostgresDriver {
 
 #[async_trait]
 impl DatabaseDriver for PostgresDriver {
-    fn manifest(&self) -> &PluginManifest { &self.manifest }
+    fn manifest(&self) -> &PluginManifest {
+        &self.manifest
+    }
 
     fn get_data_types(&self) -> Vec<crate::models::DataTypeInfo> {
         types::get_data_types()
     }
 
-    fn build_connection_url(&self, params: &crate::models::ConnectionParams) -> Result<String, String> {
+    fn build_connection_url(
+        &self,
+        params: &crate::models::ConnectionParams,
+    ) -> Result<String, String> {
         use urlencoding::encode;
         let user = encode(params.username.as_deref().unwrap_or_default());
         let pass = encode(params.password.as_deref().unwrap_or_default());
         Ok(format!(
             "postgres://{}:{}@{}:{}/{}",
-            user, pass,
+            user,
+            pass,
             params.host.as_deref().unwrap_or("localhost"),
             params.port.unwrap_or(5432),
             params.database
         ))
     }
 
-    async fn get_databases(&self, params: &crate::models::ConnectionParams) -> Result<Vec<String>, String> {
+    async fn get_databases(
+        &self,
+        params: &crate::models::ConnectionParams,
+    ) -> Result<Vec<String>, String> {
         let mut p = params.clone();
         p.database = crate::models::DatabaseSelection::Single("postgres".to_string());
         get_databases(&p).await
     }
 
-    async fn get_schemas(&self, params: &crate::models::ConnectionParams) -> Result<Vec<String>, String> {
+    async fn get_schemas(
+        &self,
+        params: &crate::models::ConnectionParams,
+    ) -> Result<Vec<String>, String> {
         get_schemas(params).await
     }
 
-    async fn get_tables(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::TableInfo>, String> {
+    async fn get_tables(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::TableInfo>, String> {
         get_tables(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_columns(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::TableColumn>, String> {
+    async fn get_columns(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::TableColumn>, String> {
         get_columns(params, table, self.resolve_schema(schema)).await
     }
 
-    async fn get_foreign_keys(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::ForeignKey>, String> {
+    async fn get_foreign_keys(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::ForeignKey>, String> {
         get_foreign_keys(params, table, self.resolve_schema(schema)).await
     }
 
-    async fn get_indexes(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::Index>, String> {
+    async fn get_indexes(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::Index>, String> {
         get_indexes(params, table, self.resolve_schema(schema)).await
     }
 
-    async fn get_views(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::ViewInfo>, String> {
+    async fn get_views(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::ViewInfo>, String> {
         get_views(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_view_definition(&self, params: &crate::models::ConnectionParams, view_name: &str, schema: Option<&str>) -> Result<String, String> {
+    async fn get_view_definition(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
         get_view_definition(params, view_name, self.resolve_schema(schema)).await
     }
 
-    async fn get_view_columns(&self, params: &crate::models::ConnectionParams, view_name: &str, schema: Option<&str>) -> Result<Vec<crate::models::TableColumn>, String> {
+    async fn get_view_columns(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::TableColumn>, String> {
         get_view_columns(params, view_name, self.resolve_schema(schema)).await
     }
 
-    async fn create_view(&self, params: &crate::models::ConnectionParams, view_name: &str, definition: &str, schema: Option<&str>) -> Result<(), String> {
+    async fn create_view(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        definition: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
         create_view(params, view_name, definition, self.resolve_schema(schema)).await
     }
 
-    async fn alter_view(&self, params: &crate::models::ConnectionParams, view_name: &str, definition: &str, schema: Option<&str>) -> Result<(), String> {
+    async fn alter_view(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        definition: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
         alter_view(params, view_name, definition, self.resolve_schema(schema)).await
     }
 
-    async fn drop_view(&self, params: &crate::models::ConnectionParams, view_name: &str, schema: Option<&str>) -> Result<(), String> {
+    async fn drop_view(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
         drop_view(params, view_name, self.resolve_schema(schema)).await
     }
 
-    async fn get_routines(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::RoutineInfo>, String> {
+    async fn get_routines(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::RoutineInfo>, String> {
         get_routines(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_routine_parameters(&self, params: &crate::models::ConnectionParams, routine_name: &str, schema: Option<&str>) -> Result<Vec<crate::models::RoutineParameter>, String> {
+    async fn get_routine_parameters(
+        &self,
+        params: &crate::models::ConnectionParams,
+        routine_name: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::RoutineParameter>, String> {
         get_routine_parameters(params, routine_name, self.resolve_schema(schema)).await
     }
 
-    async fn get_routine_definition(&self, params: &crate::models::ConnectionParams, routine_name: &str, routine_type: &str, schema: Option<&str>) -> Result<String, String> {
-        get_routine_definition(params, routine_name, routine_type, self.resolve_schema(schema)).await
+    async fn get_routine_definition(
+        &self,
+        params: &crate::models::ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        get_routine_definition(
+            params,
+            routine_name,
+            routine_type,
+            self.resolve_schema(schema),
+        )
+        .await
     }
 
-    async fn execute_query(&self, params: &crate::models::ConnectionParams, query: &str, limit: Option<u32>, page: u32, schema: Option<&str>) -> Result<crate::models::QueryResult, String> {
+    async fn execute_query(
+        &self,
+        params: &crate::models::ConnectionParams,
+        query: &str,
+        limit: Option<u32>,
+        page: u32,
+        schema: Option<&str>,
+    ) -> Result<crate::models::QueryResult, String> {
         execute_query(params, query, limit, page, schema).await
     }
 
-    async fn insert_record(&self, params: &crate::models::ConnectionParams, table: &str, data: std::collections::HashMap<String, serde_json::Value>, schema: Option<&str>, max_blob_size: u64) -> Result<u64, String> {
-        insert_record(params, table, data, self.resolve_schema(schema), max_blob_size).await
+    async fn insert_record(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        data: std::collections::HashMap<String, serde_json::Value>,
+        schema: Option<&str>,
+        max_blob_size: u64,
+    ) -> Result<u64, String> {
+        insert_record(
+            params,
+            table,
+            data,
+            self.resolve_schema(schema),
+            max_blob_size,
+        )
+        .await
     }
 
-    async fn update_record(&self, params: &crate::models::ConnectionParams, table: &str, pk_col: &str, pk_val: serde_json::Value, col_name: &str, new_val: serde_json::Value, schema: Option<&str>, max_blob_size: u64) -> Result<u64, String> {
-        update_record(params, table, pk_col, pk_val, col_name, new_val, self.resolve_schema(schema), max_blob_size).await
+    async fn update_record(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        pk_col: &str,
+        pk_val: serde_json::Value,
+        col_name: &str,
+        new_val: serde_json::Value,
+        schema: Option<&str>,
+        max_blob_size: u64,
+    ) -> Result<u64, String> {
+        update_record(
+            params,
+            table,
+            pk_col,
+            pk_val,
+            col_name,
+            new_val,
+            self.resolve_schema(schema),
+            max_blob_size,
+        )
+        .await
     }
 
-    async fn delete_record(&self, params: &crate::models::ConnectionParams, table: &str, pk_col: &str, pk_val: serde_json::Value, schema: Option<&str>) -> Result<u64, String> {
+    async fn delete_record(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        pk_col: &str,
+        pk_val: serde_json::Value,
+        schema: Option<&str>,
+    ) -> Result<u64, String> {
         delete_record(params, table, pk_col, pk_val, self.resolve_schema(schema)).await
     }
 
-    async fn save_blob_to_file(&self, params: &crate::models::ConnectionParams, table: &str, col_name: &str, pk_col: &str, pk_val: serde_json::Value, schema: Option<&str>, file_path: &str) -> Result<(), String> {
-        save_blob_column_to_file(params, table, col_name, pk_col, pk_val, self.resolve_schema(schema), file_path).await
+    async fn save_blob_to_file(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        col_name: &str,
+        pk_col: &str,
+        pk_val: serde_json::Value,
+        schema: Option<&str>,
+        file_path: &str,
+    ) -> Result<(), String> {
+        save_blob_column_to_file(
+            params,
+            table,
+            col_name,
+            pk_col,
+            pk_val,
+            self.resolve_schema(schema),
+            file_path,
+        )
+        .await
     }
 
-    async fn fetch_blob_as_data_url(&self, params: &crate::models::ConnectionParams, table: &str, col_name: &str, pk_col: &str, pk_val: serde_json::Value, schema: Option<&str>) -> Result<String, String> {
-        fetch_blob_column_as_data_url(params, table, col_name, pk_col, pk_val, self.resolve_schema(schema)).await
+    async fn fetch_blob_as_data_url(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        col_name: &str,
+        pk_col: &str,
+        pk_val: serde_json::Value,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        fetch_blob_column_as_data_url(
+            params,
+            table,
+            col_name,
+            pk_col,
+            pk_val,
+            self.resolve_schema(schema),
+        )
+        .await
     }
 
     async fn get_create_table_sql(
@@ -1656,23 +1828,38 @@ impl DatabaseDriver for PostgresDriver {
         Ok(())
     }
 
-    async fn get_all_columns_batch(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<HashMap<String, Vec<crate::models::TableColumn>>, String> {
+    async fn get_all_columns_batch(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<HashMap<String, Vec<crate::models::TableColumn>>, String> {
         get_all_columns_batch(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_all_foreign_keys_batch(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<HashMap<String, Vec<crate::models::ForeignKey>>, String> {
+    async fn get_all_foreign_keys_batch(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<HashMap<String, Vec<crate::models::ForeignKey>>, String> {
         get_all_foreign_keys_batch(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_schema_snapshot(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::TableSchema>, String> {
+    async fn get_schema_snapshot(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::TableSchema>, String> {
         let pg_schema = self.resolve_schema(schema);
         let tables = get_tables(params, pg_schema).await?;
         let mut columns_map = get_all_columns_batch(params, pg_schema).await?;
         let mut fks_map = get_all_foreign_keys_batch(params, pg_schema).await?;
-        Ok(tables.into_iter().map(|t| crate::models::TableSchema {
-            name: t.name.clone(),
-            columns: columns_map.remove(&t.name).unwrap_or_default(),
-            foreign_keys: fks_map.remove(&t.name).unwrap_or_default(),
-        }).collect())
+        Ok(tables
+            .into_iter()
+            .map(|t| crate::models::TableSchema {
+                name: t.name.clone(),
+                columns: columns_map.remove(&t.name).unwrap_or_default(),
+                foreign_keys: fks_map.remove(&t.name).unwrap_or_default(),
+            })
+            .collect())
     }
 }
