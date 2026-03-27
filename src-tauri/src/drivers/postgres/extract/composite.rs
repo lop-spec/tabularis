@@ -30,6 +30,9 @@ fn extract_into(
     };
 
     for field in fields {
+        // skip the field type OID
+        super::common::advance_buf(buf, 4)?;
+
         map.insert(
             field.name().to_string(),
             extract_field_or_null_into(field, buf)?,
