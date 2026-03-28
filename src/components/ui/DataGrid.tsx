@@ -760,7 +760,7 @@ export const DataGrid = React.memo(
           });
         }
       },
-      [t],
+      [t, showAlert],
     );
 
     const formatRows = useCallback(

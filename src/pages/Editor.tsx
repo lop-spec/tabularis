@@ -1073,7 +1073,7 @@ export const Editor = () => {
         kind: "error",
       });
     }
-  }, [activeConnectionId, activeTab, updateTab, t, settings.resultPageSize, activeSchema]);
+  }, [activeConnectionId, activeTab, updateTab, t, settings.resultPageSize, activeSchema, showAlert]);
 
   const handleSubmitChanges = useCallback(async () => {
     if (
@@ -1305,7 +1305,7 @@ export const Editor = () => {
         kind: "error",
       });
     }
-  }, [activeTab, activeConnectionId, updateActiveTab, runQuery, t, applyToAll, activeSchema]);
+  }, [activeTab, activeConnectionId, updateActiveTab, runQuery, t, applyToAll, activeSchema, activeCapabilities, showAlert]);
 
   const handleParamsSubmit = useCallback(
     (values: Record<string, string>) => {

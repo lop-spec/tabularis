@@ -78,7 +78,7 @@ export const ImportDatabaseModal = ({
         });
       }
     }
-  }, [connectionId, filePath, activeSchema, onSuccess, onClose, t]);
+  }, [connectionId, filePath, activeSchema, onSuccess, onClose, t, showAlert]);
 
   useEffect(() => {
     if (!isOpen) {

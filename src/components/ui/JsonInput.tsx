@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, X, WrapText } from "lucide-react";
 import {
@@ -25,12 +25,13 @@ export const JsonInput: React.FC<JsonInputProps> = ({
   className = "",
 }) => {
   const { t } = useTranslation();
-  const prevValueRef = useRef(value);
+  const valueKey = JSON.stringify(value);
   const [text, setText] = useState(() => formatJsonForEditor(value));
   const [error, setError] = useState<string | null>(null);
+  const [prevValueKey, setPrevValueKey] = useState(valueKey);
 
-  if (value !== prevValueRef.current) {
-    prevValueRef.current = value;
+  if (valueKey !== prevValueKey) {
+    setPrevValueKey(valueKey);
     setText(formatJsonForEditor(value));
     setError(null);
   }

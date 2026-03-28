@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { X, Check, Copy, Cpu, Terminal } from "lucide-react";
@@ -83,13 +83,7 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
     [selectedClient?.executable_path]
   );
 
-  useEffect(() => {
-    if (isOpen) {
-      loadStatus();
-    }
-  }, [isOpen]);
-
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     try {
       setLoading(true);
       const res = await invoke<McpClientStatus[]>("get_mcp_status");
@@ -102,7 +96,13 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedClient]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadStatus();
+    }
+  }, [isOpen, loadStatus]);
 
   const handleInstall = async (clientId: string) => {
     try {
