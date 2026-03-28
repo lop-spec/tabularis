@@ -572,6 +572,8 @@
     "saveThisQuery": "Guardar esta consulta",
     "noValidQueries": "No se encontraron consultas válidas",
     "queryFailed": "La consulta falló.",
+    "showErrorDetails": "Mostrar detalles",
+    "hideErrorDetails": "Ocultar detalles",
     "newVisualQuery": "Nueva Consulta Visual",
     "activeDatabase": "Base de datos activa",
     "tabSwitcher": {

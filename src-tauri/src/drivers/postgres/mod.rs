@@ -84,9 +84,25 @@ fn is_raw_sql_function(s: &str) -> bool {
         || trimmed.starts_with("POINTFROMWKB(")
 }
 
+fn format_pg_error(e: &tokio_postgres::Error) -> String {
+    if let Some(db) = e.as_db_error() {
+        let brief = format!("{}: {}", db.severity(), db.message());
+        let detail = format!("{:#?}", e);
+        format!("{}\n\n{}", brief, detail)
+    } else {
+        e.to_string()
+    }
+}
+
 #[inline(always)]
-fn map_pg_err<E: std::fmt::Debug>(e: E) -> String {
-    format!("{:#?}", e)
+fn map_pg_err<E: std::fmt::Debug + std::fmt::Display>(e: E) -> String {
+    let brief = e.to_string();
+    let detail = format!("{:#?}", e);
+    if detail.len() > brief.len() + 20 {
+        format!("{}\n\n{}", brief, detail)
+    } else {
+        brief
+    }
 }
 
 #[inline(always)]
@@ -101,7 +117,7 @@ async fn query_all(
     params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
 ) -> Result<Vec<PgRow>, String> {
     let client = get_client(pool).await?;
-    client.query(sql, params).await.map_err(map_pg_err)
+    client.query(sql, params).await.map_err(|e| format_pg_error(&e))
 }
 
 #[inline]
@@ -111,7 +127,7 @@ async fn query_one(
     params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
 ) -> Result<PgRow, String> {
     let client = get_client(pool).await?;
-    client.query_one(sql, params).await.map_err(map_pg_err)
+    client.query_one(sql, params).await.map_err(|e| format_pg_error(&e))
 }
 
 #[inline]
@@ -121,7 +137,7 @@ async fn execute(
     params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
 ) -> Result<u64, String> {
     let client = get_client(pool).await?;
-    client.execute(sql, params).await.map_err(map_pg_err)
+    client.execute(sql, params).await.map_err(|e| format_pg_error(&e))
 }
 
 pub async fn get_schemas(params: &ConnectionParams) -> Result<Vec<String>, String> {
@@ -514,7 +530,7 @@ pub async fn save_blob_column_to_file(
         _ => return Err("Unsupported PK type".into()),
     }?;
 
-    let bytes: Vec<u8> = row.try_get(0).map_err(map_pg_err)?;
+    let bytes: Vec<u8> = row.try_get(0).map_err(|e| format_pg_error(&e))?;
     std::fs::write(file_path, bytes).map_err(map_pg_err)
 }
 
@@ -555,7 +571,7 @@ pub async fn fetch_blob_column_as_data_url(
         _ => return Err("Unsupported PK type".into()),
     }?;
 
-    let bytes: Vec<u8> = row.try_get(0).map_err(map_pg_err)?;
+    let bytes: Vec<u8> = row.try_get(0).map_err(|e| format_pg_error(&e))?;
     Ok(crate::drivers::common::encode_blob_full(&bytes))
 }
 
@@ -594,7 +610,7 @@ pub async fn delete_record(
         _ => return Err("Unsupported PK type".into()),
     };
 
-    result.map_err(map_pg_err)
+    result
 }
 
 pub async fn update_record(
@@ -921,7 +937,7 @@ pub async fn execute_query(
         client
             .execute(&search_path, &[])
             .await
-            .map_err(map_pg_err)?;
+            .map_err(|e| format_pg_error(&e))?;
     }
 
     let params: Vec<i32> = vec![];
@@ -929,7 +945,7 @@ pub async fn execute_query(
     let mut rows_stream = std::pin::pin!(client
         .query_raw(&final_query, &params)
         .await
-        .map_err(map_pg_err)?);
+        .map_err(|e| format_pg_error(&e))?);
 
     let mut columns: Vec<String> = Vec::new();
     let mut json_rows = Vec::new();
@@ -957,7 +973,7 @@ pub async fn execute_query(
                 }
                 json_rows.push(json_row);
             }
-            Err(e) => return Err(map_pg_err(e)),
+            Err(e) => return Err(format_pg_error(&e)),
         }
     }
 
@@ -1234,7 +1250,7 @@ pub async fn get_routine_parameters(
     let routine_info = client
         .query_opt(return_type_query, &[&schema, &routine_name])
         .await
-        .map_err(map_pg_err)?;
+        .map_err(|e| format_pg_error(&e))?;
 
     let mut parameters = Vec::new();
 
@@ -1267,7 +1283,7 @@ pub async fn get_routine_parameters(
     let rows = client
         .query(query, &[&schema, &routine_name])
         .await
-        .map_err(map_pg_err)?;
+        .map_err(|e| format_pg_error(&e))?;
 
     parameters.extend(rows.iter().map(|r| RoutineParameter {
         name: r.try_get("parameter_name").unwrap_or_default(),

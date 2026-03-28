@@ -45,6 +45,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { TableToolbar } from "../components/ui/TableToolbar";
 import { DataGrid } from "../components/ui/DataGrid";
+import { ErrorDisplay } from "../components/ui/ErrorDisplay";
 import { NewRowModal } from "../components/modals/NewRowModal";
 import { QuerySelectionModal } from "../components/modals/QuerySelectionModal";
 import { TabSwitcherModal } from "../components/modals/TabSwitcherModal";
@@ -2058,9 +2059,7 @@ export const Editor = () => {
                 <p className="text-sm">{t("editor.executingQuery")}</p>
               </div>
             ) : activeTab.error ? (
-              <div className="p-4 text-red-400 font-mono text-sm bg-red-900/10 h-full overflow-auto whitespace-pre-wrap">
-                Error: {activeTab.error}
-              </div>
+              <ErrorDisplay error={activeTab.error} t={t} />
             ) : activeTab.result || (activeTab.pendingInsertions && Object.keys(activeTab.pendingInsertions).length > 0) ? (
               <div className="flex-1 min-h-0 flex flex-col">
                 {activeTab.result && (

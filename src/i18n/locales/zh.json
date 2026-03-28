@@ -579,6 +579,8 @@
     "saveThisQuery": "保存此查询",
     "noValidQueries": "未找到有效查询",
     "queryFailed": "查询失败。",
+    "showErrorDetails": "显示详情",
+    "hideErrorDetails": "隐藏详情",
     "newVisualQuery": "新建可视化查询",
     "activeDatabase": "当前数据库",
     "tabSwitcher": {

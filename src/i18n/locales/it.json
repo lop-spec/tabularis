@@ -579,6 +579,8 @@
     "saveThisQuery": "Salva questa query",
     "noValidQueries": "Nessuna query valida trovata",
     "queryFailed": "Esecuzione query fallita.",
+    "showErrorDetails": "Mostra dettagli",
+    "hideErrorDetails": "Nascondi dettagli",
     "newVisualQuery": "Nuova Query Visuale",
     "activeDatabase": "Database attivo",
     "tabSwitcher": {
