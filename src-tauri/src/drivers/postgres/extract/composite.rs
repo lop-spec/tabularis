@@ -6,7 +6,7 @@ use super::common::split_at_value_len;
 #[inline]
 pub fn extract_or_null(fields: &Vec<Field>, buf: &mut &[u8]) -> Result<JsonValue, ()> {
     if buf.len() == 0 {
-        log::error!("recieved empty buffer");
+        log::error!("received empty buffer");
         return Err(());
     };
 

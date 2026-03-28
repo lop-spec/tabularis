@@ -14,36 +14,36 @@ pub fn extract_or_null(ty: &Type, buf: &mut &[u8]) -> Result<JsonValue, ()> {
         return Err(());
     };
 
-    let dimentions = i32::from_be_bytes(buf[..4].try_into().unwrap());
+    let dimensions = i32::from_be_bytes(buf[..4].try_into().unwrap());
 
     // i don't think this is possible but just in case
-    if dimentions < 1 {
-        log::error!("invalid number of dimensions: {}", dimentions);
+    if dimensions < 1 {
+        log::error!("invalid number of dimensions: {}", dimensions);
         return Err(());
     };
 
     // max dimensions is 64 and just for safety
-    if dimentions > 64 {
-        log::error!("too many dimensions: {}", dimentions);
+    if dimensions > 64 {
+        log::error!("too many dimensions: {}", dimensions);
         return Err(());
     }
-
-    let dimentions = dimentions as usize;
-
-    // each dimension must have at least 8 bytes info
-    if buf.len() * dimentions < 8 * dimentions {
-        log::error!("array buffer too short: {}", buf.len());
-        return Err(());
-    };
 
     // ignore `has nulls` 4 bytes
     // ignore `element type` 4 bytes because we already have it
     *buf = &buf[12..];
 
-    let mut total_vecs: usize = 1;
-    let mut arr_lengths = Vec::with_capacity(dimentions);
+    let dimensions = dimensions as usize;
 
-    for i in 0..dimentions {
+    // each dimension must have at least 8 bytes info
+    if buf.len() < 8 * dimensions {
+        log::error!("array buffer too short: {}", buf.len());
+        return Err(());
+    };
+
+    let mut total_vecs: usize = 1;
+    let mut arr_lengths = Vec::with_capacity(dimensions);
+
+    for i in 0..dimensions {
         let length = i32::from_be_bytes(buf[..4].try_into().unwrap());
 
         // i don't think this is possible but just in case
@@ -58,7 +58,7 @@ pub fn extract_or_null(ty: &Type, buf: &mut &[u8]) -> Result<JsonValue, ()> {
 
         *buf = &buf[8..]; // skip `lower bound` 4 bytes
 
-        if dimentions - i == 1 {
+        if dimensions - i == 1 {
             continue;
         };
 
