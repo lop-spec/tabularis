@@ -1,8 +1,8 @@
 use crate::commands::{
     expand_ssh_connection_params, find_connection_by_id, resolve_connection_params_with_id,
 };
-use crate::dump_utils::{drop_table_if_exists, format_table_ref, insert_into_statement};
 use crate::drivers::{mysql, postgres, sqlite};
+use crate::dump_utils::{drop_table_if_exists, format_table_ref, insert_into_statement};
 use crate::models::ConnectionParams;
 use crate::pool_manager::{get_mysql_pool, get_postgres_pool, get_sqlite_pool};
 use futures::TryStreamExt;
@@ -154,10 +154,7 @@ async fn export_table_data(
     // Let's reuse `extract_value` logic but format for SQL.
 
     // Ideally we should use specific batch size
-    let query = format!(
-        "SELECT * FROM {}",
-        format_table_ref(driver, schema, table)
-    );
+    let query = format!("SELECT * FROM {}", format_table_ref(driver, schema, table));
 
     match driver {
         "mysql" => {
@@ -200,9 +197,15 @@ async fn export_table_data(
             use crate::pool_manager::get_postgres_pool;
 
             let pool = get_postgres_pool(params).await?;
-            let mut rows = sqlx::query(&query).fetch(&pool);
+            let client = pool.get().await.map_err(|e| e.to_string())?;
+            let params: Vec<i32> = vec![];
+            let mut rows = std::pin::pin!(client
+                .query_raw(&query, &params)
+                .await
+                .map_err(|e| e.to_string())?);
 
             let mut batch = Vec::new();
+
             while let Some(row) = rows.try_next().await.map_err(|e| e.to_string())? {
                 let mut values = Vec::new();
                 for i in 0..row.columns().len() {
@@ -353,7 +356,7 @@ impl<R: BufRead> SqlStatementStream<R> {
 
 // Helper macro for streaming execution with progress
 macro_rules! execute_statements_streaming {
-    ($tx:expr, $stream:expr, $app:expr) => {{
+    ($executor_macro:ident, $stream:expr, $app:expr) => {{
         // Larger batch for better performance - execute and emit progress every 500 statements
         const PROGRESS_EMIT_INTERVAL: usize = 500;
         let mut executed = 0;
@@ -361,7 +364,7 @@ macro_rules! execute_statements_streaming {
 
         while let Some(stmt) = $stream.next_statement()? {
             // Execute statement immediately without batching in memory
-            sqlx::query(&stmt).execute(&mut *$tx).await.map_err(|e| {
+            $executor_macro!(&stmt).await.map_err(|e| {
                 format!(
                     "Error at statement {}: {}\nQuery: {}",
                     executed + 1,
@@ -472,7 +475,13 @@ pub async fn import_database<R: Runtime>(
                     .await
                     .map_err(|e| e.to_string())?;
 
-                execute_statements_streaming!(tx, stream, app_handle)?;
+                macro_rules! execute_statement {
+                    ($stmt:expr) => {
+                        sqlx::query($stmt).execute(&mut *tx)
+                    };
+                }
+
+                execute_statements_streaming!(execute_statement, stream, app_handle)?;
 
                 // Restore settings
                 sqlx::query("SET FOREIGN_KEY_CHECKS=1")
@@ -492,26 +501,30 @@ pub async fn import_database<R: Runtime>(
             }
             "postgres" => {
                 let pool = get_postgres_pool(&params).await?;
-                let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+                let mut client = pool.get().await.map_err(|e| e.to_string())?;
+                let tx = client.transaction().await.map_err(|e| e.to_string())?;
 
                 // Set schema search path so unqualified table names resolve correctly
-                sqlx::query(&format!("SET search_path TO \"{}\"", pg_schema))
-                    .execute(&mut *tx)
+                tx.execute(&format!("SET search_path TO \"{}\"", pg_schema), &[])
                     .await
                     .map_err(|e| e.to_string())?;
 
                 // Performance optimizations for PostgreSQL
-                sqlx::query("SET CONSTRAINTS ALL DEFERRED")
-                    .execute(&mut *tx)
+                tx.execute("SET CONSTRAINTS ALL DEFERRED", &[])
                     .await
                     .map_err(|e| e.to_string())?;
                 // Temporarily disable synchronous commit for speed (data at risk until commit)
-                sqlx::query("SET LOCAL synchronous_commit=OFF")
-                    .execute(&mut *tx)
+                tx.execute("SET LOCAL synchronous_commit=OFF", &[])
                     .await
                     .map_err(|e| e.to_string())?;
 
-                execute_statements_streaming!(tx, stream, app_handle)?;
+                macro_rules! execute_statement {
+                    ($stmt:expr) => {
+                        tx.execute($stmt, &[])
+                    };
+                }
+
+                execute_statements_streaming!(execute_statement, stream, app_handle)?;
 
                 tx.commit().await.map_err(|e| e.to_string())?;
             }
@@ -533,7 +546,13 @@ pub async fn import_database<R: Runtime>(
                     .await
                     .map_err(|e| e.to_string())?;
 
-                execute_statements_streaming!(tx, stream, app_handle)?;
+                macro_rules! execute_statement {
+                    ($stmt:expr) => {
+                        sqlx::query($stmt).execute(&mut *tx)
+                    };
+                }
+
+                execute_statements_streaming!(execute_statement, stream, app_handle)?;
 
                 // Restore settings
                 sqlx::query("PRAGMA foreign_keys=ON")

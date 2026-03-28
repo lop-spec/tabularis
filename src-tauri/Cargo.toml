@@ -32,7 +32,7 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "mysql", "pos
 tokio = { version = "1.49.0", features = ["full"] }
 openssl = { version = "0.10", features = ["vendored"] }
 uuid = { version = "1.20.0", features = ["v4", "serde"] }
-rust_decimal = { version = "1.36", features = ["serde"] }
+rust_decimal = { version = "1.36", features = ["db-tokio-postgres", "serde"] }
 chrono = { version = "0.4.43", features = ["serde"] }
 tauri-plugin-dialog = "2.6.0"
 tauri-plugin-fs = "2.4.5"
@@ -54,6 +54,10 @@ serde_yaml = "0.9.34"
 sysinfo = { version = "0.32", features = ["system"] }
 zip = "4.2.0"
 tauri-plugin-clipboard-manager = "2"
+tokio-postgres = { version = "0.7.13", features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1", "array-impls"] }
+deadpool-postgres = "0.14.1"
+postgres-native-tls = "0.5.1"
+native-tls = "0.2.13"
 
 # GTK dependencies for Wayland window title workaround (Linux only)
 [target.'cfg(target_os = "linux")'.dependencies]

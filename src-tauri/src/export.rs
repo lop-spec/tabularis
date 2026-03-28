@@ -65,8 +65,13 @@ macro_rules! export_rows {
 
                 count += 1;
                 if count % 100 == 0 {
-                    $app.emit("export_progress", ExportProgress { rows_processed: count })
-                        .unwrap_or(());
+                    $app.emit(
+                        "export_progress",
+                        ExportProgress {
+                            rows_processed: count,
+                        },
+                    )
+                    .unwrap_or(());
                 }
             }
             csv_wtr.flush().map_err(|e| e.to_string())?;
@@ -84,17 +89,23 @@ macro_rules! export_rows {
                 first = false;
 
                 let mut obj = serde_json::Map::new();
-                for i in 0..row.columns().len() {
-                    let name = row.column(i).name().to_string();
-                    let val = $extract_fn(&row, i, None);
+                let columns = row.columns();
+                for i in 0..columns.len() {
+                    let name = columns[i].name().to_string();
+                    let val = $extract_fn(&row, i);
                     obj.insert(name, val);
                 }
                 serde_json::to_writer(&mut writer, &obj).map_err(|e| e.to_string())?;
 
                 count += 1;
                 if count % 100 == 0 {
-                    $app.emit("export_progress", ExportProgress { rows_processed: count })
-                        .unwrap_or(());
+                    $app.emit(
+                        "export_progress",
+                        ExportProgress {
+                            rows_processed: count,
+                        },
+                    )
+                    .unwrap_or(());
                 }
             }
             writer.write_all(b"]").map_err(|e| e.to_string())?;
@@ -134,9 +145,7 @@ pub async fn export_query_to_file<R: Runtime>(
     let params = resolve_connection_params(&saved_conn.params)?;
     let driver = saved_conn.params.driver.clone();
 
-    let delimiter_byte = csv_delimiter
-        .and_then(|d| d.bytes().next())
-        .unwrap_or(b',');
+    let delimiter_byte = csv_delimiter.and_then(|d| d.bytes().next()).unwrap_or(b',');
 
     let task = tokio::spawn(async move {
         let file = File::create(&file_path).map_err(|e| e.to_string())?;
@@ -146,17 +155,48 @@ pub async fn export_query_to_file<R: Runtime>(
             "mysql" => {
                 let pool = get_mysql_pool(&params).await?;
                 let mut rows = sqlx::query(&sanitized_query).fetch(&pool);
-                export_rows!(rows, extract_mysql_value, format, delimiter_byte, writer, app)
+                export_rows!(
+                    rows,
+                    extract_mysql_value,
+                    format,
+                    delimiter_byte,
+                    writer,
+                    app
+                )
             }
             "postgres" => {
                 let pool = get_postgres_pool(&params).await?;
-                let mut rows = sqlx::query(&sanitized_query).fetch(&pool);
-                export_rows!(rows, extract_postgres_value, format, delimiter_byte, writer, app)
+                let client = pool
+                    .get()
+                    .await
+                    .map_err(|e| format!("failed to get postgres client: {:?}", e))?;
+
+                let params: Vec<i32> = vec![];
+                let mut rows = std::pin::pin!(client
+                    .query_raw(&sanitized_query, &params)
+                    .await
+                    .map_err(|e| format!("failed to execute postgres query: {:?}", e))?);
+
+                export_rows!(
+                    rows,
+                    extract_postgres_value,
+                    format,
+                    delimiter_byte,
+                    writer,
+                    app
+                )
             }
             "sqlite" => {
                 let pool = get_sqlite_pool(&params).await?;
                 let mut rows = sqlx::query(&sanitized_query).fetch(&pool);
-                export_rows!(rows, extract_sqlite_value, format, delimiter_byte, writer, app)
+                export_rows!(
+                    rows,
+                    extract_sqlite_value,
+                    format,
+                    delimiter_byte,
+                    writer,
+                    app
+                )
             }
             _ => Err("Unsupported driver".into()),
         }

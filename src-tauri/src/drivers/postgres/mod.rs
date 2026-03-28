@@ -7,10 +7,10 @@ use crate::models::{
     TableColumn, TableInfo, ViewInfo,
 };
 use crate::pool_manager::get_postgres_pool;
+use deadpool_postgres::{Object as PgObject, Pool as PgPool};
 use extract::extract_value;
-use sqlx::{Column, Row};
+use tokio_postgres::{types::ToSql, Row as PgRow};
 use uuid::Uuid;
-
 // Helper function to escape double quotes in identifiers for PostgreSQL
 fn escape_identifier(name: &str) -> String {
     name.replace('"', "\"\"")
@@ -46,9 +46,7 @@ fn json_array_to_pg_literal(arr: &[serde_json::Value]) -> Result<String, String>
                 let escaped = s.replace('\'', "''");
                 parts.push(format!("'{}'", escaped));
             }
-            serde_json::Value::Bool(b) => {
-                parts.push(if *b { "TRUE" } else { "FALSE" }.to_string())
-            }
+            serde_json::Value::Bool(b) => parts.push(if *b { "TRUE" } else { "FALSE" }.to_string()),
             serde_json::Value::Null => parts.push("NULL".to_string()),
             serde_json::Value::Array(nested) => {
                 parts.push(json_array_to_pg_literal(nested)?);
@@ -63,7 +61,9 @@ fn json_array_to_pg_literal(arr: &[serde_json::Value]) -> Result<String, String>
 fn try_parse_pg_array(s: &str) -> Option<Result<String, String>> {
     let trimmed = s.trim();
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
-        if let Ok(serde_json::Value::Array(arr)) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        if let Ok(serde_json::Value::Array(arr)) =
+            serde_json::from_str::<serde_json::Value>(trimmed)
+        {
             return Some(json_array_to_pg_literal(&arr));
         }
     }
@@ -84,18 +84,59 @@ fn is_raw_sql_function(s: &str) -> bool {
         || trimmed.starts_with("POINTFROMWKB(")
 }
 
+#[inline(always)]
+fn map_pg_err<E: std::fmt::Debug>(e: E) -> String {
+    format!("{:#?}", e)
+}
+
+#[inline(always)]
+async fn get_client(pool: &PgPool) -> Result<PgObject, String> {
+    pool.get().await.map_err(map_pg_err)
+}
+
+#[inline]
+async fn query_all(
+    pool: &PgPool,
+    sql: &str,
+    params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+) -> Result<Vec<PgRow>, String> {
+    let client = get_client(pool).await?;
+    client.query(sql, params).await.map_err(map_pg_err)
+}
+
+#[inline]
+async fn query_one(
+    pool: &PgPool,
+    sql: &str,
+    params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+) -> Result<PgRow, String> {
+    let client = get_client(pool).await?;
+    client.query_one(sql, params).await.map_err(map_pg_err)
+}
+
+#[inline]
+async fn execute(
+    pool: &PgPool,
+    sql: &str,
+    params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+) -> Result<u64, String> {
+    let client = get_client(pool).await?;
+    client.execute(sql, params).await.map_err(map_pg_err)
+}
+
 pub async fn get_schemas(params: &ConnectionParams) -> Result<Vec<String>, String> {
     let pool = get_postgres_pool(params).await?;
-    let rows = sqlx::query(
+    let rows = query_all(
+        &pool,
         "SELECT schema_name::text FROM information_schema.schemata \
-         WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') \
-         AND schema_name NOT LIKE 'pg_temp_%' \
-         AND schema_name NOT LIKE 'pg_toast_temp_%' \
-         ORDER BY schema_name",
+WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') \
+AND schema_name NOT LIKE 'pg_temp_%' \
+AND schema_name NOT LIKE 'pg_toast_temp_%' \
+ORDER BY schema_name",
+        &[],
     )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
+
     Ok(rows
         .iter()
         .map(|r| r.try_get("schema_name").unwrap_or_default())
@@ -104,12 +145,12 @@ pub async fn get_schemas(params: &ConnectionParams) -> Result<Vec<String>, Strin
 
 pub async fn get_databases(params: &ConnectionParams) -> Result<Vec<String>, String> {
     let pool = get_postgres_pool(params).await?;
-    let rows = sqlx::query(
+    let rows = query_all(
+        &pool,
         "SELECT datname::text FROM pg_database WHERE datistemplate = false ORDER BY datname",
+        &[],
     )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(rows
         .iter()
         .map(|r| r.try_get("datname").unwrap_or_default())
@@ -123,13 +164,12 @@ pub async fn get_tables(params: &ConnectionParams, schema: &str) -> Result<Vec<T
         schema
     );
     let pool = get_postgres_pool(params).await?;
-    let rows = sqlx::query(
-        "SELECT table_name as name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name ASC",
+    let rows = query_all(
+        &pool,
+        "SELECT table_name::text as name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name ASC",
+        &[&schema],
     )
-    .bind(schema)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     let tables: Vec<TableInfo> = rows
         .iter()
         .map(|r| TableInfo {
@@ -154,11 +194,11 @@ pub async fn get_columns(
     // Postgres auto increment is usually sequences (nextval) or GENERATED BY DEFAULT/ALWAYS AS IDENTITY
     let query = r#"
         SELECT
-            c.column_name,
-            c.data_type,
-            c.is_nullable,
-            c.column_default,
-            c.is_identity,
+            c.column_name::text,
+            c.data_type::text,
+            c.is_nullable::text,
+            c.column_default::text,
+            c.is_identity::text,
             c.character_maximum_length,
             (SELECT COUNT(*) FROM information_schema.table_constraints tc
              JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
@@ -172,12 +212,7 @@ pub async fn get_columns(
         ORDER BY c.ordinal_position
     "#;
 
-    let rows = sqlx::query(query)
-        .bind(schema)
-        .bind(table_name)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let rows = query_all(&pool, &query, &[&schema, &table_name]).await?;
 
     Ok(rows
         .iter()
@@ -186,11 +221,11 @@ pub async fn get_columns(
             let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
             let default_val: String = r.try_get("column_default").unwrap_or_default();
             let is_identity: String = r.try_get("is_identity").unwrap_or_default(); // YES/NO
-            let character_maximum_length: Option<u64> =
-                r.try_get::<Option<i64>, _>("character_maximum_length")
-                    .ok()
-                    .flatten()
-                    .and_then(|v| u64::try_from(v).ok());
+            let character_maximum_length: Option<u64> = r
+                .try_get::<_, Option<i64>>("character_maximum_length")
+                .ok()
+                .flatten()
+                .and_then(|v| u64::try_from(v).ok());
 
             let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -250,12 +285,7 @@ pub async fn get_foreign_keys(
         AND tc.table_name = $2
     "#;
 
-    let rows = sqlx::query(query)
-        .bind(schema)
-        .bind(table_name)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let rows = query_all(&pool, &query, &[&schema, &table_name]).await?;
 
     Ok(rows
         .iter()
@@ -299,11 +329,7 @@ pub async fn get_all_columns_batch(
         ORDER BY c.table_name, c.ordinal_position
     "#;
 
-    let rows = sqlx::query(query)
-        .bind(schema)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let rows = query_all(&pool, &query, &[&schema]).await?;
 
     let mut result: HashMap<String, Vec<TableColumn>> = HashMap::new();
 
@@ -313,11 +339,11 @@ pub async fn get_all_columns_batch(
         let is_pk: bool = row.try_get("is_pk").unwrap_or(false);
         let default_val: String = row.try_get("column_default").unwrap_or_default();
         let is_identity: String = row.try_get("is_identity").unwrap_or_default();
-        let character_maximum_length: Option<u64> =
-            row.try_get::<Option<i64>, _>("character_maximum_length")
-                .ok()
-                .flatten()
-                .and_then(|v| u64::try_from(v).ok());
+        let character_maximum_length: Option<u64> = row
+            .try_get::<_, Option<i64>>("character_maximum_length")
+            .ok()
+            .flatten()
+            .and_then(|v| u64::try_from(v).ok());
 
         let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -384,11 +410,7 @@ pub async fn get_all_foreign_keys_batch(
         AND tc.table_schema = $1
     "#;
 
-    let rows = sqlx::query(query)
-        .bind(schema)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let rows = query_all(&pool, &query, &[&schema]).await?;
 
     let mut result: HashMap<String, Vec<ForeignKey>> = HashMap::new();
 
@@ -440,12 +462,7 @@ pub async fn get_indexes(
             seq_in_index
     "#;
 
-    let rows = sqlx::query(query)
-        .bind(schema)
-        .bind(table_name)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let rows = query_all(&pool, &query, &[&schema, &table_name]).await?;
 
     Ok(rows
         .iter()
@@ -454,7 +471,7 @@ pub async fn get_indexes(
             column_name: r.try_get("column_name").unwrap_or_default(),
             is_unique: r.try_get("is_unique").unwrap_or(false),
             is_primary: r.try_get("is_primary").unwrap_or(false),
-            seq_in_index: r.try_get::<i32, _>("seq_in_index").unwrap_or(0),
+            seq_in_index: r.try_get("seq_in_index").unwrap_or(0),
         })
         .collect())
 }
@@ -481,25 +498,24 @@ pub async fn save_blob_column_to_file(
     let row = match pk_val {
         serde_json::Value::Number(n) => {
             if n.is_i64() {
-                sqlx::query(&query).bind(n.as_i64()).fetch_one(&pool).await
+                query_one(&pool, &query, &[&n.as_i64()]).await
             } else {
-                sqlx::query(&query).bind(n.as_f64()).fetch_one(&pool).await
+                query_one(&pool, &query, &[&n.as_f64()]).await
             }
         }
         serde_json::Value::String(s) => {
             // Try parsing as UUID so PostgreSQL receives the correct type
             if let Ok(uuid) = s.parse::<Uuid>() {
-                sqlx::query(&query).bind(uuid).fetch_one(&pool).await
+                query_one(&pool, &query, &[&uuid]).await
             } else {
-                sqlx::query(&query).bind(s).fetch_one(&pool).await
+                query_one(&pool, &query, &[&s]).await
             }
         }
         _ => return Err("Unsupported PK type".into()),
-    }
-    .map_err(|e| e.to_string())?;
+    }?;
 
-    let bytes: Vec<u8> = row.try_get(0).map_err(|e| e.to_string())?;
-    std::fs::write(file_path, bytes).map_err(|e| e.to_string())
+    let bytes: Vec<u8> = row.try_get(0).map_err(map_pg_err)?;
+    std::fs::write(file_path, bytes).map_err(map_pg_err)
 }
 
 pub async fn fetch_blob_column_as_data_url(
@@ -523,24 +539,23 @@ pub async fn fetch_blob_column_as_data_url(
     let row = match pk_val {
         serde_json::Value::Number(n) => {
             if n.is_i64() {
-                sqlx::query(&query).bind(n.as_i64()).fetch_one(&pool).await
+                query_one(&pool, &query, &[&n.as_i64()]).await
             } else {
-                sqlx::query(&query).bind(n.as_f64()).fetch_one(&pool).await
+                query_one(&pool, &query, &[&n.as_f64()]).await
             }
         }
         serde_json::Value::String(s) => {
             // Try parsing as UUID so PostgreSQL receives the correct type
             if let Ok(uuid) = s.parse::<Uuid>() {
-                sqlx::query(&query).bind(uuid).fetch_one(&pool).await
+                query_one(&pool, &query, &[&uuid]).await
             } else {
-                sqlx::query(&query).bind(s).fetch_one(&pool).await
+                query_one(&pool, &query, &[&s]).await
             }
         }
         _ => return Err("Unsupported PK type".into()),
-    }
-    .map_err(|e| e.to_string())?;
+    }?;
 
-    let bytes: Vec<u8> = row.try_get(0).map_err(|e| e.to_string())?;
+    let bytes: Vec<u8> = row.try_get(0).map_err(map_pg_err)?;
     Ok(crate::drivers::common::encode_blob_full(&bytes))
 }
 
@@ -563,23 +578,23 @@ pub async fn delete_record(
     let result = match pk_val {
         serde_json::Value::Number(n) => {
             if n.is_i64() {
-                sqlx::query(&query).bind(n.as_i64()).execute(&pool).await
+                execute(&pool, &query, &[&n.as_i64()]).await
             } else {
-                sqlx::query(&query).bind(n.as_f64()).execute(&pool).await
+                execute(&pool, &query, &[&n.as_f64()]).await
             }
         }
         serde_json::Value::String(s) => {
             // Try parsing as UUID so PostgreSQL receives the correct type
             if let Ok(uuid) = s.parse::<Uuid>() {
-                sqlx::query(&query).bind(uuid).execute(&pool).await
+                execute(&pool, &query, &[&uuid]).await
             } else {
-                sqlx::query(&query).bind(s).execute(&pool).await
+                execute(&pool, &query, &[&s]).await
             }
         }
         _ => return Err("Unsupported PK type".into()),
     };
 
-    result.map(|r| r.rows_affected()).map_err(|e| e.to_string())
+    result.map_err(map_pg_err)
 }
 
 pub async fn update_record(
@@ -594,89 +609,100 @@ pub async fn update_record(
 ) -> Result<u64, String> {
     let pool = get_postgres_pool(params).await?;
 
-    let mut qb = sqlx::QueryBuilder::new(format!(
+    let mut query = format!(
         "UPDATE \"{}\".\"{}\" SET \"{}\" = ",
         escape_identifier(schema),
         escape_identifier(table),
         escape_identifier(col_name)
-    ));
+    );
+
+    let mut params: Vec<Box<dyn tokio_postgres::types::ToSql + Send + Sync>> = Vec::new();
 
     match new_val {
         serde_json::Value::Number(n) => {
+            query.push_str(&format!("${}", params.len() + 1));
             if n.is_i64() {
-                qb.push_bind(n.as_i64());
+                params.push(Box::new(n.as_i64()));
             } else {
-                qb.push_bind(n.as_f64());
+                params.push(Box::new(n.as_f64()));
             }
         }
         serde_json::Value::String(s) => {
             // Check for special sentinel value to use DEFAULT
             if s == "__USE_DEFAULT__" {
-                qb.push("DEFAULT");
+                query.push_str("DEFAULT");
             } else if let Some(bytes) =
                 crate::drivers::common::decode_blob_wire_format(&s, max_blob_size)
             {
                 // Blob wire format: decode to raw bytes so the DB stores binary data,
                 // not the internal wire format string.
-                qb.push_bind(bytes);
+                query.push_str(&format!("${}", params.len() + 1));
+                params.push(Box::new(bytes));
             } else if is_raw_sql_function(&s) {
                 // If it's a raw SQL function (e.g., ST_GeomFromText('POINT(1 2)', 4326))
                 // insert it directly without parameter binding
-                qb.push(s);
+                query.push_str(&s);
             } else if is_wkt_geometry(&s) {
                 // If it's WKT geometry format, wrap with ST_GeomFromText
-                qb.push("ST_GeomFromText(");
-                qb.push_bind(s);
-                qb.push(")");
+                query.push_str(&format!("ST_GeomFromText(${})", params.len() + 1));
+
+                params.push(Box::new(s));
             } else if s.parse::<Uuid>().is_ok() {
                 // Wrap in explicit SQL CAST so PostgreSQL receives the correct type
                 // regardless of how sqlx QueryBuilder infers the parameter OID
-                qb.push("CAST(");
-                qb.push_bind(s);
-                qb.push(" AS uuid)");
+                query.push_str(&format!("CAST(${} AS uuid)", params.len() + 1));
+
+                params.push(Box::new(s));
             } else if let Some(pg_arr) = try_parse_pg_array(&s) {
-                qb.push(pg_arr?);
+                query.push_str(&pg_arr?);
             } else {
-                qb.push_bind(s);
+                query.push_str(&format!("${}", params.len() + 1));
+                params.push(Box::new(s));
             }
         }
         serde_json::Value::Bool(b) => {
-            qb.push_bind(b);
+            query.push_str(&format!("${}", params.len() + 1));
+            params.push(Box::new(b));
         }
         serde_json::Value::Null => {
-            qb.push("NULL");
+            query.push_str("NULL");
         }
         serde_json::Value::Array(arr) => {
-            qb.push(json_array_to_pg_literal(&arr)?);
+            query.push_str(&json_array_to_pg_literal(&arr)?);
         }
         _ => return Err("Unsupported Value type".into()),
     }
 
-    qb.push(format!(" WHERE \"{}\" = ", pk_col));
+    query.push_str(&format!(" WHERE \"{}\" = ", pk_col));
 
     match pk_val {
         serde_json::Value::Number(n) => {
+            query.push_str(&format!("${}", params.len() + 1));
+
             if n.is_i64() {
-                qb.push_bind(n.as_i64());
+                params.push(Box::new(n.as_i64()));
             } else {
-                qb.push_bind(n.as_f64());
+                params.push(Box::new(n.as_f64()));
             }
         }
         serde_json::Value::String(s) => {
             if s.parse::<Uuid>().is_ok() {
-                qb.push("CAST(");
-                qb.push_bind(s);
-                qb.push(" AS uuid)");
+                query.push_str(&format!("CAST(${}) AS uuid)", params.len() + 1));
+                params.push(Box::new(s));
             } else {
-                qb.push_bind(s);
+                query.push_str(&format!("${}", params.len() + 1));
+                params.push(Box::new(s));
             }
         }
         _ => return Err("Unsupported PK type".into()),
     }
 
-    let query = qb.build();
-    let result = query.execute(&pool).await.map_err(|e| e.to_string())?;
-    Ok(result.rows_affected())
+    let params: Vec<&(dyn ToSql + Sync)> = params
+        .iter()
+        .map(|b| b.as_ref() as &(dyn ToSql + Sync))
+        .collect();
+
+    execute(&pool, &query, &params).await
 }
 
 pub async fn insert_record(
@@ -697,75 +723,89 @@ pub async fn insert_record(
     }
 
     // Allow empty inserts for auto-generated values (e.g., auto-increment PKs)
-    let mut qb = if cols.is_empty() {
-        sqlx::QueryBuilder::new(format!(
-            "INSERT INTO \"{}\".\"{}\" DEFAULT VALUES",
-            escape_identifier(schema),
-            escape_identifier(table)
-        ))
-    } else {
-        let mut qb = sqlx::QueryBuilder::new(format!(
-            "INSERT INTO \"{}\".\"{}\" ({}) VALUES (",
-            escape_identifier(schema),
-            escape_identifier(table),
-            cols.join(", ")
-        ));
-
-        let mut separated = qb.separated(", ");
-        for val in vals {
-            match val {
-                serde_json::Value::Number(n) => {
-                    if n.is_i64() {
-                        separated.push_bind(n.as_i64());
-                    } else {
-                        separated.push_bind(n.as_f64());
-                    }
-                }
-                serde_json::Value::String(s) => {
-                    if let Some(bytes) =
-                        crate::drivers::common::decode_blob_wire_format(&s, max_blob_size)
-                    {
-                        // Blob wire format: decode to raw bytes so the DB stores binary data,
-                        // not the internal wire format string.
-                        separated.push_bind(bytes);
-                    } else if is_raw_sql_function(&s) {
-                        // If it's a raw SQL function (e.g., ST_GeomFromText('POINT(1 2)', 4326))
-                        // insert it directly without parameter binding
-                        separated.push_unseparated(&s);
-                    } else if is_wkt_geometry(&s) {
-                        // If it's WKT geometry format, wrap with ST_GeomFromText
-                        separated.push_unseparated("ST_GeomFromText(");
-                        separated.push_bind_unseparated(s);
-                        separated.push_unseparated(")");
-                    } else if s.parse::<Uuid>().is_ok() {
-                        separated.push_unseparated("CAST(");
-                        separated.push_bind_unseparated(s);
-                        separated.push_unseparated(" AS uuid)");
-                    } else if let Some(pg_arr) = try_parse_pg_array(&s) {
-                        separated.push_unseparated(&pg_arr?);
-                    } else {
-                        separated.push_bind(s);
-                    }
-                }
-                serde_json::Value::Bool(b) => {
-                    separated.push_bind(b);
-                }
-                serde_json::Value::Null => {
-                    separated.push("NULL");
-                }
-                serde_json::Value::Array(arr) => {
-                    separated.push_unseparated(&json_array_to_pg_literal(&arr)?);
-                }
-                _ => return Err("Unsupported value type".into()),
-            }
-        }
-        separated.push_unseparated(")");
-        qb
+    if cols.is_empty() {
+        return execute(
+            &pool,
+            &format!(
+                "INSERT INTO \"{}\".\"{}\" DEFAULT VALUES",
+                escape_identifier(schema),
+                escape_identifier(table)
+            ),
+            &[],
+        )
+        .await;
     };
 
-    let query = qb.build();
-    let result = query.execute(&pool).await.map_err(|e| e.to_string())?;
-    Ok(result.rows_affected())
+    let mut params: Vec<Box<dyn ToSql + Sync + Send>> = Vec::with_capacity(vals.len());
+    let mut vals_set: Vec<String> = Vec::with_capacity(vals.len());
+
+    for val in vals {
+        match val {
+            serde_json::Value::Number(n) => {
+                vals_set.push(format!("${}", params.len() + 1));
+                if n.is_i64() {
+                    params.push(Box::new(n.as_i64()));
+                } else {
+                    params.push(Box::new(n.as_f64()));
+                }
+            }
+            serde_json::Value::String(s) => {
+                if let Some(bytes) =
+                    crate::drivers::common::decode_blob_wire_format(&s, max_blob_size)
+                {
+                    // Blob wire format: decode to raw bytes so the DB stores binary data,
+                    // not the internal wire format string.
+                    vals_set.push(format!("${}", params.len() + 1));
+                    params.push(Box::new(bytes));
+                } else if is_raw_sql_function(&s) {
+                    // If it's a raw SQL function (e.g., ST_GeomFromText('POINT(1 2)', 4326))
+                    // insert it directly without parameter binding
+                    vals_set.push(s);
+                } else if is_wkt_geometry(&s) {
+                    // If it's WKT geometry format, wrap with ST_GeomFromText
+                    vals_set.push(format!("ST_GeomFromText(${})", params.len() + 1));
+                    params.push(Box::new(s));
+                } else if s.parse::<Uuid>().is_ok() {
+                    // If it's a UUID, cast it to uuid type
+                    vals_set.push(format!("CAST(${} AS uuid)", params.len() + 1));
+                    params.push(Box::new(s));
+                } else if let Some(pg_arr) = try_parse_pg_array(&s) {
+                    vals_set.push(pg_arr?);
+                } else {
+                    vals_set.push(format!("${}", params.len() + 1));
+                    params.push(Box::new(s));
+                }
+            }
+            serde_json::Value::Bool(b) => {
+                vals_set.push(format!("${}", params.len() + 1));
+                params.push(Box::new(b));
+            }
+            serde_json::Value::Null => {
+                vals_set.push("NULL".to_string());
+            }
+            serde_json::Value::Array(arr) => {
+                vals_set.push(json_array_to_pg_literal(&arr)?);
+            }
+            _ => {
+                return Err(format!("Unsupported value type: {:?}", val));
+            }
+        }
+    }
+
+    let query = format!(
+        "INSERT INTO \"{}\".\"{}\" ({}) VALUES ({})",
+        escape_identifier(schema),
+        escape_identifier(table),
+        cols.join(", "),
+        vals_set.join(", ")
+    );
+
+    let params: Vec<&(dyn ToSql + Sync)> = params
+        .iter()
+        .map(|b| b.as_ref() as &(dyn ToSql + Sync))
+        .collect();
+
+    execute(&pool, &query, &params).await
 }
 
 /// Extracts ORDER BY clause from a SQL query (case-insensitive)
@@ -850,12 +890,17 @@ pub async fn execute_query(
             let query_without_order = remove_order_by(query);
             format!(
                 "SELECT * FROM ({}) as data_wrapper {} LIMIT {} OFFSET {}",
-                query_without_order, order_by_clause, l + 1, offset
+                query_without_order,
+                order_by_clause,
+                l + 1,
+                offset
             )
         } else {
             format!(
                 "SELECT * FROM ({}) as data_wrapper LIMIT {} OFFSET {}",
-                query, l + 1, offset
+                query,
+                l + 1,
+                offset
             )
         };
 
@@ -865,19 +910,26 @@ pub async fn execute_query(
         (query.to_string(), None)
     };
 
+    // this comment was for sqlx and i didn't understand it
     // Acquire main connection for the data fetch (COUNT runs concurrently above)
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    // let mut conn = pool.acquire().await.map_err(map_pg_err)?;
+
+    let client = get_client(&pool).await?;
 
     if let Some(schema) = schema {
         let search_path = format!("SET search_path TO \"{}\"", escape_identifier(schema));
-        sqlx::query(&search_path)
-            .execute(&mut *conn)
+        client
+            .execute(&search_path, &[])
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(map_pg_err)?;
     }
 
+    let params: Vec<i32> = vec![];
     // Stream data rows while COUNT runs in the background
-    let mut rows_stream = sqlx::query(&final_query).fetch(&mut *conn);
+    let mut rows_stream = std::pin::pin!(client
+        .query_raw(&final_query, &params)
+        .await
+        .map_err(map_pg_err)?);
 
     let mut columns: Vec<String> = Vec::new();
     let mut json_rows = Vec::new();
@@ -905,7 +957,7 @@ pub async fn execute_query(
                 }
                 json_rows.push(json_row);
             }
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(map_pg_err(e)),
         }
     }
 
@@ -942,13 +994,13 @@ pub async fn get_views(params: &ConnectionParams, schema: &str) -> Result<Vec<Vi
         schema
     );
     let pool = get_postgres_pool(params).await?;
-    let rows = sqlx::query(
+    let rows = query_all(
+        &pool,
         "SELECT viewname as name FROM pg_views WHERE schemaname = $1 ORDER BY viewname ASC",
+        &[&schema],
     )
-    .bind(schema)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
+
     let views: Vec<ViewInfo> = rows
         .iter()
         .map(|r| ViewInfo {
@@ -975,10 +1027,14 @@ pub async fn get_view_definition(
         escape_identifier(schema),
         escape_identifier(view_name)
     );
-    let query = "SELECT pg_get_viewdef($1::regclass, true) as definition";
-    let row = sqlx::query(query)
-        .bind(&qualified)
-        .fetch_one(&pool)
+
+    let client = get_client(&pool).await?;
+
+    let row = client
+        .query_one(
+            "SELECT pg_get_viewdef($1::regclass, true) as definition",
+            &[&qualified],
+        )
         .await
         .map_err(|e| format!("Failed to get view definition: {}", e))?;
 
@@ -1002,10 +1058,13 @@ pub async fn create_view(
         escape_identifier(view_name),
         definition
     );
-    sqlx::query(&query)
-        .execute(&pool)
+
+    let client = get_client(&pool).await?;
+    client
+        .execute(&query, &[])
         .await
         .map_err(|e| format!("Failed to create view: {}", e))?;
+
     Ok(())
 }
 
@@ -1022,10 +1081,13 @@ pub async fn alter_view(
         escape_identifier(view_name),
         definition
     );
-    sqlx::query(&query)
-        .execute(&pool)
+
+    let client = get_client(&pool).await?;
+    client
+        .execute(&query, &[])
         .await
         .map_err(|e| format!("Failed to alter view: {}", e))?;
+
     Ok(())
 }
 
@@ -1040,10 +1102,13 @@ pub async fn drop_view(
         escape_identifier(schema),
         escape_identifier(view_name)
     );
-    sqlx::query(&query)
-        .execute(&pool)
+
+    let client = get_client(&pool).await?;
+    client
+        .execute(&query, &[])
         .await
         .map_err(|e| format!("Failed to drop view: {}", e))?;
+
     Ok(())
 }
 
@@ -1074,12 +1139,7 @@ pub async fn get_view_columns(
         ORDER BY c.ordinal_position
     "#;
 
-    let rows = sqlx::query(query)
-        .bind(schema)
-        .bind(view_name)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let rows = query_all(&pool, &query, &[&schema, &view_name]).await?;
 
     Ok(rows
         .iter()
@@ -1088,11 +1148,11 @@ pub async fn get_view_columns(
             let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
             let default_val: String = r.try_get("column_default").unwrap_or_default();
             let is_identity: String = r.try_get("is_identity").unwrap_or_default();
-            let character_maximum_length: Option<u64> =
-                r.try_get::<Option<i64>, _>("character_maximum_length")
-                    .ok()
-                    .flatten()
-                    .and_then(|v| u64::try_from(v).ok());
+            let character_maximum_length: Option<u64> = r
+                .try_get::<_, Option<i64>>("character_maximum_length")
+                .ok()
+                .flatten()
+                .and_then(|v| u64::try_from(v).ok());
 
             let is_auto = is_identity == "YES" || default_val.contains("nextval");
 
@@ -1134,11 +1194,7 @@ pub async fn get_routines(
             ORDER BY proname
         "#;
 
-    let rows = sqlx::query(query)
-        .bind(schema)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let rows = query_all(&pool, &query, &[&schema]).await?;
 
     Ok(rows
         .iter()
@@ -1173,12 +1229,12 @@ pub async fn get_routine_parameters(
             LIMIT 1
         "#;
 
-    let routine_info = sqlx::query(return_type_query)
-        .bind(schema)
-        .bind(routine_name)
-        .fetch_optional(&pool)
+    let client = get_client(&pool).await?;
+
+    let routine_info = client
+        .query_opt(return_type_query, &[&schema, &routine_name])
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(map_pg_err)?;
 
     let mut parameters = Vec::new();
 
@@ -1208,12 +1264,10 @@ pub async fn get_routine_parameters(
             ORDER BY p.ordinal_position
         "#;
 
-    let rows = sqlx::query(query)
-        .bind(schema)
-        .bind(routine_name)
-        .fetch_all(&pool)
+    let rows = client
+        .query(query, &[&schema, &routine_name])
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(map_pg_err)?;
 
     parameters.extend(rows.iter().map(|r| RoutineParameter {
         name: r.try_get("parameter_name").unwrap_or_default(),
@@ -1241,12 +1295,7 @@ pub async fn get_routine_definition(
             LIMIT 1
         "#;
 
-    let row = sqlx::query(query)
-        .bind(schema)
-        .bind(routine_name)
-        .fetch_one(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let row = query_one(&pool, &query, &[&schema, &routine_name]).await?;
 
     let definition: String = row.try_get("definition").unwrap_or_default();
     Ok(definition)
@@ -1306,109 +1355,274 @@ impl PostgresDriver {
 
 #[async_trait]
 impl DatabaseDriver for PostgresDriver {
-    fn manifest(&self) -> &PluginManifest { &self.manifest }
+    fn manifest(&self) -> &PluginManifest {
+        &self.manifest
+    }
 
     fn get_data_types(&self) -> Vec<crate::models::DataTypeInfo> {
         types::get_data_types()
     }
 
-    fn build_connection_url(&self, params: &crate::models::ConnectionParams) -> Result<String, String> {
+    fn build_connection_url(
+        &self,
+        params: &crate::models::ConnectionParams,
+    ) -> Result<String, String> {
         use urlencoding::encode;
         let user = encode(params.username.as_deref().unwrap_or_default());
         let pass = encode(params.password.as_deref().unwrap_or_default());
         Ok(format!(
             "postgres://{}:{}@{}:{}/{}",
-            user, pass,
+            user,
+            pass,
             params.host.as_deref().unwrap_or("localhost"),
             params.port.unwrap_or(5432),
             params.database
         ))
     }
 
-    async fn get_databases(&self, params: &crate::models::ConnectionParams) -> Result<Vec<String>, String> {
+    async fn get_databases(
+        &self,
+        params: &crate::models::ConnectionParams,
+    ) -> Result<Vec<String>, String> {
         let mut p = params.clone();
         p.database = crate::models::DatabaseSelection::Single("postgres".to_string());
         get_databases(&p).await
     }
 
-    async fn get_schemas(&self, params: &crate::models::ConnectionParams) -> Result<Vec<String>, String> {
+    async fn get_schemas(
+        &self,
+        params: &crate::models::ConnectionParams,
+    ) -> Result<Vec<String>, String> {
         get_schemas(params).await
     }
 
-    async fn get_tables(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::TableInfo>, String> {
+    async fn get_tables(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::TableInfo>, String> {
         get_tables(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_columns(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::TableColumn>, String> {
+    async fn get_columns(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::TableColumn>, String> {
         get_columns(params, table, self.resolve_schema(schema)).await
     }
 
-    async fn get_foreign_keys(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::ForeignKey>, String> {
+    async fn get_foreign_keys(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::ForeignKey>, String> {
         get_foreign_keys(params, table, self.resolve_schema(schema)).await
     }
 
-    async fn get_indexes(&self, params: &crate::models::ConnectionParams, table: &str, schema: Option<&str>) -> Result<Vec<crate::models::Index>, String> {
+    async fn get_indexes(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::Index>, String> {
         get_indexes(params, table, self.resolve_schema(schema)).await
     }
 
-    async fn get_views(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::ViewInfo>, String> {
+    async fn get_views(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::ViewInfo>, String> {
         get_views(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_view_definition(&self, params: &crate::models::ConnectionParams, view_name: &str, schema: Option<&str>) -> Result<String, String> {
+    async fn get_view_definition(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
         get_view_definition(params, view_name, self.resolve_schema(schema)).await
     }
 
-    async fn get_view_columns(&self, params: &crate::models::ConnectionParams, view_name: &str, schema: Option<&str>) -> Result<Vec<crate::models::TableColumn>, String> {
+    async fn get_view_columns(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::TableColumn>, String> {
         get_view_columns(params, view_name, self.resolve_schema(schema)).await
     }
 
-    async fn create_view(&self, params: &crate::models::ConnectionParams, view_name: &str, definition: &str, schema: Option<&str>) -> Result<(), String> {
+    async fn create_view(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        definition: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
         create_view(params, view_name, definition, self.resolve_schema(schema)).await
     }
 
-    async fn alter_view(&self, params: &crate::models::ConnectionParams, view_name: &str, definition: &str, schema: Option<&str>) -> Result<(), String> {
+    async fn alter_view(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        definition: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
         alter_view(params, view_name, definition, self.resolve_schema(schema)).await
     }
 
-    async fn drop_view(&self, params: &crate::models::ConnectionParams, view_name: &str, schema: Option<&str>) -> Result<(), String> {
+    async fn drop_view(
+        &self,
+        params: &crate::models::ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
         drop_view(params, view_name, self.resolve_schema(schema)).await
     }
 
-    async fn get_routines(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::RoutineInfo>, String> {
+    async fn get_routines(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::RoutineInfo>, String> {
         get_routines(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_routine_parameters(&self, params: &crate::models::ConnectionParams, routine_name: &str, schema: Option<&str>) -> Result<Vec<crate::models::RoutineParameter>, String> {
+    async fn get_routine_parameters(
+        &self,
+        params: &crate::models::ConnectionParams,
+        routine_name: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::RoutineParameter>, String> {
         get_routine_parameters(params, routine_name, self.resolve_schema(schema)).await
     }
 
-    async fn get_routine_definition(&self, params: &crate::models::ConnectionParams, routine_name: &str, routine_type: &str, schema: Option<&str>) -> Result<String, String> {
-        get_routine_definition(params, routine_name, routine_type, self.resolve_schema(schema)).await
+    async fn get_routine_definition(
+        &self,
+        params: &crate::models::ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        get_routine_definition(
+            params,
+            routine_name,
+            routine_type,
+            self.resolve_schema(schema),
+        )
+        .await
     }
 
-    async fn execute_query(&self, params: &crate::models::ConnectionParams, query: &str, limit: Option<u32>, page: u32, schema: Option<&str>) -> Result<crate::models::QueryResult, String> {
+    async fn execute_query(
+        &self,
+        params: &crate::models::ConnectionParams,
+        query: &str,
+        limit: Option<u32>,
+        page: u32,
+        schema: Option<&str>,
+    ) -> Result<crate::models::QueryResult, String> {
         execute_query(params, query, limit, page, schema).await
     }
 
-    async fn insert_record(&self, params: &crate::models::ConnectionParams, table: &str, data: std::collections::HashMap<String, serde_json::Value>, schema: Option<&str>, max_blob_size: u64) -> Result<u64, String> {
-        insert_record(params, table, data, self.resolve_schema(schema), max_blob_size).await
+    async fn insert_record(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        data: std::collections::HashMap<String, serde_json::Value>,
+        schema: Option<&str>,
+        max_blob_size: u64,
+    ) -> Result<u64, String> {
+        insert_record(
+            params,
+            table,
+            data,
+            self.resolve_schema(schema),
+            max_blob_size,
+        )
+        .await
     }
 
-    async fn update_record(&self, params: &crate::models::ConnectionParams, table: &str, pk_col: &str, pk_val: serde_json::Value, col_name: &str, new_val: serde_json::Value, schema: Option<&str>, max_blob_size: u64) -> Result<u64, String> {
-        update_record(params, table, pk_col, pk_val, col_name, new_val, self.resolve_schema(schema), max_blob_size).await
+    async fn update_record(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        pk_col: &str,
+        pk_val: serde_json::Value,
+        col_name: &str,
+        new_val: serde_json::Value,
+        schema: Option<&str>,
+        max_blob_size: u64,
+    ) -> Result<u64, String> {
+        update_record(
+            params,
+            table,
+            pk_col,
+            pk_val,
+            col_name,
+            new_val,
+            self.resolve_schema(schema),
+            max_blob_size,
+        )
+        .await
     }
 
-    async fn delete_record(&self, params: &crate::models::ConnectionParams, table: &str, pk_col: &str, pk_val: serde_json::Value, schema: Option<&str>) -> Result<u64, String> {
+    async fn delete_record(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        pk_col: &str,
+        pk_val: serde_json::Value,
+        schema: Option<&str>,
+    ) -> Result<u64, String> {
         delete_record(params, table, pk_col, pk_val, self.resolve_schema(schema)).await
     }
 
-    async fn save_blob_to_file(&self, params: &crate::models::ConnectionParams, table: &str, col_name: &str, pk_col: &str, pk_val: serde_json::Value, schema: Option<&str>, file_path: &str) -> Result<(), String> {
-        save_blob_column_to_file(params, table, col_name, pk_col, pk_val, self.resolve_schema(schema), file_path).await
+    async fn save_blob_to_file(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        col_name: &str,
+        pk_col: &str,
+        pk_val: serde_json::Value,
+        schema: Option<&str>,
+        file_path: &str,
+    ) -> Result<(), String> {
+        save_blob_column_to_file(
+            params,
+            table,
+            col_name,
+            pk_col,
+            pk_val,
+            self.resolve_schema(schema),
+            file_path,
+        )
+        .await
     }
 
-    async fn fetch_blob_as_data_url(&self, params: &crate::models::ConnectionParams, table: &str, col_name: &str, pk_col: &str, pk_val: serde_json::Value, schema: Option<&str>) -> Result<String, String> {
-        fetch_blob_column_as_data_url(params, table, col_name, pk_col, pk_val, self.resolve_schema(schema)).await
+    async fn fetch_blob_as_data_url(
+        &self,
+        params: &crate::models::ConnectionParams,
+        table: &str,
+        col_name: &str,
+        pk_col: &str,
+        pk_val: serde_json::Value,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        fetch_blob_column_as_data_url(
+            params,
+            table,
+            col_name,
+            pk_col,
+            pk_val,
+            self.resolve_schema(schema),
+        )
+        .await
     }
 
     async fn get_create_table_sql(
@@ -1603,7 +1817,7 @@ impl DatabaseDriver for PostgresDriver {
             pg_schema.replace('"', "\"\""),
             table.replace('"', "\"\"")
         );
-        let mut sql = format!(
+        let mut query = format!(
             "ALTER TABLE {} ADD CONSTRAINT \"{}\" FOREIGN KEY (\"{}\") REFERENCES \"{}\".\"{}\" (\"{}\")",
             tbl,
             fk_name.replace('"', "\"\""),
@@ -1613,12 +1827,12 @@ impl DatabaseDriver for PostgresDriver {
             ref_column.replace('"', "\"\"")
         );
         if let Some(action) = on_delete {
-            sql.push_str(&format!(" ON DELETE {}", action));
+            query.push_str(&format!(" ON DELETE {}", action));
         }
         if let Some(action) = on_update {
-            sql.push_str(&format!(" ON UPDATE {}", action));
+            query.push_str(&format!(" ON UPDATE {}", action));
         }
-        Ok(vec![sql])
+        Ok(vec![query])
     }
 
     async fn drop_index(
@@ -1629,12 +1843,12 @@ impl DatabaseDriver for PostgresDriver {
         schema: Option<&str>,
     ) -> Result<(), String> {
         let pg_schema = self.resolve_schema(schema);
-        let sql = format!(
+        let query = format!(
             "DROP INDEX \"{}\".\"{}\"",
             pg_schema.replace('"', "\"\""),
             index_name.replace('"', "\"\"")
         );
-        execute_query(params, &sql, None, 1, schema).await?;
+        execute_query(params, &query, None, 1, schema).await?;
         Ok(())
     }
 
@@ -1646,33 +1860,48 @@ impl DatabaseDriver for PostgresDriver {
         schema: Option<&str>,
     ) -> Result<(), String> {
         let pg_schema = self.resolve_schema(schema);
-        let sql = format!(
+        let query = format!(
             "ALTER TABLE \"{}\".\"{}\" DROP CONSTRAINT \"{}\"",
             pg_schema.replace('"', "\"\""),
             table.replace('"', "\"\""),
             fk_name.replace('"', "\"\"")
         );
-        execute_query(params, &sql, None, 1, schema).await?;
+        execute_query(params, &query, None, 1, schema).await?;
         Ok(())
     }
 
-    async fn get_all_columns_batch(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<HashMap<String, Vec<crate::models::TableColumn>>, String> {
+    async fn get_all_columns_batch(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<HashMap<String, Vec<crate::models::TableColumn>>, String> {
         get_all_columns_batch(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_all_foreign_keys_batch(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<HashMap<String, Vec<crate::models::ForeignKey>>, String> {
+    async fn get_all_foreign_keys_batch(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<HashMap<String, Vec<crate::models::ForeignKey>>, String> {
         get_all_foreign_keys_batch(params, self.resolve_schema(schema)).await
     }
 
-    async fn get_schema_snapshot(&self, params: &crate::models::ConnectionParams, schema: Option<&str>) -> Result<Vec<crate::models::TableSchema>, String> {
+    async fn get_schema_snapshot(
+        &self,
+        params: &crate::models::ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::models::TableSchema>, String> {
         let pg_schema = self.resolve_schema(schema);
         let tables = get_tables(params, pg_schema).await?;
         let mut columns_map = get_all_columns_batch(params, pg_schema).await?;
         let mut fks_map = get_all_foreign_keys_batch(params, pg_schema).await?;
-        Ok(tables.into_iter().map(|t| crate::models::TableSchema {
-            name: t.name.clone(),
-            columns: columns_map.remove(&t.name).unwrap_or_default(),
-            foreign_keys: fks_map.remove(&t.name).unwrap_or_default(),
-        }).collect())
+        Ok(tables
+            .into_iter()
+            .map(|t| crate::models::TableSchema {
+                name: t.name.clone(),
+                columns: columns_map.remove(&t.name).unwrap_or_default(),
+                foreign_keys: fks_map.remove(&t.name).unwrap_or_default(),
+            })
+            .collect())
     }
 }
