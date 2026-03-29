@@ -1,23 +1,32 @@
 use serde_json::Value as JsonValue;
 use tokio_postgres::types::Type;
 
+use crate::drivers::postgres::extract::common::advance_buf;
+
 #[inline]
 pub fn extract_or_null(ty: &Type, buf: &mut &[u8]) -> JsonValue {
+    log::info!("extract buf: {:?}", buf);
     if buf.len() < 4 {
         return JsonValue::Null;
     };
 
     let count = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]);
 
+    *buf = &buf[4..];
+
     if count == 0 {
         return JsonValue::from("{}");
     };
 
-    *buf = &buf[4..];
-
     let mut ranges = String::from('{');
 
     for _ in 0..count - 1 {
+        // skip range length
+        if let Err(_) = advance_buf(buf, 4) {
+            ranges.push('}');
+            return JsonValue::String(ranges);
+        };
+
         match super::range::extract_or_null(ty, buf) {
             JsonValue::String(r) => ranges.push_str(&r),
             r @ _ => {
@@ -29,6 +38,12 @@ pub fn extract_or_null(ty: &Type, buf: &mut &[u8]) -> JsonValue {
         ranges.push(',');
     }
 
+    // skip range length
+    if let Err(_) = advance_buf(buf, 4) {
+        ranges.push('}');
+        return JsonValue::String(ranges);
+    };
+
     match super::range::extract_or_null(ty, buf) {
         JsonValue::String(r) => ranges.push_str(&r),
         r @ _ => {
@@ -39,7 +54,7 @@ pub fn extract_or_null(ty: &Type, buf: &mut &[u8]) -> JsonValue {
 
     ranges.push('}');
 
-    JsonValue::from(ranges)
+    JsonValue::String(ranges)
 }
 
 #[cfg(test)]
@@ -66,6 +81,7 @@ mod tests {
         let mut buf = Vec::new();
         buf.extend_from_slice(&count.to_be_bytes());
         for r in ranges {
+            buf.extend_from_slice(&(r.len() as i32).to_be_bytes()); // range length prefix
             buf.extend_from_slice(r);
         }
         buf
