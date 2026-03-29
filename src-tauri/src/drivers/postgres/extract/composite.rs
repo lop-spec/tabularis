@@ -50,6 +50,7 @@ fn extract_field_or_null_into(field: &Field, buf: &mut &[u8]) -> Result<JsonValu
 
     Ok(match ty.kind() {
         Kind::Simple => super::simple::extract_or_null(ty, value_buf),
+        Kind::Enum(_variants) => super::r#enum::extract_or_null(value_buf),
         Kind::Domain(ty) => super::simple::extract_or_null(ty, value_buf),
         Kind::Composite(fields) => {
             let mut map = Map::with_capacity(fields.len());

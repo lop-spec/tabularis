@@ -128,6 +128,7 @@ fn extract_elem(ty: &Type, buf: &mut &[u8]) -> Result<JsonValue, ()> {
 
     match ty.kind() {
         Kind::Simple => Ok(super::simple::extract_or_null(ty, value_buf)),
+        Kind::Enum(_variants) => Ok(super::r#enum::extract_or_null(value_buf)),
         Kind::Domain(inner) => Ok(super::simple::extract_or_null(inner, value_buf)),
         Kind::Array(_) => Ok(JsonValue::Null), // impossible case
         Kind::Composite(fields) => super::composite::extract_or_null(fields, &mut value_buf),
