@@ -2,6 +2,7 @@ mod array;
 mod common;
 mod composite;
 mod r#enum;
+mod range;
 mod simple;
 
 use serde_json::Value as JsonValue;
@@ -43,6 +44,10 @@ impl<'a> FromSql<'a> for Extractor {
             Kind::Array(ty) => {
                 let mut buf = raw;
                 array::extract_or_null(ty, &mut buf)
+            }
+            Kind::Range(ty) => {
+                let mut buf = raw;
+                range::extract_or_null(ty, &mut buf)
             }
             Kind::Domain(ty) => simple::extract_or_null(ty, raw),
             Kind::Composite(fields) => {

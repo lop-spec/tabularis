@@ -159,6 +159,7 @@ fn try_extract_elem(ty: &Type, buf: &mut &[u8]) -> Result<JsonValue, ()> {
         Kind::Simple => super::simple::extract_or_null(ty, value_buf),
         Kind::Enum(_variants) => super::r#enum::extract_or_null(value_buf),
         Kind::Array(_) => JsonValue::Null, // impossible case
+        Kind::Range(ty) => super::range::extract_or_null(ty, &mut value_buf),
         Kind::Domain(inner) => super::simple::extract_or_null(inner, value_buf),
         Kind::Composite(fields) => super::composite::extract_or_null(fields, &mut value_buf),
         _ => JsonValue::Null,
