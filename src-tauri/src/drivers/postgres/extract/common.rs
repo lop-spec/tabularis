@@ -9,6 +9,11 @@ pub fn advance_buf(buf: &mut &[u8], n: usize) -> Result<(), ()> {
 }
 
 pub fn split_at_value_len<'a>(buf: &mut &'a [u8]) -> Result<Option<&'a [u8]>, ()> {
+    if buf.len() < 4 {
+        log::error!("Buffer too short to read value length");
+        return Err(());
+    };
+
     let len = i32::from_be_bytes(match buf[..4].try_into() {
         Ok(bytes) => bytes,
         Err(e) => {
