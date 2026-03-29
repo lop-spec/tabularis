@@ -67,7 +67,10 @@ fn fill_nulls(fields: &[Field], map: &mut Map<String, JsonValue>) {
 /// the idea of returning a `Result` is to stop extracting further if error occurs
 /// because it is most likely to fail anyway
 fn try_extract_field(field: &Field, buf: &mut &[u8]) -> Result<JsonValue, ()> {
-    let mut value_buf = split_at_value_len(buf)?;
+    let mut value_buf = match split_at_value_len(buf)? {
+        Some(buf) => buf,
+        None => return Ok(JsonValue::Null),
+    };
 
     let ty = field.type_();
 

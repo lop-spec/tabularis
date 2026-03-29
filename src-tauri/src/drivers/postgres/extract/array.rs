@@ -150,7 +150,10 @@ fn fill_nulls(vec: &mut Vec<JsonValue>, count: usize) {
 
 #[inline]
 fn try_extract_elem(ty: &Type, buf: &mut &[u8]) -> Result<JsonValue, ()> {
-    let mut value_buf = split_at_value_len(buf)?;
+    let mut value_buf = match split_at_value_len(buf)? {
+        Some(buf) => buf,
+        None => return Ok(JsonValue::Null),
+    };
 
     Ok(match ty.kind() {
         Kind::Simple => super::simple::extract_or_null(ty, value_buf),
