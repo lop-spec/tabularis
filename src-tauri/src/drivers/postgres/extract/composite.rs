@@ -79,6 +79,7 @@ fn try_extract_field(field: &Field, buf: &mut &[u8]) -> Result<JsonValue, ()> {
         Kind::Enum(_variants) => super::r#enum::extract_or_null(value_buf),
         Kind::Array(of) => super::array::extract_or_null(of, &mut value_buf),
         Kind::Range(ty) => super::range::extract_or_null(ty, &mut value_buf),
+        Kind::Multirange(ty) => super::multi_range::extract_or_null(ty, &mut value_buf),
         Kind::Domain(ty) => super::simple::extract_or_null(ty, value_buf),
         Kind::Composite(fields) => extract_or_null(fields, buf),
         _ => JsonValue::Null,

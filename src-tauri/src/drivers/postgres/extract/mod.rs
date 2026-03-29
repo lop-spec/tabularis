@@ -2,6 +2,7 @@ mod array;
 mod common;
 mod composite;
 mod r#enum;
+mod multi_range;
 mod range;
 mod simple;
 
@@ -48,6 +49,10 @@ impl<'a> FromSql<'a> for Extractor {
             Kind::Range(ty) => {
                 let mut buf = raw;
                 range::extract_or_null(ty, &mut buf)
+            }
+            Kind::Multirange(ty) => {
+                let mut buf = raw;
+                multi_range::extract_or_null(ty, &mut buf)
             }
             Kind::Domain(ty) => simple::extract_or_null(ty, raw),
             Kind::Composite(fields) => {
