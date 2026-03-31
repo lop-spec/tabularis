@@ -21,7 +21,7 @@
   <a href="https://winstall.app/apps/Debba.Tabularis"><img src="https://img.shields.io/winget/v/Debba.Tabularis?label=WinGet&logo=windows&color=0078D4" alt="WinGet" /></a>
 </p>
 
-A lightweight, developer-focused database management tool, built with Tauri and React.
+A lightweight, cross-platform database client for developers, built with Tauri and React.
 
 **Available in:** English, Italian, Spanish, Chinese (Simplified)
 
@@ -31,7 +31,7 @@ A lightweight, developer-focused database management tool, built with Tauri and 
   <img src="website/public/img/overview.png?v" width="80%" alt="Tabularis" />
 </div>
 
-> 💡 **Origin Story:** This project was born from a **vibe coding** session — an experiment in fluid, agent-assisted development to build a functional tool from scratch in record time.
+> 💡 **Origin Story:** This project began as an AI-assisted development experiment, exploring how far intelligent agents could accelerate building a fully functional tool from scratch..
 
 ## Release Download:
 
