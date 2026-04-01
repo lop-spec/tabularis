@@ -29,8 +29,9 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { ask, message, open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { toErrorMessage } from "../../utils/errors";
+import { useAlert } from "../../hooks/useAlert";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useSavedQueries } from "../../hooks/useSavedQueries";
 import type { SavedQuery } from "../../contexts/SavedQueriesContext";
@@ -100,6 +101,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
     connectionDataMap,
   } = useDatabase();
   const { queries, deleteQuery, updateQuery } = useSavedQueries();
+  const { showAlert } = useAlert();
   const navigate = useNavigate();
   const [schemaVersion, setSchemaVersion] = useState(0);
 
@@ -242,7 +244,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
       runQuery(definition, `${routine.name} Definition`, undefined, true);
     } catch (e) {
       console.error(e);
-      await message(
+      showAlert(
         t("sidebar.failGetRoutineDefinition") + String(e),
         { kind: "error" }
       );
@@ -706,7 +708,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                 });
                                 setSchemaVersion((v) => v + 1);
                               } catch (e) {
-                                await message(t("sidebar.failDeleteIndex") + toErrorMessage(e), { title: t("common.error"), kind: "error" });
+                                showAlert(t("sidebar.failDeleteIndex") + toErrorMessage(e), { title: t("common.error"), kind: "error" });
                               }
                             }
                           }}
@@ -729,7 +731,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                 });
                                 setSchemaVersion((v) => v + 1);
                               } catch (e) {
-                                await message(toErrorMessage(e), { title: t("common.error"), kind: "error" });
+                                showAlert(toErrorMessage(e), { title: t("common.error"), kind: "error" });
                               }
                             }
                           }}
@@ -927,7 +929,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                             });
                             setSchemaVersion((v) => v + 1);
                           } catch (e) {
-                            await message(t("sidebar.failDeleteIndex") + toErrorMessage(e), { title: t("common.error"), kind: "error" });
+                            showAlert(t("sidebar.failDeleteIndex") + toErrorMessage(e), { title: t("common.error"), kind: "error" });
                           }
                         }
                       }}
@@ -950,7 +952,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                             });
                             setSchemaVersion((v) => v + 1);
                           } catch (e) {
-                            await message(toErrorMessage(e), { title: t("common.error"), kind: "error" });
+                            showAlert(toErrorMessage(e), { title: t("common.error"), kind: "error" });
                           }
                         }
                       }}
@@ -1086,7 +1088,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                     });
                                     setSchemaVersion((v) => v + 1);
                                   } catch (e) {
-                                    await message(t("sidebar.failDeleteIndex") + toErrorMessage(e), { title: t("common.error"), kind: "error" });
+                                    showAlert(t("sidebar.failDeleteIndex") + toErrorMessage(e), { title: t("common.error"), kind: "error" });
                                   }
                                 }
                               }}
@@ -1108,7 +1110,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                     });
                                     setSchemaVersion((v) => v + 1);
                                   } catch (e) {
-                                    await message(toErrorMessage(e), { title: t("common.error"), kind: "error" });
+                                    showAlert(toErrorMessage(e), { title: t("common.error"), kind: "error" });
                                   }
                                 }
                               }}
@@ -1343,7 +1345,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                             if (refreshTables) refreshTables();
                           } catch (e) {
                             console.error(e);
-                            await message(t("sidebar.failDeleteTable") + String(e), { kind: "error" });
+                            showAlert(t("sidebar.failDeleteTable") + String(e), { kind: "error" });
                           }
                         }
                       },
@@ -1380,7 +1382,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                               });
                               setSchemaVersion((v) => v + 1);
                             } catch (e) {
-                              await message(
+                              showAlert(
                                 t("sidebar.failDeleteIndex") + String(e),
                                 { title: t("common.error"), kind: "error" },
                               );
@@ -1420,7 +1422,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                 });
                                 setSchemaVersion((v) => v + 1);
                               } catch (e) {
-                                await message(String(e), { kind: "error" });
+                                showAlert(String(e), { kind: "error" });
                               }
                             }
                           }
@@ -1507,7 +1509,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                       if (refreshViews) refreshViews();
                                     } catch (e) {
                                       console.error(e);
-                                      await message(t("sidebar.failDropView") + String(e), { kind: "error" });
+                                      showAlert(t("sidebar.failDropView") + String(e), { kind: "error" });
                                     }
                                   }
                                 },
@@ -1534,7 +1536,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                     runQuery(definition, `${contextMenu.id} Definition`, undefined, true);
                                   } catch (e) {
                                     console.error(e);
-                                    await message(
+                                    showAlert(
                                       t("sidebar.failGetRoutineDefinition") + String(e),
                                       { kind: "error" }
                                     );

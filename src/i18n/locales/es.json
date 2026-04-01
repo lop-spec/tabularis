@@ -35,7 +35,8 @@
     "loading": "Cargando...",
     "search": "Buscar...",
     "error": "Error",
-    "success": "Éxito"
+    "success": "Éxito",
+    "ok": "OK"
   },
   "sidebar": {
     "connections": "Conexiones",
@@ -240,6 +241,7 @@
       "fromEnvTooltip": "Esta clave se carga desde una variable de entorno",
       "envVariableDetected": "Se detectó una variable de entorno, pero puedes sobrescribirla estableciendo una clave arriba.",
       "reset": "Restablecer",
+      "changeKey": "Cambiar",
       "resetKey": "Eliminar clave personalizada y volver a la variable de entorno (si existe)",
       "keyResetSuccess": "Clave personalizada eliminada correctamente",
       "systemPrompt": "Prompt del Sistema",
@@ -571,7 +573,10 @@
     "saveThisQuery": "Guardar esta consulta",
     "noValidQueries": "No se encontraron consultas válidas",
     "queryFailed": "La consulta falló.",
+    "showErrorDetails": "Mostrar detalles",
+    "hideErrorDetails": "Ocultar detalles",
     "newVisualQuery": "Nueva Consulta Visual",
+    "activeDatabase": "Base de datos activa",
     "tabSwitcher": {
       "title": "Pestañas Abiertas",
       "hint": "Ctrl+Tab",
@@ -745,6 +750,12 @@
     "sqlPlaceholder": "ST_GeomFromText('POINT(30 40)', 4326)",
     "wktPlaceholder": "POINT(30 40)",
     "toggleTooltip": "Funciones SQL"
+  },
+  "jsonInput": {
+    "placeholder": "Ingrese JSON...",
+    "format": "Formatear",
+    "valid": "JSON válido",
+    "invalid": "JSON no válido"
   },
   "rowEditor": {
     "title": "Editar Fila",

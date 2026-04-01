@@ -35,7 +35,8 @@
     "loading": "Caricamento...",
     "search": "Cerca...",
     "error": "Errore",
-    "success": "Successo"
+    "success": "Successo",
+    "ok": "OK"
   },
   "sidebar": {
     "connections": "Connessioni",
@@ -240,6 +241,7 @@
       "fromEnvTooltip": "Questa chiave è caricata da una variabile d'ambiente",
       "envVariableDetected": "È presente una variabile d'ambiente, ma puoi sovrascriverla impostando una chiave qui sopra.",
       "reset": "Ripristina",
+      "changeKey": "Cambia",
       "resetKey": "Elimina chiave personalizzata e ripristina variabile d'ambiente (se presente)",
       "keyResetSuccess": "Chiave personalizzata eliminata con successo",
       "systemPrompt": "Prompt di Sistema",
@@ -578,7 +580,10 @@
     "saveThisQuery": "Salva questa query",
     "noValidQueries": "Nessuna query valida trovata",
     "queryFailed": "Esecuzione query fallita.",
+    "showErrorDetails": "Mostra dettagli",
+    "hideErrorDetails": "Nascondi dettagli",
     "newVisualQuery": "Nuova Query Visuale",
+    "activeDatabase": "Database attivo",
     "tabSwitcher": {
       "title": "Tab Aperte",
       "hint": "Ctrl+Tab",
@@ -765,6 +770,12 @@
     "sqlPlaceholder": "ST_GeomFromText('POINT(30 40)', 4326)",
     "wktPlaceholder": "POINT(30 40)",
     "toggleTooltip": "Funzioni SQL"
+  },
+  "jsonInput": {
+    "placeholder": "Inserisci JSON...",
+    "format": "Formatta",
+    "valid": "JSON valido",
+    "invalid": "JSON non valido"
   },
   "rowEditor": {
     "title": "Modifica Riga",

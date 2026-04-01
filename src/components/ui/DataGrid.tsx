@@ -29,7 +29,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { ErrorModal } from "../modals/ErrorModal";
+import { useAlert } from "../../hooks/useAlert";
 import {
   USE_DEFAULT_SENTINEL,
   formatCellValue,
@@ -44,6 +44,7 @@ import {
 } from "../../utils/dataGrid";
 import { isGeometricType, formatGeometricValue } from "../../utils/geometry";
 import { isBlobColumn, isBlobWireFormat } from "../../utils/blob";
+import { isJsonColumn } from "../../utils/json";
 import { getDateInputMode } from "../../utils/dateInput";
 import { GeometryInput } from "./GeometryInput";
 import { DateInput } from "./DateInput";
@@ -122,6 +123,7 @@ export const DataGrid = React.memo(
   }: DataGridProps) => {
     const { t } = useTranslation();
     const { activeSchema } = useDatabase();
+    const { showAlert } = useAlert();
 
     const [contextMenu, setContextMenu] = useState<{
       x: number;
@@ -154,10 +156,6 @@ export const DataGrid = React.memo(
       rowIndex: number;
       focusField?: string;
     } | null>(null);
-    const [errorModal, setErrorModal] = useState<{
-      isOpen: boolean;
-      message: string;
-    }>({ isOpen: false, message: "" });
 
     const [internalSelectedRowIndices, setInternalSelectedRowIndices] =
       useState<Set<number>>(new Set());
@@ -197,10 +195,7 @@ export const DataGrid = React.memo(
     const columnLengthMap = useMemo(() => {
       if (!columnMetadata) return null;
       return new Map(
-        columnMetadata.map((col) => [
-          col.name,
-          col.character_maximum_length,
-        ]),
+        columnMetadata.map((col) => [col.name, col.character_maximum_length]),
       );
     }, [columnMetadata]);
 
@@ -302,7 +297,23 @@ export const DataGrid = React.memo(
           isBlobWireFormat(value))
       ) {
         setSidebarRowData({
-          data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
+          data: buildRowDataWithPending(
+            mergedRow.rowData,
+            mergedRow.type === "insertion",
+          ),
+          rowIndex,
+          focusField: colName,
+        });
+        setSidebarOpen(true);
+        return;
+      }
+
+      if (colType && isJsonColumn(colType)) {
+        setSidebarRowData({
+          data: buildRowDataWithPending(
+            mergedRow.rowData,
+            mergedRow.type === "insertion",
+          ),
           rowIndex,
           focusField: colName,
         });
@@ -409,7 +420,10 @@ export const DataGrid = React.memo(
           if (onRefresh) onRefresh();
         } catch (e) {
           console.error("Update failed:", e);
-          setErrorModal({ isOpen: true, message: t("dataGrid.updateFailed") + e });
+          showAlert(t("dataGrid.updateFailed") + e, {
+            title: t("common.error"),
+            kind: "error",
+          });
         }
         setEditingCell(null);
       } finally {
@@ -537,7 +551,15 @@ export const DataGrid = React.memo(
             },
           }),
         ),
-      [columns, columnHelper, t, sortClause, onSort, columnTypeMap, columnLengthMap],
+      [
+        columns,
+        columnHelper,
+        t,
+        sortClause,
+        onSort,
+        columnTypeMap,
+        columnLengthMap,
+      ],
     );
 
     const parentRef = useRef<HTMLDivElement>(null);
@@ -744,13 +766,16 @@ export const DataGrid = React.memo(
         try {
           await copyTextToClipboard(text);
           // Optional: show a brief success message
-          // await message(t("dataGrid.copied"), { title: t("common.success"), kind: "info" });
+          // showAlert(t("dataGrid.copied"), { title: t("common.success"), kind: "info" });
         } catch (e) {
           console.error("Copy failed:", e);
-          setErrorModal({ isOpen: true, message: t("common.error") + ": " + e });
+          showAlert(t("common.error") + ": " + e, {
+            title: t("common.error"),
+            kind: "error",
+          });
         }
       },
-      [t, setErrorModal],
+      [t, showAlert],
     );
 
     const formatRows = useCallback(
@@ -793,7 +818,9 @@ export const DataGrid = React.memo(
 
     const copySelectedCells = useCallback(async () => {
       if (selectedRowIndices.size === 0) return;
-      await copyToClipboard(formatRows(getSelectedRows(data, selectedRowIndices)));
+      await copyToClipboard(
+        formatRows(getSelectedRows(data, selectedRowIndices)),
+      );
     }, [selectedRowIndices, data, formatRows, copyToClipboard]);
 
     // Handle keyboard shortcuts
@@ -825,572 +852,590 @@ export const DataGrid = React.memo(
 
     return (
       <>
-      <ErrorModal
-        isOpen={errorModal.isOpen}
-        onClose={() => setErrorModal({ isOpen: false, message: "" })}
-        message={errorModal.message}
-      />
-      <div
-        ref={parentRef}
-        className="h-full overflow-auto border border-default rounded bg-elevated relative"
-      >
         <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            position: "relative",
-          }}
+          ref={parentRef}
+          className="h-full overflow-auto border border-default rounded bg-elevated relative"
         >
-          <table
-            className="w-full text-left border-collapse absolute top-0 left-0"
+          <div
             style={{
-              transform: `translateY(${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px)`,
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: "relative",
             }}
           >
-            <thead
-              className="bg-base sticky top-0 z-10 shadow-sm"
+            <table
+              className="w-full text-left border-collapse absolute top-0 left-0"
               style={{
-                transform: `translateY(${-1 * (rowVirtualizer.getVirtualItems()[0]?.start ?? 0)}px)`,
+                transform: `translateY(${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px)`,
               }}
             >
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  <th
-                    onClick={handleSelectAll}
-                    className="px-2 py-2 text-xs font-semibold text-muted border-b border-r border-default bg-base sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-elevated"
-                  >
-                    #
-                  </th>
-                  {headerGroup.headers.map((header) => (
+              <thead
+                className="bg-base sticky top-0 z-10 shadow-sm"
+                style={{
+                  transform: `translateY(${-1 * (rowVirtualizer.getVirtualItems()[0]?.start ?? 0)}px)`,
+                }}
+              >
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <tr key={headerGroup.id}>
                     <th
-                      key={header.id}
-                      className="px-4 py-2 text-xs font-semibold text-secondary tracking-wider border-b border-r border-default last:border-r-0 whitespace-nowrap"
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setHeaderContextMenu({
-                          x: e.clientX,
-                          y: e.clientY,
-                          colName: header.id,
-                        });
-                      }}
+                      onClick={handleSelectAll}
+                      className="px-2 py-2 text-xs font-semibold text-muted border-b border-r border-default bg-base sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-elevated"
                     >
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext(),
-                      )}
+                      #
                     </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const row = tableRows[virtualRow.index];
-                const rowIndex = virtualRow.index;
-                const isSelected = selectedRowIndices.has(rowIndex);
+                    {headerGroup.headers.map((header) => (
+                      <th
+                        key={header.id}
+                        className="px-4 py-2 text-xs font-semibold text-secondary tracking-wider border-b border-r border-default last:border-r-0 whitespace-nowrap"
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setHeaderContextMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            colName: header.id,
+                          });
+                        }}
+                      >
+                        {flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody>
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = tableRows[virtualRow.index];
+                  const rowIndex = virtualRow.index;
+                  const isSelected = selectedRowIndices.has(rowIndex);
 
-                // Check if this is an insertion row
-                const mergedRow = mergedRows[rowIndex];
-                const isInsertion = mergedRow?.type === "insertion";
+                  // Check if this is an insertion row
+                  const mergedRow = mergedRows[rowIndex];
+                  const isInsertion = mergedRow?.type === "insertion";
 
-                // Get PK for pending check (using pre-calculated pkIndexMap)
-                const pkVal =
-                  pkIndexMap !== null ? String(row.original[pkIndexMap]) : null;
-                const isPendingDelete =
-                  !isInsertion && pkVal
-                    ? pendingDeletions?.[pkVal] !== undefined
-                    : false;
+                  // Get PK for pending check (using pre-calculated pkIndexMap)
+                  const pkVal =
+                    pkIndexMap !== null
+                      ? String(row.original[pkIndexMap])
+                      : null;
+                  const isPendingDelete =
+                    !isInsertion && pkVal
+                      ? pendingDeletions?.[pkVal] !== undefined
+                      : false;
 
-                return (
-                  <tr
-                    key={row.id}
-                    data-index={virtualRow.index}
-                    ref={rowVirtualizer.measureElement}
-                    className={`transition-colors group ${
-                      isSelected
-                        ? "bg-blue-900/20 border-l-4 border-blue-400"
-                        : isInsertion
-                          ? "bg-green-500/8 border-l-4 border-green-400"
-                          : isPendingDelete
-                            ? "bg-red-900/20 opacity-60"
-                            : "hover:bg-surface-secondary/50"
-                    }`}
-                  >
-                    <td
-                      onClick={(e) => handleRowClick(rowIndex, e)}
-                      className={`px-2 py-1.5 text-xs text-center border-b border-r border-default sticky left-0 z-10 cursor-pointer select-none w-[50px] min-w-[50px] ${
-                        isInsertion
-                          ? isSelected
-                            ? "bg-blue-900/40 text-blue-200 font-bold"
-                            : "bg-green-950/30 text-green-300 font-bold"
-                          : isPendingDelete
-                            ? "bg-red-950/50 text-red-500 line-through"
-                            : isSelected
-                              ? "bg-blue-900/40 text-blue-200 font-bold"
-                              : "bg-base text-muted hover:bg-surface-secondary"
+                  return (
+                    <tr
+                      key={row.id}
+                      data-index={virtualRow.index}
+                      ref={rowVirtualizer.measureElement}
+                      className={`transition-colors group ${
+                        isSelected
+                          ? "bg-blue-900/20 border-l-4 border-blue-400"
+                          : isInsertion
+                            ? "bg-green-500/8 border-l-4 border-green-400"
+                            : isPendingDelete
+                              ? "bg-red-900/20 opacity-60"
+                              : "hover:bg-surface-secondary/50"
                       }`}
                     >
-                      {isInsertion ? "NEW" : rowIndex + 1}
-                    </td>
-                    {row.getVisibleCells().map((cell, colIndex) => {
-                      const isEditing =
-                        editingCell?.rowIndex === rowIndex &&
-                        editingCell?.colIndex === colIndex;
+                      <td
+                        onClick={(e) => handleRowClick(rowIndex, e)}
+                        className={`px-2 py-1.5 text-xs text-center border-b border-r border-default sticky left-0 z-10 cursor-pointer select-none w-[50px] min-w-[50px] ${
+                          isInsertion
+                            ? isSelected
+                              ? "bg-blue-900/40 text-blue-200 font-bold"
+                              : "bg-green-950/30 text-green-300 font-bold"
+                            : isPendingDelete
+                              ? "bg-red-950/50 text-red-500 line-through"
+                              : isSelected
+                                ? "bg-blue-900/40 text-blue-200 font-bold"
+                                : "bg-base text-muted hover:bg-surface-secondary"
+                        }`}
+                      >
+                        {isInsertion ? "NEW" : rowIndex + 1}
+                      </td>
+                      {row.getVisibleCells().map((cell, colIndex) => {
+                        const isEditing =
+                          editingCell?.rowIndex === rowIndex &&
+                          editingCell?.colIndex === colIndex;
 
-                      const colName = cell.column.id;
+                        const colName = cell.column.id;
 
-                      const columnInfo: ColumnDisplayInfo = {
-                        colName,
-                        autoIncrementColumns,
-                        defaultValueColumns,
-                        nullableColumns,
-                      };
+                        const columnInfo: ColumnDisplayInfo = {
+                          colName,
+                          autoIncrementColumns,
+                          defaultValueColumns,
+                          nullableColumns,
+                        };
 
-                      const resolved = isInsertion
-                        ? resolveInsertionCellDisplay(
-                            cell.getValue(),
-                            columnInfo,
-                          )
-                        : resolveExistingCellDisplay(
-                            cell.getValue(),
-                            pkVal,
-                            pkColumn,
-                            pendingChanges,
-                            columnInfo,
-                          );
+                        const resolved = isInsertion
+                          ? resolveInsertionCellDisplay(
+                              cell.getValue(),
+                              columnInfo,
+                            )
+                          : resolveExistingCellDisplay(
+                              cell.getValue(),
+                              pkVal,
+                              pkColumn,
+                              pendingChanges,
+                              columnInfo,
+                            );
 
-                      const {
-                        displayValue,
-                        hasPendingChange,
-                        isModified,
-                        isAutoIncrementPlaceholder,
-                        isDefaultValuePlaceholder,
-                      } = resolved;
+                        const {
+                          displayValue,
+                          hasPendingChange,
+                          isModified,
+                          isAutoIncrementPlaceholder,
+                          isDefaultValuePlaceholder,
+                        } = resolved;
 
-                      const stateClass = getCellStateClass({
-                        isPendingDelete,
-                        isSelected,
-                        isInsertion,
-                        isAutoIncrementPlaceholder,
-                        isDefaultValuePlaceholder,
-                        isModified,
-                      });
+                        const stateClass = getCellStateClass({
+                          isPendingDelete,
+                          isSelected,
+                          isInsertion,
+                          isAutoIncrementPlaceholder,
+                          isDefaultValuePlaceholder,
+                          isModified,
+                        });
 
-                      return (
-                        <td
-                          key={cell.id}
-                          onClick={(e) => {
-                            // Don't handle row click if clicking on a button
-                            const target = e.target as HTMLElement;
-                            if (target.closest("button")) {
-                              return;
+                        return (
+                          <td
+                            key={cell.id}
+                            onClick={(e) => {
+                              // Don't handle row click if clicking on a button
+                              const target = e.target as HTMLElement;
+                              if (target.closest("button")) {
+                                return;
+                              }
+                              handleRowClick(rowIndex, e);
+                            }}
+                            onDoubleClick={() =>
+                              !isPendingDelete &&
+                              handleCellDoubleClick(
+                                rowIndex,
+                                colIndex,
+                                isAutoIncrementPlaceholder ||
+                                  isDefaultValuePlaceholder
+                                  ? ""
+                                  : displayValue,
+                              )
                             }
-                            handleRowClick(rowIndex, e);
-                          }}
-                          onDoubleClick={() =>
-                            !isPendingDelete &&
-                            handleCellDoubleClick(
-                              rowIndex,
-                              colIndex,
-                              isAutoIncrementPlaceholder ||
-                                isDefaultValuePlaceholder
-                                ? ""
-                                : displayValue,
-                            )
-                          }
-                          onContextMenu={(e) =>
-                            handleContextMenu(
-                              e,
-                              row.original,
-                              rowIndex,
-                              colIndex,
-                              colName,
-                            )
-                          }
-                          className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} cursor-text ${stateClass}`}
-                          title={!isEditing ? String(displayValue) : ""}
-                        >
-                          {isEditing
-                            ? (() => {
-                                const colType = columnTypeMap?.get(colName);
-                                if (colType && isGeometricType(colType)) {
-                                  return (
-                                    <GeometryInput
-                                      inputRef={editInputRef}
-                                      value={String(editingCell.value ?? "")}
-                                      dataType={colType}
-                                      onChange={(newValue, isRawSql) =>
-                                        setEditingCell((prev) =>
-                                          prev
-                                            ? {
-                                                ...prev,
-                                                value: newValue,
-                                                isRawSql,
-                                              }
-                                            : null,
-                                        )
-                                      }
-                                      onBlur={handleEditCommit}
-                                      onKeyDown={handleKeyDown}
-                                      onSqlFunctionsClick={() => {
-                                        // Close inline editing
-                                        setEditingCell(null);
-
-                                        // Open sidebar with the current row
-                                        const mergedRow = mergedRows[rowIndex];
-                                        if (mergedRow) {
-                                          setSidebarRowData({
-                                            data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
-                                            rowIndex: rowIndex,
-                                            focusField: colName,
-                                          });
-                                          setSidebarOpen(true);
-                                        }
-                                      }}
-                                      className="w-full bg-base text-primary border-none outline-none p-0 m-0 font-mono"
-                                    />
-                                  );
-                                }
-                                const dateMode =
-                                  colType ? getDateInputMode(colType) : null;
-                                if (dateMode) {
-                                  return (
-                                    <DateInput
-                                      value={String(editingCell.value ?? "")}
-                                      mode={dateMode}
-                                      onChange={(newValue) =>
-                                        setEditingCell((prev) =>
-                                          prev
-                                            ? { ...prev, value: newValue }
-                                            : null,
-                                        )
-                                      }
-                                      onBlur={handleEditCommit}
-                                      onKeyDown={handleKeyDown}
-                                      inputRef={editInputRef}
-                                    />
-                                  );
-                                }
-                                const textValue = String(
-                                  editingCell.value ?? "",
-                                );
-                                // Measure the longest line to size the textarea
-                                const lines = textValue.split("\n");
-                                const canvas = document.createElement("canvas");
-                                const ctx = canvas.getContext("2d");
-                                if (ctx) {
-                                  ctx.font =
-                                    "14px ui-monospace, SFMono-Regular, monospace";
-                                }
-                                const longestLineWidth = ctx
-                                  ? Math.max(
-                                      ...lines.map(
-                                        (line) =>
-                                          ctx.measureText(line).width,
-                                      ),
-                                    )
-                                  : 200;
-                                // padding (p-2 = 8px * 2) + small buffer
-                                const textareaWidth =
-                                  Math.ceil(longestLineWidth) + 32;
-
-                                return (
-                                  <>
-                                    {/* Invisible placeholder to preserve td width */}
-                                    <span className="invisible whitespace-nowrap">
-                                      {String(displayValue)}
-                                    </span>
-                                    <textarea
-                                      ref={(el) => {
-                                        (
-                                          editInputRef as React.MutableRefObject<HTMLElement | null>
-                                        ).current = el;
-                                        if (el) {
-                                          const td = el.parentElement;
-                                          if (td) {
-                                            el.style.width = `${Math.max(td.offsetWidth, textareaWidth)}px`;
-                                          }
-                                        }
-                                      }}
-                                      value={textValue}
-                                      rows={Math.min(lines.length, 10)}
-                                      onChange={(e) => {
-                                        setEditingCell((prev) =>
-                                          prev
-                                            ? {
-                                                ...prev,
-                                                value: e.target.value,
-                                              }
-                                            : null,
-                                        );
-                                      }}
-                                      onBlur={handleEditCommit}
-                                      onKeyDown={handleKeyDown}
-                                      className="absolute left-0 top-0 max-w-[400px] max-h-[120px] bg-base text-primary border border-blue-500 rounded shadow-lg p-2 font-mono text-sm resize-none z-50 outline-none"
-                                    />
-                                  </>
-                                );
-                              })()
-                            : hasPendingChange
-                              ? String(displayValue)
-                              : (() => {
+                            onContextMenu={(e) =>
+                              handleContextMenu(
+                                e,
+                                row.original,
+                                rowIndex,
+                                colIndex,
+                                colName,
+                              )
+                            }
+                            className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} cursor-text ${stateClass}`}
+                            title={!isEditing ? String(displayValue) : ""}
+                          >
+                            {isEditing
+                              ? (() => {
                                   const colType = columnTypeMap?.get(colName);
-                                  if (
-                                    colType &&
-                                    (isBlobColumn(colType, columnLengthMap?.get(colName)) ||
-                                      isBlobWireFormat(displayValue)) &&
-                                    !isPendingDelete
-                                  ) {
+                                  if (colType && isGeometricType(colType)) {
                                     return (
-                                      <span className="flex items-center gap-1 group/blobcell w-full">
-                                        <span className="truncate flex-1">
-                                          {flexRender(
-                                            cell.column.columnDef.cell,
-                                            cell.getContext(),
-                                          )}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const mergedRow =
-                                              mergedRows[rowIndex];
-                                            if (mergedRow) {
-                                              setSidebarRowData({
-                                                data: buildRowDataWithPending(mergedRow.rowData, mergedRow.type === "insertion"),
-                                                rowIndex,
-                                                focusField: colName,
-                                              });
-                                              setSidebarOpen(true);
-                                            }
-                                          }}
-                                          className="opacity-0 group-hover/blobcell:opacity-100 transition-opacity p-0.5 rounded text-muted hover:text-secondary hover:bg-surface-tertiary flex-shrink-0"
-                                          title={t("blobInput.openSidebar")}
-                                        >
-                                          <ExternalLink size={11} />
-                                        </button>
-                                      </span>
+                                      <GeometryInput
+                                        inputRef={editInputRef}
+                                        value={String(editingCell.value ?? "")}
+                                        dataType={colType}
+                                        onChange={(newValue, isRawSql) =>
+                                          setEditingCell((prev) =>
+                                            prev
+                                              ? {
+                                                  ...prev,
+                                                  value: newValue,
+                                                  isRawSql,
+                                                }
+                                              : null,
+                                          )
+                                        }
+                                        onBlur={handleEditCommit}
+                                        onKeyDown={handleKeyDown}
+                                        onSqlFunctionsClick={() => {
+                                          // Close inline editing
+                                          setEditingCell(null);
+
+                                          // Open sidebar with the current row
+                                          const mergedRow =
+                                            mergedRows[rowIndex];
+                                          if (mergedRow) {
+                                            setSidebarRowData({
+                                              data: buildRowDataWithPending(
+                                                mergedRow.rowData,
+                                                mergedRow.type === "insertion",
+                                              ),
+                                              rowIndex: rowIndex,
+                                              focusField: colName,
+                                            });
+                                            setSidebarOpen(true);
+                                          }
+                                        }}
+                                        className="w-full bg-base text-primary border-none outline-none p-0 m-0 font-mono"
+                                      />
                                     );
                                   }
-                                  return flexRender(
-                                    cell.column.columnDef.cell,
-                                    cell.getContext(),
+                                  const dateMode = colType
+                                    ? getDateInputMode(colType)
+                                    : null;
+                                  if (dateMode) {
+                                    return (
+                                      <DateInput
+                                        value={String(editingCell.value ?? "")}
+                                        mode={dateMode}
+                                        onChange={(newValue) =>
+                                          setEditingCell((prev) =>
+                                            prev
+                                              ? { ...prev, value: newValue }
+                                              : null,
+                                          )
+                                        }
+                                        onBlur={handleEditCommit}
+                                        onKeyDown={handleKeyDown}
+                                        inputRef={editInputRef}
+                                      />
+                                    );
+                                  }
+                                  const textValue = String(
+                                    editingCell.value ?? "",
                                   );
-                                })()}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                                  // Measure the longest line to size the textarea
+                                  const lines = textValue.split("\n");
+                                  const canvas =
+                                    document.createElement("canvas");
+                                  const ctx = canvas.getContext("2d");
+                                  if (ctx) {
+                                    ctx.font =
+                                      "14px ui-monospace, SFMono-Regular, monospace";
+                                  }
+                                  const longestLineWidth = ctx
+                                    ? Math.max(
+                                        ...lines.map(
+                                          (line) => ctx.measureText(line).width,
+                                        ),
+                                      )
+                                    : 200;
+                                  // padding (p-2 = 8px * 2) + small buffer
+                                  const textareaWidth =
+                                    Math.ceil(longestLineWidth) + 32;
 
-        {contextMenu &&
-          (() => {
-            // Check if this row has any pending changes, deletions, or is an insertion
-            const isInsertion = contextMenu.mergedRow?.type === "insertion";
-            const pkVal =
-              pkIndexMap !== null ? String(contextMenu.row[pkIndexMap]) : null;
-            const hasPendingChanges =
-              !isInsertion && pkVal && pendingChanges?.[pkVal] !== undefined;
-            const hasPendingDeletion =
-              !isInsertion && pkVal && pendingDeletions?.[pkVal] !== undefined;
+                                  return (
+                                    <>
+                                      {/* Invisible placeholder to preserve td width */}
+                                      <span className="invisible whitespace-nowrap">
+                                        {String(displayValue)}
+                                      </span>
+                                      <textarea
+                                        ref={(el) => {
+                                          (
+                                            editInputRef as React.MutableRefObject<HTMLElement | null>
+                                          ).current = el;
+                                          if (el) {
+                                            const td = el.parentElement;
+                                            if (td) {
+                                              el.style.width = `${Math.max(td.offsetWidth, textareaWidth)}px`;
+                                            }
+                                          }
+                                        }}
+                                        value={textValue}
+                                        rows={Math.min(lines.length, 10)}
+                                        onChange={(e) => {
+                                          setEditingCell((prev) =>
+                                            prev
+                                              ? {
+                                                  ...prev,
+                                                  value: e.target.value,
+                                                }
+                                              : null,
+                                          );
+                                        }}
+                                        onBlur={handleEditCommit}
+                                        onKeyDown={handleKeyDown}
+                                        className="absolute left-0 top-0 max-w-[400px] max-h-[120px] bg-base text-primary border border-blue-500 rounded shadow-lg p-2 font-mono text-sm resize-none z-50 outline-none"
+                                      />
+                                    </>
+                                  );
+                                })()
+                              : hasPendingChange
+                                ? String(displayValue)
+                                : (() => {
+                                    const colType = columnTypeMap?.get(colName);
+                                    if (
+                                      colType &&
+                                      (isBlobColumn(
+                                        colType,
+                                        columnLengthMap?.get(colName),
+                                      ) ||
+                                        isBlobWireFormat(displayValue)) &&
+                                      !isPendingDelete
+                                    ) {
+                                      return (
+                                        <span className="flex items-center gap-1 group/blobcell w-full">
+                                          <span className="truncate flex-1">
+                                            {flexRender(
+                                              cell.column.columnDef.cell,
+                                              cell.getContext(),
+                                            )}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const mergedRow =
+                                                mergedRows[rowIndex];
+                                              if (mergedRow) {
+                                                setSidebarRowData({
+                                                  data: buildRowDataWithPending(
+                                                    mergedRow.rowData,
+                                                    mergedRow.type ===
+                                                      "insertion",
+                                                  ),
+                                                  rowIndex,
+                                                  focusField: colName,
+                                                });
+                                                setSidebarOpen(true);
+                                              }
+                                            }}
+                                            className="opacity-0 group-hover/blobcell:opacity-100 transition-opacity p-0.5 rounded text-muted hover:text-secondary hover:bg-surface-tertiary flex-shrink-0"
+                                            title={t("blobInput.openSidebar")}
+                                          >
+                                            <ExternalLink size={11} />
+                                          </button>
+                                        </span>
+                                      );
+                                    }
+                                    return flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext(),
+                                    );
+                                  })()}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-            // Enable revert if there's any pending change, deletion, or insertion
-            const canRevert =
-              isInsertion || hasPendingChanges || hasPendingDeletion;
+          {contextMenu &&
+            (() => {
+              // Check if this row has any pending changes, deletions, or is an insertion
+              const isInsertion = contextMenu.mergedRow?.type === "insertion";
+              const pkVal =
+                pkIndexMap !== null
+                  ? String(contextMenu.row[pkIndexMap])
+                  : null;
+              const hasPendingChanges =
+                !isInsertion && pkVal && pendingChanges?.[pkVal] !== undefined;
+              const hasPendingDeletion =
+                !isInsertion &&
+                pkVal &&
+                pendingDeletions?.[pkVal] !== undefined;
 
-            // Determine which cell value options to show based on column properties
-            const { colName } = contextMenu;
-            const isAutoIncrement = autoIncrementColumns?.includes(colName);
-            const isNullable = nullableColumns?.includes(colName);
-            const hasDefault = defaultValueColumns?.includes(colName);
+              // Enable revert if there's any pending change, deletion, or insertion
+              const canRevert =
+                isInsertion || hasPendingChanges || hasPendingDeletion;
 
-            // Build menu items dynamically
-            const menuItems: ContextMenuItem[] = [];
+              // Determine which cell value options to show based on column properties
+              const { colName } = contextMenu;
+              const isAutoIncrement = autoIncrementColumns?.includes(colName);
+              const isNullable = nullableColumns?.includes(colName);
+              const hasDefault = defaultValueColumns?.includes(colName);
 
-            if (!readonlyProp) {
-              // Cell value manipulation options (shown first for cell context)
-              // SET GENERATED only for insertion rows, not for existing rows
-              if (isAutoIncrement && isInsertion) {
-                menuItems.push({
-                  label: t("dataGrid.setGenerate"),
-                  icon: Sparkles,
-                  action: setCellGenerate,
-                });
+              // Build menu items dynamically
+              const menuItems: ContextMenuItem[] = [];
+
+              if (!readonlyProp) {
+                // Cell value manipulation options (shown first for cell context)
+                // SET GENERATED only for insertion rows, not for existing rows
+                if (isAutoIncrement && isInsertion) {
+                  menuItems.push({
+                    label: t("dataGrid.setGenerate"),
+                    icon: Sparkles,
+                    action: setCellGenerate,
+                  });
+                }
+                if (isNullable) {
+                  menuItems.push({
+                    label: t("dataGrid.setNull"),
+                    icon: Ban,
+                    action: setCellNull,
+                  });
+                }
+                if (hasDefault) {
+                  menuItems.push({
+                    label: t("dataGrid.setDefault"),
+                    icon: FileDigit,
+                    action: setCellDefault,
+                  });
+                }
+                // Always allow setting empty string, except for BLOB columns
+                const colDataType = columnTypeMap?.get(colName) ?? "";
+                if (!isBlobColumn(colDataType, columnLengthMap?.get(colName))) {
+                  menuItems.push({
+                    label: t("dataGrid.setEmpty"),
+                    icon: Copy,
+                    action: setCellEmpty,
+                  });
+                }
+
+                // Separator before row actions
+                if (menuItems.length > 0) {
+                  menuItems.push({ separator: true });
+                }
               }
-              if (isNullable) {
-                menuItems.push({
-                  label: t("dataGrid.setNull"),
-                  icon: Ban,
-                  action: setCellNull,
-                });
-              }
-              if (hasDefault) {
-                menuItems.push({
-                  label: t("dataGrid.setDefault"),
-                  icon: FileDigit,
-                  action: setCellDefault,
-                });
-              }
-              // Always allow setting empty string, except for BLOB columns
-              const colDataType = columnTypeMap?.get(colName) ?? "";
-              if (!isBlobColumn(colDataType, columnLengthMap?.get(colName))) {
-                menuItems.push({
-                  label: t("dataGrid.setEmpty"),
-                  icon: Copy,
-                  action: setCellEmpty,
-                });
-              }
 
-              // Separator before row actions
-              if (menuItems.length > 0) {
-                menuItems.push({ separator: true });
-              }
-            }
-
-            menuItems.push(
-              {
+              menuItems.push({
                 label: t("dataGrid.copySelectedRows"),
                 icon: Copy,
                 action: copySelectedOrContextRow,
-              },
-            );
+              });
 
-            if (!readonlyProp) {
-              menuItems.push(
-                {
-                  label: t("contextMenu.openSidebar"),
-                  icon: Edit,
-                  action: openSidebarEditor,
-                },
-                {
-                  label: t("dataGrid.deleteRow"),
-                  icon: Trash2,
-                  danger: true,
-                  action: deleteSelectedRow,
-                },
-                {
-                  label: t("dataGrid.revertSelected"),
-                  icon: Undo,
-                  action: revertSelectedRow,
-                  disabled: !canRevert,
-                },
+              if (!readonlyProp) {
+                menuItems.push(
+                  {
+                    label: t("contextMenu.openSidebar"),
+                    icon: Edit,
+                    action: openSidebarEditor,
+                  },
+                  {
+                    label: t("dataGrid.deleteRow"),
+                    icon: Trash2,
+                    danger: true,
+                    action: deleteSelectedRow,
+                  },
+                  {
+                    label: t("dataGrid.revertSelected"),
+                    icon: Undo,
+                    action: revertSelectedRow,
+                    disabled: !canRevert,
+                  },
+                );
+              }
+
+              return (
+                <ContextMenu
+                  x={contextMenu.x}
+                  y={contextMenu.y}
+                  onClose={() => setContextMenu(null)}
+                  items={menuItems}
+                >
+                  <SlotAnchor
+                    name="data-grid.context-menu.items"
+                    context={{
+                      connectionId,
+                      tableName,
+                      schema: activeSchema,
+                      columnName: contextMenu.colName,
+                      rowIndex: contextMenu.rowIndex,
+                      rowData: mergedRows[contextMenu.rowIndex]
+                        ?.rowData as unknown as
+                        | Record<string, unknown>
+                        | undefined,
+                    }}
+                    className="border-t border-default mt-1 pt-1"
+                  />
+                </ContextMenu>
               );
-            }
+            })()}
 
-            return (
-              <ContextMenu
-                x={contextMenu.x}
-                y={contextMenu.y}
-                onClose={() => setContextMenu(null)}
-                items={menuItems}
-              >
-                <SlotAnchor
-                  name="data-grid.context-menu.items"
-                  context={{
-                    connectionId,
-                    tableName,
-                    schema: activeSchema,
-                    columnName: contextMenu.colName,
-                    rowIndex: contextMenu.rowIndex,
-                    rowData: mergedRows[contextMenu.rowIndex]?.rowData as unknown as Record<string, unknown> | undefined,
+          {headerContextMenu && (
+            <ContextMenu
+              x={headerContextMenu.x}
+              y={headerContextMenu.y}
+              onClose={() => setHeaderContextMenu(null)}
+              items={[
+                {
+                  label: t("dataGrid.copyColumnName"),
+                  icon: Copy,
+                  action: copyHeaderName,
+                },
+                {
+                  label: t("dataGrid.copyColumnNameQuoted"),
+                  icon: Copy,
+                  action: copyHeaderNameQuoted,
+                },
+                {
+                  label: t("dataGrid.copyColumnNameTable"),
+                  icon: Copy,
+                  action: copyHeaderNameTable,
+                },
+              ]}
+            />
+          )}
+
+          {/* Row Editor Sidebar */}
+          {sidebarOpen &&
+            sidebarRowData &&
+            (() => {
+              const mergedRow = mergedRows[sidebarRowData.rowIndex];
+              const isInsertion = mergedRow?.type === "insertion";
+
+              return (
+                <RowEditorSidebar
+                  isOpen={sidebarOpen}
+                  onClose={() => {
+                    setSidebarOpen(false);
+                    setSidebarRowData(null);
                   }}
-                  className="border-t border-default mt-1 pt-1"
-                />
-              </ContextMenu>
-            );
-          })()}
+                  rowData={sidebarRowData.data}
+                  rowIndex={sidebarRowData.rowIndex}
+                  isInsertion={isInsertion}
+                  columns={columns.map((colName, index) => ({
+                    name: colName,
+                    type: columnMetadata?.[index]?.data_type,
+                    characterMaximumLength:
+                      columnMetadata?.[index]?.character_maximum_length,
+                  }))}
+                  autoIncrementColumns={autoIncrementColumns}
+                  defaultValueColumns={defaultValueColumns}
+                  nullableColumns={nullableColumns}
+                  focusField={sidebarRowData.focusField}
+                  connectionId={connectionId}
+                  tableName={tableName}
+                  pkColumn={pkColumn}
+                  schema={activeSchema}
+                  onChange={(colName, value) => {
+                    // Get the merged row to determine if it's an insertion or existing row
+                    const mergedRow = mergedRows[sidebarRowData.rowIndex];
+                    if (!mergedRow) return;
 
-        {headerContextMenu && (
-          <ContextMenu
-            x={headerContextMenu.x}
-            y={headerContextMenu.y}
-            onClose={() => setHeaderContextMenu(null)}
-            items={[
-              {
-                label: t("dataGrid.copyColumnName"),
-                icon: Copy,
-                action: copyHeaderName,
-              },
-              {
-                label: t("dataGrid.copyColumnNameQuoted"),
-                icon: Copy,
-                action: copyHeaderNameQuoted,
-              },
-              {
-                label: t("dataGrid.copyColumnNameTable"),
-                icon: Copy,
-                action: copyHeaderNameTable,
-              },
-            ]}
-          />
-        )}
+                    const isInsertion = mergedRow.type === "insertion";
 
-        {/* Row Editor Sidebar */}
-        {sidebarOpen &&
-          sidebarRowData &&
-          (() => {
-            const mergedRow = mergedRows[sidebarRowData.rowIndex];
-            const isInsertion = mergedRow?.type === "insertion";
-
-            return (
-              <RowEditorSidebar
-                isOpen={sidebarOpen}
-                onClose={() => {
-                  setSidebarOpen(false);
-                  setSidebarRowData(null);
-                }}
-                rowData={sidebarRowData.data}
-                rowIndex={sidebarRowData.rowIndex}
-                isInsertion={isInsertion}
-                columns={columns.map((colName, index) => ({
-                  name: colName,
-                  type: columnMetadata?.[index]?.data_type,
-                  characterMaximumLength:
-                    columnMetadata?.[index]?.character_maximum_length,
-                }))}
-                autoIncrementColumns={autoIncrementColumns}
-                defaultValueColumns={defaultValueColumns}
-                nullableColumns={nullableColumns}
-                focusField={sidebarRowData.focusField}
-                connectionId={connectionId}
-                tableName={tableName}
-                pkColumn={pkColumn}
-                schema={activeSchema}
-                onChange={(colName, value) => {
-                  // Get the merged row to determine if it's an insertion or existing row
-                  const mergedRow = mergedRows[sidebarRowData.rowIndex];
-                  if (!mergedRow) return;
-
-                  const isInsertion = mergedRow.type === "insertion";
-
-                  // Apply change immediately
-                  if (
-                    isInsertion &&
-                    onPendingInsertionChange &&
-                    mergedRow.tempId
-                  ) {
-                    // Handle insertion row updates
-                    onPendingInsertionChange(mergedRow.tempId, colName, value);
-                  } else if (
-                    !isInsertion &&
-                    onPendingChange &&
-                    pkColumn &&
-                    pkIndexMap !== null
-                  ) {
-                    // Handle existing row updates
-                    const rowData = mergedRow.rowData;
-                    if (rowData) {
-                      const pkVal = rowData[pkIndexMap];
-                      onPendingChange(pkVal, colName, value);
+                    // Apply change immediately
+                    if (
+                      isInsertion &&
+                      onPendingInsertionChange &&
+                      mergedRow.tempId
+                    ) {
+                      // Handle insertion row updates
+                      onPendingInsertionChange(
+                        mergedRow.tempId,
+                        colName,
+                        value,
+                      );
+                    } else if (
+                      !isInsertion &&
+                      onPendingChange &&
+                      pkColumn &&
+                      pkIndexMap !== null
+                    ) {
+                      // Handle existing row updates
+                      const rowData = mergedRow.rowData;
+                      if (rowData) {
+                        const pkVal = rowData[pkIndexMap];
+                        onPendingChange(pkVal, colName, value);
+                      }
                     }
-                  }
-                }}
-              />
-            );
-          })()}
-      </div>
+                  }}
+                />
+              );
+            })()}
+        </div>
       </>
     );
   },

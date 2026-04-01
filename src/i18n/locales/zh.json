@@ -35,7 +35,8 @@
     "loading": "加载中...",
     "search": "搜索...",
     "error": "错误",
-    "success": "成功"
+    "success": "成功",
+    "ok": "OK"
   },
   "sidebar": {
     "connections": "连接",
@@ -240,6 +241,7 @@
       "fromEnvTooltip": "此密钥从环境变量加载",
       "envVariableDetected": "检测到环境变量，但您可以通过在上方设置密钥来覆盖它。",
       "reset": "重置",
+      "changeKey": "更改",
       "resetKey": "删除自定义密钥并恢复到环境变量（如果有）",
       "keyResetSuccess": "自定义密钥删除成功",
       "systemPrompt": "系统提示词",
@@ -578,7 +580,10 @@
     "saveThisQuery": "保存此查询",
     "noValidQueries": "未找到有效查询",
     "queryFailed": "查询失败。",
+    "showErrorDetails": "显示详情",
+    "hideErrorDetails": "隐藏详情",
     "newVisualQuery": "新建可视化查询",
+    "activeDatabase": "当前数据库",
     "tabSwitcher": {
       "title": "打开的标签",
       "hint": "Ctrl+Tab",
@@ -765,6 +770,12 @@
     "sqlPlaceholder": "ST_GeomFromText('POINT(30 40)', 4326)",
     "wktPlaceholder": "POINT(30 40)",
     "toggleTooltip": "SQL 函数"
+  },
+  "jsonInput": {
+    "placeholder": "输入 JSON...",
+    "format": "格式化",
+    "valid": "JSON 格式正确",
+    "invalid": "JSON 格式错误"
   },
   "rowEditor": {
     "title": "编辑行",

@@ -6,6 +6,7 @@ import { ConnectionLayoutProvider } from "./contexts/ConnectionLayoutProvider";
 import { KeybindingsProvider } from "./contexts/KeybindingsProvider";
 import { PluginSlotProvider } from "./contexts/PluginSlotProvider";
 import { PluginModalProvider } from "./contexts/PluginModalProvider";
+import { AlertProvider } from "./contexts/AlertProvider";
 import { Connections } from "./pages/Connections";
 import { Editor } from "./pages/Editor";
 import { Settings } from "./pages/Settings";
@@ -58,26 +59,34 @@ export function App() {
 
   return (
     <>
-      <BrowserRouter>
-        <KeybindingsProvider>
-        <PluginSlotProvider>
-        <PluginModalProvider>
-        <ConnectionLayoutProvider>
-          <Routes>
-            <Route path="/" element={<MainLayout />}>
-              <Route index element={<Navigate to="/connections" replace />} />
-              <Route path="connections" element={<Connections />} />
-              <Route path="editor" element={<Editor />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-            <Route path="/schema-diagram" element={<SchemaDiagramPage />} />
-            <Route path="/task-manager" element={<TaskManagerPage />} />
-          </Routes>
-        </ConnectionLayoutProvider>
-        </PluginModalProvider>
-        </PluginSlotProvider>
-        </KeybindingsProvider>
-      </BrowserRouter>
+      <AlertProvider>
+        <BrowserRouter>
+          <KeybindingsProvider>
+            <PluginSlotProvider>
+              <PluginModalProvider>
+                <ConnectionLayoutProvider>
+                  <Routes>
+                    <Route path="/" element={<MainLayout />}>
+                      <Route
+                        index
+                        element={<Navigate to="/connections" replace />}
+                      />
+                      <Route path="connections" element={<Connections />} />
+                      <Route path="editor" element={<Editor />} />
+                      <Route path="settings" element={<Settings />} />
+                    </Route>
+                    <Route
+                      path="/schema-diagram"
+                      element={<SchemaDiagramPage />}
+                    />
+                    <Route path="/task-manager" element={<TaskManagerPage />} />
+                  </Routes>
+                </ConnectionLayoutProvider>
+              </PluginModalProvider>
+            </PluginSlotProvider>
+          </KeybindingsProvider>
+        </BrowserRouter>
+      </AlertProvider>
 
       <UpdateNotificationModal
         isOpen={!!updateInfo}
@@ -96,4 +105,3 @@ export function App() {
     </>
   );
 }
-

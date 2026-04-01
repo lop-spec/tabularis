@@ -46,6 +46,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { TableToolbar } from "../components/ui/TableToolbar";
 import { DataGrid } from "../components/ui/DataGrid";
+import { ErrorDisplay } from "../components/ui/ErrorDisplay";
 import { NewRowModal } from "../components/modals/NewRowModal";
 import { QuerySelectionModal } from "../components/modals/QuerySelectionModal";
 import { TabSwitcherModal } from "../components/modals/TabSwitcherModal";
@@ -68,14 +69,25 @@ import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
 import { registerSqlAutocomplete } from "../utils/autocomplete";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save } from "@tauri-apps/plugin-dialog";
+import { useAlert } from "../hooks/useAlert";
 import { useDatabase } from "../hooks/useDatabase";
 import { useSavedQueries } from "../hooks/useSavedQueries";
 import { useSettings } from "../hooks/useSettings";
 import { useEditor } from "../hooks/useEditor";
 import { useConnectionLayoutContext } from "../hooks/useConnectionLayoutContext";
 import { useKeybindings } from "../hooks/useKeybindings";
-import type { QueryResult, Tab, PendingInsertion, TableColumn } from "../types/editor";
-import { getTabScrollState, getAdjacentTabIndex, resolveNextTabId, isFocusedPane } from "../utils/tabScroll";
+import type {
+  QueryResult,
+  Tab,
+  PendingInsertion,
+  TableColumn,
+} from "../types/editor";
+import {
+  getTabScrollState,
+  getAdjacentTabIndex,
+  resolveNextTabId,
+  isFocusedPane,
+} from "../utils/tabScroll";
 import clsx from "clsx";
 
 interface EditorState {
@@ -94,13 +106,23 @@ interface ExportProgress {
 
 const CHEVRON_SELECT_STYLE: React.CSSProperties = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right center',
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right center",
 };
 
 export const Editor = () => {
   const { t } = useTranslation();
-  const { activeConnectionId, tables, views, activeDriver, activeSchema, activeCapabilities } = useDatabase();
+  const {
+    activeConnectionId,
+    tables,
+    views,
+    activeDriver,
+    activeSchema,
+    activeCapabilities,
+    selectedDatabases,
+    activeConnectionName,
+    activeDatabaseName,
+  } = useDatabase();
   const { explorerConnectionId } = useConnectionLayoutContext();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
@@ -119,6 +141,7 @@ export const Editor = () => {
   } = useEditor();
   const location = useLocation();
   const { matchesShortcut } = useKeybindings();
+  const { showAlert } = useAlert();
   const navigate = useNavigate();
 
   const driverReadonly = isReadonly(activeCapabilities);
@@ -170,11 +193,13 @@ export const Editor = () => {
       const tab = tabsRef.current.find((t) => t.id === tabId);
       if (!tab) return;
 
-      const effectiveSchema = activeCapabilities?.schemas === true ? tab.schema : undefined;
+      const effectiveSchema =
+        activeCapabilities?.schemas === true ? tab.schema : undefined;
       const tabForQuery = { ...tab, schema: effectiveSchema };
-      const query = tab.type === "table" && tab.activeTable
-        ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
-        : tab.query;
+      const query =
+        tab.type === "table" && tab.activeTable
+          ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
+          : tab.query;
 
       addTab({
         type: "console",
@@ -219,6 +244,7 @@ export const Editor = () => {
     useState(false);
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
+  const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isAiExplainModalOpen, setIsAiExplainModalOpen] = useState(false);
   const [isEditingPage, setIsEditingPage] = useState(false);
@@ -235,8 +261,46 @@ export const Editor = () => {
   const activeTabType = activeTab?.type;
   const activeTabQuery = activeTab?.query;
   const isTableTab = activeTab?.type === "table";
+  const isMultiDb =
+    isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
   const isEditorOpen =
     !isTableTab && (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
+
+  // Update window title when the active tab changes
+  useEffect(() => {
+    const updateTitle = async () => {
+      try {
+        let title = "tabularis";
+        if (activeConnectionName && activeDatabaseName) {
+          const schemaSuffix =
+            activeSchema && activeCapabilities?.schemas === true
+              ? `/${activeSchema}`
+              : "";
+          let dbDisplay: string;
+          if (isMultiDb) {
+            dbDisplay =
+              activeTab?.schema ?? selectedDatabases[0] ?? activeDatabaseName;
+          } else {
+            dbDisplay = activeDatabaseName;
+          }
+          title = `tabularis - ${activeConnectionName} (${dbDisplay}${schemaSuffix})`;
+        }
+        await invoke("set_window_title", { title });
+      } catch (e) {
+        console.error("Failed to update window title", e);
+      }
+    };
+    updateTitle();
+  }, [
+    activeTabId,
+    activeTab?.schema,
+    activeConnectionName,
+    activeDatabaseName,
+    activeSchema,
+    activeCapabilities,
+    isMultiDb,
+    selectedDatabases,
+  ]);
 
   // Define updateActiveTab first to be used in handleQueryChange
   const updateActiveTab = useCallback(
@@ -277,17 +341,28 @@ export const Editor = () => {
     setCanScrollRight(canScrollRight);
   }, []);
 
-  const scrollTabs = useCallback((direction: "left" | "right") => {
-    const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
-    const targetIndex = getAdjacentTabIndex(currentIndex, tabs.length, direction);
-    if (targetIndex === null) return;
-    const targetTab = tabs[targetIndex];
-    setActiveTabId(targetTab.id);
-    const el = tabScrollRef.current;
-    if (!el) return;
-    const tabEl = el.children[targetIndex] as HTMLElement | undefined;
-    tabEl?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-  }, [tabs, activeTabId, setActiveTabId]);
+  const scrollTabs = useCallback(
+    (direction: "left" | "right") => {
+      const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
+      const targetIndex = getAdjacentTabIndex(
+        currentIndex,
+        tabs.length,
+        direction,
+      );
+      if (targetIndex === null) return;
+      const targetTab = tabs[targetIndex];
+      setActiveTabId(targetTab.id);
+      const el = tabScrollRef.current;
+      if (!el) return;
+      const tabEl = el.children[targetIndex] as HTMLElement | undefined;
+      tabEl?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "nearest",
+      });
+    },
+    [tabs, activeTabId, setActiveTabId],
+  );
   const processingRef = useRef<string | null>(null);
   const pendingExecutionsRef = useRef<
     Record<string, { sql: string; page: number }>
@@ -295,8 +370,14 @@ export const Editor = () => {
 
   const selectionHasPending = useMemo(() => {
     if (!activeTab) return false;
-    const { pendingChanges, pendingDeletions, pendingInsertions, selectedRows, result, pkColumn } =
-      activeTab;
+    const {
+      pendingChanges,
+      pendingDeletions,
+      pendingInsertions,
+      selectedRows,
+      result,
+      pkColumn,
+    } = activeTab;
     const hasGlobalPending =
       (pendingChanges && Object.keys(pendingChanges).length > 0) ||
       (pendingDeletions && Object.keys(pendingDeletions).length > 0) ||
@@ -366,11 +447,11 @@ export const Editor = () => {
           .filter((c) => c.is_auto_increment)
           .map((c) => c.name);
         const defaultVal = cols
-          .filter((c) => c.default_value !== undefined && c.default_value !== null)
+          .filter(
+            (c) => c.default_value !== undefined && c.default_value !== null,
+          )
           .map((c) => c.name);
-        const nullable = cols
-          .filter((c) => c.is_nullable)
-          .map((c) => c.name);
+        const nullable = cols.filter((c) => c.is_nullable).map((c) => c.name);
         const targetId = tabId || activeTabId;
         if (targetId)
           updateTab(targetId, {
@@ -385,7 +466,13 @@ export const Editor = () => {
         // Even if PK fetch fails, set pkColumn to null to unblock the UI
         const targetId = tabId || activeTabId;
         if (targetId)
-          updateTab(targetId, { pkColumn: null, autoIncrementColumns: [], defaultValueColumns: [], nullableColumns: [], columnMetadata: [] });
+          updateTab(targetId, {
+            pkColumn: null,
+            autoIncrementColumns: [],
+            defaultValueColumns: [],
+            nullableColumns: [],
+            columnMetadata: [],
+          });
       }
     },
     [activeConnectionId, activeTabId, updateTab, activeSchema],
@@ -428,14 +515,21 @@ export const Editor = () => {
       let textToRun = sql?.trim() || targetTab?.query;
       // For Table Tabs, reconstruct query if filter/sort are present
       if (targetTab?.type === "table" && targetTab.activeTable) {
-        const effectiveSchema = activeCapabilities?.schemas === true ? targetTab.schema : undefined;
+        const effectiveSchema =
+          activeCapabilities?.schemas === true ? targetTab.schema : undefined;
         const tabForQuery = { ...targetTab, schema: effectiveSchema };
-        textToRun = reconstructTableQuery(tabForQuery, activeDriver ?? undefined, {
-          filterOverride: filterOverride !== undefined ? filterOverride : undefined,
-          sortOverride: sortOverride !== undefined ? sortOverride : undefined,
-          limitOverride: limitOverride !== undefined ? limitOverride : undefined,
-          wrapLimitSubquery: true,
-        });
+        textToRun = reconstructTableQuery(
+          tabForQuery,
+          activeDriver ?? undefined,
+          {
+            filterOverride:
+              filterOverride !== undefined ? filterOverride : undefined,
+            sortOverride: sortOverride !== undefined ? sortOverride : undefined,
+            limitOverride:
+              limitOverride !== undefined ? limitOverride : undefined,
+            wrapLimitSubquery: true,
+          },
+        );
       }
 
       if (!textToRun || !textToRun.trim()) return;
@@ -469,7 +563,8 @@ export const Editor = () => {
       setIsResultsCollapsed(false);
 
       // Preserve total_rows across page changes so the count doesn't disappear
-      const previousTotalRows = targetTab?.result?.pagination?.total_rows ?? null;
+      const previousTotalRows =
+        targetTab?.result?.pagination?.total_rows ?? null;
 
       updateTab(targetTabId, {
         isLoading: true,
@@ -525,8 +620,16 @@ export const Editor = () => {
         }
 
         const resultWithCount =
-          res.pagination && res.pagination.total_rows === null && previousTotalRows !== null
-            ? { ...res, pagination: { ...res.pagination, total_rows: previousTotalRows } }
+          res.pagination &&
+          res.pagination.total_rows === null &&
+          previousTotalRows !== null
+            ? {
+                ...res,
+                pagination: {
+                  ...res.pagination,
+                  total_rows: previousTotalRows,
+                },
+              }
             : res;
 
         updateTab(targetTabId, {
@@ -542,7 +645,17 @@ export const Editor = () => {
         });
       }
     },
-    [activeConnectionId, updateTab, settings.resultPageSize, fetchPkColumn, t, activeDriver, activeSchema, activeCapabilities?.schemas, views],
+    [
+      activeConnectionId,
+      updateTab,
+      settings.resultPageSize,
+      fetchPkColumn,
+      t,
+      activeDriver,
+      activeSchema,
+      activeCapabilities?.schemas,
+      views,
+    ],
   );
 
   const loadCount = useCallback(async () => {
@@ -673,7 +786,9 @@ export const Editor = () => {
       }
 
       if (matchesShortcut(e, "next_page")) {
-        const tab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+        const tab = tabsRef.current.find(
+          (t) => t.id === activeTabIdRef.current,
+        );
         if (tab?.result?.pagination?.has_more) {
           e.preventDefault();
           runQuery(tab.query, (tab.result.pagination.page ?? 1) + 1);
@@ -682,7 +797,9 @@ export const Editor = () => {
       }
 
       if (matchesShortcut(e, "prev_page")) {
-        const tab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+        const tab = tabsRef.current.find(
+          (t) => t.id === activeTabIdRef.current,
+        );
         if (tab?.result?.pagination && tab.result.pagination.page > 1) {
           e.preventDefault();
           runQuery(tab.query, tab.result.pagination.page - 1);
@@ -692,7 +809,14 @@ export const Editor = () => {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [explorerConnectionId, activeConnectionId, matchesShortcut, addTab, closeTab, runQuery]);
+  }, [
+    explorerConnectionId,
+    activeConnectionId,
+    matchesShortcut,
+    addTab,
+    closeTab,
+    runQuery,
+  ]);
 
   const handleRefresh = useCallback(() => {
     const currentTab = tabsRef.current.find(
@@ -815,13 +939,13 @@ export const Editor = () => {
     const existingRowCount = activeTab.result?.rows.length || 0;
     const currentPendingInsertions = activeTab.pendingInsertions || {};
     const currentPendingDeletions = activeTab.pendingDeletions || {};
-    
+
     const newPendingDeletions = { ...currentPendingDeletions };
     const newPendingInsertions = { ...currentPendingInsertions };
 
     // Separate selected rows into existing rows and new rows
     const insertionTempIds = Object.keys(currentPendingInsertions);
-    
+
     activeTab.selectedRows.forEach((rowIndex) => {
       if (rowIndex < existingRowCount) {
         // Existing row - add to pending deletions
@@ -838,7 +962,10 @@ export const Editor = () => {
       } else {
         // New row (insertion) - remove directly from pendingInsertions
         const insertionArrayIndex = rowIndex - existingRowCount;
-        if (insertionArrayIndex >= 0 && insertionArrayIndex < insertionTempIds.length) {
+        if (
+          insertionArrayIndex >= 0 &&
+          insertionArrayIndex < insertionTempIds.length
+        ) {
           const tempId = insertionTempIds[insertionArrayIndex];
           delete newPendingInsertions[tempId];
         }
@@ -940,7 +1067,11 @@ export const Editor = () => {
   );
 
   const handleNewRow = useCallback(async () => {
-    if (!activeTabIdRef.current || !activeConnectionId || !activeTab?.activeTable) {
+    if (
+      !activeTabIdRef.current ||
+      !activeConnectionId ||
+      !activeTab?.activeTable
+    ) {
       console.warn("Cannot create new row: missing required context", {
         tabId: activeTabIdRef.current,
         connectionId: activeConnectionId,
@@ -999,7 +1130,10 @@ export const Editor = () => {
             has_more: false,
           },
         };
-      } else if (!activeTab.result.columns || activeTab.result.columns.length === 0) {
+      } else if (
+        !activeTab.result.columns ||
+        activeTab.result.columns.length === 0
+      ) {
         // If result exists but has no columns, update it with columns
         updates.result = {
           ...activeTab.result,
@@ -1024,7 +1158,9 @@ export const Editor = () => {
 
       if (!activeTab.defaultValueColumns) {
         const defaultVal = columns
-          .filter((c) => c.default_value !== undefined && c.default_value !== null)
+          .filter(
+            (c) => c.default_value !== undefined && c.default_value !== null,
+          )
           .map((c) => c.name);
         updates.defaultValueColumns = defaultVal;
       }
@@ -1043,17 +1179,23 @@ export const Editor = () => {
       updateTab(activeTabIdRef.current, updates);
     } catch (err) {
       console.error("Failed to create new row:", err);
-      setErrorModal({ isOpen: true, message: t("editor.failedCreateRow") + String(err) });
+      showAlert(t("editor.failedCreateRow") + String(err), {
+        title: t("general.error"),
+        kind: "error",
+      });
     }
-  }, [activeConnectionId, activeTab, updateTab, t, settings.resultPageSize, activeSchema]);
+  }, [
+    activeConnectionId,
+    activeTab,
+    updateTab,
+    t,
+    settings.resultPageSize,
+    activeSchema,
+    showAlert,
+  ]);
 
   const handleSubmitChanges = useCallback(async () => {
-    if (
-      !activeTab ||
-      !activeTab.activeTable ||
-      !activeConnectionId
-    )
-      return;
+    if (!activeTab || !activeTab.activeTable || !activeConnectionId) return;
 
     // pkColumn is required for updates/deletions but not for insertions-only
     const hasPkColumn = !!activeTab.pkColumn;
@@ -1131,7 +1273,10 @@ export const Editor = () => {
         for (const [tempId, insertion] of Object.entries(pendingInsertions)) {
           // Check if this insertion is selected (if filtering by selection)
           const insertionDisplayIndex = existingRowCount + insertionIndex;
-          if (hasSelection && !selectedDisplayIndices.has(insertionDisplayIndex)) {
+          if (
+            hasSelection &&
+            !selectedDisplayIndices.has(insertionDisplayIndex)
+          ) {
             insertionIndex++;
             continue;
           }
@@ -1153,12 +1298,19 @@ export const Editor = () => {
         }
       } catch (err) {
         console.error("Failed to process insertions:", err);
-        setErrorModal({ isOpen: true, message: t("editor.failedProcessInsertions") + String(err) });
+        showAlert(t("editor.failedProcessInsertions") + String(err), {
+          title: t("common.error"),
+          kind: "error",
+        });
         return;
       }
     }
 
-    if (updates.length === 0 && deletions.length === 0 && insertions.length === 0)
+    if (
+      updates.length === 0 &&
+      deletions.length === 0 &&
+      insertions.length === 0
+    )
       return;
 
     updateActiveTab({ isLoading: true });
@@ -1269,9 +1421,22 @@ export const Editor = () => {
     } catch (e) {
       console.error("Batch update failed", e);
       updateActiveTab({ isLoading: false });
-      setErrorModal({ isOpen: true, message: t("dataGrid.updateFailed") + String(e) });
+      showAlert(t("dataGrid.updateFailed") + String(e), {
+        title: t("common.error"),
+        kind: "error",
+      });
     }
-  }, [activeTab, activeConnectionId, updateActiveTab, runQuery, t, applyToAll, activeSchema]);
+  }, [
+    activeTab,
+    activeConnectionId,
+    updateActiveTab,
+    runQuery,
+    t,
+    applyToAll,
+    activeSchema,
+    activeCapabilities,
+    showAlert,
+  ]);
 
   const handleParamsSubmit = useCallback(
     (values: Record<string, string>) => {
@@ -1390,7 +1555,11 @@ export const Editor = () => {
     });
   }, [activeTab, updateActiveTab, applyToAll]);
 
-  const handleEditorMount = (editor: Parameters<OnMount>[0], monaco: Monaco, tabId: string) => {
+  const handleEditorMount = (
+    editor: Parameters<OnMount>[0],
+    monaco: Monaco,
+    tabId: string,
+  ) => {
     editorsRef.current[tabId] = editor;
     setMonacoInstance(monaco);
     editor.addAction({
@@ -1429,18 +1598,28 @@ export const Editor = () => {
     const state = location.state as EditorState;
     if (activeConnectionId) {
       if (state?.initialQuery) {
-        if (state.targetConnectionId && state.targetConnectionId !== activeConnectionId) return;
+        if (
+          state.targetConnectionId &&
+          state.targetConnectionId !== activeConnectionId
+        )
+          return;
 
         const queryKey = `${state.initialQuery}-${state.tableName}-${state.queryName}`;
 
         if (processingRef.current === queryKey) return;
         processingRef.current = queryKey;
 
-        const { initialQuery: sql, tableName: table, queryName, preventAutoRun, schema: navSchema, title: navTitle } = state;
+        const {
+          initialQuery: sql,
+          tableName: table,
+          queryName,
+          preventAutoRun,
+          schema: navSchema,
+          title: navTitle,
+        } = state;
         const tabId = addTab({
           type: table ? "table" : "console",
-          title:
-            navTitle || queryName || table || t("sidebar.newConsole"),
+          title: navTitle || queryName || table || t("sidebar.newConsole"),
           query: sql,
           activeTable: table,
           schema: navSchema,
@@ -1523,11 +1702,13 @@ export const Editor = () => {
   const handleExportCommon = async (format: "csv" | "json") => {
     if (!activeTab || !activeConnectionId) return;
 
-    const effectiveSchema = activeCapabilities?.schemas === true ? activeTab.schema : undefined;
+    const effectiveSchema =
+      activeCapabilities?.schemas === true ? activeTab.schema : undefined;
     const tabForQuery = { ...activeTab, schema: effectiveSchema };
-    const query = activeTab.type === "table" && activeTab.activeTable
-      ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
-      : activeTab.query;
+    const query =
+      activeTab.type === "table" && activeTab.activeTable
+        ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
+        : activeTab.query;
 
     if (!query || !query.trim()) return;
 
@@ -1641,7 +1822,11 @@ export const Editor = () => {
         >
           <ChevronRight size={14} />
         </button>
-        <div ref={tabScrollRef} onScroll={updateScrollArrows} className="flex flex-1 overflow-x-auto no-scrollbar h-full">
+        <div
+          ref={tabScrollRef}
+          onScroll={updateScrollArrows}
+          className="flex flex-1 overflow-x-auto no-scrollbar h-full"
+        >
           {tabs.map((tab) => (
             <div
               key={tab.id}
@@ -1670,7 +1855,14 @@ export const Editor = () => {
               ) : (
                 <FileCode size={12} className="text-green-500 shrink-0" />
               )}
-              <span className="truncate flex-1">{tab.title}</span>
+              <span className="truncate flex-1 flex items-center gap-1">
+                <span className="truncate">{tab.title}</span>
+                {tab.type === "console" && isMultiDb && (
+                  <span className="text-muted shrink-0">
+                    ({tab.schema || selectedDatabases[0]})
+                  </span>
+                )}
+              </span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1692,7 +1884,12 @@ export const Editor = () => {
           ))}
         </div>
         <button
-          onClick={() => addTab({ type: "console" })}
+          onClick={() =>
+            addTab({
+              type: "console",
+              ...(isMultiDb ? { schema: selectedDatabases[0] } : {}),
+            })
+          }
           className="flex items-center justify-center w-9 h-full text-muted hover:text-white hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
           title={t("editor.newConsole")}
         >
@@ -1806,7 +2003,6 @@ export const Editor = () => {
           </button>
         )}
 
-
         <div className="relative ml-auto">
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
@@ -1838,11 +2034,55 @@ export const Editor = () => {
             </>
           )}
         </div>
-        <span className="text-xs text-muted ml-2">
-          {activeConnectionId
-            ? t("editor.connected")
-            : t("editor.disconnected")}
-        </span>
+        {!isTableTab && isMultiDb && activeTab.type !== "query_builder" ? (
+          <div className="relative ml-2">
+            <button
+              onClick={() => setIsDbDropdownOpen((v) => !v)}
+              className="flex items-center gap-1.5 px-2 py-1 bg-surface-secondary border border-strong rounded text-xs text-primary hover:bg-surface transition-colors h-[30px]"
+              title={t("editor.activeDatabase")}
+            >
+              <Database size={12} className="text-muted shrink-0" />
+              <span className="max-w-[120px] truncate">
+                {activeTab.schema || selectedDatabases[0]}
+              </span>
+              <ChevronDown size={12} className="text-muted shrink-0" />
+            </button>
+            {isDbDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsDbDropdownOpen(false)}
+                />
+                <div className="absolute top-full right-0 mt-1 min-w-[140px] bg-surface-secondary border border-strong rounded shadow-xl z-50 flex flex-col py-1">
+                  {selectedDatabases.map((db) => (
+                    <button
+                      key={db}
+                      onClick={() => {
+                        updateActiveTab({ schema: db });
+                        setIsDbDropdownOpen(false);
+                      }}
+                      className={clsx(
+                        "text-left px-3 py-1.5 text-xs hover:bg-surface transition-colors flex items-center gap-2",
+                        (activeTab.schema || selectedDatabases[0]) === db
+                          ? "text-white font-medium"
+                          : "text-secondary",
+                      )}
+                    >
+                      <Database size={11} className="text-muted shrink-0" />
+                      {db}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-muted ml-2">
+            {activeConnectionId
+              ? t("editor.connected")
+              : t("editor.disconnected")}
+          </span>
+        )}
       </div>
 
       {/* Render all non-table tabs to prevent Monaco remounting */}
@@ -1871,7 +2111,12 @@ export const Editor = () => {
                   if (isActive) updateTab(tab.id, { query: val });
                 }}
                 onRun={handleRunButton}
-                onMount={isActive ? (editor, monaco) => handleEditorMount(editor, monaco, tab.id) : undefined}
+                onMount={
+                  isActive
+                    ? (editor, monaco) =>
+                        handleEditorMount(editor, monaco, tab.id)
+                    : undefined
+                }
                 editorKey={tab.id}
                 options={{
                   minimap: { enabled: false },
@@ -1979,10 +2224,10 @@ export const Editor = () => {
                 <p className="text-sm">{t("editor.executingQuery")}</p>
               </div>
             ) : activeTab.error ? (
-              <div className="p-4 text-red-400 font-mono text-sm bg-red-900/10 h-full overflow-auto whitespace-pre-wrap">
-                Error: {activeTab.error}
-              </div>
-            ) : activeTab.result || (activeTab.pendingInsertions && Object.keys(activeTab.pendingInsertions).length > 0) ? (
+              <ErrorDisplay error={activeTab.error} t={t} />
+            ) : activeTab.result ||
+              (activeTab.pendingInsertions &&
+                Object.keys(activeTab.pendingInsertions).length > 0) ? (
               <div className="flex-1 min-h-0 flex flex-col">
                 {activeTab.result && (
                   <div className="p-2 bg-elevated text-xs text-secondary border-b border-default flex justify-between items-center shrink-0">
@@ -1991,152 +2236,165 @@ export const Editor = () => {
                         {t("editor.rowsRetrieved", {
                           count: activeTab.result.rows.length,
                         })}{" "}
-                      {activeTab.executionTime !== null && (
-                        <span className="text-muted ml-2 font-mono">
-                          ({formatDuration(activeTab.executionTime)})
-                        </span>
-                      )}
-                    </span>
+                        {activeTab.executionTime !== null && (
+                          <span className="text-muted ml-2 font-mono">
+                            ({formatDuration(activeTab.executionTime)})
+                          </span>
+                        )}
+                      </span>
 
-                    {activeTab.result.pagination?.has_more && (
+                      {activeTab.result.pagination?.has_more && (
                         <span className="px-2 py-0.5 bg-yellow-900/30 text-yellow-400 rounded text-[10px] font-semibold uppercase tracking-wide border border-yellow-500/30">
                           {t("editor.autoPaginated")}
                         </span>
                       )}
-                  </div>
-
-                  {/* Pagination Controls */}
-                  {activeTab.result.pagination && (
-                    <div className="flex items-center gap-1 bg-surface-secondary rounded border border-strong">
-                      <button
-                        disabled={
-                          activeTab.result.pagination.page === 1 ||
-                          activeTab.isLoading
-                        }
-                        onClick={() => runQuery(activeTab.query, 1)}
-                        className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="First Page"
-                      >
-                        <ChevronsLeft size={14} />
-                      </button>
-                      <button
-                        disabled={
-                          activeTab.result.pagination.page === 1 ||
-                          activeTab.isLoading
-                        }
-                        onClick={() =>
-                          runQuery(
-                            activeTab.query,
-                            activeTab.result!.pagination!.page - 1,
-                          )
-                        }
-                        className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
-                        title="Previous Page"
-                      >
-                        <ChevronLeft size={14} />
-                      </button>
-
-                      <div
-                        className="px-3 text-secondary text-xs font-medium cursor-pointer hover:bg-surface-tertiary transition-colors min-w-[80px] text-center py-1"
-                        onClick={() => {
-                          setIsEditingPage(true);
-                          setTempPage(
-                            String(activeTab.result!.pagination!.page),
-                          );
-                        }}
-                        title={t("editor.jumpToPage")}
-                      >
-                        {isEditingPage ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            className="w-full bg-transparent text-center focus:outline-none text-white p-0 m-0 border-none h-full"
-                            value={tempPage}
-                            onChange={(e) => setTempPage(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                const newPage = parseInt(tempPage);
-                                const totalRows = activeTab.result!.pagination!.total_rows;
-                                if (!isNaN(newPage) && newPage >= 1) {
-                                  if (totalRows === null || newPage <= Math.ceil(totalRows / activeTab.result!.pagination!.page_size)) {
-                                    runQuery(activeTab.query, newPage);
-                                  }
-                                }
-                                setIsEditingPage(false);
-                              } else if (e.key === "Escape") {
-                                setIsEditingPage(false);
-                              }
-                              e.stopPropagation();
-                            }}
-                            onBlur={() => setIsEditingPage(false)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : (
-                          <>
-                            {activeTab.result.pagination.total_rows !== null
-                              ? t("editor.pageOf", {
-                                  current: activeTab.result.pagination.page,
-                                  total: Math.ceil(
-                                    activeTab.result.pagination.total_rows /
-                                      activeTab.result.pagination.page_size,
-                                  ),
-                                })
-                              : t("editor.page", { current: activeTab.result.pagination.page })}
-                          </>
-                        )}
-                      </div>
-
-                      {/* Count load button or spinner */}
-                      {activeTab.result.pagination.total_rows === null && (
-                        <button
-                          disabled={isCountLoading || activeTab.isLoading}
-                          onClick={loadCount}
-                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
-                          title={t("editor.loadRowCount")}
-                        >
-                          {isCountLoading
-                            ? <Loader2 size={14} className="animate-spin" />
-                            : <Hash size={14} />}
-                        </button>
-                      )}
-
-                      <button
-                        disabled={
-                          !activeTab.result.pagination.has_more ||
-                          activeTab.isLoading
-                        }
-                        onClick={() =>
-                          runQuery(
-                            activeTab.query,
-                            activeTab.result!.pagination!.page + 1,
-                          )
-                        }
-                        className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
-                        title="Next Page"
-                      >
-                        <ChevronRight size={14} />
-                      </button>
-                      <button
-                        disabled={
-                          activeTab.result.pagination.total_rows === null ||
-                          activeTab.isLoading
-                        }
-                        onClick={() =>
-                          runQuery(
-                            activeTab.query,
-                            Math.ceil(
-                              activeTab.result!.pagination!.total_rows! /
-                                activeTab.result!.pagination!.page_size,
-                            ),
-                          )
-                        }
-                        className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
-                        title="Last Page"
-                      >
-                        <ChevronsRight size={14} />
-                      </button>
                     </div>
-                  )}
+
+                    {/* Pagination Controls */}
+                    {activeTab.result.pagination && (
+                      <div className="flex items-center gap-1 bg-surface-secondary rounded border border-strong">
+                        <button
+                          disabled={
+                            activeTab.result.pagination.page === 1 ||
+                            activeTab.isLoading
+                          }
+                          onClick={() => runQuery(activeTab.query, 1)}
+                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="First Page"
+                        >
+                          <ChevronsLeft size={14} />
+                        </button>
+                        <button
+                          disabled={
+                            activeTab.result.pagination.page === 1 ||
+                            activeTab.isLoading
+                          }
+                          onClick={() =>
+                            runQuery(
+                              activeTab.query,
+                              activeTab.result!.pagination!.page - 1,
+                            )
+                          }
+                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
+                          title="Previous Page"
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+
+                        <div
+                          className="px-3 text-secondary text-xs font-medium cursor-pointer hover:bg-surface-tertiary transition-colors min-w-[80px] text-center py-1"
+                          onClick={() => {
+                            setIsEditingPage(true);
+                            setTempPage(
+                              String(activeTab.result!.pagination!.page),
+                            );
+                          }}
+                          title={t("editor.jumpToPage")}
+                        >
+                          {isEditingPage ? (
+                            <input
+                              autoFocus
+                              type="text"
+                              className="w-full bg-transparent text-center focus:outline-none text-white p-0 m-0 border-none h-full"
+                              value={tempPage}
+                              onChange={(e) => setTempPage(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const newPage = parseInt(tempPage);
+                                  const totalRows =
+                                    activeTab.result!.pagination!.total_rows;
+                                  if (!isNaN(newPage) && newPage >= 1) {
+                                    if (
+                                      totalRows === null ||
+                                      newPage <=
+                                        Math.ceil(
+                                          totalRows /
+                                            activeTab.result!.pagination!
+                                              .page_size,
+                                        )
+                                    ) {
+                                      runQuery(activeTab.query, newPage);
+                                    }
+                                  }
+                                  setIsEditingPage(false);
+                                } else if (e.key === "Escape") {
+                                  setIsEditingPage(false);
+                                }
+                                e.stopPropagation();
+                              }}
+                              onBlur={() => setIsEditingPage(false)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <>
+                              {activeTab.result.pagination.total_rows !== null
+                                ? t("editor.pageOf", {
+                                    current: activeTab.result.pagination.page,
+                                    total: Math.ceil(
+                                      activeTab.result.pagination.total_rows /
+                                        activeTab.result.pagination.page_size,
+                                    ),
+                                  })
+                                : t("editor.page", {
+                                    current: activeTab.result.pagination.page,
+                                  })}
+                            </>
+                          )}
+                        </div>
+
+                        {/* Count load button or spinner */}
+                        {activeTab.result.pagination.total_rows === null && (
+                          <button
+                            disabled={isCountLoading || activeTab.isLoading}
+                            onClick={loadCount}
+                            className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
+                            title={t("editor.loadRowCount")}
+                          >
+                            {isCountLoading ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Hash size={14} />
+                            )}
+                          </button>
+                        )}
+
+                        <button
+                          disabled={
+                            !activeTab.result.pagination.has_more ||
+                            activeTab.isLoading
+                          }
+                          onClick={() =>
+                            runQuery(
+                              activeTab.query,
+                              activeTab.result!.pagination!.page + 1,
+                            )
+                          }
+                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
+                          title="Next Page"
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                        <button
+                          disabled={
+                            activeTab.result.pagination.total_rows === null ||
+                            activeTab.isLoading
+                          }
+                          onClick={() =>
+                            runQuery(
+                              activeTab.query,
+                              Math.ceil(
+                                activeTab.result!.pagination!.total_rows! /
+                                  activeTab.result!.pagination!.page_size,
+                              ),
+                            )
+                          }
+                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
+                          title="Last Page"
+                        >
+                          <ChevronsRight size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2144,26 +2402,26 @@ export const Editor = () => {
                 {activeTab.activeTable && activeTab.result && (
                   <div className="p-1 px-2 bg-elevated border-b border-default flex items-center gap-2">
                     {!driverReadonly && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={handleNewRow}
-                        className="flex items-center justify-center w-7 h-7 text-secondary hover:text-green-400 hover:bg-surface-secondary rounded transition-colors"
-                        title={t("editor.newRow")}
-                      >
-                        <Plus size={16} />
-                      </button>
-                      <button
-                        onClick={handleDeleteRows}
-                        disabled={
-                          !activeTab.selectedRows ||
-                          activeTab.selectedRows.length === 0
-                        }
-                        className="flex items-center justify-center w-7 h-7 text-secondary hover:text-red-400 hover:bg-surface-secondary rounded transition-colors disabled:opacity-30"
-                        title={t("dataGrid.deleteRow")}
-                      >
-                        <Minus size={16} />
-                      </button>
-                    </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={handleNewRow}
+                          className="flex items-center justify-center w-7 h-7 text-secondary hover:text-green-400 hover:bg-surface-secondary rounded transition-colors"
+                          title={t("editor.newRow")}
+                        >
+                          <Plus size={16} />
+                        </button>
+                        <button
+                          onClick={handleDeleteRows}
+                          disabled={
+                            !activeTab.selectedRows ||
+                            activeTab.selectedRows.length === 0
+                          }
+                          className="flex items-center justify-center w-7 h-7 text-secondary hover:text-red-400 hover:bg-surface-secondary rounded transition-colors disabled:opacity-30"
+                          title={t("dataGrid.deleteRow")}
+                        >
+                          <Minus size={16} />
+                        </button>
+                      </div>
                     )}
 
                     <div className="w-[1px] h-4 bg-surface-secondary mx-1"></div>
@@ -2190,10 +2448,18 @@ export const Editor = () => {
                           title={t("settings.csvDelimiter")}
                           style={CHEVRON_SELECT_STYLE}
                         >
-                          <option value=",">{t("settings.delimiterComma")}</option>
-                          <option value=";">{t("settings.delimiterSemicolon")}</option>
-                          <option value={"\t"}>{t("settings.delimiterTab")}</option>
-                          <option value="|">{t("settings.delimiterPipe")}</option>
+                          <option value=",">
+                            {t("settings.delimiterComma")}
+                          </option>
+                          <option value=";">
+                            {t("settings.delimiterSemicolon")}
+                          </option>
+                          <option value={"\t"}>
+                            {t("settings.delimiterTab")}
+                          </option>
+                          <option value="|">
+                            {t("settings.delimiterPipe")}
+                          </option>
                         </select>
                       )}
                     </div>
@@ -2237,7 +2503,8 @@ export const Editor = () => {
                         </button>
                         <span className="text-[10px] text-blue-400 bg-blue-900/20 border border-blue-900/30 px-2 py-0.5 rounded-full font-medium select-none ml-2">
                           {Object.keys(activeTab.pendingChanges || {}).length +
-                            Object.keys(activeTab.pendingDeletions || {}).length +
+                            Object.keys(activeTab.pendingDeletions || {})
+                              .length +
                             Object.keys(activeTab.pendingInsertions || {})
                               .length}{" "}
                           pending
@@ -2273,7 +2540,12 @@ export const Editor = () => {
                     copyFormat={copyFormat}
                     csvDelimiter={csvDelimiter}
                     sortClause={activeTab.sortClause}
-                    onSort={activeTab.type === "table" && (activeTab.result?.rows.length ?? 0) > 0 ? handleSort : undefined}
+                    onSort={
+                      activeTab.type === "table" &&
+                      (activeTab.result?.rows.length ?? 0) > 0
+                        ? handleSort
+                        : undefined
+                    }
                     readonly={driverReadonly}
                   />
                 </div>

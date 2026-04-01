@@ -1,3 +1,28 @@
+## [0.9.12](https://github.com/debba/tabularis/compare/v0.9.11...v0.9.12) (2026-03-29)
+
+
+### Bug Fixes
+
+* add missing extracting logic ([6c1bcc2](https://github.com/debba/tabularis/commit/6c1bcc27eed1bf793265083704bb6e47533d7310))
+* add missing extracting logic ([743b655](https://github.com/debba/tabularis/commit/743b655787f5d8678577c730ee98dcd3b2ce82cc))
+* handle misreported text/blob types using known_type hint ([805d495](https://github.com/debba/tabularis/commit/805d49574562d92c163f91483b96a324c95ea2f2))
+* **json-input:** sync text state with value using ref instead of effect ([4ff8b4f](https://github.com/debba/tabularis/commit/4ff8b4ff1bc928255da1f82790884933bfb53164))
+* MySQL JSON column values shown as NULL in data grid ([493f125](https://github.com/debba/tabularis/commit/493f1252d7966cb33a1a76b658b62387a55a93e4))
+* **react:** add missing hook deps and stabilize callbacks ([c74a2bb](https://github.com/debba/tabularis/commit/c74a2bb946f02f06d98893965f8dc4b90d1c4fff))
+* skip the field type bytes ([3d4401c](https://github.com/debba/tabularis/commit/3d4401cd63339083a43904b5a6e2daa44a6608a7))
+
+
+### Features
+
+* add JSON editor with validation for sidebar editing ([41ab6d1](https://github.com/debba/tabularis/commit/41ab6d119c695cb64c81fa2a22e81b142bf8695c))
+* add MiniMax as first-class AI provider ([ffc0e50](https://github.com/debba/tabularis/commit/ffc0e50893d46c4091997d5c80dea1b0fc612c9c))
+* **alert:** add global alert modal and replace dialog notifications ([27c843d](https://github.com/debba/tabularis/commit/27c843db1ff32b5e2a50efb5b8f5fafecd181412))
+* **editor:** show active database and update window title ([6ddc629](https://github.com/debba/tabularis/commit/6ddc62925919ca4068d08b8152313683600eb853))
+* **error:** improve pg errors and add toggleable details UI ([f83025b](https://github.com/debba/tabularis/commit/f83025b6ae028b95a5e30626132257cb72ecc1e8))
+* **posts:** include PR contributors between releases in contributor ([945823d](https://github.com/debba/tabularis/commit/945823d4d2d0a3fbec7c9fd14eda9828f7064b81))
+* **settings:** add provider icons and change key label ([5ffad1a](https://github.com/debba/tabularis/commit/5ffad1a2b2fc2a276059ed29172898b3cd8cbe49))
+* **website:** add ZH to language badge ([6037e00](https://github.com/debba/tabularis/commit/6037e000b182613a4e43a5480f282f58b109d8b6))
+
 ## [0.9.11](https://github.com/debba/tabularis/compare/v0.9.10...v0.9.11) (2026-03-25)
 
 

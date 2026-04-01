@@ -21,7 +21,7 @@
   <a href="https://winstall.app/apps/Debba.Tabularis"><img src="https://img.shields.io/winget/v/Debba.Tabularis?label=WinGet&logo=windows&color=0078D4" alt="WinGet" /></a>
 </p>
 
-A lightweight, developer-focused database management tool, built with Tauri and React.
+A lightweight, cross-platform database client for developers, built with Tauri and React.
 
 **Available in:** English, Italian, Spanish, Chinese (Simplified)
 
@@ -31,11 +31,11 @@ A lightweight, developer-focused database management tool, built with Tauri and 
   <img src="website/public/img/overview.png?v" width="80%" alt="Tabularis" />
 </div>
 
-> 💡 **Origin Story:** This project was born from a **vibe coding** session — an experiment in fluid, agent-assisted development to build a functional tool from scratch in record time.
+> 💡 **Origin Story:** This project began as an AI-assisted development experiment, exploring how far intelligent agents could accelerate building a fully functional tool from scratch..
 
 ## Release Download:
 
-[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.9.11/tabularis_0.9.11_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.9.11/tabularis_0.9.11_x64.dmg) [![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.9.11/tabularis_0.9.11_amd64.AppImage) [![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/debba/tabularis/releases/download/v0.9.11/tabularis_0.9.11_amd64.deb) [![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/debba/tabularis/releases/download/v0.9.11/tabularis-0.9.7-1.x86_64.rpm)
+[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.9.12/tabularis_0.9.12_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.9.12/tabularis_0.9.12_x64.dmg) [![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.9.12/tabularis_0.9.12_amd64.AppImage) [![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/debba/tabularis/releases/download/v0.9.12/tabularis_0.9.12_amd64.deb) [![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/debba/tabularis/releases/download/v0.9.12/tabularis-0.9.7-1.x86_64.rpm)
 
 <!-- SPONSORS:START -->
 
@@ -323,6 +323,7 @@ You can override or add custom models for AI providers by editing `config.json` 
   "aiCustomModels": {
     "openai": ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-5-preview"],
     "anthropic": ["claude-3-opus-20240229", "claude-3-sonnet-20240229"],
+    "minimax": ["MiniMax-M2.7", "MiniMax-M2.7-highspeed"],
     "openrouter": ["google/gemini-pro-1.5", "meta-llama/llama-3-70b-instruct"]
   }
 }
@@ -334,6 +335,7 @@ Optional Text-to-SQL and query explanation powered by:
 
 - **OpenAI**
 - **Anthropic**
+- **MiniMax** (MiniMax-M2.7 and MiniMax-M2.7-highspeed, 204K context)
 - **OpenRouter** (access to Gemini, Llama, DeepSeek, etc.)
 - **Ollama** (Local LLM support for total privacy)
 - **OpenAI-Compatible APIs** (Groq, Perplexity, Azure OpenAI, LocalAI, and more)

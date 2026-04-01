@@ -35,7 +35,8 @@
     "loading": "Loading...",
     "search": "Search...",
     "error": "Error",
-    "success": "Success"
+    "success": "Success",
+    "ok": "OK"
   },
   "sidebar": {
     "connections": "Connections",
@@ -240,6 +241,7 @@
       "fromEnvTooltip": "This key is loaded from an environment variable",
       "envVariableDetected": "An environment variable is present, but you can override it by setting a key above.",
       "reset": "Reset",
+      "changeKey": "Change",
       "resetKey": "Delete custom key and revert to environment variable (if present)",
       "keyResetSuccess": "Custom key deleted successfully",
       "systemPrompt": "System Prompt",
@@ -578,7 +580,10 @@
     "saveThisQuery": "Save this query",
     "noValidQueries": "No valid queries found",
     "queryFailed": "Query failed.",
+    "showErrorDetails": "Show details",
+    "hideErrorDetails": "Hide details",
     "newVisualQuery": "New Visual Query",
+    "activeDatabase": "Active database",
     "tabSwitcher": {
       "title": "Open Tabs",
       "hint": "Ctrl+Tab",
@@ -765,6 +770,12 @@
     "sqlPlaceholder": "ST_GeomFromText('POINT(30 40)', 4326)",
     "wktPlaceholder": "POINT(30 40)",
     "toggleTooltip": "SQL Functions"
+  },
+  "jsonInput": {
+    "placeholder": "Enter JSON...",
+    "format": "Format",
+    "valid": "Valid JSON",
+    "invalid": "Invalid JSON"
   },
   "rowEditor": {
     "title": "Edit Row",
