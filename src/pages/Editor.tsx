@@ -2119,12 +2119,7 @@ export const Editor = () => {
                 }
                 editorKey={tab.id}
                 options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
                   padding: { top: 16, bottom: 40 },
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  wordWrap: "on",
                 }}
               />
             )}

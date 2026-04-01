@@ -4,6 +4,8 @@ import type * as Monaco from "monaco-editor";
 import { useTheme } from "../../hooks/useTheme";
 import { loadMonacoTheme } from "../../themes/themeUtils";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { useSettings } from "../../hooks/useSettings";
+import { getFontCSS } from "../../utils/settings";
 
 interface SqlEditorWrapperProps {
   initialValue: string;
@@ -27,7 +29,12 @@ const SqlEditorInternal = ({
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
-  const { currentTheme } = useTheme();
+  const { currentTheme, allThemes } = useTheme();
+  const { settings } = useSettings();
+
+  const editorTheme = settings.editorTheme
+    ? (allThemes.find((t) => t.id === settings.editorTheme) ?? currentTheme)
+    : currentTheme;
 
   // Sync editor value only when initialValue changes externally (e.g., tab switch)
   useEffect(() => {
@@ -39,9 +46,9 @@ const SqlEditorInternal = ({
   // Update Monaco theme when theme changes
   useEffect(() => {
     if (editorRef.current && monacoRef.current) {
-      loadMonacoTheme(currentTheme, monacoRef.current);
+      loadMonacoTheme(editorTheme, monacoRef.current);
     }
-  }, [currentTheme]);
+  }, [editorTheme]);
 
     const handleChange = useCallback(
       (val: string | undefined) => {
@@ -60,7 +67,7 @@ const SqlEditorInternal = ({
 
     const handleBeforeMount: BeforeMount = (monaco) => {
       // Load Monaco theme before editor is created
-      loadMonacoTheme(currentTheme, monaco);
+      loadMonacoTheme(editorTheme, monaco);
 
       // Override Monaco's default paste action to use Tauri clipboard API
       monaco.editor.addEditorAction({
@@ -106,18 +113,22 @@ const SqlEditorInternal = ({
       <MonacoEditor
         height={height}
         defaultLanguage="sql"
-        theme={currentTheme.id}
+        theme={editorTheme.id}
         defaultValue={initialValue}
         onChange={handleChange}
         beforeMount={handleBeforeMount}
         onMount={handleEditorMount}
         options={{
           minimap: { enabled: false },
-          fontSize: 14,
+          fontSize: settings.editorFontSize ?? 14,
+          fontFamily: getFontCSS(settings.editorFontFamily ?? "JetBrains Mono"),
+          lineHeight: settings.editorLineHeight ?? 1.5,
+          tabSize: settings.editorTabSize ?? 2,
+          wordWrap: (settings.editorWordWrap ?? true) ? 'on' : 'off',
+          lineNumbers: (settings.editorShowLineNumbers ?? true) ? 'on' : 'off',
           padding: { top: 16, bottom: 32 },
           scrollBeyondLastLine: false,
           automaticLayout: true,
-          wordWrap: 'on',
           ...options
         }}
       />

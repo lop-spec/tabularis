@@ -42,6 +42,13 @@ pub struct AppConfig {
     pub active_external_drivers: Option<Vec<String>>,
     pub custom_registry_url: Option<String>,
     pub plugins: Option<HashMap<String, PluginConfig>>,
+    pub editor_theme: Option<String>,
+    pub editor_font_family: Option<String>,
+    pub editor_font_size: Option<u32>,
+    pub editor_line_height: Option<f32>,
+    pub editor_tab_size: Option<u32>,
+    pub editor_word_wrap: Option<bool>,
+    pub editor_show_line_numbers: Option<bool>,
 }
 
 pub fn get_config_dir<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
@@ -148,6 +155,27 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.plugins.is_some() {
             existing_config.plugins = config.plugins;
+        }
+        if config.editor_theme.is_some() {
+            existing_config.editor_theme = config.editor_theme;
+        }
+        if config.editor_font_family.is_some() {
+            existing_config.editor_font_family = config.editor_font_family;
+        }
+        if config.editor_font_size.is_some() {
+            existing_config.editor_font_size = config.editor_font_size;
+        }
+        if config.editor_line_height.is_some() {
+            existing_config.editor_line_height = config.editor_line_height;
+        }
+        if config.editor_tab_size.is_some() {
+            existing_config.editor_tab_size = config.editor_tab_size;
+        }
+        if config.editor_word_wrap.is_some() {
+            existing_config.editor_word_wrap = config.editor_word_wrap;
+        }
+        if config.editor_show_line_numbers.is_some() {
+            existing_config.editor_show_line_numbers = config.editor_show_line_numbers;
         }
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;
@@ -414,6 +442,44 @@ pub fn reset_explain_prompt(app: AppHandle) -> Result<String, String> {
     Ok(DEFAULT_EXPLAIN_PROMPT.to_string())
 }
 
+#[tauri::command]
+pub fn get_config_json(app: AppHandle) -> Result<String, String> {
+    if let Some(config_dir) = get_config_dir(&app) {
+        let config_path = config_dir.join("config.json");
+        if config_path.exists() {
+            return fs::read_to_string(config_path).map_err(|e| e.to_string());
+        }
+    }
+    // Return empty JSON object if no config file exists yet
+    Ok("{}".to_string())
+}
+
+#[tauri::command]
+pub fn relaunch_app(app: AppHandle) {
+    app.restart();
+}
+
+#[tauri::command]
+pub fn save_config_json(app: AppHandle, json: String) -> Result<(), String> {
+    // Validate the JSON parses as a valid AppConfig
+    serde_json::from_str::<AppConfig>(&json)
+        .map_err(|e| format!("Invalid configuration JSON: {}", e))?;
+
+    if let Some(config_dir) = get_config_dir(&app) {
+        if !config_dir.exists() {
+            fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+        }
+        let config_path = config_dir.join("config.json");
+        // Re-serialize with pretty-printing for consistency
+        let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+        let pretty = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+        fs::write(config_path, pretty).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Could not resolve config directory".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -483,5 +549,69 @@ mod tests {
         let config: AppConfig = serde_json::from_str(json).unwrap();
         // hiddenSchemas is no longer a field, so it's ignored; selectedSchemas is None
         assert!(config.selected_schemas.is_none());
+    }
+
+    #[test]
+    fn editor_fields_default_to_none() {
+        let config = AppConfig::default();
+        assert!(config.editor_theme.is_none());
+        assert!(config.editor_font_family.is_none());
+        assert!(config.editor_font_size.is_none());
+        assert!(config.editor_line_height.is_none());
+        assert!(config.editor_tab_size.is_none());
+        assert!(config.editor_word_wrap.is_none());
+        assert!(config.editor_show_line_numbers.is_none());
+    }
+
+    #[test]
+    fn editor_fields_serialize_with_camel_case() {
+        let mut config = AppConfig::default();
+        config.editor_font_family = Some("JetBrains Mono".to_string());
+        config.editor_font_size = Some(16);
+        config.editor_line_height = Some(1.5);
+        config.editor_tab_size = Some(4);
+        config.editor_word_wrap = Some(false);
+        config.editor_show_line_numbers = Some(true);
+        config.editor_theme = Some("tabularis-light".to_string());
+
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("editorFontFamily"));
+        assert!(json.contains("editorFontSize"));
+        assert!(json.contains("editorLineHeight"));
+        assert!(json.contains("editorTabSize"));
+        assert!(json.contains("editorWordWrap"));
+        assert!(json.contains("editorShowLineNumbers"));
+        assert!(json.contains("editorTheme"));
+        // snake_case must not appear
+        assert!(!json.contains("editor_font_family"));
+    }
+
+    #[test]
+    fn editor_fields_round_trip() {
+        let json = r#"{
+            "editorFontFamily": "Hack",
+            "editorFontSize": 14,
+            "editorLineHeight": 1.8,
+            "editorTabSize": 2,
+            "editorWordWrap": true,
+            "editorShowLineNumbers": true,
+            "editorTheme": "tabularis-dark"
+        }"#;
+
+        let config: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.editor_font_family.as_deref(), Some("Hack"));
+        assert_eq!(config.editor_font_size, Some(14));
+        assert_eq!(config.editor_tab_size, Some(2));
+        assert_eq!(config.editor_word_wrap, Some(true));
+        assert_eq!(config.editor_show_line_numbers, Some(true));
+        assert_eq!(config.editor_theme.as_deref(), Some("tabularis-dark"));
+    }
+
+    #[test]
+    fn save_config_json_rejects_invalid_json() {
+        // Test that the validation logic catches malformed AppConfig JSON
+        let invalid = r#"{"editorFontSize": "not-a-number"}"#;
+        let result = serde_json::from_str::<AppConfig>(invalid);
+        assert!(result.is_err());
     }
 }

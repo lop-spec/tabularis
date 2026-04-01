@@ -20,6 +20,7 @@ import {
   type FontCache,
   type DetectedAIConfig,
 } from '../../src/utils/settings';
+import { DEFAULT_SETTINGS } from '../../src/contexts/SettingsContext';
 import type { Settings, AppLanguage, AiProvider } from '../../src/contexts/SettingsContext';
 
 describe('settings', () => {
@@ -515,6 +516,84 @@ describe('settings', () => {
       const names = AVAILABLE_FONTS.map(f => f.name);
       const uniqueNames = [...new Set(names)];
       expect(uniqueNames.length).toBe(names.length);
+    });
+  });
+
+  describe('DEFAULT_SETTINGS editor fields', () => {
+    it('should include editor font family defaulting to JetBrains Mono', () => {
+      expect(DEFAULT_SETTINGS.editorFontFamily).toBe('JetBrains Mono');
+    });
+
+    it('should include editor font size defaulting to 14', () => {
+      expect(DEFAULT_SETTINGS.editorFontSize).toBe(14);
+    });
+
+    it('should include editor line height defaulting to 1.5', () => {
+      expect(DEFAULT_SETTINGS.editorLineHeight).toBe(1.5);
+    });
+
+    it('should include editor tab size defaulting to 2', () => {
+      expect(DEFAULT_SETTINGS.editorTabSize).toBe(2);
+    });
+
+    it('should enable word wrap by default', () => {
+      expect(DEFAULT_SETTINGS.editorWordWrap).toBe(true);
+    });
+
+    it('should show line numbers by default', () => {
+      expect(DEFAULT_SETTINGS.editorShowLineNumbers).toBe(true);
+    });
+
+    it('should not set an editor theme override by default', () => {
+      expect(DEFAULT_SETTINGS.editorTheme).toBeUndefined();
+    });
+  });
+
+  describe('mergeSettings with editor fields', () => {
+    const defaults: Settings = {
+      ...DEFAULT_SETTINGS,
+      aiEnabled: false,
+      aiProvider: null,
+      aiModel: null,
+    };
+
+    it('should carry editor settings from backend config', () => {
+      const backendConfig: Partial<Settings> = {
+        editorFontFamily: 'Hack',
+        editorFontSize: 16,
+        editorTabSize: 4,
+        editorWordWrap: false,
+        editorShowLineNumbers: false,
+        editorLineHeight: 1.8,
+        editorTheme: 'tabularis-light',
+      };
+
+      const result = mergeSettings(defaults, backendConfig, {}, false);
+
+      expect(result.editorFontFamily).toBe('Hack');
+      expect(result.editorFontSize).toBe(16);
+      expect(result.editorTabSize).toBe(4);
+      expect(result.editorWordWrap).toBe(false);
+      expect(result.editorShowLineNumbers).toBe(false);
+      expect(result.editorLineHeight).toBe(1.8);
+      expect(result.editorTheme).toBe('tabularis-light');
+    });
+
+    it('should fall back to defaults when editor fields are absent from backend', () => {
+      const result = mergeSettings(defaults, {}, {}, false);
+
+      expect(result.editorFontFamily).toBe('JetBrains Mono');
+      expect(result.editorFontSize).toBe(14);
+      expect(result.editorWordWrap).toBe(true);
+      expect(result.editorShowLineNumbers).toBe(true);
+    });
+
+    it('should treat empty editorTheme string as no override', () => {
+      const backendConfig: Partial<Settings> = { editorTheme: '' };
+      const result = mergeSettings(defaults, backendConfig, {}, false);
+      expect(result.editorTheme).toBe('');
+      // Falsy check that the wrapper uses to detect "inherit from app"
+      expect(!result.editorTheme).toBe(true);
     });
   });
 });

@@ -37,6 +37,13 @@ export interface Settings {
   csvDelimiter?: string;
   activeExternalDrivers?: string[];
   plugins?: Record<string, PluginConfig>;
+  editorTheme?: string;
+  editorFontFamily?: string;
+  editorFontSize?: number;
+  editorLineHeight?: number;
+  editorTabSize?: number;
+  editorWordWrap?: boolean;
+  editorShowLineNumbers?: boolean;
 }
 
 export interface SettingsContextType {
@@ -66,4 +73,10 @@ export const DEFAULT_SETTINGS: Settings = {
   copyFormat: "csv",
   csvDelimiter: ",",
   erDiagramDefaultLayout: "LR",
+  editorFontFamily: "JetBrains Mono",
+  editorFontSize: 14,
+  editorLineHeight: 1.5,
+  editorTabSize: 2,
+  editorWordWrap: true,
+  editorShowLineNumbers: true,
 };

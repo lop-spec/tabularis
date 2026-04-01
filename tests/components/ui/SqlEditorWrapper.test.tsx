@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SqlEditorWrapper } from '../../../src/components/ui/SqlEditorWrapper';
+import { SettingsContext, DEFAULT_SETTINGS } from '../../../src/contexts/SettingsContext';
+import type { ReactNode } from 'react';
 
 // Mock MonacoEditor
 vi.mock('@monaco-editor/react', async () => {
@@ -36,6 +38,18 @@ vi.mock('monaco-editor', () => ({
   KeyCode: { Enter: 3 },
 }));
 
+const settingsValue = {
+  settings: DEFAULT_SETTINGS,
+  updateSetting: vi.fn(),
+  isLoading: false,
+};
+
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <SettingsContext.Provider value={settingsValue}>
+    {children}
+  </SettingsContext.Provider>
+);
+
 describe('SqlEditorWrapper', () => {
   const mockOnChange = vi.fn();
   const mockOnRun = vi.fn();
@@ -52,7 +66,8 @@ describe('SqlEditorWrapper', () => {
         onChange={mockOnChange}
         onRun={mockOnRun}
         editorKey="test-1"
-      />
+      />,
+      { wrapper }
     );
 
     expect(screen.getByTestId('monaco-editor')).toHaveValue('SELECT * FROM users');
@@ -65,7 +80,8 @@ describe('SqlEditorWrapper', () => {
         onChange={mockOnChange}
         onRun={mockOnRun}
         editorKey="test-2"
-      />
+      />,
+      { wrapper }
     );
 
     // Verify editor is rendered (mock in setup.ts returns null, but component mounts)
@@ -79,7 +95,8 @@ describe('SqlEditorWrapper', () => {
         onChange={mockOnChange}
         onRun={mockOnRun}
         editorKey="test-3"
-      />
+      />,
+      { wrapper }
     );
 
     // Component should mount without errors
@@ -87,14 +104,15 @@ describe('SqlEditorWrapper', () => {
   });
 
   it('applies custom height', () => {
-    const { container } = render(
+    render(
       <SqlEditorWrapper
         initialValue="SELECT 1"
         onChange={mockOnChange}
         onRun={mockOnRun}
         height="300px"
         editorKey="test-4"
-      />
+      />,
+      { wrapper }
     );
 
     // Height is passed to MonacoEditor component
@@ -103,7 +121,7 @@ describe('SqlEditorWrapper', () => {
 
   it('applies custom options', () => {
     const customOptions = { fontSize: 16, lineNumbers: 'on' as const };
-    
+
     render(
       <SqlEditorWrapper
         initialValue="SELECT 1"
@@ -111,7 +129,8 @@ describe('SqlEditorWrapper', () => {
         onRun={mockOnRun}
         options={customOptions}
         editorKey="test-5"
-      />
+      />,
+      { wrapper }
     );
 
     expect(screen.getByTestId('monaco-editor')).toBeInTheDocument();
@@ -124,7 +143,8 @@ describe('SqlEditorWrapper', () => {
         onChange={mockOnChange}
         onRun={mockOnRun}
         editorKey="key-1"
-      />
+      />,
+      { wrapper }
     );
 
     rerender(
@@ -146,7 +166,8 @@ describe('SqlEditorWrapper', () => {
         initialValue="SELECT 1"
         onChange={mockOnChange}
         onRun={mockOnRun}
-      />
+      />,
+      { wrapper }
     );
 
     expect(screen.getByTestId('monaco-editor')).toBeInTheDocument();
@@ -167,7 +188,8 @@ describe('SqlEditorWrapper', () => {
           onChange={mockOnChange}
           onRun={mockOnRun}
           editorKey={`query-${index}`}
-        />
+        />,
+        { wrapper }
       );
 
       expect(screen.getByTestId('monaco-editor')).toHaveValue(query);
@@ -182,7 +204,8 @@ describe('SqlEditorWrapper', () => {
         onChange={mockOnChange}
         onRun={mockOnRun}
         editorKey="empty-test"
-      />
+      />,
+      { wrapper }
     );
 
     expect(screen.getByTestId('monaco-editor')).toHaveValue('');
@@ -195,7 +218,8 @@ describe('SqlEditorWrapper', () => {
         onChange={undefined as unknown as (value: string) => void}
         onRun={mockOnRun}
         editorKey="undefined-test"
-      />
+      />,
+      { wrapper }
     );
 
     expect(container).toBeInTheDocument();
