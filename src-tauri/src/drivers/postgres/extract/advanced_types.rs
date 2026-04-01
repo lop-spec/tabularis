@@ -1,6 +1,7 @@
 use std::net::IpAddr;
 
 use serde_json::{Number as JsonNumber, Value as JsonValue};
+use tauri::webview::cookie::time::serde::timestamp::microseconds;
 use tokio_postgres::types::{FromSql, Type};
 
 // System Identifiers & Object References (The "Reg" Types)
@@ -691,5 +692,249 @@ impl From<BitOrVarBit> for JsonValue {
     #[inline(always)]
     fn from(value: BitOrVarBit) -> Self {
         JsonValue::String(value.bits)
+    }
+}
+
+// Time types
+
+pub struct TimeTz {
+    hrs: u8,
+    mins: u8,
+    secs: u8,
+    microseconds: u16,
+    offset_sign: u8,
+    offset_hrs: u8,
+    offset_mins: u8,
+    offset_secs: u8,
+}
+
+impl<'a> FromSql<'a> for TimeTz {
+    fn from_sql(_ty: &Type, raw: &[u8]) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        if raw.len() < 12 {
+            return Err(format!("expected at least 12 bytes for TIMETZ, got {}", raw.len()).into());
+        }
+
+        let mut microseconds = i64::from_be_bytes([
+            raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
+        ]);
+
+        if microseconds < 0 {
+            return Err(format!(
+                "microseconds must not be negative for TIMETZ: {}",
+                microseconds
+            )
+            .into());
+        };
+
+        // it is important to check for this because we need to convert to hours `u8` safely
+        if microseconds > 1000 * 60 * 60 * 24 {
+            return Err(format!(
+                "microseconds must not exceed 24 hours for TIMETZ: {}",
+                microseconds
+            )
+            .into());
+        };
+
+        let hrs = (microseconds / (1000 * 60 * 60)) as u8;
+        microseconds %= 1000 * 60 * 60;
+        let mins = (microseconds / (1000 * 60)) as u8;
+        microseconds %= 1000 * 60;
+        let secs = (microseconds / 1000) as u8;
+        let microseconds = (microseconds % 1000) as u16;
+
+        let mut timezone_offset = i32::from_be_bytes([raw[8], raw[9], raw[10], raw[11]]);
+
+        let offset_sign = if timezone_offset.is_positive() {
+            timezone_offset = timezone_offset.abs();
+            b'-'
+        } else {
+            b'+'
+        };
+
+        let offset_hrs = (timezone_offset / 3600) as u8;
+        let remainder = timezone_offset % 3600;
+        let offset_mins = (remainder / 60) as u8;
+        let offset_secs = (remainder % 60) as u8;
+
+        Ok(Self {
+            hrs,
+            mins,
+            secs,
+            microseconds: microseconds as u16,
+            offset_sign,
+            offset_hrs,
+            offset_mins,
+            offset_secs,
+        })
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        match *ty {
+            Type::TIMETZ => true,
+            _ => false,
+        }
+    }
+}
+
+impl From<TimeTz> for JsonValue {
+    fn from(value: TimeTz) -> Self {
+        let mut offset = Vec::with_capacity(9);
+        offset.push(value.offset_sign);
+
+        if value.offset_hrs > 9 {
+            let offset_hrs = value.offset_hrs.to_string();
+            offset.extend_from_slice(offset_hrs.as_bytes());
+        } else {
+            offset.push(b'0');
+            offset.push(value.offset_hrs + 48);
+        };
+
+        if value.offset_mins > 0 {
+            offset.push(b':');
+            if value.offset_mins > 9 {
+                let offset_mins = value.offset_mins.to_string();
+                offset.extend_from_slice(offset_mins.as_bytes());
+            } else {
+                offset.push(b'0');
+                offset.push(value.offset_mins + 48);
+            }
+        };
+
+        if value.offset_secs > 0 {
+            offset.push(b':');
+            if value.offset_secs > 9 {
+                let offset_secs = value.offset_secs.to_string();
+                offset.extend_from_slice(offset_secs.as_bytes());
+            } else {
+                offset.push(b'0');
+                offset.push(value.offset_secs + 48);
+            }
+        };
+
+        let mut time = format!("{}:{}:{}", value.hrs, value.mins, value.secs);
+
+        if value.microseconds > 0 {
+            time.push('.');
+            time.push_str(&value.microseconds.to_string());
+        };
+
+        JsonValue::String(format!("{}{}", time, String::from_utf8(offset).unwrap(),))
+    }
+}
+
+pub struct Interval {
+    pub years: i32,
+    pub months: i8,
+    pub days: i32,
+    pub sign: char,
+    pub hours: u8,
+    pub minutes: u8,
+    pub seconds: u8,
+    pub microseconds: u16,
+}
+
+impl<'a> FromSql<'a> for Interval {
+    fn from_sql(_ty: &Type, raw: &[u8]) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        if raw.len() < 16 {
+            return Err(format!("expected 16 bytes for Interval, got {}", raw.len()).into());
+        };
+
+        let mut microseconds = i64::from_be_bytes(raw[..8].try_into().unwrap());
+        let mut days = i32::from_be_bytes(raw[8..12].try_into().unwrap());
+        let mut months = i32::from_be_bytes(raw[12..].try_into().unwrap());
+        let mut years = 0;
+
+        if months > 11 || months < -11 {
+            years = (months / 12) as i32;
+            months %= 12;
+        };
+
+        let sign;
+
+        if microseconds < 0 {
+            sign = '-';
+            microseconds = -microseconds;
+        } else {
+            sign = '+';
+        }
+
+        let mut hrs = microseconds / (1000 * 60 * 60);
+        microseconds %= 1000 * 60 * 60;
+        let mins = (microseconds / (1000 * 60)) as u8;
+        microseconds %= 1000 * 60;
+        let secs = (microseconds / 1000) as u8;
+        let microseconds = (microseconds % 1000) as u16;
+
+        if hrs > 23 || hrs < -23 {
+            days += (hrs % 24) as i32;
+            hrs /= 24;
+        };
+
+        Ok(Interval {
+            years,
+            months: months as i8,
+            days,
+            sign,
+            hours: hrs as u8,
+            minutes: mins as u8,
+            seconds: secs as u8,
+            microseconds,
+        })
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        match *ty {
+            Type::INTERNAL => true,
+            _ => false,
+        }
+    }
+}
+
+impl From<Interval> for JsonValue {
+    fn from(value: Interval) -> Self {
+        let mut s = String::new();
+
+        if value.years != 0 {
+            let years_str = if value.years == 1 || value.years == -1 {
+                "year"
+            } else {
+                "years"
+            };
+            s.push_str(&format!("{} {}", value.years, years_str));
+        };
+
+        if value.months != 0 {
+            let months_str = if value.months == 1 || value.months == -1 {
+                "month"
+            } else {
+                "months"
+            };
+            s.push_str(&format!("{} {}", value.months, months_str));
+        };
+
+        if value.days != 0 {
+            let days_str = if value.days == 1 || value.days == -1 {
+                "day"
+            } else {
+                "days"
+            };
+            s.push_str(&format!("{} {}", value.days, days_str));
+        };
+
+        if value.hours != 0 || value.minutes != 0 || value.seconds != 0 || value.microseconds != 0 {
+            if s.len() > 0 {
+                s.push(' ');
+            };
+
+            s.push_str(&format!(
+                "{}{:02}:{:02}:{:02}",
+                value.sign, value.hours, value.minutes, value.seconds
+            ));
+            if value.microseconds != 0 {
+                s.push_str(&format!(".{}", value.microseconds));
+            }
+        };
+
+        JsonValue::String(s)
     }
 }
