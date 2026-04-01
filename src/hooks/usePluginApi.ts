@@ -120,7 +120,26 @@ export function usePluginSetting(pluginId: string) {
     [settingsCtx, pluginId],
   );
 
-  return { getSetting, setSetting };
+  const setSettings = useCallback(
+    (updates: Record<string, unknown>) => {
+      if (!settingsCtx) return;
+
+      const currentPlugins = settingsCtx.settings.plugins ?? {};
+      const currentPluginConfig = currentPlugins[pluginId] ?? {};
+      const currentSettings = currentPluginConfig.settings ?? {};
+
+      settingsCtx.updateSetting("plugins", {
+        ...currentPlugins,
+        [pluginId]: {
+          ...currentPluginConfig,
+          settings: { ...currentSettings, ...updates },
+        },
+      });
+    },
+    [settingsCtx, pluginId],
+  );
+
+  return { getSetting, setSetting, setSettings };
 }
 
 /**
