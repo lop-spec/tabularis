@@ -7,8 +7,6 @@ import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { useSettings } from "../../hooks/useSettings";
 import { getFontCSS } from "../../utils/settings";
 
-let pasteActionRegistered = false;
-
 interface SqlEditorWrapperProps {
   initialValue: string;
   onChange: (value: string) => void;
@@ -70,38 +68,50 @@ const SqlEditorInternal = ({
     const handleBeforeMount: BeforeMount = (monaco) => {
       // Load Monaco theme before editor is created
       loadMonacoTheme(editorTheme, monaco);
+    };
 
-      // Override Monaco's default paste action to use Tauri clipboard API (once globally)
-      if (!pasteActionRegistered) {
-        monaco.editor.addEditorAction({
-          id: 'editor.action.clipboardPasteAction',
-          label: 'Paste',
-          contextMenuGroupId: '9_cutcopypaste',
-          contextMenuOrder: 2,
-          run: async (editor: Monaco.editor.IStandaloneCodeEditor) => {
-            try {
-              const text = await readText();
-              const selection = editor.getSelection();
-              if (selection && text) {
-                editor.executeEdits('paste', [{
-                  range: selection,
-                  text: text,
-                  forceMoveMarkers: true
-                }]);
-                editor.pushUndoStop();
-              }
-            } catch (err) {
-              console.error('Failed to read clipboard:', err);
-            }
-          }
-        });
-        pasteActionRegistered = true;
+    const tauriPaste = async (ed: Monaco.editor.ICodeEditor) => {
+      try {
+        const text = await readText();
+        const selection = ed.getSelection();
+        if (selection && text) {
+          ed.executeEdits('paste', [{
+            range: selection,
+            text: text,
+            forceMoveMarkers: true
+          }]);
+          ed.pushUndoStop();
+        }
+      } catch (err) {
+        console.error('Failed to read clipboard:', err);
       }
     };
 
     const handleEditorMount: OnMount = (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
+
+      // Register custom Paste action using Tauri clipboard API
+      editor.addAction({
+        id: 'tauri.clipboardPaste',
+        label: 'Paste',
+        contextMenuGroupId: '9_cutcopypaste',
+        contextMenuOrder: 2,
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV],
+        run: tauriPaste,
+      });
+
+      // Remove the built-in Paste from context menu (doesn't work in Tauri)
+      const contextMenuContrib = editor.getContribution('editor.contrib.contextmenu');
+      if (contextMenuContrib) {
+        const orig = (contextMenuContrib as any)._getMenuActions;
+        if (typeof orig === 'function') {
+          (contextMenuContrib as any)._getMenuActions = function (...args: unknown[]) {
+            const actions: { id?: string }[] = orig.apply(this, args);
+            return actions.filter((a) => a.id !== 'editor.action.clipboardPasteAction');
+          };
+        }
+      }
 
       // Bind Ctrl+Enter to Run
       editor.addCommand(
@@ -133,6 +143,15 @@ const SqlEditorInternal = ({
           lineNumbers: (settings.editorShowLineNumbers ?? true) ? 'on' : 'off',
           padding: { top: 16, bottom: 32 },
           scrollBeyondLastLine: false,
+          overviewRulerLanes: 0,
+          hideCursorInOverviewRuler: true,
+          overviewRulerBorder: false,
+          scrollbar: {
+            vertical: 'auto',
+            horizontal: 'auto',
+            verticalScrollbarSize: 8,
+            horizontalScrollbarSize: 8,
+          },
           automaticLayout: true,
           ...options
         }}
