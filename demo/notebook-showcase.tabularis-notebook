@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "title": "Tabularis Notebook — Full Feature Showcase",
+  "createdAt": "2026-04-02T12:00:00.000Z",
+  "cells": [
+    {
+      "type": "markdown",
+      "content": "# Tabularis Notebook — Full Feature Showcase\n\nWelcome! This notebook demonstrates **every major feature** of Tabularis Notebooks using a sample e-commerce analytics database.\n\n> **Setup:** Run `demo/demo-database.sql` on your MariaDB server first to create the `tabularis_demo` database.\n>\n> **Quick Start:** Press `Ctrl+Shift+Enter` (or `Cmd+Shift+Enter` on Mac) to run all SQL cells at once."
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 1. Basic Queries & Resizable Results\n\nRun the cells below. After results appear:\n- **Resize** the result panel by dragging the handle at the bottom edge\n- **Export** results to CSV or JSON using the small buttons in the result toolbar"
+    },
+    {
+      "type": "sql",
+      "content": "SELECT d.name AS department, \n       COUNT(e.id) AS headcount, \n       ROUND(AVG(e.salary), 0) AS avg_salary,\n       ROUND(SUM(e.salary), 0) AS total_payroll\nFROM employees e\nJOIN departments d ON e.department_id = d.id\nWHERE e.is_active = 1\nGROUP BY d.name\nORDER BY headcount DESC"
+    },
+    {
+      "type": "sql",
+      "content": "SELECT c.country, \n       COUNT(DISTINCT c.id) AS customers,\n       COUNT(o.id) AS orders,\n       ROUND(SUM(o.total), 2) AS total_revenue\nFROM customers c\nLEFT JOIN orders o ON c.id = o.customer_id\nGROUP BY c.country\nORDER BY total_revenue DESC"
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 2. Inline Charts\n\nClick the **chart icon** (bar chart) in the result toolbar to visualize data. You can:\n- Switch between **Bar**, **Line**, and **Pie** charts\n- Choose which column to use as **label** (X-axis)\n- Select one or more **value columns** to plot\n\nThe cells below come with pre-configured charts — run them and see!"
+    },
+    {
+      "type": "sql",
+      "content": "SELECT p.category, \n       SUM(oi.quantity) AS units_sold, \n       ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue\nFROM order_items oi\nJOIN products p ON oi.product_id = p.id\nGROUP BY p.category\nORDER BY revenue DESC",
+      "chartConfig": {
+        "type": "bar",
+        "labelColumn": "category",
+        "valueColumns": ["revenue", "units_sold"]
+      }
+    },
+    {
+      "type": "sql",
+      "content": "SELECT p.name AS product, \n       SUM(oi.quantity) AS units_sold\nFROM order_items oi\nJOIN products p ON oi.product_id = p.id\nGROUP BY p.name\nORDER BY units_sold DESC\nLIMIT 10",
+      "chartConfig": {
+        "type": "line",
+        "labelColumn": "product",
+        "valueColumns": ["units_sold"]
+      }
+    },
+    {
+      "type": "sql",
+      "content": "SELECT o.status, \n       COUNT(*) AS order_count,\n       ROUND(SUM(o.total), 2) AS total_value\nFROM orders o\nGROUP BY o.status\nORDER BY order_count DESC",
+      "chartConfig": {
+        "type": "pie",
+        "labelColumn": "status",
+        "valueColumns": ["order_count"]
+      }
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 3. Cell Variables — `{{cell_N}}`\n\nOne of the most powerful features: **reference the result of any cell** in your SQL.\n\nThe syntax is `{{cell_N}}` where N is the cell number shown in the header. The referenced result is injected as a CTE (WITH clause).\n\n**Important:** The referenced cell must have been executed first!"
+    },
+    {
+      "type": "sql",
+      "content": "-- Cell 10: Top 5 customers by revenue\nSELECT c.name AS customer, \n       c.country,\n       ROUND(SUM(o.total), 2) AS total_spent\nFROM customers c\nJOIN orders o ON c.id = o.customer_id\nGROUP BY c.name, c.country\nORDER BY total_spent DESC\nLIMIT 5"
+    },
+    {
+      "type": "sql",
+      "content": "-- Uses the result from Cell 10 as a subquery!\n-- Shows only top customers from the previous analysis\nSELECT customer, country, total_spent\nFROM {{cell_10}}\nWHERE country IN ('USA', 'China', 'Japan')"
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 4. Notebook Parameters\n\nDefine **reusable parameters** in the Parameters panel (click the \"Parameters\" header above the cells).\n\nUse `@param_name` in your SQL — they get replaced with the defined values at execution time.\n\n**Try it:** Add these parameters in the panel:\n- `min_revenue` = `1000`\n- `target_country` = `'USA'`\n\nThen run the cell below."
+    },
+    {
+      "type": "sql",
+      "content": "-- Uses @min_revenue and @target_country parameters\nSELECT c.name, c.country, \n       ROUND(SUM(o.total), 2) AS revenue\nFROM customers c\nJOIN orders o ON c.id = o.customer_id\nWHERE c.country = @target_country\nGROUP BY c.name, c.country\nHAVING revenue >= @min_revenue\nORDER BY revenue DESC"
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 5. Stop on Error & Run All Summary\n\nToggle the **\"Stop on Error\"** button (🛑) in the toolbar.\n\n- When **enabled**: `Run All` halts at the first error, remaining cells are skipped\n- When **disabled**: all cells execute regardless of errors\n\nAfter `Run All` completes, a **summary banner** shows succeeded/failed/skipped counts with clickable links to jump to error cells.\n\nThe cell below has intentional bad SQL to demonstrate error handling:"
+    },
+    {
+      "type": "sql",
+      "content": "-- This cell intentionally has a syntax error!\n-- Enable 'Stop on Error' and run all to see the behavior\nSELECT * FORM this_table_does_not_exist"
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 6. Drag & Drop Reordering\n\nGrab the **⠿ grip handle** on the left side of any cell header and **drag** it to a new position.\n\nThe up/down arrow buttons still work too — both use the same reorder logic."
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 7. Parallel Execution\n\nClick the **⚡ lightning bolt** on a SQL cell header to mark it for **parallel execution**.\n\nDuring `Run All`, cells marked as parallel execute concurrently (using `Promise.allSettled`), while the rest run sequentially.\n\nThis is great for independent queries that don't depend on each other's results."
+    },
+    {
+      "type": "sql",
+      "content": "-- Mark this cell as parallel (click ⚡) — it's independent!\nSELECT COUNT(*) AS total_products, \n       SUM(stock) AS total_inventory,\n       ROUND(AVG(price), 2) AS avg_price\nFROM products",
+      "isParallel": true
+    },
+    {
+      "type": "sql",
+      "content": "-- This one too — runs at the same time as the cell above\nSELECT COUNT(*) AS total_employees,\n       SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,\n       SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive\nFROM employees",
+      "isParallel": true
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 8. Execution History\n\nClick the **🕐 clock icon** on any SQL cell header to view its **execution history**.\n\nEach execution is recorded with:\n- The query that was run\n- Result row count or error message\n- Execution time and timestamp\n\nClick the **↺ restore** button on any history entry to revert the cell to that previous state."
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 9. Collapsible Sections\n\nUse the **\"Section\"** button in the toolbar to create named sections.\n\nSections group consecutive cells visually and can be:\n- **Collapsed/expanded** — click the arrow to hide cells\n- **Renamed** — double-click the title or use the pencil icon\n- **Deleted** — cells inside are kept, just ungrouped\n\nAssign cells to sections by setting their `sectionId` property."
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## 10. HTML Export\n\nClick the **\"HTML\"** button in the toolbar to export this entire notebook (with results!) as a self-contained HTML file.\n\nThe exported file includes:\n- Dark-themed styling\n- Rendered markdown\n- SQL code blocks\n- Result tables with all data\n- Error messages\n\nPerfect for sharing analysis with colleagues who don't have Tabularis!"
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n## Bonus: Complex Multi-Table Analysis\n\nLet's put it all together with a comprehensive analysis query."
+    },
+    {
+      "type": "sql",
+      "content": "SELECT \n  c.country,\n  COUNT(DISTINCT c.id) AS customers,\n  COUNT(DISTINCT o.id) AS orders,\n  ROUND(SUM(o.total), 2) AS revenue,\n  ROUND(AVG(o.total), 2) AS avg_order_value,\n  ROUND(SUM(o.total) / COUNT(DISTINCT c.id), 2) AS revenue_per_customer\nFROM customers c\nJOIN orders o ON c.id = o.customer_id\nWHERE o.status != 'cancelled'\nGROUP BY c.country\nHAVING orders >= 1\nORDER BY revenue DESC",
+      "chartConfig": {
+        "type": "bar",
+        "labelColumn": "country",
+        "valueColumns": ["revenue", "avg_order_value"]
+      }
+    },
+    {
+      "type": "sql",
+      "content": "-- Monthly order trend\nSELECT \n  DATE_FORMAT(o.order_date, '%Y-%m') AS month,\n  COUNT(*) AS orders,\n  ROUND(SUM(o.total), 2) AS revenue\nFROM orders o\nGROUP BY DATE_FORMAT(o.order_date, '%Y-%m')\nORDER BY month",
+      "chartConfig": {
+        "type": "line",
+        "labelColumn": "month",
+        "valueColumns": ["revenue"]
+      }
+    },
+    {
+      "type": "markdown",
+      "content": "---\n\n*This notebook was generated to showcase all Tabularis Notebook features. Edit the queries, try the parameters, toggle charts, drag cells around, and explore!*\n\n**Feature Summary:**\n- Resizable result panels with CSV/JSON export\n- Bar, Line, Pie charts with multi-column support\n- Cell variable references (`{{cell_N}}`)\n- Notebook parameters (`@param_name`)\n- Stop on Error with execution summary\n- Drag & Drop cell reordering\n- Parallel cell execution\n- Execution history with restore\n- Collapsible sections\n- HTML export"
+    }
+  ]
+}

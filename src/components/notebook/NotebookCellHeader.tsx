@@ -9,6 +9,9 @@ import {
   Pencil,
   Loader2,
   Database,
+  GripVertical,
+  Zap,
+  History,
 } from "lucide-react";
 import type { NotebookCellType } from "../../types/notebook";
 
@@ -26,6 +29,15 @@ interface NotebookCellHeaderProps {
   activeSchema?: string;
   selectedDatabases?: string[];
   onSchemaChange?: (schema: string) => void;
+  dragHandleProps?: {
+    onDragStart: (e: React.DragEvent) => void;
+    onDragEnd: (e: React.DragEvent) => void;
+    draggable: boolean;
+  };
+  isParallel?: boolean;
+  onToggleParallel?: () => void;
+  historyCount?: number;
+  onToggleHistory?: () => void;
 }
 
 function CellTypeBadge({ cellType }: { cellType: NotebookCellType }) {
@@ -84,6 +96,11 @@ export function NotebookCellHeader({
   activeSchema,
   selectedDatabases,
   onSchemaChange,
+  dragHandleProps,
+  isParallel,
+  onToggleParallel,
+  historyCount,
+  onToggleHistory,
 }: NotebookCellHeaderProps) {
   const { t } = useTranslation();
   const [isDbOpen, setIsDbOpen] = useState(false);
@@ -92,6 +109,16 @@ export function NotebookCellHeader({
   return (
     <div className="flex items-center justify-between px-3 py-1.5 bg-elevated border-b border-default relative z-10">
       <div className="flex items-center gap-2">
+        {dragHandleProps && (
+          <div
+            className="cursor-grab active:cursor-grabbing text-muted hover:text-secondary transition-colors"
+            draggable={dragHandleProps.draggable}
+            onDragStart={dragHandleProps.onDragStart}
+            onDragEnd={dragHandleProps.onDragEnd}
+          >
+            <GripVertical size={14} />
+          </div>
+        )}
         <CellTypeBadge cellType={cellType} />
         <span className="text-[10px] text-muted">#{index + 1}</span>
         {showDbSelector && (
@@ -147,6 +174,37 @@ export function NotebookCellHeader({
               <Play size={14} />
             )}
           </ActionButton>
+        )}
+
+        {cellType === "sql" && onToggleParallel && (
+          <button
+            type="button"
+            onClick={onToggleParallel}
+            title={t("editor.notebook.parallelExecution")}
+            className={`p-1 rounded transition-colors ${
+              isParallel
+                ? "text-yellow-400 bg-yellow-500/15"
+                : "text-muted hover:text-primary hover:bg-surface-secondary"
+            }`}
+          >
+            <Zap size={14} />
+          </button>
+        )}
+
+        {cellType === "sql" && onToggleHistory && (
+          <button
+            type="button"
+            onClick={onToggleHistory}
+            title={t("editor.notebook.executionHistory")}
+            className="p-1 text-muted hover:text-primary hover:bg-surface-secondary rounded transition-colors relative"
+          >
+            <History size={14} />
+            {historyCount != null && historyCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 text-[8px] bg-blue-500 text-white rounded-full w-3 h-3 flex items-center justify-center leading-none">
+                {historyCount > 9 ? "+" : historyCount}
+              </span>
+            )}
+          </button>
         )}
 
         {cellType === "markdown" && onTogglePreview && (

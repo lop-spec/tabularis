@@ -1,5 +1,5 @@
 import type { Tab } from '../types/editor';
-import type { NotebookState } from '../types/notebook';
+import type { NotebookState, NotebookCell } from '../types/notebook';
 
 /**
  * Interface representing a cleaned tab with only persistent data
@@ -25,7 +25,14 @@ export interface CleanedTab {
       type: 'sql' | 'markdown';
       content: string;
       isPreview?: boolean;
+      chartConfig?: NotebookCell['chartConfig'];
+      resultHeight?: number;
+      isParallel?: boolean;
+      sectionId?: string;
     }>;
+    stopOnError?: boolean;
+    params?: NotebookState['params'];
+    sections?: NotebookState['sections'];
   };
 }
 
@@ -59,7 +66,14 @@ export function cleanTabForStorage(tab: Tab): CleanedTab {
             type: cell.type,
             content: cell.content,
             isPreview: cell.isPreview,
+            chartConfig: cell.chartConfig,
+            resultHeight: cell.resultHeight,
+            isParallel: cell.isParallel,
+            sectionId: cell.sectionId,
           })),
+          stopOnError: tab.notebookState.stopOnError,
+          params: tab.notebookState.params,
+          sections: tab.notebookState.sections,
         }
       : undefined,
   };
@@ -97,7 +111,11 @@ export function restoreTabFromStorage(cleanedTab: Partial<Tab>): Tab {
             error: undefined,
             executionTime: null,
             isLoading: false,
+            history: undefined,
           })),
+          stopOnError: (cleanedTab.notebookState as NotebookState).stopOnError,
+          params: (cleanedTab.notebookState as NotebookState).params,
+          sections: (cleanedTab.notebookState as NotebookState).sections,
         }
       : undefined,
   };

@@ -1,13 +1,23 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DataGrid } from "../ui/DataGrid";
 import { ErrorDisplay } from "../ui/ErrorDisplay";
 import type { QueryResult } from "../../types/editor";
+import type { CellChartConfig } from "../../types/notebook";
+import { canRenderChart, buildDefaultChartConfig } from "../../utils/notebookChart";
+import { ResultToolbar } from "./ResultToolbar";
+import { ResizeHandle } from "./ResizeHandle";
+import { CellChart } from "./CellChart";
 
 interface SqlCellResultProps {
   result: QueryResult | null;
   error?: string;
   executionTime?: number | null;
   isLoading?: boolean;
+  chartConfig?: CellChartConfig | null;
+  onChartConfigChange?: (config: CellChartConfig | null) => void;
+  resultHeight?: number;
+  onResultHeightChange?: (height: number) => void;
 }
 
 export function SqlCellResult({
@@ -15,8 +25,14 @@ export function SqlCellResult({
   error,
   executionTime,
   isLoading,
+  chartConfig,
+  onChartConfigChange,
+  resultHeight,
+  onResultHeightChange,
 }: SqlCellResultProps) {
   const { t } = useTranslation();
+  const [showChart, setShowChart] = useState(false);
+  const height = resultHeight ?? 300;
 
   if (isLoading) {
     return (
@@ -37,17 +53,28 @@ export function SqlCellResult({
 
   if (!result) return null;
 
+  const chartCapable = canRenderChart(result);
+
+  const handleToggleChart = () => {
+    if (!showChart && !chartConfig && chartCapable) {
+      const defaultConfig = buildDefaultChartConfig(result);
+      if (defaultConfig && onChartConfigChange) {
+        onChartConfigChange(defaultConfig);
+      }
+    }
+    setShowChart((v) => !v);
+  };
+
   return (
     <div className="border-t border-default">
-      <div className="px-3 py-1 bg-elevated text-xs text-muted flex items-center gap-2">
-        <span>
-          {t("editor.notebook.cellResult", {
-            count: result.rows.length,
-            time: executionTime != null ? Math.round(executionTime) : "—",
-          })}
-        </span>
-      </div>
-      <div className="h-[300px] overflow-hidden">
+      <ResultToolbar
+        result={result}
+        executionTime={executionTime}
+        showChart={showChart}
+        onToggleChart={handleToggleChart}
+        canChart={chartCapable}
+      />
+      <div style={{ height }} className="overflow-hidden">
         <DataGrid
           columns={result.columns}
           data={result.rows}
@@ -56,6 +83,18 @@ export function SqlCellResult({
           readonly
         />
       </div>
+      <ResizeHandle
+        onResize={(h) => onResultHeightChange?.(h)}
+        minHeight={100}
+        maxHeight={800}
+      />
+      {showChart && chartConfig && onChartConfigChange && (
+        <CellChart
+          result={result}
+          config={chartConfig}
+          onConfigChange={onChartConfigChange}
+        />
+      )}
     </div>
   );
 }

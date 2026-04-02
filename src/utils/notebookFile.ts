@@ -1,5 +1,4 @@
-import type { NotebookCell } from "../types/notebook";
-import type { NotebookFile } from "../types/notebook";
+import type { NotebookCell, NotebookFile } from "../types/notebook";
 import { generateCellId } from "./notebook";
 
 export function serializeNotebook(
@@ -14,6 +13,7 @@ export function serializeNotebook(
       type: c.type,
       content: c.content,
       ...(c.schema ? { schema: c.schema } : {}),
+      ...(c.chartConfig ? { chartConfig: c.chartConfig } : {}),
     })),
   };
 }
@@ -57,6 +57,7 @@ export function deserializeNotebook(json: string): {
       type: c.type,
       content: c.content,
       schema: c.schema,
+      chartConfig: (c as Record<string, unknown>).chartConfig as NotebookCell['chartConfig'] ?? null,
       result: null,
       error: undefined,
       executionTime: null,

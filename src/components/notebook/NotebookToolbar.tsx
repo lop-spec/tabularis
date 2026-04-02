@@ -1,13 +1,26 @@
 import { useTranslation } from "react-i18next";
-import { Plus, Play, Download, Upload, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Play,
+  Download,
+  Upload,
+  Loader2,
+  OctagonX,
+  FolderPlus,
+  FileCode,
+} from "lucide-react";
 
 interface NotebookToolbarProps {
   onAddSqlCell: () => void;
   onAddMarkdownCell: () => void;
   onRunAll: () => void;
   onExport: () => void;
+  onExportHtml: () => void;
   onImport: () => void;
   isRunning: boolean;
+  stopOnError: boolean;
+  onToggleStopOnError: () => void;
+  onAddSection: () => void;
 }
 
 function ToolbarButton({
@@ -43,21 +56,39 @@ export function NotebookToolbar({
   onAddMarkdownCell,
   onRunAll,
   onExport,
+  onExportHtml,
   onImport,
   isRunning,
+  stopOnError,
+  onToggleStopOnError,
+  onAddSection,
 }: NotebookToolbarProps) {
   const { t } = useTranslation();
 
   return (
     <div className="h-10 bg-elevated border-b border-default flex items-center px-2 gap-0.5 shrink-0">
-      <ToolbarButton onClick={onAddSqlCell} title={t("editor.notebook.addSqlCell")}>
+      <ToolbarButton
+        onClick={onAddSqlCell}
+        title={t("editor.notebook.addSqlCell")}
+      >
         <Plus size={14} />
         <span className="font-semibold text-green-400">SQL</span>
       </ToolbarButton>
 
-      <ToolbarButton onClick={onAddMarkdownCell} title={t("editor.notebook.addMarkdownCell")}>
+      <ToolbarButton
+        onClick={onAddMarkdownCell}
+        title={t("editor.notebook.addMarkdownCell")}
+      >
         <Plus size={14} />
         <span className="font-semibold text-blue-400">MD</span>
+      </ToolbarButton>
+
+      <ToolbarButton
+        onClick={onAddSection}
+        title={t("editor.notebook.addSection")}
+      >
+        <FolderPlus size={14} />
+        <span>{t("editor.notebook.section")}</span>
       </ToolbarButton>
 
       <Separator />
@@ -75,11 +106,33 @@ export function NotebookToolbar({
         <span>{t("editor.notebook.runAll")}</span>
       </ToolbarButton>
 
+      <button
+        type="button"
+        onClick={onToggleStopOnError}
+        title={t("editor.notebook.stopOnErrorTooltip")}
+        className={`flex items-center gap-1 px-1.5 py-1 text-[10px] rounded transition-colors ${
+          stopOnError
+            ? "bg-red-500/15 text-red-400 font-semibold"
+            : "text-muted hover:text-secondary hover:bg-surface-secondary"
+        }`}
+      >
+        <OctagonX size={12} />
+        <span>{t("editor.notebook.stopOnError")}</span>
+      </button>
+
       <Separator />
 
       <ToolbarButton onClick={onExport} title={t("editor.notebook.export")}>
         <Download size={14} />
         <span>{t("editor.notebook.export")}</span>
+      </ToolbarButton>
+
+      <ToolbarButton
+        onClick={onExportHtml}
+        title={t("editor.notebook.exportHtml")}
+      >
+        <FileCode size={14} />
+        <span>HTML</span>
       </ToolbarButton>
 
       <ToolbarButton onClick={onImport} title={t("editor.notebook.import")}>
