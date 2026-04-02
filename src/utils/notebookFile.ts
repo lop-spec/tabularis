@@ -14,6 +14,8 @@ export function serializeNotebook(
       content: c.content,
       ...(c.schema ? { schema: c.schema } : {}),
       ...(c.chartConfig ? { chartConfig: c.chartConfig } : {}),
+      ...(c.isParallel ? { isParallel: c.isParallel } : {}),
+      ...(c.sectionId ? { sectionId: c.sectionId } : {}),
     })),
   };
 }
@@ -52,17 +54,22 @@ export function deserializeNotebook(json: string): {
 
   return {
     title: data.title,
-    cells: data.cells.map((c) => ({
-      id: generateCellId(),
-      type: c.type,
-      content: c.content,
-      schema: c.schema,
-      chartConfig: (c as Record<string, unknown>).chartConfig as NotebookCell['chartConfig'] ?? null,
-      result: null,
-      error: undefined,
-      executionTime: null,
-      isLoading: false,
-      isPreview: c.type === "markdown" ? true : undefined,
-    })),
+    cells: data.cells.map((c) => {
+      const raw = c as Record<string, unknown>;
+      return {
+        id: generateCellId(),
+        type: c.type,
+        content: c.content,
+        schema: c.schema,
+        chartConfig: raw.chartConfig as NotebookCell['chartConfig'] ?? null,
+        isParallel: raw.isParallel as boolean | undefined,
+        sectionId: raw.sectionId as string | undefined,
+        result: null,
+        error: undefined,
+        executionTime: null,
+        isLoading: false,
+        isPreview: c.type === "markdown" ? true : undefined,
+      };
+    }),
   };
 }

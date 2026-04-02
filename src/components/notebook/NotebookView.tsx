@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
-import { writeFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { BookOpen } from "lucide-react";
 import type { Tab, QueryResult } from "../../types/editor";
 import type {
@@ -99,6 +99,10 @@ export function NotebookView({
         sections?: NotebookSection[];
       },
     ) => {
+      // Immediately update ref so subsequent reads within the same
+      // async flow (e.g. runAll loop) see the latest cells without
+      // waiting for React to re-render.
+      cellsRef.current = newCells;
       updateTab(tab.id, {
         notebookState: {
           cells: newCells,
@@ -342,36 +346,49 @@ export function NotebookView({
   }, [runCell, stopOnError]);
 
   const handleExport = useCallback(async () => {
-    const notebook = serializeNotebook(tab.title, cellsRef.current);
-    const safeName = tab.title.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const filePath = await save({
-      defaultPath: `${safeName}.tabularis-notebook`,
-      filters: [
-        { name: "Tabularis Notebook", extensions: ["tabularis-notebook"] },
-      ],
-    });
-    if (!filePath) return;
+    try {
+      const notebook = serializeNotebook(tab.title, cellsRef.current);
+      const safeName = tab.title.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filePath = await save({
+        defaultPath: `${safeName}.tabularis-notebook`,
+        filters: [
+          { name: "Tabularis Notebook", extensions: ["tabularis-notebook"] },
+        ],
+      });
+      if (!filePath) return;
 
-    const encoder = new TextEncoder();
-    await writeFile(
-      filePath,
-      encoder.encode(JSON.stringify(notebook, null, 2)),
-    );
-    showAlert(t("editor.notebook.exportSuccess"), { kind: "info" });
+      await writeTextFile(filePath, JSON.stringify(notebook, null, 2));
+      showAlert(t("editor.notebook.exportSuccess"), { kind: "info" });
+    } catch (e) {
+      console.error("Notebook export failed:", e);
+      showAlert(
+        t("editor.notebook.exportError") ||
+          `Export failed: ${e instanceof Error ? e.message : String(e)}`,
+        { kind: "error" },
+      );
+    }
   }, [tab.title, showAlert, t]);
 
   const handleExportHtml = useCallback(async () => {
-    const html = exportNotebookToHtml(tab.title, cellsRef.current);
-    const safeName = tab.title.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const filePath = await save({
-      defaultPath: `${safeName}.html`,
-      filters: [{ name: "HTML", extensions: ["html"] }],
-    });
-    if (!filePath) return;
+    try {
+      const html = exportNotebookToHtml(tab.title, cellsRef.current);
+      const safeName = tab.title.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filePath = await save({
+        defaultPath: `${safeName}.html`,
+        filters: [{ name: "HTML", extensions: ["html"] }],
+      });
+      if (!filePath) return;
 
-    const encoder = new TextEncoder();
-    await writeFile(filePath, encoder.encode(html));
-    showAlert(t("editor.notebook.exportSuccess"), { kind: "info" });
+      await writeTextFile(filePath, html);
+      showAlert(t("editor.notebook.exportSuccess"), { kind: "info" });
+    } catch (e) {
+      console.error("HTML export failed:", e);
+      showAlert(
+        t("editor.notebook.exportError") ||
+          `Export failed: ${e instanceof Error ? e.message : String(e)}`,
+        { kind: "error" },
+      );
+    }
   }, [tab.title, showAlert, t]);
 
   const handleImport = useCallback(async () => {
