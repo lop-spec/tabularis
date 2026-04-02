@@ -409,7 +409,7 @@ The custom registry must expose a JSON file that follows the same schema as the 
 
 ## UI Extensions (Phase 2)
 
-Starting with v0.9.15, plugins can inject custom React components into the Tabularis UI through a **slot-based extension system**. This allows plugins to add buttons, fields, previews, and menu items directly into the interface without modifying host code.
+Starting with v0.9.13, plugins can inject custom React components into the Tabularis UI through a **slot-based extension system**. This allows plugins to add buttons, fields, previews, and menu items directly into the interface without modifying host code.
 
 ### How It Works
 
@@ -421,7 +421,7 @@ The system has three layers:
 
 ### Available Slots
 
-Eight insertion points are available:
+Ten insertion points are available:
 
 | Slot Name | Location | Renders Per |
 |-----------|----------|-------------|
@@ -433,6 +433,8 @@ Eight insertion points are available:
 | `data-grid.context-menu.items` | Right-click context menu on grid rows | Each menu open |
 | `sidebar.footer.actions` | Main sidebar footer area | Once (global) |
 | `settings.plugin.actions` | Per-plugin actions in Settings | Each installed plugin |
+| `settings.plugin.before_settings` | Above plugin settings form | Each installed plugin |
+| `connection-modal.connection_content` | Inside the connection form | Each connection dialog |
 
 ### Declaring UI Extensions in the Manifest
 
@@ -467,8 +469,11 @@ Slot components can import hooks from `@tabularis/plugin-api`:
 | `usePluginQuery()` | Execute read-only queries on the active connection |
 | `usePluginConnection()` | Access active connection metadata (ID, driver, schema) |
 | `usePluginToast()` | Show info/error/warning notification dialogs |
+| `usePluginModal()` | Open host-managed modals with custom content |
 | `usePluginSetting(pluginId)` | Read and write plugin-specific settings |
 | `usePluginTheme()` | Access theme information (dark/light, colors) |
+| `usePluginTranslation(pluginId)` | Access plugin-specific i18n translations |
+| `openUrl(url)` | Open a URL in the system browser |
 
 ### Error Isolation
 
