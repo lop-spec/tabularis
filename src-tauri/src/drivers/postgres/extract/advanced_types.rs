@@ -889,7 +889,7 @@ impl<'a> FromSql<'a> for Interval {
 
     fn accepts(ty: &Type) -> bool {
         match *ty {
-            Type::INTERNAL => true,
+            Type::INTERVAL => true,
             _ => false,
         }
     }
@@ -1341,7 +1341,7 @@ fn try_extract_ts_query(buf: &mut &[u8], pre_lvl: u8) -> Result<String, String> 
                 }
 
                 _ => {
-                    return Err("fail to extract ts_query operator: invalid operator expected 1, 2, 3, or 4, got: {}".into());
+                    return Err(format!("fail to extract ts_query operator: invalid operator expected 1, 2, 3, or 4, got: {}", operator));
                 }
             };
 
@@ -1356,7 +1356,10 @@ fn try_extract_ts_query(buf: &mut &[u8], pre_lvl: u8) -> Result<String, String> 
         }
 
         _ => {
-            return Err("fail to extract ts_query: expected 1 or 2 got: {}".into());
+            return Err(format!(
+                "fail to extract ts_query: expected 1 or 2 got: {}",
+                buf[0]
+            ));
         }
     }
 }
@@ -1513,7 +1516,7 @@ impl From<TxidSnapshotOrPgSnapshot> for JsonValue {
 utf8_wrapper!(AclItem, ACLITEM);
 utf8_wrapper!(PgNodeTree, PG_NODE_TREE);
 
-macro_rules! binray_wrapper {
+macro_rules! binary_wrapper {
     ($name: ident, $pg_type: ident) => {
         pub struct $name(pub Vec<u8>);
 
@@ -1546,8 +1549,8 @@ macro_rules! binray_wrapper {
 // they are very rarly used, we send them as blobs. anyway if someone requests,
 // we should implement a proper text representation
 
-binray_wrapper!(PgMcvList, PG_MCV_LIST);
-binray_wrapper!(PgDependencies, PG_DEPENDENCIES);
-binray_wrapper!(PgNdistinct, PG_NDISTINCT);
-binray_wrapper!(PgBrinBloomSummary, PG_BRIN_BLOOM_SUMMARY);
-binray_wrapper!(PgBrinMinmaxMultiSummary, PG_BRIN_MINMAX_MULTI_SUMMARY);
+binary_wrapper!(PgMcvList, PG_MCV_LIST);
+binary_wrapper!(PgDependencies, PG_DEPENDENCIES);
+binary_wrapper!(PgNdistinct, PG_NDISTINCT);
+binary_wrapper!(PgBrinBloomSummary, PG_BRIN_BLOOM_SUMMARY);
+binary_wrapper!(PgBrinMinmaxMultiSummary, PG_BRIN_MINMAX_MULTI_SUMMARY);
