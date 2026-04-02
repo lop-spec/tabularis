@@ -1,3 +1,34 @@
+## [0.9.13](https://github.com/debba/tabularis/compare/v0.9.12...v0.9.13) (2026-04-02)
+
+
+### Bug Fixes
+
+* add check to prevent panic if buf len is less than 4 ([f43af04](https://github.com/debba/tabularis/commit/f43af04b273e3472b73457dda8e5b98abd8069d9))
+* **editor:** register paste action per instance and improve scrollbar UI ([32020d1](https://github.com/debba/tabularis/commit/32020d1072833ae543146b7189faf46d58e4cd20))
+* handle `Option` returned by `split_at_value_len` to return `Null` if `None` ([26cc2ab](https://github.com/debba/tabularis/commit/26cc2ab4d118a484630d16b11cba23df817d5d0a))
+* make `fill_nulls` fill only the remaining fields ([d45cce7](https://github.com/debba/tabularis/commit/d45cce7d5fcbbf67f00a69ec2901418bf96652e9))
+* return empty array in zero dimensions instead of `null` ([60c420a](https://github.com/debba/tabularis/commit/60c420a9149217bdcefc34b5507907c754df60fb))
+* return None if `len < 0` which means the value is null ([e45a67d](https://github.com/debba/tabularis/commit/e45a67d7bf7c89cde358efe8ed6657b6a7464027))
+* skip the length of each range ([c2e1844](https://github.com/debba/tabularis/commit/c2e18444f80c594da86807af1036e002babe8f63))
+* **sql-editor:** preserve cursor and improve autocomplete behavior ([92c0fe3](https://github.com/debba/tabularis/commit/92c0fe3a3eb8723131a33cd1606fb27b1552082a))
+
+
+### Features
+
+* add support for `multirange` postgres type ([a56d9f2](https://github.com/debba/tabularis/commit/a56d9f290f458bc42ec66b28d2c61b6ba6661d09))
+* add support for `range` postgres type ([14fe823](https://github.com/debba/tabularis/commit/14fe8236ee705283059c5b4bb2f80d6837ecab3a))
+* **drivers:** add readonly capability to disable data writes ([2846a2c](https://github.com/debba/tabularis/commit/2846a2c0bf97330b786680e2b2e70ae99955d491))
+* **hooks:** add setSettings to usePluginSetting hook ([e0ce6a5](https://github.com/debba/tabularis/commit/e0ce6a538701e8fa702cf3e0a5352a4077a70078))
+* **modals:** add error modal and use it for async errors ([4373b9f](https://github.com/debba/tabularis/commit/4373b9f2042616af41fddc51f9d5af01c52b04cd))
+* **plugin-modal:** add plugin modal context and provider ([57b89fc](https://github.com/debba/tabularis/commit/57b89fc6f5a1ef668672ab583cae4df2f77149c7))
+* **plugins:** add JSON Viewer example plugin for UI Extensions ([53485ec](https://github.com/debba/tabularis/commit/53485ec7eeff845db1e7cdcd18700a54b5b5e20f))
+* **plugins:** add manage_tables capability and UI gating ([df07072](https://github.com/debba/tabularis/commit/df070723a2642eaac95c4dedf0a35820ed718e7d))
+* **plugins:** add plugin slots and external opener support ([6725a6c](https://github.com/debba/tabularis/commit/6725a6ca4b677eb1da89eada6e2a9171d6c16a64))
+* **plugins:** default manage_tables to true and use helper ([6a2a0c5](https://github.com/debba/tabularis/commit/6a2a0c5760af79c2edcbd0b7f3655ff0369d82d7))
+* **plugins:** implement Plugin UI Extensions system (Phase 2) ([5e464f3](https://github.com/debba/tabularis/commit/5e464f3a3d196a2bfbd3add8260432d30b7e8601))
+* **plugins:** support UI-only plugins and external UI bundles ([065307c](https://github.com/debba/tabularis/commit/065307cf712dcdfa5598978cbf9fa04cd48a007b))
+* **settings:** split settings UI into modular tabs and add editor prefs ([4d71583](https://github.com/debba/tabularis/commit/4d715839ea7ce0db84a1be2d2b49a9c955c76e93))
+
 ## [0.9.12](https://github.com/debba/tabularis/compare/v0.9.11...v0.9.12) (2026-03-29)
 
 
