@@ -647,7 +647,12 @@
       "invalidParamName": "参数名称无效",
       "parallelExecution": "并行执行（全部运行）",
       "executionHistory": "执行历史",
-      "noHistory": "暂无执行历史"
+      "noHistory": "暂无执行历史",
+      "collapseCell": "折叠单元格",
+      "expandCell": "展开单元格",
+      "outline": "大纲",
+      "aiGenerate": "使用 AI 生成 SQL",
+      "aiExplain": "使用 AI 解释此查询"
     }
   },
   "createTable": {

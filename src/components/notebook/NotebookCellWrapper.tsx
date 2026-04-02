@@ -95,9 +95,11 @@ export function NotebookCellWrapper({
         onToggleHistory={
           cell.type === "sql" ? () => setShowHistory((v) => !v) : undefined
         }
+        isCollapsed={cell.isCollapsed}
+        onToggleCollapse={() => onUpdate({ isCollapsed: !cell.isCollapsed })}
       />
 
-      {cell.type === "sql" ? (
+      {!cell.isCollapsed && cell.type === "sql" ? (
         <SqlCell
           cell={cell}
           onContentChange={(content) => onUpdate({ content })}
@@ -105,15 +107,15 @@ export function NotebookCellWrapper({
           onChartConfigChange={handleChartConfigChange}
           onResultHeightChange={handleResultHeightChange}
         />
-      ) : (
+      ) : !cell.isCollapsed ? (
         <MarkdownCell
           cell={cell}
           onContentChange={(content) => onUpdate({ content })}
           onTogglePreview={() => onUpdate({ isPreview: !cell.isPreview })}
         />
-      )}
+      ) : null}
 
-      {showHistory && cell.type === "sql" && (
+      {!cell.isCollapsed && showHistory && cell.type === "sql" && (
         <CellHistoryPanel
           history={cell.history ?? []}
           onRestore={handleRestoreHistory}

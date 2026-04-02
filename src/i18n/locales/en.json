@@ -671,7 +671,12 @@
       "invalidParamName": "Invalid parameter name",
       "parallelExecution": "Parallel Execution (Run All)",
       "executionHistory": "Execution History",
-      "noHistory": "No execution history yet"
+      "noHistory": "No execution history yet",
+      "collapseCell": "Collapse Cell",
+      "expandCell": "Expand Cell",
+      "outline": "Outline",
+      "aiGenerate": "Generate SQL with AI",
+      "aiExplain": "Explain this Query with AI"
     }
   },
   "createTable": {

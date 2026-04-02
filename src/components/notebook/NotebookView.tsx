@@ -45,6 +45,7 @@ import { NotebookCellWrapper } from "./NotebookCellWrapper";
 import { AddCellButton } from "./AddCellButton";
 import { RunAllSummary } from "./RunAllSummary";
 import { ParamsPanel } from "./ParamsPanel";
+import { NotebookOutline } from "./NotebookOutline";
 
 interface NotebookViewProps {
   tab: Tab;
@@ -489,6 +490,7 @@ export function NotebookView({
       <NotebookToolbar {...toolbarProps} />
       <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4 space-y-0">
         <ParamsPanel params={params} onParamsChange={handleParamsChange} />
+        <NotebookOutline cells={cells} onScrollToCell={scrollToCell} />
 
         {runAllResult && (
           <RunAllSummary

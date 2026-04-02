@@ -661,7 +661,12 @@
       "invalidParamName": "Nombre de parámetro no válido",
       "parallelExecution": "Ejecución Paralela (Ejecutar Todo)",
       "executionHistory": "Historial de Ejecución",
-      "noHistory": "Sin historial de ejecución"
+      "noHistory": "Sin historial de ejecución",
+      "collapseCell": "Contraer Celda",
+      "expandCell": "Expandir Celda",
+      "outline": "Esquema",
+      "aiGenerate": "Generar SQL con IA",
+      "aiExplain": "Explicar esta Consulta con IA"
     }
   },
   "createTable": {

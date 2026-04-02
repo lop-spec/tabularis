@@ -1,4 +1,6 @@
 import { useTranslation } from "react-i18next";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { Download, BarChart3, X } from "lucide-react";
 import type { QueryResult } from "../../types/editor";
 import { resultToCsv, resultToJson } from "../../utils/notebookExport";
@@ -20,26 +22,24 @@ export function ResultToolbar({
 }: ResultToolbarProps) {
   const { t } = useTranslation();
 
-  const handleExportCsv = () => {
+  const handleExportCsv = async () => {
+    const filePath = await save({
+      defaultPath: "result.csv",
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+    if (!filePath) return;
     const csv = resultToCsv(result);
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "result.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    await writeTextFile(filePath, csv);
   };
 
-  const handleExportJson = () => {
+  const handleExportJson = async () => {
+    const filePath = await save({
+      defaultPath: "result.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (!filePath) return;
     const json = resultToJson(result);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "result.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    await writeTextFile(filePath, json);
   };
 
   return (

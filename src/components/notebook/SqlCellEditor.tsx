@@ -1,4 +1,6 @@
 import { SqlEditorWrapper } from "../ui/SqlEditorWrapper";
+import { useSettings } from "../../hooks/useSettings";
+import { NotebookAiButtons } from "./NotebookAiButtons";
 
 interface SqlCellEditorProps {
   cellId: string;
@@ -13,8 +15,10 @@ export function SqlCellEditor({
   onContentChange,
   onRun,
 }: SqlCellEditorProps) {
+  const { settings } = useSettings();
+
   return (
-    <div className="h-[150px]">
+    <div className="h-[150px] relative">
       <SqlEditorWrapper
         height="100%"
         initialValue={content}
@@ -27,6 +31,9 @@ export function SqlCellEditor({
           scrollbar: { alwaysConsumeMouseWheel: false },
         }}
       />
+      {settings.aiEnabled && (
+        <NotebookAiButtons content={content} onInsert={onContentChange} />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   Trash2,
   Play,
   Eye,
@@ -38,6 +39,8 @@ interface NotebookCellHeaderProps {
   onToggleParallel?: () => void;
   historyCount?: number;
   onToggleHistory?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse: () => void;
 }
 
 function CellTypeBadge({ cellType }: { cellType: NotebookCellType }) {
@@ -101,6 +104,8 @@ export function NotebookCellHeader({
   onToggleParallel,
   historyCount,
   onToggleHistory,
+  isCollapsed,
+  onToggleCollapse,
 }: NotebookCellHeaderProps) {
   const { t } = useTranslation();
   const [isDbOpen, setIsDbOpen] = useState(false);
@@ -119,6 +124,17 @@ export function NotebookCellHeader({
             <GripVertical size={14} />
           </div>
         )}
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="p-0.5 text-muted hover:text-primary transition-colors rounded"
+          title={t(isCollapsed ? "editor.notebook.expandCell" : "editor.notebook.collapseCell")}
+        >
+          <ChevronRight
+            size={14}
+            className={`transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+          />
+        </button>
         <CellTypeBadge cellType={cellType} />
         <span className="text-[10px] text-muted">#{index + 1}</span>
         {showDbSelector && (

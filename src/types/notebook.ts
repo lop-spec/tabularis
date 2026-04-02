@@ -45,6 +45,7 @@ export interface NotebookCell {
   chartConfig?: CellChartConfig | null; // SQL only: inline chart configuration
   resultHeight?: number; // SQL only: custom result panel height in pixels
   isParallel?: boolean; // SQL only: can run in parallel during Run All
+  isCollapsed?: boolean; // Cell body hidden when collapsed
   history?: CellExecutionEntry[]; // Last N executions
 }
 
