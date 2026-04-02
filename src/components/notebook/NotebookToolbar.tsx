@@ -6,7 +6,6 @@ import {
   Upload,
   Loader2,
   OctagonX,
-  FolderPlus,
   FileCode,
 } from "lucide-react";
 
@@ -20,7 +19,6 @@ interface NotebookToolbarProps {
   isRunning: boolean;
   stopOnError: boolean;
   onToggleStopOnError: () => void;
-  onAddSection: () => void;
 }
 
 function ToolbarButton({
@@ -51,6 +49,10 @@ function Separator() {
   return <div className="w-px h-5 bg-default mx-1" />;
 }
 
+function ToolbarGroup({ children }: { children: React.ReactNode }) {
+  return <div className="flex items-center gap-0.5">{children}</div>;
+}
+
 export function NotebookToolbar({
   onAddSqlCell,
   onAddMarkdownCell,
@@ -61,84 +63,88 @@ export function NotebookToolbar({
   isRunning,
   stopOnError,
   onToggleStopOnError,
-  onAddSection,
 }: NotebookToolbarProps) {
   const { t } = useTranslation();
 
   return (
     <div className="h-10 bg-elevated border-b border-default flex items-center px-2 gap-0.5 shrink-0">
-      <ToolbarButton
-        onClick={onAddSqlCell}
-        title={t("editor.notebook.addSqlCell")}
-      >
-        <Plus size={14} />
-        <span className="font-semibold text-green-400">SQL</span>
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={onAddMarkdownCell}
-        title={t("editor.notebook.addMarkdownCell")}
-      >
-        <Plus size={14} />
-        <span className="font-semibold text-blue-400">MD</span>
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={onAddSection}
-        title={t("editor.notebook.addSection")}
-      >
-        <FolderPlus size={14} />
-        <span>{t("editor.notebook.section")}</span>
-      </ToolbarButton>
-
-      <Separator />
-
-      <ToolbarButton
-        onClick={onRunAll}
-        disabled={isRunning}
-        title={t("editor.notebook.runAllTooltip")}
-      >
-        {isRunning ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : (
-          <Play size={14} className="text-green-400" />
-        )}
-        <span>{t("editor.notebook.runAll")}</span>
-      </ToolbarButton>
-
-      <button
-        type="button"
-        onClick={onToggleStopOnError}
-        title={t("editor.notebook.stopOnErrorTooltip")}
-        className={`flex items-center gap-1 px-1.5 py-1 text-[10px] rounded transition-colors ${
-          stopOnError
-            ? "bg-red-500/15 text-red-400 font-semibold"
-            : "text-muted hover:text-secondary hover:bg-surface-secondary"
-        }`}
-      >
-        <OctagonX size={12} />
-        <span>{t("editor.notebook.stopOnError")}</span>
-      </button>
+      <div className="flex items-center bg-surface-secondary rounded overflow-hidden">
+        <span className="pl-2 text-muted">
+          <Plus size={14} />
+        </span>
+        <button
+          type="button"
+          onClick={onAddSqlCell}
+          title={t("editor.notebook.addSqlCell")}
+          className="px-2 py-1 text-xs font-semibold text-green-400 hover:bg-green-500/15 transition-colors"
+        >
+          SQL
+        </button>
+        <div className="w-px h-4 bg-default" />
+        <button
+          type="button"
+          onClick={onAddMarkdownCell}
+          title={t("editor.notebook.addMarkdownCell")}
+          className="px-2 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/15 transition-colors"
+        >
+          MD
+        </button>
+      </div>
 
       <Separator />
 
-      <ToolbarButton onClick={onExport} title={t("editor.notebook.export")}>
-        <Download size={14} />
-        <span>{t("editor.notebook.export")}</span>
-      </ToolbarButton>
+      <ToolbarGroup>
+        <ToolbarButton
+          onClick={onRunAll}
+          disabled={isRunning}
+          title={t("editor.notebook.runAllTooltip")}
+        >
+          {isRunning ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Play size={14} className="text-green-400" />
+          )}
+          <span>{t("editor.notebook.runAll")}</span>
+        </ToolbarButton>
 
-      <ToolbarButton
-        onClick={onExportHtml}
-        title={t("editor.notebook.exportHtml")}
-      >
-        <FileCode size={14} />
-        <span>HTML</span>
-      </ToolbarButton>
+        <button
+          type="button"
+          onClick={onToggleStopOnError}
+          title={t("editor.notebook.stopOnErrorTooltip")}
+          className={`flex items-center gap-1 px-1.5 py-1 text-[10px] rounded transition-colors ${
+            stopOnError
+              ? "bg-red-500/15 text-red-400 font-semibold"
+              : "text-muted hover:text-secondary hover:bg-surface-secondary"
+          }`}
+        >
+          <OctagonX size={12} />
+          <span>{t("editor.notebook.stopOnError")}</span>
+        </button>
+      </ToolbarGroup>
 
-      <ToolbarButton onClick={onImport} title={t("editor.notebook.import")}>
-        <Upload size={14} />
-        <span>{t("editor.notebook.import")}</span>
-      </ToolbarButton>
+      <div className="flex-1" />
+
+      <ToolbarGroup>
+        <ToolbarButton onClick={onExport} title={t("editor.notebook.export")}>
+          <Download size={14} />
+          <span>{t("editor.notebook.export")}</span>
+        </ToolbarButton>
+
+        <ToolbarButton
+          onClick={onExportHtml}
+          title={t("editor.notebook.exportHtml")}
+        >
+          <FileCode size={14} />
+          <span>HTML</span>
+        </ToolbarButton>
+
+        <Separator />
+
+        <ToolbarButton onClick={onImport} title={t("editor.notebook.import")}>
+          <Upload size={14} />
+          <span>{t("editor.notebook.import")}</span>
+        </ToolbarButton>
+      </ToolbarGroup>
     </div>
   );
 }

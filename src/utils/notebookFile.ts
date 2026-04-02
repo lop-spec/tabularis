@@ -1,9 +1,14 @@
-import type { NotebookCell, NotebookFile } from "../types/notebook";
+import type {
+  NotebookCell,
+  NotebookFile,
+  NotebookParam,
+} from "../types/notebook";
 import { generateCellId } from "./notebook";
 
 export function serializeNotebook(
   title: string,
   cells: NotebookCell[],
+  params?: NotebookParam[],
 ): NotebookFile {
   return {
     version: 1,
@@ -15,8 +20,8 @@ export function serializeNotebook(
       ...(c.schema ? { schema: c.schema } : {}),
       ...(c.chartConfig ? { chartConfig: c.chartConfig } : {}),
       ...(c.isParallel ? { isParallel: c.isParallel } : {}),
-      ...(c.sectionId ? { sectionId: c.sectionId } : {}),
     })),
+    ...(params && params.length > 0 ? { params } : {}),
   };
 }
 
@@ -40,6 +45,7 @@ export function validateNotebookFile(data: unknown): data is NotebookFile {
 export function deserializeNotebook(json: string): {
   title: string;
   cells: NotebookCell[];
+  params?: NotebookParam[];
 } {
   let data: unknown;
   try {
@@ -52,18 +58,18 @@ export function deserializeNotebook(json: string): {
     throw new Error("Invalid notebook file format");
   }
 
+  const raw = data as Record<string, unknown>;
   return {
     title: data.title,
     cells: data.cells.map((c) => {
-      const raw = c as Record<string, unknown>;
+      const cellRaw = c as Record<string, unknown>;
       return {
         id: generateCellId(),
         type: c.type,
         content: c.content,
         schema: c.schema,
-        chartConfig: raw.chartConfig as NotebookCell['chartConfig'] ?? null,
-        isParallel: raw.isParallel as boolean | undefined,
-        sectionId: raw.sectionId as string | undefined,
+        chartConfig: cellRaw.chartConfig as NotebookCell['chartConfig'] ?? null,
+        isParallel: cellRaw.isParallel as boolean | undefined,
         result: null,
         error: undefined,
         executionTime: null,
@@ -71,5 +77,6 @@ export function deserializeNotebook(json: string): {
         isPreview: c.type === "markdown" ? true : undefined,
       };
     }),
+    params: Array.isArray(raw.params) ? raw.params as NotebookParam[] : undefined,
   };
 }

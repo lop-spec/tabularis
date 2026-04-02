@@ -24,6 +24,7 @@ export function SqlCellEditor({
         options={{
           padding: { top: 8, bottom: 8 },
           lineNumbers: "off",
+          scrollbar: { alwaysConsumeMouseWheel: false },
         }}
       />
     </div>

@@ -9,7 +9,6 @@ import type {
   NotebookCell,
   NotebookCellType,
   NotebookParam,
-  NotebookSection,
   RunAllResult,
 } from "../../types/notebook";
 import {
@@ -35,14 +34,6 @@ import {
   addHistoryEntry,
   createHistoryEntry,
 } from "../../utils/notebookHistory";
-import {
-  createSection,
-  toggleSection,
-  renameSection,
-  removeSection,
-  clearCellSection,
-  groupCellsBySections,
-} from "../../utils/notebookSections";
 import { exportNotebookToHtml } from "../../utils/notebookHtmlExport";
 import { useDatabase } from "../../hooks/useDatabase";
 import { isMultiDatabaseCapable } from "../../utils/database";
@@ -54,7 +45,6 @@ import { NotebookCellWrapper } from "./NotebookCellWrapper";
 import { AddCellButton } from "./AddCellButton";
 import { RunAllSummary } from "./RunAllSummary";
 import { ParamsPanel } from "./ParamsPanel";
-import { SectionHeader } from "./SectionHeader";
 
 interface NotebookViewProps {
   tab: Tab;
@@ -82,13 +72,13 @@ export function NotebookView({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const cellsRef = useRef(tab.notebookState?.cells ?? []);
   const cellRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   cellsRef.current = tab.notebookState?.cells ?? [];
 
   const cells = tab.notebookState?.cells ?? [];
   const stopOnError = tab.notebookState?.stopOnError ?? false;
   const params = tab.notebookState?.params ?? [];
-  const sections = tab.notebookState?.sections ?? [];
 
   const updateNotebook = useCallback(
     (
@@ -96,12 +86,8 @@ export function NotebookView({
       extraState?: {
         stopOnError?: boolean;
         params?: NotebookParam[];
-        sections?: NotebookSection[];
       },
     ) => {
-      // Immediately update ref so subsequent reads within the same
-      // async flow (e.g. runAll loop) see the latest cells without
-      // waiting for React to re-render.
       cellsRef.current = newCells;
       updateTab(tab.id, {
         notebookState: {
@@ -111,14 +97,10 @@ export function NotebookView({
               ? extraState.stopOnError
               : stopOnError,
           params: extraState?.params !== undefined ? extraState.params : params,
-          sections:
-            extraState?.sections !== undefined
-              ? extraState.sections
-              : sections,
         },
       });
     },
-    [tab.id, updateTab, stopOnError, params, sections],
+    [tab.id, updateTab, stopOnError, params],
   );
 
   const updateCell = useCallback(
@@ -129,8 +111,12 @@ export function NotebookView({
   );
 
   const addCell = useCallback(
-    (type: NotebookCellType, afterIndex?: number) => {
-      updateNotebook(addCellToCells(cellsRef.current, type, afterIndex));
+    (type: NotebookCellType, afterIndex?: number): string => {
+      const newCells = addCellToCells(cellsRef.current, type, afterIndex);
+      const insertAt = afterIndex !== undefined ? afterIndex + 1 : newCells.length - 1;
+      const newCellId = newCells[insertAt].id;
+      updateNotebook(newCells);
+      return newCellId;
     },
     [updateNotebook],
   );
@@ -151,41 +137,6 @@ export function NotebookView({
       updateNotebook(cellsRef.current, { params: newParams });
     },
     [updateNotebook],
-  );
-
-  const handleAddSection = useCallback(() => {
-    const section = createSection(t("editor.notebook.newSection"));
-    updateNotebook(cellsRef.current, {
-      sections: [...sections, section],
-    });
-  }, [updateNotebook, sections, t]);
-
-  const handleToggleSection = useCallback(
-    (sectionId: string) => {
-      updateNotebook(cellsRef.current, {
-        sections: toggleSection(sections, sectionId),
-      });
-    },
-    [updateNotebook, sections],
-  );
-
-  const handleRenameSection = useCallback(
-    (sectionId: string, title: string) => {
-      updateNotebook(cellsRef.current, {
-        sections: renameSection(sections, sectionId, title),
-      });
-    },
-    [updateNotebook, sections],
-  );
-
-  const handleDeleteSection = useCallback(
-    (sectionId: string) => {
-      const clearedCells = clearCellSection(cellsRef.current, sectionId);
-      updateNotebook(clearedCells, {
-        sections: removeSection(sections, sectionId),
-      });
-    },
-    [updateNotebook, sections],
   );
 
   const runCell = useCallback(
@@ -241,7 +192,6 @@ export function NotebookView({
         });
         const elapsed = performance.now() - start;
 
-        // Add to history
         const historyEntry = createHistoryEntry(
           cell.content.trim(),
           res,
@@ -261,7 +211,6 @@ export function NotebookView({
         const elapsed = performance.now() - start;
         const errorMsg = e instanceof Error ? e.message : String(e);
 
-        // Add error to history
         const historyEntry = createHistoryEntry(
           cell.content.trim(),
           null,
@@ -347,7 +296,7 @@ export function NotebookView({
 
   const handleExport = useCallback(async () => {
     try {
-      const notebook = serializeNotebook(tab.title, cellsRef.current);
+      const notebook = serializeNotebook(tab.title, cellsRef.current, params);
       const safeName = tab.title.replace(/[^a-zA-Z0-9_-]/g, "_");
       const filePath = await save({
         defaultPath: `${safeName}.tabularis-notebook`,
@@ -367,7 +316,7 @@ export function NotebookView({
         { kind: "error" },
       );
     }
-  }, [tab.title, showAlert, t]);
+  }, [tab.title, showAlert, t, params]);
 
   const handleExportHtml = useCallback(async () => {
     try {
@@ -401,10 +350,13 @@ export function NotebookView({
 
     try {
       const content = await readTextFile(filePath);
-      const { title, cells: importedCells } = deserializeNotebook(content);
+      const { title, cells: importedCells, params: importedParams } = deserializeNotebook(content);
       updateTab(tab.id, {
         title,
-        notebookState: { cells: importedCells },
+        notebookState: {
+          cells: importedCells,
+          params: importedParams,
+        },
       });
       showAlert(t("editor.notebook.importSuccess"), { kind: "info" });
     } catch {
@@ -448,6 +400,40 @@ export function NotebookView({
     [dragIndex, updateNotebook],
   );
 
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      scrollContainerRef.current?.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+  }, []);
+
+  const focusCell = useCallback((cellId: string) => {
+    const tryFocus = (attempts: number) => {
+      const el = cellRefsMap.current.get(cellId);
+      if (!el) {
+        if (attempts < 10) requestAnimationFrame(() => tryFocus(attempts + 1));
+        return;
+      }
+      // SQL cell: Monaco editor textarea
+      const monacoTextarea = el.querySelector<HTMLTextAreaElement>(".monaco-editor textarea");
+      if (monacoTextarea) {
+        monacoTextarea.focus();
+        return;
+      }
+      // Markdown cell: plain textarea
+      const textarea = el.querySelector<HTMLTextAreaElement>("textarea");
+      if (textarea) {
+        textarea.focus();
+        return;
+      }
+      // Editor may not be mounted yet, retry
+      if (attempts < 10) requestAnimationFrame(() => tryFocus(attempts + 1));
+    };
+    requestAnimationFrame(() => tryFocus(0));
+  }, []);
+
   const scrollToCell = useCallback((cellId: string) => {
     const el = cellRefsMap.current.get(cellId);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -466,8 +452,16 @@ export function NotebookView({
   }, [matchesShortcut, runAll]);
 
   const toolbarProps = {
-    onAddSqlCell: () => addCell("sql"),
-    onAddMarkdownCell: () => addCell("markdown"),
+    onAddSqlCell: () => {
+      const id = addCell("sql");
+      scrollToBottom();
+      focusCell(id);
+    },
+    onAddMarkdownCell: () => {
+      const id = addCell("markdown");
+      scrollToBottom();
+      focusCell(id);
+    },
     onRunAll: runAll,
     onExport: handleExport,
     onExportHtml: handleExportHtml,
@@ -475,7 +469,6 @@ export function NotebookView({
     isRunning: isRunningAll,
     stopOnError,
     onToggleStopOnError: toggleStopOnError,
-    onAddSection: handleAddSection,
   };
 
   // Empty state
@@ -491,63 +484,10 @@ export function NotebookView({
     );
   }
 
-  const cellGroups = groupCellsBySections(cells, sections);
-
-  const renderCell = (cell: NotebookCell, index: number) => (
-    <div
-      key={`${cell.id}-${index}`}
-      ref={(el) => {
-        if (el) cellRefsMap.current.set(cell.id, el);
-        else cellRefsMap.current.delete(cell.id);
-      }}
-      onDragOver={handleDragOver(index)}
-      onDrop={handleDrop(index)}
-      className={`${
-        dragOverIndex === index && dragIndex !== index
-          ? "border-t-2 border-blue-500"
-          : ""
-      }`}
-    >
-      <NotebookCellWrapper
-        cell={cell}
-        index={index}
-        totalCells={cells.length}
-        onUpdate={(partial) => updateCell(cell.id, partial)}
-        onDelete={() => deleteCell(cell.id)}
-        onMoveUp={() => {
-          if (index > 0)
-            updateNotebook(reorderCells(cellsRef.current, index, index - 1));
-        }}
-        onMoveDown={() => {
-          if (index < cells.length - 1)
-            updateNotebook(reorderCells(cellsRef.current, index, index + 1));
-        }}
-        onRun={() => runCell(cell.id)}
-        activeSchema={cell.schema || effectiveSchema || undefined}
-        selectedDatabases={isMultiDb ? selectedDatabases : undefined}
-        onSchemaChange={
-          isMultiDb
-            ? (schema) => updateCell(cell.id, { schema })
-            : undefined
-        }
-        isDragging={dragIndex === index}
-        dragHandleProps={{
-          draggable: true,
-          onDragStart: handleDragStart(index),
-          onDragEnd: handleDragEnd,
-        }}
-      />
-      <AddCellButton
-        onAddSql={() => addCell("sql", index)}
-        onAddMarkdown={() => addCell("markdown", index)}
-      />
-    </div>
-  );
-
   return (
     <div className="flex flex-col h-full">
       <NotebookToolbar {...toolbarProps} />
-      <div className="flex-1 overflow-auto p-4 space-y-0">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4 space-y-0">
         <ParamsPanel params={params} onParamsChange={handleParamsChange} />
 
         {runAllResult && (
@@ -558,30 +498,60 @@ export function NotebookView({
           />
         )}
 
-        {cellGroups.map((group) => {
-          if (group.type === "cell") {
-            return renderCell(group.cell, group.index);
-          }
-
-          // Section group
-          return (
-            <div key={group.section.id} className="mb-2">
-              <SectionHeader
-                section={group.section}
-                cellCount={group.cells.length}
-                onToggle={() => handleToggleSection(group.section.id)}
-                onRename={(title) =>
-                  handleRenameSection(group.section.id, title)
-                }
-                onDelete={() => handleDeleteSection(group.section.id)}
-              />
-              {!group.section.collapsed &&
-                group.cells.map((cell, i) =>
-                  renderCell(cell, group.startIndex + i),
-                )}
-            </div>
-          );
-        })}
+        {cells.map((cell, index) => (
+          <div
+            key={`${cell.id}-${index}`}
+            ref={(el) => {
+              if (el) cellRefsMap.current.set(cell.id, el);
+              else cellRefsMap.current.delete(cell.id);
+            }}
+            onDragOver={handleDragOver(index)}
+            onDrop={handleDrop(index)}
+            className={`${
+              dragOverIndex === index && dragIndex !== index
+                ? "border-t-2 border-blue-500"
+                : ""
+            }`}
+          >
+            <NotebookCellWrapper
+              cell={cell}
+              index={index}
+              totalCells={cells.length}
+              onUpdate={(partial) => updateCell(cell.id, partial)}
+              onDelete={() => deleteCell(cell.id)}
+              onMoveUp={() => {
+                if (index > 0)
+                  updateNotebook(
+                    reorderCells(cellsRef.current, index, index - 1),
+                  );
+              }}
+              onMoveDown={() => {
+                if (index < cells.length - 1)
+                  updateNotebook(
+                    reorderCells(cellsRef.current, index, index + 1),
+                  );
+              }}
+              onRun={() => runCell(cell.id)}
+              activeSchema={cell.schema || effectiveSchema || undefined}
+              selectedDatabases={isMultiDb ? selectedDatabases : undefined}
+              onSchemaChange={
+                isMultiDb
+                  ? (schema) => updateCell(cell.id, { schema })
+                  : undefined
+              }
+              isDragging={dragIndex === index}
+              dragHandleProps={{
+                draggable: true,
+                onDragStart: handleDragStart(index),
+                onDragEnd: handleDragEnd,
+              }}
+            />
+            <AddCellButton
+              onAddSql={() => addCell("sql", index)}
+              onAddMarkdown={() => addCell("markdown", index)}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );

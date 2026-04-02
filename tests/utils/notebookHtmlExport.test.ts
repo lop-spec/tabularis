@@ -100,6 +100,27 @@ describe("notebookHtmlExport", () => {
     expect(html).toContain("<em>NULL</em>");
   });
 
+  it("should render cell schema/database in SQL cell header", () => {
+    const cells = [
+      makeCell({
+        type: "sql",
+        content: "SELECT 1",
+        schema: "production_db",
+      }),
+    ];
+    const html = exportNotebookToHtml("Test", cells);
+    expect(html).toContain("production_db");
+    expect(html).toContain("SQL Cell #1");
+  });
+
+  it("should not render schema when not set", () => {
+    const cells = [
+      makeCell({ type: "sql", content: "SELECT 1" }),
+    ];
+    const html = exportNotebookToHtml("Test", cells);
+    expect(html).not.toContain("· <span");
+  });
+
   it("should render bold and italic in markdown", () => {
     const cells = [
       makeCell({

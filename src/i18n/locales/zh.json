@@ -645,11 +645,6 @@
       "paramName": "名称",
       "paramValue": "值",
       "invalidParamName": "参数名称无效",
-      "addSection": "添加分组",
-      "section": "分组",
-      "newSection": "新分组",
-      "renameSection": "重命名分组",
-      "deleteSection": "删除分组",
       "parallelExecution": "并行执行（全部运行）",
       "executionHistory": "执行历史",
       "noHistory": "暂无执行历史"

@@ -31,7 +31,7 @@ export function SqlCellResult({
   onResultHeightChange,
 }: SqlCellResultProps) {
   const { t } = useTranslation();
-  const [showChart, setShowChart] = useState(false);
+  const [showChart, setShowChart] = useState(!!chartConfig);
   const height = resultHeight ?? 300;
 
   if (isLoading) {

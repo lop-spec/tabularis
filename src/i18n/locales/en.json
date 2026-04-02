@@ -669,11 +669,6 @@
       "paramName": "name",
       "paramValue": "value",
       "invalidParamName": "Invalid parameter name",
-      "addSection": "Add Section",
-      "section": "Section",
-      "newSection": "New Section",
-      "renameSection": "Rename Section",
-      "deleteSection": "Delete Section",
       "parallelExecution": "Parallel Execution (Run All)",
       "executionHistory": "Execution History",
       "noHistory": "No execution history yet"

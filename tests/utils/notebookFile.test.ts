@@ -171,6 +171,26 @@ describe('notebookFile utils', () => {
     });
   });
 
+  describe('params serialization', () => {
+    it('should include params when provided', () => {
+      const params = [{ name: 'start', value: "'2026-01-01'" }];
+      const result = serializeNotebook('Test', makeCells(), params);
+      expect(result.params).toEqual(params);
+    });
+
+    it('should omit params when empty', () => {
+      const result = serializeNotebook('Test', makeCells(), []);
+      expect(result.params).toBeUndefined();
+    });
+
+    it('should include cell schema when set', () => {
+      const cells = makeCells();
+      cells[0].schema = 'my_database';
+      const result = serializeNotebook('Test', cells);
+      expect(result.cells[0].schema).toBe('my_database');
+    });
+  });
+
   describe('round-trip', () => {
     it('should preserve content through serialize → deserialize', () => {
       const cells = makeCells();
@@ -184,6 +204,26 @@ describe('notebookFile utils', () => {
       expect(restoredCells[0].content).toBe('SELECT * FROM users');
       expect(restoredCells[1].type).toBe('markdown');
       expect(restoredCells[1].content).toBe('# Report');
+    });
+
+    it('should preserve params and schema through round-trip', () => {
+      const cells = makeCells();
+      cells[0].schema = 'production_db';
+      const params = [{ name: 'limit', value: '50' }];
+      const serialized = serializeNotebook('Full', cells, params);
+      const json = JSON.stringify(serialized);
+      const result = deserializeNotebook(json);
+
+      expect(result.params).toEqual(params);
+      expect(result.cells[0].schema).toBe('production_db');
+    });
+
+    it('should handle notebook without params', () => {
+      const serialized = serializeNotebook('Bare', makeCells());
+      const json = JSON.stringify(serialized);
+      const result = deserializeNotebook(json);
+
+      expect(result.params).toBeUndefined();
     });
   });
 });

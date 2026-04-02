@@ -45,21 +45,13 @@ export interface NotebookCell {
   chartConfig?: CellChartConfig | null; // SQL only: inline chart configuration
   resultHeight?: number; // SQL only: custom result panel height in pixels
   isParallel?: boolean; // SQL only: can run in parallel during Run All
-  sectionId?: string; // Section grouping
   history?: CellExecutionEntry[]; // Last N executions
-}
-
-export interface NotebookSection {
-  id: string;
-  title: string;
-  collapsed: boolean;
 }
 
 export interface NotebookState {
   cells: NotebookCell[];
   stopOnError?: boolean;
   params?: NotebookParam[];
-  sections?: NotebookSection[];
 }
 
 // File format for .tabularis-notebook export/import
@@ -73,8 +65,6 @@ export interface NotebookFile {
     schema?: string;
     chartConfig?: CellChartConfig | null;
     isParallel?: boolean;
-    sectionId?: string;
   }>;
   params?: NotebookParam[];
-  sections?: NotebookSection[];
 }

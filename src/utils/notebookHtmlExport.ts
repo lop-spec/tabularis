@@ -45,7 +45,8 @@ function renderMarkdownCell(content: string): string {
 
 function renderSqlCell(cell: NotebookCell, index: number): string {
   let html = `<div class="sql-cell">`;
-  html += `<div class="cell-header">SQL Cell #${index + 1}</div>`;
+  const schemaLabel = cell.schema ? ` · <span style="color:#79c0ff">${escapeHtml(cell.schema)}</span>` : "";
+  html += `<div class="cell-header">SQL Cell #${index + 1}${schemaLabel}</div>`;
   html += `<pre class="sql-code"><code>${escapeHtml(cell.content)}</code></pre>`;
 
   if (cell.error) {

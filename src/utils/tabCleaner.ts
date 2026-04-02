@@ -28,11 +28,9 @@ export interface CleanedTab {
       chartConfig?: NotebookCell['chartConfig'];
       resultHeight?: number;
       isParallel?: boolean;
-      sectionId?: string;
     }>;
     stopOnError?: boolean;
     params?: NotebookState['params'];
-    sections?: NotebookState['sections'];
   };
 }
 
@@ -69,11 +67,9 @@ export function cleanTabForStorage(tab: Tab): CleanedTab {
             chartConfig: cell.chartConfig,
             resultHeight: cell.resultHeight,
             isParallel: cell.isParallel,
-            sectionId: cell.sectionId,
           })),
           stopOnError: tab.notebookState.stopOnError,
           params: tab.notebookState.params,
-          sections: tab.notebookState.sections,
         }
       : undefined,
   };
@@ -115,7 +111,6 @@ export function restoreTabFromStorage(cleanedTab: Partial<Tab>): Tab {
           })),
           stopOnError: (cleanedTab.notebookState as NotebookState).stopOnError,
           params: (cleanedTab.notebookState as NotebookState).params,
-          sections: (cleanedTab.notebookState as NotebookState).sections,
         }
       : undefined,
   };
