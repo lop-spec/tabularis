@@ -105,7 +105,7 @@ export const registerSqlAutocomplete = (
   schema?: string | null,
 ) => {
   const provider = monaco.languages.registerCompletionItemProvider("sql", {
-    triggerCharacters: [".", " ", "\n"],
+    triggerCharacters: [".", " "],
     provideCompletionItems: async (model: { getWordUntilPosition: (position: { lineNumber: number; column: number }) => { startColumn: number; endColumn: number }; getValueInRange: (range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }) => string; getValue: () => string; getOffsetAt: (position: { lineNumber: number; column: number }) => number }, position: { lineNumber: number; column: number }) => {
       if (!connectionId) return { suggestions: [] };
 

@@ -98,7 +98,7 @@ describe('autocomplete', () => {
       expect(monaco.languages.registerCompletionItemProvider).toHaveBeenCalledWith(
         'sql',
         expect.objectContaining({
-          triggerCharacters: ['.', ' ', '\n'],
+          triggerCharacters: ['.', ' '],
           provideCompletionItems: expect.any(Function),
         })
       );

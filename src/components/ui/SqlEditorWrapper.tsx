@@ -37,9 +37,15 @@ const SqlEditorInternal = ({
     : currentTheme;
 
   // Sync editor value only when initialValue changes externally (e.g., tab switch)
+  // Preserve cursor position to avoid jumping to start during debounced updates
   useEffect(() => {
-    if (editorRef.current && initialValue !== editorRef.current.getValue()) {
-      editorRef.current.setValue(initialValue);
+    const editor = editorRef.current;
+    if (editor && initialValue !== editor.getValue()) {
+      const position = editor.getPosition();
+      const selections = editor.getSelections();
+      editor.setValue(initialValue);
+      if (position) editor.setPosition(position);
+      if (selections && selections.length > 0) editor.setSelections(selections);
     }
   }, [initialValue]);
 
@@ -104,10 +110,11 @@ const SqlEditorInternal = ({
       // Remove the built-in Paste from context menu (doesn't work in Tauri)
       const contextMenuContrib = editor.getContribution('editor.contrib.contextmenu');
       if (contextMenuContrib) {
-        const orig = (contextMenuContrib as any)._getMenuActions;
+        const contrib = contextMenuContrib as unknown as Record<string, unknown>;
+        const orig = contrib._getMenuActions;
         if (typeof orig === 'function') {
-          (contextMenuContrib as any)._getMenuActions = function (...args: unknown[]) {
-            const actions: { id?: string }[] = orig.apply(this, args);
+          contrib._getMenuActions = function (...args: unknown[]) {
+            const actions: { id?: string }[] = (orig as (...a: unknown[]) => { id?: string }[]).apply(this, args);
             return actions.filter((a) => a.id !== 'editor.action.clipboardPasteAction');
           };
         }
@@ -152,6 +159,7 @@ const SqlEditorInternal = ({
             verticalScrollbarSize: 8,
             horizontalScrollbarSize: 8,
           },
+          acceptSuggestionOnEnter: 'off',
           automaticLayout: true,
           ...options
         }}

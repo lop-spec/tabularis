@@ -203,7 +203,7 @@ describe("EditorProvider", () => {
     expect(result.current.activeTabId).not.toBe(tabId);
   });
 
-  it("should create new console tab when closing last tab", () => {
+  it("should return empty tabs when closing last tab", () => {
     const wrapper = createWrapper("conn-1");
     const { result } = renderHook(() => useEditor(), { wrapper });
 
@@ -217,9 +217,7 @@ describe("EditorProvider", () => {
       result.current.closeTab(tabId);
     });
 
-    expect(result.current.tabs).toHaveLength(1); // New tab created
-    expect(result.current.tabs[0].title).toBe("Console");
-    expect(result.current.activeTabId).toBe(result.current.tabs[0].id);
+    expect(result.current.tabs).toHaveLength(0);
   });
 
   it("should close all tabs for connection", () => {
@@ -242,9 +240,7 @@ describe("EditorProvider", () => {
       result.current.closeAllTabs();
     });
 
-    expect(result.current.tabs).toHaveLength(1); // Fresh console tab
-    expect(result.current.tabs[0].title).toBe("Console");
-    expect(result.current.tabs[0].type).toBe("console");
+    expect(result.current.tabs).toHaveLength(0);
   });
 
   it("should close other tabs", () => {

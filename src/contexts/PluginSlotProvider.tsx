@@ -87,7 +87,6 @@ async function loadExternalPluginContributions(
 
       // Execute the IIFE, passing React globals as parameters.
       // The bundle assigns its exports to the local `__tabularis_plugin__` var.
-      // eslint-disable-next-line no-new-func
       const fn = new Function(
         "React",
         "ReactJSXRuntime",
@@ -138,7 +137,9 @@ export const PluginSlotProvider = ({ children }: PluginSlotProviderProps) => {
   // Stable serialized key so the effect re-runs only when the enabled set changes.
   const enabledKey = [...activeExternalDrivers].sort().join(",");
   const enabledKeyRef = useRef(enabledKey);
-  enabledKeyRef.current = enabledKey;
+  useEffect(() => {
+    enabledKeyRef.current = enabledKey;
+  }, [enabledKey]);
 
   const register = useCallback((contribution: SlotContribution) => {
     setContributions((prev) => [...prev, contribution]);
@@ -186,7 +187,6 @@ export const PluginSlotProvider = ({ children }: PluginSlotProviderProps) => {
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabledKey]);
 
   const registerAll = useCallback((newContributions: SlotContribution[]) => {

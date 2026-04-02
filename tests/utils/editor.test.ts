@@ -364,21 +364,6 @@ describe("editor", () => {
       ...overrides,
     });
 
-    const createTabFn = (connectionId: string): Tab => ({
-      id: "new-tab",
-      title: "New Console",
-      type: "console",
-      query: "",
-      result: null,
-      error: "",
-      executionTime: null,
-      page: 1,
-      activeTable: null,
-      pkColumn: null,
-      connectionId,
-      isEditorOpen: true,
-    });
-
     it("should close tab and update state", () => {
       const tabs: Tab[] = [
         createMockTab({ id: "tab-1" }),
@@ -390,16 +375,14 @@ describe("editor", () => {
         "conn-1",
         "tab-1",
         "tab-2",
-        createTabFn,
       );
 
       expect(result.newTabs).toHaveLength(1);
       expect(result.newTabs[0].id).toBe("tab-1");
       expect(result.newActiveTabId).toBe("tab-1");
-      expect(result.createdNewTab).toBe(false);
     });
 
-    it("should create new tab when closing last tab for connection", () => {
+    it("should return empty tabs when closing last tab for connection", () => {
       const tabs: Tab[] = [createMockTab({ id: "tab-1" })];
 
       const result = closeTabWithState(
@@ -407,13 +390,10 @@ describe("editor", () => {
         "conn-1",
         "tab-1",
         "tab-1",
-        createTabFn,
       );
 
-      expect(result.newTabs).toHaveLength(1);
-      expect(result.newTabs[0].id).toBe("new-tab");
-      expect(result.newActiveTabId).toBe("new-tab");
-      expect(result.createdNewTab).toBe(true);
+      expect(result.newTabs).toHaveLength(0);
+      expect(result.newActiveTabId).toBeNull();
     });
 
     it("should handle closing active tab", () => {
@@ -428,7 +408,6 @@ describe("editor", () => {
         "conn-1",
         "tab-2",
         "tab-2",
-        createTabFn,
       );
 
       expect(result.newTabs).toHaveLength(2);
@@ -448,7 +427,6 @@ describe("editor", () => {
         "conn-1",
         "tab-1",
         "tab-1",
-        createTabFn,
       );
 
       expect(result.newTabs).toHaveLength(2);
@@ -456,7 +434,7 @@ describe("editor", () => {
       expect(result.newActiveTabId).toBe("tab-2");
     });
 
-    it("should keep other connection tabs when creating new tab", () => {
+    it("should keep other connection tabs when closing last tab for a connection", () => {
       const tabs: Tab[] = [
         createMockTab({ id: "tab-1", connectionId: "conn-1" }),
         createMockTab({ id: "tab-2", connectionId: "conn-2" }),
@@ -467,12 +445,10 @@ describe("editor", () => {
         "conn-1",
         "tab-1",
         "tab-1",
-        createTabFn,
       );
 
-      expect(result.newTabs).toHaveLength(2);
-      expect(result.newTabs.map((t) => t.id)).toContain("tab-2");
-      expect(result.newTabs.map((t) => t.id)).toContain("new-tab");
+      expect(result.newTabs).toHaveLength(1);
+      expect(result.newTabs[0].id).toBe("tab-2");
     });
   });
 
@@ -492,42 +468,27 @@ describe("editor", () => {
       ...overrides,
     });
 
-    const createTabFn = (connectionId: string): Tab => ({
-      id: "fresh-tab",
-      title: "Fresh Console",
-      type: "console",
-      query: "",
-      result: null,
-      error: "",
-      executionTime: null,
-      page: 1,
-      activeTable: null,
-      pkColumn: null,
-      connectionId,
-      isEditorOpen: true,
-    });
-
-    it("should close all tabs for connection and create fresh tab", () => {
+    it("should close all tabs for connection and keep other connections", () => {
       const tabs: Tab[] = [
         createMockTab({ id: "tab-1", connectionId: "conn-1" }),
         createMockTab({ id: "tab-2", connectionId: "conn-1" }),
         createMockTab({ id: "tab-3", connectionId: "conn-2" }),
       ];
 
-      const result = closeAllTabsForConnection(tabs, "conn-1", createTabFn);
+      const result = closeAllTabsForConnection(tabs, "conn-1");
 
-      expect(result.newTabs).toHaveLength(2);
-      expect(result.newTabs.map((t) => t.id)).toEqual(["tab-3", "fresh-tab"]);
-      expect(result.newActiveTabId).toBe("fresh-tab");
+      expect(result.newTabs).toHaveLength(1);
+      expect(result.newTabs[0].id).toBe("tab-3");
+      expect(result.newActiveTabId).toBeNull();
     });
 
     it("should work with empty tabs array", () => {
       const tabs: Tab[] = [];
 
-      const result = closeAllTabsForConnection(tabs, "conn-1", createTabFn);
+      const result = closeAllTabsForConnection(tabs, "conn-1");
 
-      expect(result.newTabs).toHaveLength(1);
-      expect(result.newTabs[0].id).toBe("fresh-tab");
+      expect(result.newTabs).toHaveLength(0);
+      expect(result.newActiveTabId).toBeNull();
     });
   });
 
