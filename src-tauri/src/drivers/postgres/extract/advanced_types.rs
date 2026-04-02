@@ -675,8 +675,12 @@ impl<'a> FromSql<'a> for BitOrVarBit {
         }
 
         let last_byte = format!("{:08b}", raw[4 + bits_len - 1]);
-        // remove padded zeros
-        bits.push_str(&last_byte[..remainder]);
+        if remainder > 0 {
+            // remove padded zeros
+            bits.push_str(&last_byte[..remainder]);
+        } else {
+            bits.push_str(&last_byte);
+        }
 
         Ok(Self { bits })
     }
@@ -1423,9 +1427,9 @@ impl<'a> FromSql<'a> for TxidSnapshotOrPgSnapshot {
         _ty: &Type,
         raw: &'a [u8],
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        if raw.len() != 20 {
+        if raw.len() < 20 {
             return Err(format!(
-                "fail to extract TxidSnapshotOrPgSnapshot: expected 20 bytes, got {}",
+                "fail to extract TxidSnapshotOrPgSnapshot: expected at least 20 bytes, got {}",
                 raw.len()
             )
             .into());
