@@ -424,7 +424,7 @@ mod tests {
         let buf = [2u8, 32, 0, 4, 192, 168, 1, 1];
         assert_eq!(
             extract_or_null(&Type::INET, &buf),
-            JsonValue::String("192.168.1.1".to_string())
+            JsonValue::String("192.168.1.1/32".to_string())
         );
     }
 
@@ -440,7 +440,315 @@ mod tests {
         buf.extend_from_slice(&[0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         assert_eq!(
             extract_or_null(&Type::INET, &buf),
-            JsonValue::String("2001:db8::1".to_string())
+            JsonValue::String("2001:db8::1/128".to_string())
+        );
+    }
+
+    #[test]
+    fn test_cidr_ipv4() {
+        // postgres CIDR binary for IPv4 with /24 netmask
+        let buf = [2u8, 24, 1, 4, 10, 0, 0, 0];
+        assert_eq!(
+            extract_or_null(&Type::CIDR, &buf),
+            JsonValue::String("10.0.0.0/24".to_string())
+        );
+    }
+
+    #[test]
+    fn test_macaddr() {
+        // MACADDR is 6 bytes
+        let buf = [0x08u8, 0x00, 0x2b, 0x01, 0x02, 0x03];
+        assert_eq!(
+            extract_or_null(&Type::MACADDR, &buf),
+            JsonValue::String("08:00:2b:01:02:03".to_string())
+        );
+    }
+
+    #[test]
+    fn test_macaddr8() {
+        // MACADDR8 is 8 bytes
+        let buf = [0x08u8, 0x00, 0x2b, 0x01, 0x02, 0x03, 0x04, 0x05];
+        assert_eq!(
+            extract_or_null(&Type::MACADDR8, &buf),
+            JsonValue::String("08:00:2b:01:02:03:04:05".to_string())
+        );
+    }
+
+    #[test]
+    fn test_bit_varbit() {
+        // BIT/VARBIT: 4 bytes for bit count + bit bytes
+        // 8 bits = 1 byte, value 0b10101010
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&8i32.to_be_bytes()); // 8 bits
+        buf.push(0b10101010);
+        assert_eq!(
+            extract_or_null(&Type::BIT, &buf),
+            JsonValue::String("10101010".to_string())
+        );
+    }
+
+    #[test]
+    fn test_varbit_partial_byte() {
+        // VARBIT with 13 bits = 2 bytes
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&13i32.to_be_bytes()); // 13 bits
+        buf.push(0b11110000); // first 8 bits
+        buf.push(0b10100000); // remaining 5 bits (13-8=5)
+        assert_eq!(
+            extract_or_null(&Type::VARBIT, &buf),
+            JsonValue::String("1111000010100".to_string())
+        );
+    }
+
+    #[test]
+    fn test_xid() {
+        let buf = 12345u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::XID, &buf),
+            JsonValue::Number(12345.into())
+        );
+    }
+
+    #[test]
+    fn test_cid() {
+        let buf = 67890u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::CID, &buf),
+            JsonValue::Number(67890.into())
+        );
+    }
+
+    #[test]
+    fn test_tid() {
+        // TID: 4 bytes block_num + 2 bytes offset
+        let buf = [0x00, 0x01, 0x00, 0x00, 0x00, 0x05]; // block=65536, offset=5
+        assert_eq!(
+            extract_or_null(&Type::TID, &buf),
+            JsonValue::String("(65536, 5)".to_string())
+        );
+    }
+
+    #[test]
+    fn test_xid8() {
+        let buf = 9876543210i64.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::XID8, &buf),
+            JsonValue::Number(9876543210i64.into())
+        );
+    }
+
+    #[test]
+    fn test_regclass() {
+        let buf = 12345u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::REGCLASS, &buf),
+            JsonValue::Number(12345.into())
+        );
+    }
+
+    #[test]
+    fn test_regtype() {
+        let buf = 23u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::REGTYPE, &buf),
+            JsonValue::Number(23.into())
+        );
+    }
+
+    #[test]
+    fn test_point() {
+        // Point: 16 bytes (2 x f64)
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&1.5f64.to_be_bytes());
+        buf.extend_from_slice(&(-2.5f64).to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::POINT, &buf),
+            JsonValue::String("(1.5, -2.5)".to_string())
+        );
+    }
+
+    #[test]
+    fn test_lseg() {
+        // Lseg: 32 bytes (2 x Point)
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&3.0f64.to_be_bytes());
+        buf.extend_from_slice(&4.0f64.to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::LSEG, &buf),
+            JsonValue::String("[(0, 0), (3, 4)]".to_string())
+        );
+    }
+
+    #[test]
+    fn test_box() {
+        // Box: 32 bytes (2 x Point: upper_right, lower_left)
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&5.0f64.to_be_bytes());
+        buf.extend_from_slice(&5.0f64.to_be_bytes());
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::BOX, &buf),
+            JsonValue::String("((5, 5), (1, 1))".to_string())
+        );
+    }
+
+    #[test]
+    fn test_line() {
+        // Line: 24 bytes (3 x f64: a, b, c)
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        buf.extend_from_slice(&2.0f64.to_be_bytes());
+        buf.extend_from_slice(&3.0f64.to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::LINE, &buf),
+            JsonValue::String("{1, 2, 3}".to_string())
+        );
+    }
+
+    #[test]
+    fn test_circle() {
+        // Circle: 24 bytes (Point + radius)
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&5.0f64.to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::CIRCLE, &buf),
+            JsonValue::String("<(0, 0), 5>".to_string())
+        );
+    }
+
+    #[test]
+    fn test_polygon() {
+        // Polygon: 4 bytes num_points + points
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&2i32.to_be_bytes()); // 2 points
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::POLYGON, &buf),
+            JsonValue::String("((0, 0), (1, 1))".to_string())
+        );
+    }
+
+    #[test]
+    fn test_path_closed() {
+        // Path: 1 byte flag + 4 bytes num_points + points
+        // flag=0 means closed path
+        let mut buf = Vec::new();
+        buf.push(0u8); // closed
+        buf.extend_from_slice(&2i32.to_be_bytes()); // 2 points
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::PATH, &buf),
+            JsonValue::String("[(0, 0), (1, 1)]".to_string())
+        );
+    }
+
+    #[test]
+    fn test_path_open() {
+        // Path: 1 byte flag + 4 bytes num_points + points
+        // flag=1 means open path
+        let mut buf = Vec::new();
+        buf.push(1u8); // open
+        buf.extend_from_slice(&2i32.to_be_bytes()); // 2 points
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&0.0f64.to_be_bytes());
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        buf.extend_from_slice(&1.0f64.to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::PATH, &buf),
+            JsonValue::String("((0, 0), (1, 1))".to_string())
+        );
+    }
+
+    #[test]
+    fn test_money() {
+        let buf = 12345i64.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::MONEY, &buf),
+            JsonValue::Number(12345.into())
+        );
+    }
+
+    #[test]
+    fn test_xml() {
+        let buf = b"<root>test</root>";
+        assert_eq!(
+            extract_or_null(&Type::XML, buf),
+            JsonValue::String("<root>test</root>".to_string())
+        );
+    }
+
+    #[test]
+    fn test_refcursor() {
+        let buf = b"my_cursor";
+        assert_eq!(
+            extract_or_null(&Type::REFCURSOR, buf),
+            JsonValue::String("my_cursor".to_string())
+        );
+    }
+
+    #[test]
+    fn test_pg_lsn() {
+        // PgLsn: 8 bytes (upper u32 + lower u32)
+        let buf = [0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x2A];
+        assert_eq!(
+            extract_or_null(&Type::PG_LSN, &buf),
+            JsonValue::String("1/2A".to_string())
+        );
+    }
+
+    #[test]
+    fn test_txid_snapshot() {
+        // TxidSnapshot: 4 bytes count + 8 bytes xmin + 8 bytes xmax + count*8 bytes active_xids
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0i32.to_be_bytes()); // 0 active xids
+        buf.extend_from_slice(&100i64.to_be_bytes()); // xmin
+        buf.extend_from_slice(&200i64.to_be_bytes()); // xmax
+        assert_eq!(
+            extract_or_null(&Type::TXID_SNAPSHOT, &buf),
+            JsonValue::String("100:200:".to_string())
+        );
+    }
+
+    #[test]
+    fn test_pg_snapshot_with_active_xids() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&2i32.to_be_bytes()); // 2 active xids
+        buf.extend_from_slice(&100i64.to_be_bytes()); // xmin
+        buf.extend_from_slice(&200i64.to_be_bytes()); // xmax
+        buf.extend_from_slice(&150i64.to_be_bytes()); // active xid 1
+        buf.extend_from_slice(&175i64.to_be_bytes()); // active xid 2
+        assert_eq!(
+            extract_or_null(&Type::PG_SNAPSHOT, &buf),
+            JsonValue::String("100:200:150,175".to_string())
+        );
+    }
+
+    #[test]
+    fn test_aclitem() {
+        let buf = b"postgres=arwdDxt/postgres";
+        assert_eq!(
+            extract_or_null(&Type::ACLITEM, buf),
+            JsonValue::String("postgres=arwdDxt/postgres".to_string())
+        );
+    }
+
+    #[test]
+    fn test_pg_node_tree() {
+        let buf = b"12345 12346 12347";
+        assert_eq!(
+            extract_or_null(&Type::PG_NODE_TREE, buf),
+            JsonValue::String("12345 12346 12347".to_string())
         );
     }
 
