@@ -104,7 +104,7 @@ describe('tabCleaner', () => {
       expect(cleaned.flowState).toEqual(flowState);
     });
 
-    it('should preserve notebookState and strip cell runtime data', () => {
+    it('should preserve notebookId and strip notebookState for notebook tabs', () => {
       const tab: Tab = {
         id: 'tab-nb',
         title: 'Notebook',
@@ -117,6 +117,7 @@ describe('tabCleaner', () => {
         result: null,
         error: '',
         executionTime: null,
+        notebookId: 'nb_abc123',
         notebookState: {
           cells: [
             {
@@ -128,16 +129,6 @@ describe('tabCleaner', () => {
               executionTime: 100,
               isLoading: true,
             },
-            {
-              id: 'cell-2',
-              type: 'markdown',
-              content: '# Title',
-              result: null,
-              error: undefined,
-              executionTime: null,
-              isLoading: false,
-              isPreview: true,
-            },
           ],
         },
       };
@@ -145,18 +136,9 @@ describe('tabCleaner', () => {
       const cleaned = cleanTabForStorage(tab);
 
       expect(cleaned.type).toBe('notebook');
-      expect(cleaned.notebookState).toBeDefined();
-      expect(cleaned.notebookState!.cells).toHaveLength(2);
-      // Should keep persistent fields
-      expect(cleaned.notebookState!.cells[0].id).toBe('cell-1');
-      expect(cleaned.notebookState!.cells[0].type).toBe('sql');
-      expect(cleaned.notebookState!.cells[0].content).toBe('SELECT 1');
-      expect(cleaned.notebookState!.cells[1].isPreview).toBe(true);
-      // Should NOT keep runtime fields
-      expect(cleaned.notebookState!.cells[0]).not.toHaveProperty('result');
-      expect(cleaned.notebookState!.cells[0]).not.toHaveProperty('error');
-      expect(cleaned.notebookState!.cells[0]).not.toHaveProperty('executionTime');
-      expect(cleaned.notebookState!.cells[0]).not.toHaveProperty('isLoading');
+      expect(cleaned.notebookId).toBe('nb_abc123');
+      // notebookState should NOT be in the cleaned output
+      expect(cleaned).not.toHaveProperty('notebookState');
     });
 
     it('should handle table type tabs', () => {
@@ -290,7 +272,7 @@ describe('tabCleaner', () => {
       expect(restored.queryParams).toEqual({ startDate: '2024-01-01' });
     });
 
-    it('should restore notebook tab with default runtime values for cells', () => {
+    it('should restore notebook tab with notebookId and no notebookState', () => {
       const cleanedTab = {
         id: 'tab-nb',
         title: 'Notebook',
@@ -300,27 +282,14 @@ describe('tabCleaner', () => {
         activeTable: null,
         pkColumn: null,
         connectionId: 'conn-456',
-        notebookState: {
-          cells: [
-            { id: 'cell-1', type: 'sql' as const, content: 'SELECT 1' },
-            { id: 'cell-2', type: 'markdown' as const, content: '# Title', isPreview: true },
-          ],
-        },
+        notebookId: 'nb_abc123',
       };
 
       const restored = restoreTabFromStorage(cleanedTab);
 
       expect(restored.type).toBe('notebook');
-      expect(restored.notebookState).toBeDefined();
-      expect(restored.notebookState!.cells).toHaveLength(2);
-      // Runtime fields should have defaults
-      expect(restored.notebookState!.cells[0].result).toBeNull();
-      expect(restored.notebookState!.cells[0].error).toBeUndefined();
-      expect(restored.notebookState!.cells[0].executionTime).toBeNull();
-      expect(restored.notebookState!.cells[0].isLoading).toBe(false);
-      // Persistent fields preserved
-      expect(restored.notebookState!.cells[0].content).toBe('SELECT 1');
-      expect(restored.notebookState!.cells[1].isPreview).toBe(true);
+      expect(restored.notebookId).toBe('nb_abc123');
+      expect(restored.notebookState).toBeUndefined();
     });
 
     it('should handle round-trip for notebook tabs', () => {
@@ -336,27 +305,14 @@ describe('tabCleaner', () => {
         result: null,
         error: '',
         executionTime: null,
-        notebookState: {
-          cells: [
-            {
-              id: 'cell-rt',
-              type: 'sql',
-              content: 'SELECT * FROM orders',
-              result: { columns: ['id'], rows: [[1]], affected_rows: 0 },
-              executionTime: 50,
-              isLoading: false,
-            },
-          ],
-        },
+        notebookId: 'nb_round_trip',
       };
 
       const cleaned = cleanTabForStorage(originalTab);
       const restored = restoreTabFromStorage(cleaned);
 
-      expect(restored.notebookState!.cells[0].content).toBe('SELECT * FROM orders');
-      expect(restored.notebookState!.cells[0].result).toBeNull();
-      expect(restored.notebookState!.cells[0].executionTime).toBeNull();
-      expect(restored.notebookState!.cells[0].isLoading).toBe(false);
+      expect(restored.notebookId).toBe('nb_round_trip');
+      expect(restored.notebookState).toBeUndefined();
     });
 
     it('should handle round-trip: clean then restore', () => {

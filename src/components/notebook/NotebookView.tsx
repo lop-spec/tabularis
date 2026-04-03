@@ -3,12 +3,13 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Loader2 } from "lucide-react";
 import type { Tab, QueryResult } from "../../types/editor";
 import type {
   NotebookCell,
   NotebookCellType,
   NotebookParam,
+  NotebookState,
   RunAllResult,
 } from "../../types/notebook";
 import {
@@ -35,6 +36,13 @@ import {
   createHistoryEntry,
 } from "../../utils/notebookHistory";
 import { exportNotebookToHtml } from "../../utils/notebookHtmlExport";
+import {
+  getNotebookState,
+  setNotebookState as storeSetState,
+  loadNotebook,
+  setNotebookTitle,
+  createNotebookFromState,
+} from "../../utils/notebookStore";
 import { useDatabase } from "../../hooks/useDatabase";
 import { isMultiDatabaseCapable } from "../../utils/database";
 import { useSettings } from "../../hooks/useSettings";
@@ -67,19 +75,60 @@ export function NotebookView({
   const { settings } = useSettings();
   const { showAlert } = useAlert();
   const { matchesShortcut } = useKeybindings();
+
+  // Local notebook state — loaded from store/disk, NOT from tab
+  const [notebook, setNotebook] = useState<NotebookState | null>(() =>
+    tab.notebookId ? getNotebookState(tab.notebookId) ?? null : null,
+  );
+  const [isLoadingNotebook, setIsLoadingNotebook] = useState(!notebook);
+
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [runAllResult, setRunAllResult] = useState<RunAllResult | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const cellsRef = useRef(tab.notebookState?.cells ?? []);
+  const cellsRef = useRef<NotebookCell[]>(notebook?.cells ?? []);
   const cellRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const notebookIdRef = useRef(tab.notebookId);
 
-  cellsRef.current = tab.notebookState?.cells ?? [];
+  // Keep ref in sync
+  useEffect(() => {
+    notebookIdRef.current = tab.notebookId;
+  }, [tab.notebookId]);
 
-  const cells = tab.notebookState?.cells ?? [];
-  const stopOnError = tab.notebookState?.stopOnError ?? false;
-  const params = tab.notebookState?.params ?? [];
+  // Load notebook from store/disk on mount or notebookId change
+  useEffect(() => {
+    if (!tab.notebookId) {
+      setIsLoadingNotebook(false);
+      return;
+    }
+
+    const cached = getNotebookState(tab.notebookId);
+    if (cached) {
+      setNotebook(cached);
+      cellsRef.current = cached.cells;
+      setIsLoadingNotebook(false);
+      return;
+    }
+
+    setIsLoadingNotebook(true);
+    loadNotebook(tab.notebookId).then((state) => {
+      setNotebook(state);
+      cellsRef.current = state.cells;
+      setIsLoadingNotebook(false);
+    });
+  }, [tab.notebookId]);
+
+  // Sync tab title to notebook store
+  useEffect(() => {
+    if (tab.notebookId) {
+      setNotebookTitle(tab.notebookId, tab.title);
+    }
+  }, [tab.notebookId, tab.title]);
+
+  const cells = notebook?.cells ?? [];
+  const stopOnError = notebook?.stopOnError ?? false;
+  const params = notebook?.params ?? [];
 
   const updateNotebook = useCallback(
     (
@@ -90,18 +139,20 @@ export function NotebookView({
       },
     ) => {
       cellsRef.current = newCells;
-      updateTab(tab.id, {
-        notebookState: {
-          cells: newCells,
-          stopOnError:
-            extraState?.stopOnError !== undefined
-              ? extraState.stopOnError
-              : stopOnError,
-          params: extraState?.params !== undefined ? extraState.params : params,
-        },
-      });
+      const newState: NotebookState = {
+        cells: newCells,
+        stopOnError:
+          extraState?.stopOnError !== undefined
+            ? extraState.stopOnError
+            : notebook?.stopOnError,
+        params: extraState?.params !== undefined ? extraState.params : notebook?.params,
+      };
+      setNotebook(newState);
+      if (notebookIdRef.current) {
+        storeSetState(notebookIdRef.current, newState);
+      }
     },
-    [tab.id, updateTab, stopOnError, params],
+    [notebook?.stopOnError, notebook?.params],
   );
 
   const updateCell = useCallback(
@@ -297,7 +348,7 @@ export function NotebookView({
 
   const handleExport = useCallback(async () => {
     try {
-      const notebook = serializeNotebook(tab.title, cellsRef.current, params);
+      const notebookFile = serializeNotebook(tab.title, cellsRef.current, params, stopOnError);
       const safeName = tab.title.replace(/[^a-zA-Z0-9_-]/g, "_");
       const filePath = await save({
         defaultPath: `${safeName}.tabularis-notebook`,
@@ -307,7 +358,7 @@ export function NotebookView({
       });
       if (!filePath) return;
 
-      await writeTextFile(filePath, JSON.stringify(notebook, null, 2));
+      await writeTextFile(filePath, JSON.stringify(notebookFile, null, 2));
       showAlert(t("editor.notebook.exportSuccess"), { kind: "info" });
     } catch (e) {
       console.error("Notebook export failed:", e);
@@ -317,7 +368,7 @@ export function NotebookView({
         { kind: "error" },
       );
     }
-  }, [tab.title, showAlert, t, params]);
+  }, [tab.title, showAlert, t, params, stopOnError]);
 
   const handleExportHtml = useCallback(async () => {
     try {
@@ -351,14 +402,23 @@ export function NotebookView({
 
     try {
       const content = await readTextFile(filePath);
-      const { title, cells: importedCells, params: importedParams } = deserializeNotebook(content);
-      updateTab(tab.id, {
-        title,
-        notebookState: {
-          cells: importedCells,
-          params: importedParams,
-        },
-      });
+      const { title, cells: importedCells, params: importedParams, stopOnError: importedStopOnError } = deserializeNotebook(content);
+      const importedState: NotebookState = {
+        cells: importedCells,
+        params: importedParams,
+        stopOnError: importedStopOnError,
+      };
+
+      // Create a new notebook file for the imported content
+      const { notebookId: newId } = await createNotebookFromState(title, importedState);
+
+      // Update the tab to point to the new notebook
+      updateTab(tab.id, { notebookId: newId, title });
+
+      // Update local state
+      setNotebook(importedState);
+      cellsRef.current = importedCells;
+
       showAlert(t("editor.notebook.importSuccess"), { kind: "info" });
     } catch {
       showAlert(t("editor.notebook.invalidFile"), { kind: "error" });
@@ -417,19 +477,16 @@ export function NotebookView({
         if (attempts < 10) requestAnimationFrame(() => tryFocus(attempts + 1));
         return;
       }
-      // SQL cell: Monaco editor textarea
       const monacoTextarea = el.querySelector<HTMLTextAreaElement>(".monaco-editor textarea");
       if (monacoTextarea) {
         monacoTextarea.focus();
         return;
       }
-      // Markdown cell: plain textarea
       const textarea = el.querySelector<HTMLTextAreaElement>("textarea");
       if (textarea) {
         textarea.focus();
         return;
       }
-      // Editor may not be mounted yet, retry
       if (attempts < 10) requestAnimationFrame(() => tryFocus(attempts + 1));
     };
     requestAnimationFrame(() => tryFocus(0));
@@ -481,6 +538,18 @@ export function NotebookView({
     onCollapseAll: collapseAll,
     onExpandAll: expandAll,
   };
+
+  // Loading state
+  if (isLoadingNotebook) {
+    return (
+      <div className="flex flex-col h-full">
+        <NotebookToolbar {...toolbarProps} />
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted">
+          <Loader2 size={32} className="animate-spin opacity-40" />
+        </div>
+      </div>
+    );
+  }
 
   // Empty state
   if (cells.length === 0) {

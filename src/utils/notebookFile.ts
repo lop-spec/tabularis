@@ -9,9 +9,10 @@ export function serializeNotebook(
   title: string,
   cells: NotebookCell[],
   params?: NotebookParam[],
+  stopOnError?: boolean,
 ): NotebookFile {
   return {
-    version: 1,
+    version: 2,
     title,
     createdAt: new Date().toISOString(),
     cells: cells.map((c) => ({
@@ -21,8 +22,10 @@ export function serializeNotebook(
       ...(c.schema ? { schema: c.schema } : {}),
       ...(c.chartConfig ? { chartConfig: c.chartConfig } : {}),
       ...(c.isParallel ? { isParallel: c.isParallel } : {}),
+      ...(c.isCollapsed ? { isCollapsed: c.isCollapsed } : {}),
     })),
     ...(params && params.length > 0 ? { params } : {}),
+    ...(stopOnError ? { stopOnError } : {}),
   };
 }
 
@@ -47,6 +50,7 @@ export function deserializeNotebook(json: string): {
   title: string;
   cells: NotebookCell[];
   params?: NotebookParam[];
+  stopOnError?: boolean;
 } {
   let data: unknown;
   try {
@@ -72,6 +76,7 @@ export function deserializeNotebook(json: string): {
         schema: c.schema,
         chartConfig: cellRaw.chartConfig as NotebookCell['chartConfig'] ?? null,
         isParallel: cellRaw.isParallel as boolean | undefined,
+        isCollapsed: cellRaw.isCollapsed as boolean | undefined,
         result: null,
         error: undefined,
         executionTime: null,
@@ -80,5 +85,6 @@ export function deserializeNotebook(json: string): {
       };
     }),
     params: Array.isArray(raw.params) ? raw.params as NotebookParam[] : undefined,
+    stopOnError: typeof raw.stopOnError === "boolean" ? raw.stopOnError : undefined,
   };
 }

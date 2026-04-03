@@ -34,7 +34,7 @@ describe('notebookFile utils', () => {
   describe('serializeNotebook', () => {
     it('should produce correct structure', () => {
       const result = serializeNotebook('My Notebook', makeCells());
-      expect(result.version).toBe(1);
+      expect(result.version).toBe(2);
       expect(result.title).toBe('My Notebook');
       expect(result.createdAt).toBeTruthy();
       expect(result.cells).toHaveLength(2);
@@ -55,6 +55,34 @@ describe('notebookFile utils', () => {
       const result = serializeNotebook('Empty', []);
       expect(result.cells).toHaveLength(0);
     });
+
+    it('should include stopOnError when true', () => {
+      const result = serializeNotebook('Test', makeCells(), [], true);
+      expect(result.stopOnError).toBe(true);
+    });
+
+    it('should omit stopOnError when false or undefined', () => {
+      const result = serializeNotebook('Test', makeCells(), [], false);
+      expect(result.stopOnError).toBeUndefined();
+
+      const result2 = serializeNotebook('Test', makeCells());
+      expect(result2.stopOnError).toBeUndefined();
+    });
+
+    it('should include isCollapsed when true', () => {
+      const cells = makeCells();
+      cells[0].isCollapsed = true;
+      const result = serializeNotebook('Test', cells);
+      expect(result.cells[0].isCollapsed).toBe(true);
+      expect(result.cells[1].isCollapsed).toBeUndefined();
+    });
+
+    it('should include cell name when set', () => {
+      const cells = makeCells();
+      cells[0].name = 'User Query';
+      const result = serializeNotebook('Test', cells);
+      expect(result.cells[0].name).toBe('User Query');
+    });
   });
 
   describe('validateNotebookFile', () => {
@@ -67,6 +95,19 @@ describe('notebookFile utils', () => {
           { type: 'sql', content: 'SELECT 1' },
           { type: 'markdown', content: '# Title' },
         ],
+      };
+      expect(validateNotebookFile(data)).toBe(true);
+    });
+
+    it('should return true for version 2 with new fields', () => {
+      const data = {
+        version: 2,
+        title: 'Test',
+        createdAt: '2026-01-01',
+        cells: [
+          { type: 'sql', content: 'SELECT 1', isCollapsed: true },
+        ],
+        stopOnError: true,
       };
       expect(validateNotebookFile(data)).toBe(true);
     });
@@ -169,6 +210,45 @@ describe('notebookFile utils', () => {
       const json = JSON.stringify({ title: 'T', cells: [] });
       expect(() => deserializeNotebook(json)).toThrow('Invalid notebook file format');
     });
+
+    it('should deserialize stopOnError from version 2', () => {
+      const json = JSON.stringify({
+        version: 2,
+        title: 'T',
+        createdAt: '',
+        cells: [{ type: 'sql', content: 'SELECT 1' }],
+        stopOnError: true,
+      });
+      const result = deserializeNotebook(json);
+      expect(result.stopOnError).toBe(true);
+    });
+
+    it('should deserialize isCollapsed per cell', () => {
+      const json = JSON.stringify({
+        version: 2,
+        title: 'T',
+        createdAt: '',
+        cells: [
+          { type: 'sql', content: 'SELECT 1', isCollapsed: true },
+          { type: 'sql', content: 'SELECT 2' },
+        ],
+      });
+      const result = deserializeNotebook(json);
+      expect(result.cells[0].isCollapsed).toBe(true);
+      expect(result.cells[1].isCollapsed).toBeUndefined();
+    });
+
+    it('should handle version 1 without new fields (backward compat)', () => {
+      const json = JSON.stringify({
+        version: 1,
+        title: 'Old Notebook',
+        createdAt: '2025-01-01',
+        cells: [{ type: 'sql', content: 'SELECT 1' }],
+      });
+      const result = deserializeNotebook(json);
+      expect(result.stopOnError).toBeUndefined();
+      expect(result.cells[0].isCollapsed).toBeUndefined();
+    });
   });
 
   describe('params serialization', () => {
@@ -224,6 +304,18 @@ describe('notebookFile utils', () => {
       const result = deserializeNotebook(json);
 
       expect(result.params).toBeUndefined();
+    });
+
+    it('should preserve stopOnError and isCollapsed through round-trip', () => {
+      const cells = makeCells();
+      cells[0].isCollapsed = true;
+      const serialized = serializeNotebook('Full', cells, [], true);
+      const json = JSON.stringify(serialized);
+      const result = deserializeNotebook(json);
+
+      expect(result.stopOnError).toBe(true);
+      expect(result.cells[0].isCollapsed).toBe(true);
+      expect(result.cells[1].isCollapsed).toBeUndefined();
     });
   });
 });

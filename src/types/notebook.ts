@@ -68,6 +68,8 @@ export interface NotebookFile {
     schema?: string;
     chartConfig?: CellChartConfig | null;
     isParallel?: boolean;
+    isCollapsed?: boolean;
   }>;
   params?: NotebookParam[];
+  stopOnError?: boolean;
 }

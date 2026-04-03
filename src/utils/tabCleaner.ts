@@ -1,5 +1,4 @@
 import type { Tab } from '../types/editor';
-import type { NotebookState, NotebookCell } from '../types/notebook';
 
 /**
  * Interface representing a cleaned tab with only persistent data
@@ -19,24 +18,13 @@ export interface CleanedTab {
   sortClause?: string;
   limitClause?: number;
   queryParams?: Record<string, string>;
-  notebookState?: {
-    cells: Array<{
-      id: string;
-      type: 'sql' | 'markdown';
-      content: string;
-      isPreview?: boolean;
-      chartConfig?: NotebookCell['chartConfig'];
-      resultHeight?: number;
-      isParallel?: boolean;
-    }>;
-    stopOnError?: boolean;
-    params?: NotebookState['params'];
-  };
+  notebookId?: string;
 }
 
 /**
  * Removes temporary/runtime data from a tab, keeping only persistent state.
  * Excludes: result, error, executionTime, isLoading, pendingChanges, pendingDeletions, selectedRows
+ * For notebook tabs: only persists notebookId reference, not the full notebookState.
  *
  * @param tab - The tab to clean
  * @returns A cleaned tab with only persistent data
@@ -57,21 +45,7 @@ export function cleanTabForStorage(tab: Tab): CleanedTab {
     sortClause: tab.sortClause,
     limitClause: tab.limitClause,
     queryParams: tab.queryParams,
-    notebookState: tab.notebookState
-      ? {
-          cells: tab.notebookState.cells.map((cell) => ({
-            id: cell.id,
-            type: cell.type,
-            content: cell.content,
-            isPreview: cell.isPreview,
-            chartConfig: cell.chartConfig,
-            resultHeight: cell.resultHeight,
-            isParallel: cell.isParallel,
-          })),
-          stopOnError: tab.notebookState.stopOnError,
-          params: tab.notebookState.params,
-        }
-      : undefined,
+    notebookId: tab.notebookId,
   };
 }
 
@@ -99,19 +73,7 @@ export function restoreTabFromStorage(cleanedTab: Partial<Tab>): Tab {
     pendingChanges: undefined,
     pendingDeletions: undefined,
     selectedRows: undefined,
-    notebookState: cleanedTab.notebookState
-      ? {
-          cells: (cleanedTab.notebookState as NotebookState).cells.map((cell) => ({
-            ...cell,
-            result: null,
-            error: undefined,
-            executionTime: null,
-            isLoading: false,
-            history: undefined,
-          })),
-          stopOnError: (cleanedTab.notebookState as NotebookState).stopOnError,
-          params: (cleanedTab.notebookState as NotebookState).params,
-        }
-      : undefined,
+    notebookId: cleanedTab.notebookId,
+    notebookState: undefined,
   };
 }

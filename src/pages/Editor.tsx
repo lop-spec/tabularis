@@ -67,7 +67,8 @@ import {
 import { formatDuration } from "../utils/formatTime";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
 import { NotebookView } from "../components/notebook/NotebookView";
-import { createDefaultNotebookState, extractSqlFromCells } from "../utils/notebook";
+import { extractSqlFromCells } from "../utils/notebook";
+import { createNotebook } from "../utils/notebookStore";
 import { registerSqlAutocomplete } from "../utils/autocomplete";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -1946,13 +1947,15 @@ export const Editor = () => {
           <Network size={16} />
         </button>
         <button
-          onClick={() =>
+          onClick={async () => {
+            const title = "Notebook";
+            const { notebookId } = await createNotebook(title);
             addTab({
               type: "notebook",
-              notebookState: createDefaultNotebookState(),
+              notebookId,
               ...(isMultiDb ? { schema: selectedDatabases[0] } : {}),
-            })
-          }
+            });
+          }}
           className="flex items-center justify-center w-9 h-full text-orange-400 hover:text-white hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
           title={t("editor.newNotebook")}
         >

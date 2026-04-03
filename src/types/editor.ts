@@ -84,7 +84,8 @@ export interface Tab {
   limitClause?: number; // SQL LIMIT value
   queryParams?: Record<string, string>; // Saved values for query parameters
   schema?: string; // Schema name (PostgreSQL) for query reconstruction
-  notebookState?: NotebookState;
+  notebookId?: string; // Reference to notebook file in config dir
+  notebookState?: NotebookState; // Deprecated: kept for migration of old tabs
 }
 
 export interface EditorPreferences {
