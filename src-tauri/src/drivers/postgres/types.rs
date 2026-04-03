@@ -1,10 +1,12 @@
 use crate::models::DataTypeInfo;
 
 /// Returns the list of data types supported by PostgreSQL.
-/// Includes spatial types from PostGIS extension.
+/// Includes types from extensions (hstore, ltree, citext, PostGIS, etc.).
 pub fn get_data_types() -> Vec<DataTypeInfo> {
     vec![
+        // ============================================================
         // Numeric types
+        // ============================================================
         DataTypeInfo {
             name: "SMALLINT".to_string(),
             category: "numeric".to_string(),
@@ -55,6 +57,13 @@ pub fn get_data_types() -> Vec<DataTypeInfo> {
             default_length: None,
         },
         DataTypeInfo {
+            name: "SMALLSERIAL".to_string(),
+            category: "numeric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
             name: "SERIAL".to_string(),
             category: "numeric".to_string(),
             requires_length: false,
@@ -68,7 +77,16 @@ pub fn get_data_types() -> Vec<DataTypeInfo> {
             requires_precision: false,
             default_length: None,
         },
-        // String types
+        DataTypeInfo {
+            name: "MONEY".to_string(),
+            category: "numeric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // String / Character types
+        // ============================================================
         DataTypeInfo {
             name: "VARCHAR".to_string(),
             category: "string".to_string(),
@@ -90,15 +108,33 @@ pub fn get_data_types() -> Vec<DataTypeInfo> {
             requires_precision: false,
             default_length: None,
         },
-        // Boolean
         DataTypeInfo {
-            name: "BOOLEAN".to_string(),
-            category: "other".to_string(),
+            name: "NAME".to_string(),
+            category: "string".to_string(),
             requires_length: false,
             requires_precision: false,
             default_length: None,
         },
+        DataTypeInfo {
+            name: "\"char\"".to_string(),
+            category: "string".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Boolean
+        // ============================================================
+        DataTypeInfo {
+            name: "BOOLEAN".to_string(),
+            category: "boolean".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
         // Date/Time types
+        // ============================================================
         DataTypeInfo {
             name: "DATE".to_string(),
             category: "date".to_string(),
@@ -108,6 +144,13 @@ pub fn get_data_types() -> Vec<DataTypeInfo> {
         },
         DataTypeInfo {
             name: "TIME".to_string(),
+            category: "date".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "TIMETZ".to_string(),
             category: "date".to_string(),
             requires_length: false,
             requires_precision: false,
@@ -134,7 +177,9 @@ pub fn get_data_types() -> Vec<DataTypeInfo> {
             requires_precision: false,
             default_length: None,
         },
+        // ============================================================
         // JSON types
+        // ============================================================
         DataTypeInfo {
             name: "JSON".to_string(),
             category: "json".to_string(),
@@ -149,15 +194,26 @@ pub fn get_data_types() -> Vec<DataTypeInfo> {
             requires_precision: false,
             default_length: None,
         },
-        // UUID
         DataTypeInfo {
-            name: "UUID".to_string(),
-            category: "other".to_string(),
+            name: "JSONPATH".to_string(),
+            category: "json".to_string(),
             requires_length: false,
             requires_precision: false,
             default_length: None,
         },
+        // ============================================================
+        // UUID
+        // ============================================================
+        DataTypeInfo {
+            name: "UUID".to_string(),
+            category: "identifier".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
         // Binary types
+        // ============================================================
         DataTypeInfo {
             name: "BYTEA".to_string(),
             category: "binary".to_string(),
@@ -165,7 +221,309 @@ pub fn get_data_types() -> Vec<DataTypeInfo> {
             requires_precision: false,
             default_length: None,
         },
-        // Spatial types (PostGIS)
+        // ============================================================
+        // Bit string types
+        // ============================================================
+        DataTypeInfo {
+            name: "BIT".to_string(),
+            category: "bit".to_string(),
+            requires_length: true,
+            requires_precision: false,
+            default_length: Some("1".to_string()),
+        },
+        DataTypeInfo {
+            name: "VARBIT".to_string(),
+            category: "bit".to_string(),
+            requires_length: true,
+            requires_precision: false,
+            default_length: Some("64".to_string()),
+        },
+        // ============================================================
+        // Network address types
+        // ============================================================
+        DataTypeInfo {
+            name: "INET".to_string(),
+            category: "network".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "CIDR".to_string(),
+            category: "network".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "MACADDR".to_string(),
+            category: "network".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "MACADDR8".to_string(),
+            category: "network".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Geometric types (built-in)
+        // ============================================================
+        DataTypeInfo {
+            name: "POINT".to_string(),
+            category: "geometric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "LINE".to_string(),
+            category: "geometric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "LSEG".to_string(),
+            category: "geometric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "BOX".to_string(),
+            category: "geometric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "PATH".to_string(),
+            category: "geometric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "POLYGON".to_string(),
+            category: "geometric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "CIRCLE".to_string(),
+            category: "geometric".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Full text search types
+        // ============================================================
+        DataTypeInfo {
+            name: "TSVECTOR".to_string(),
+            category: "fulltext".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "TSQUERY".to_string(),
+            category: "fulltext".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // XML
+        // ============================================================
+        DataTypeInfo {
+            name: "XML".to_string(),
+            category: "xml".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // System / Internal types (rarely used in user tables)
+        // ============================================================
+        DataTypeInfo {
+            name: "OID".to_string(),
+            category: "system".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "XID".to_string(),
+            category: "system".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "XID8".to_string(),
+            category: "system".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "CID".to_string(),
+            category: "system".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "TID".to_string(),
+            category: "system".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Object identifier (Reg) types
+        // ============================================================
+        DataTypeInfo {
+            name: "REGCLASS".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGTYPE".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGPROC".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGPROCEDURE".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGOPER".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGOPERATOR".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGCONFIG".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGDICTIONARY".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGNAMESPACE".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGROLE".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "REGCOLLATION".to_string(),
+            category: "reg".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Extension: hstore (CREATE EXTENSION hstore)
+        // ============================================================
+        DataTypeInfo {
+            name: "HSTORE".to_string(),
+            category: "extension".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Extension: ltree (CREATE EXTENSION ltree)
+        // ============================================================
+        DataTypeInfo {
+            name: "LTREE".to_string(),
+            category: "extension".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "LQUERY".to_string(),
+            category: "extension".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "LTXTQUERY".to_string(),
+            category: "extension".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Extension: citext (CREATE EXTENSION citext)
+        // ============================================================
+        DataTypeInfo {
+            name: "CITEXT".to_string(),
+            category: "extension".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Extension: pg_trgm (CREATE EXTENSION pg_trgm)
+        // ============================================================
+        DataTypeInfo {
+            name: "GTSVECTOR".to_string(),
+            category: "extension".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Extension: PostGIS (CREATE EXTENSION postgis)
+        // WARNING: These types are not supported by `tokio-postgres`
+        // ============================================================
         DataTypeInfo {
             name: "GEOMETRY".to_string(),
             category: "spatial".to_string(),
@@ -181,22 +539,126 @@ pub fn get_data_types() -> Vec<DataTypeInfo> {
             default_length: None,
         },
         DataTypeInfo {
-            name: "POINT".to_string(),
+            name: "GEOMETRY(Point, 4326)".to_string(),
             category: "spatial".to_string(),
             requires_length: false,
             requires_precision: false,
             default_length: None,
         },
         DataTypeInfo {
-            name: "LINESTRING".to_string(),
+            name: "GEOMETRY(LineString, 4326)".to_string(),
             category: "spatial".to_string(),
             requires_length: false,
             requires_precision: false,
             default_length: None,
         },
         DataTypeInfo {
-            name: "POLYGON".to_string(),
+            name: "GEOMETRY(Polygon, 4326)".to_string(),
             category: "spatial".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "GEOMETRY(MultiPoint, 4326)".to_string(),
+            category: "spatial".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "GEOMETRY(MultiLineString, 4326)".to_string(),
+            category: "spatial".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "GEOMETRY(MultiPolygon, 4326)".to_string(),
+            category: "spatial".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "GEOMETRY(GeometryCollection, 4326)".to_string(),
+            category: "spatial".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "GEOGRAPHY(Point, 4326)".to_string(),
+            category: "spatial".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Extension: intarray (CREATE EXTENSION intarray)
+        // ============================================================
+        DataTypeInfo {
+            name: "INTARRAY".to_string(),
+            category: "extension".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        // ============================================================
+        // Arrays (PostgreSQL supports arrays of any type)
+        // ============================================================
+        DataTypeInfo {
+            name: "INTEGER[]".to_string(),
+            category: "array".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "TEXT[]".to_string(),
+            category: "array".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "VARCHAR[]".to_string(),
+            category: "array".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "BOOLEAN[]".to_string(),
+            category: "array".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "UUID[]".to_string(),
+            category: "array".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "JSONB[]".to_string(),
+            category: "array".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "TIMESTAMP[]".to_string(),
+            category: "array".to_string(),
+            requires_length: false,
+            requires_precision: false,
+            default_length: None,
+        },
+        DataTypeInfo {
+            name: "NUMERIC[]".to_string(),
+            category: "array".to_string(),
             requires_length: false,
             requires_precision: false,
             default_length: None,
