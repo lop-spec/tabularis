@@ -1545,9 +1545,3 @@ binary_wrapper!(PgDependencies, PG_DEPENDENCIES);
 binary_wrapper!(PgNdistinct, PG_NDISTINCT);
 binary_wrapper!(PgBrinBloomSummary, PG_BRIN_BLOOM_SUMMARY);
 binary_wrapper!(PgBrinMinmaxMultiSummary, PG_BRIN_MINMAX_MULTI_SUMMARY);
-
-/*
-'14:30:00-05'::timetz AS timetz_val => null,
-'1 year 2 months 3 days 04:05:06'::interval AS interval_val =>
-1 year2 months8 days +170:00:00;
- */
