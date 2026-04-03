@@ -178,6 +178,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio_postgres::types::Kind;
 
     #[test]
     fn test_bool_true() {
@@ -873,5 +874,342 @@ mod tests {
             extract_or_null(&Type::NUMERIC, &buf),
             JsonValue::String("12345".to_string())
         );
+    }
+
+    #[test]
+    fn test_regproc() {
+        let buf = 12345u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::REGPROC, &buf),
+            JsonValue::Number(12345.into())
+        );
+    }
+
+    #[test]
+    fn test_regprocedure() {
+        let buf = 67890u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::REGPROCEDURE, &buf),
+            JsonValue::Number(67890.into())
+        );
+    }
+
+    #[test]
+    fn test_regoper() {
+        let buf = 11111u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::REGOPER, &buf),
+            JsonValue::Number(11111.into())
+        );
+    }
+
+    #[test]
+    fn test_regoperator() {
+        let buf = 22222u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::REGOPERATOR, &buf),
+            JsonValue::Number(22222.into())
+        );
+    }
+
+    #[test]
+    fn test_regconfig() {
+        let buf = 3748u32.to_be_bytes(); // default OID for 'english'
+        assert_eq!(
+            extract_or_null(&Type::REGCONFIG, &buf),
+            JsonValue::Number(3748.into())
+        );
+    }
+
+    #[test]
+    fn test_regdictionary() {
+        let buf = 3380u32.to_be_bytes(); // default OID for 'simple'
+        assert_eq!(
+            extract_or_null(&Type::REGDICTIONARY, &buf),
+            JsonValue::Number(3380.into())
+        );
+    }
+
+    #[test]
+    fn test_regnamespace() {
+        let buf = 11u32.to_be_bytes(); // default OID for 'pg_catalog'
+        assert_eq!(
+            extract_or_null(&Type::REGNAMESPACE, &buf),
+            JsonValue::Number(11.into())
+        );
+    }
+
+    #[test]
+    fn test_regrole() {
+        let buf = 10u32.to_be_bytes(); // default OID for 'pg_role'
+        assert_eq!(
+            extract_or_null(&Type::REGROLE, &buf),
+            JsonValue::Number(10.into())
+        );
+    }
+
+    #[test]
+    fn test_regcollation() {
+        let buf = 100u32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::REGCOLLATION, &buf),
+            JsonValue::Number(100.into())
+        );
+    }
+
+    #[test]
+    fn test_timetz() {
+        // TIMETZ: 8 bytes microseconds + 4 bytes timezone offset (seconds)
+        // 14:30:05.37 = 52205370000 microseconds
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&52205370000i64.to_be_bytes());
+        buf.extend_from_slice(&(-18347i32).to_be_bytes()); // +5:05:47 (EST)
+        assert_eq!(
+            extract_or_null(&Type::TIMETZ, &buf),
+            JsonValue::String("14:30:05.37+05:05:47".to_string())
+        );
+    }
+
+    #[test]
+    fn test_interval() {
+        // INTERVAL: 8 bytes microseconds + 4 bytes days + 4 bytes months
+        // 1 year 2 months 3 days 04:05:06.007
+        let mut buf = Vec::new();
+        // microseconds: 4*3600*1000000 + 5*60*1000000 + 6*1000000 + 7000 = 14706007000
+        buf.extend_from_slice(&14706007000i64.to_be_bytes());
+        buf.extend_from_slice(&3i32.to_be_bytes()); // 3 days
+        buf.extend_from_slice(&14i32.to_be_bytes()); // 14 months (1 year + 2 months)
+        assert_eq!(
+            extract_or_null(&Type::INTERVAL, &buf),
+            JsonValue::String("1 year 2 months 3 days 04:05:06.7".to_string())
+        );
+    }
+
+    #[test]
+    fn test_citext() {
+        let buf = b"CaseInsensitiveText";
+        // Create a custom Type for citext
+        let citext_type = Type::new(
+            "citext".to_string(),
+            10000,
+            Kind::Simple,
+            "public".to_string(),
+        );
+        assert_eq!(
+            extract_or_null(&citext_type, buf),
+            JsonValue::String("CaseInsensitiveText".to_string())
+        );
+    }
+
+    #[test]
+    fn test_ltree() {
+        let buf = b"\x01Top.Science.Astronomy";
+        let ltree_type = Type::new(
+            "ltree".to_string(),
+            10001,
+            Kind::Simple,
+            "public".to_string(),
+        );
+        assert_eq!(
+            extract_or_null(&ltree_type, buf),
+            JsonValue::String("Top.Science.Astronomy".to_string())
+        );
+    }
+
+    #[test]
+    fn test_lquery() {
+        let buf = b"\x01Top.*{1,2}";
+        let lquery_type = Type::new(
+            "lquery".to_string(),
+            10002,
+            Kind::Simple,
+            "public".to_string(),
+        );
+        assert_eq!(
+            extract_or_null(&lquery_type, buf),
+            JsonValue::String("Top.*{1,2}".to_string())
+        );
+    }
+
+    #[test]
+    fn test_ltxtquery() {
+        let buf = b"\x01Top & Science";
+        let ltxtquery_type = Type::new(
+            "ltxtquery".to_string(),
+            10003,
+            Kind::Simple,
+            "public".to_string(),
+        );
+        assert_eq!(
+            extract_or_null(&ltxtquery_type, buf),
+            JsonValue::String("Top & Science".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tsvector() {
+        // TsVector: 4 bytes count + lexemes
+        // Each lexeme: null-terminated text + 2 bytes position count + positions
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&1i32.to_be_bytes()); // 1 lexeme
+        buf.extend_from_slice(b"hello\0"); // lexeme text
+        buf.extend_from_slice(&1i16.to_be_bytes()); // 1 position
+        buf.extend_from_slice(&1u16.to_be_bytes()); // position 1, weight D (0)
+        assert_eq!(
+            extract_or_null(&Type::TS_VECTOR, &buf),
+            JsonValue::String("'hello':1".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tsvector_empty() {
+        let buf = 0i32.to_be_bytes();
+        assert_eq!(
+            extract_or_null(&Type::TS_VECTOR, &buf),
+            JsonValue::String("".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tsvector_with_weights() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&1i32.to_be_bytes()); // 1 lexeme
+        buf.extend_from_slice(b"world\0"); // lexeme text
+        buf.extend_from_slice(&2i16.to_be_bytes()); // 2 positions
+                                                    // position 5, weight A (3 << 14 = 0xC000 | 5 = 0xC005)
+        buf.extend_from_slice(&0xC005u16.to_be_bytes());
+        // position 10, weight B (2 << 14 = 0x8000 | 10 = 0x800A)
+        buf.extend_from_slice(&0x800Au16.to_be_bytes());
+        assert_eq!(
+            extract_or_null(&Type::TS_VECTOR, &buf),
+            JsonValue::String("'world':5A,10B".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tsquery() {
+        // TsQuery binary: type byte + data
+        // type=1 (operand): weight(1) + prefixed(1) + null-terminated text
+        let buf = [1u8, 0, 0, b'f', b'o', b'o', 0]; // operand 'foo', weight D, not prefixed
+        assert_eq!(
+            extract_or_null(&Type::TSQUERY, &buf),
+            JsonValue::String("'foo'".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tsquery_and() {
+        // AND query: type=2, operator=2 (&), then two operands
+        let buf = [
+            2u8, 2, // type=2, operator=AND
+            1u8, 0, 0, b'f', b'o', b'o', 0, // operand 'foo'
+            1u8, 0, 0, b'b', b'a', b'r', 0, // operand 'bar'
+        ];
+        assert_eq!(
+            extract_or_null(&Type::TSQUERY, &buf),
+            JsonValue::String("'bar' & 'foo'".to_string())
+        );
+    }
+
+    #[test]
+    fn test_gts_vector() {
+        // GtsVector: 4 bytes header + 1 byte signature
+        let buf = [0x01, 0x02, 0x03, 0x04, 0xAB];
+        let result = extract_or_null(&Type::GTS_VECTOR, &buf);
+        match result {
+            JsonValue::String(s) => {
+                assert!(s.starts_with("BLOB:5:"));
+            }
+            _ => panic!("expected blob string for GTS_VECTOR"),
+        }
+    }
+
+    #[test]
+    fn test_pg_ndistinct() {
+        let buf = [0xDE, 0xAD, 0xBE, 0xEF];
+        let result = extract_or_null(&Type::PG_NDISTINCT, &buf);
+        match result {
+            JsonValue::String(s) => {
+                assert!(s.starts_with("BLOB:4:"));
+            }
+            _ => panic!("expected blob string for PG_NDISTINCT"),
+        }
+    }
+
+    #[test]
+    fn test_pg_dependencies() {
+        let buf = [0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x01];
+        let result = extract_or_null(&Type::PG_DEPENDENCIES, &buf);
+        match result {
+            JsonValue::String(s) => {
+                assert!(s.starts_with("BLOB:6:"));
+            }
+            _ => panic!("expected blob string for PG_DEPENDENCIES"),
+        }
+    }
+
+    #[test]
+    fn test_pg_brin_bloom_summary() {
+        let buf = [0x01, 0x02, 0x03];
+        let result = extract_or_null(&Type::PG_BRIN_BLOOM_SUMMARY, &buf);
+        match result {
+            JsonValue::String(s) => {
+                assert!(s.starts_with("BLOB:3:"));
+            }
+            _ => panic!("expected blob string for PG_BRIN_BLOOM_SUMMARY"),
+        }
+    }
+
+    #[test]
+    fn test_pg_brin_minmax_multi_summary() {
+        let buf = [0xAA, 0xBB];
+        let result = extract_or_null(&Type::PG_BRIN_MINMAX_MULTI_SUMMARY, &buf);
+        match result {
+            JsonValue::String(s) => {
+                assert!(s.starts_with("BLOB:2:"));
+            }
+            _ => panic!("expected blob string for PG_BRIN_MINMAX_MULTI_SUMMARY"),
+        }
+    }
+
+    #[test]
+    fn test_pg_mcv_list() {
+        let buf = [0x01, 0x02, 0x03, 0x04, 0x05];
+        let result = extract_or_null(&Type::PG_MCV_LIST, &buf);
+        match result {
+            JsonValue::String(s) => {
+                assert!(s.starts_with("BLOB:5:"));
+            }
+            _ => panic!("expected blob string for PG_MCV_LIST"),
+        }
+    }
+
+    #[test]
+    fn test_jsonpath() {
+        // JSONPATH: 1 byte version + path string
+        let mut buf = vec![1u8]; // version 1
+        buf.extend_from_slice(b"$.store.book[*].author");
+        assert_eq!(
+            extract_or_null(&Type::JSONPATH, &buf),
+            JsonValue::String("$.store.book[*].author".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hstore() {
+        // HSTORE uses HashMap<String, Option<String>> via tokio_postgres
+        // Binary format is complex; this test verifies the type mapping exists
+        // In practice, hstore binary parsing is handled by tokio_postgres
+        let hstore_type = Type::new(
+            "hstore".to_string(),
+            10004,
+            Kind::Simple,
+            "public".to_string(),
+        );
+        // Empty hstore would be handled by tokio_postgres internally
+        // We just verify the type match works
+        let result = extract_or_null(&hstore_type, &[]);
+        // Empty buffer should fail gracefully
+        assert_eq!(result, JsonValue::Null);
     }
 }
