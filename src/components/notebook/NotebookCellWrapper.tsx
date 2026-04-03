@@ -102,6 +102,14 @@ export function NotebookCellWrapper({
         cellContent={cell.content}
       />
 
+      {showHistory && cell.type === "sql" && (
+        <CellHistoryPanel
+          history={cell.history ?? []}
+          onRestore={handleRestoreHistory}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
+
       {!cell.isCollapsed && cell.type === "sql" ? (
         <SqlCell
           cell={cell}
@@ -117,14 +125,6 @@ export function NotebookCellWrapper({
           onTogglePreview={() => onUpdate({ isPreview: !cell.isPreview })}
         />
       ) : null}
-
-      {!cell.isCollapsed && showHistory && cell.type === "sql" && (
-        <CellHistoryPanel
-          history={cell.history ?? []}
-          onRestore={handleRestoreHistory}
-          onClose={() => setShowHistory(false)}
-        />
-      )}
     </div>
   );
 }
