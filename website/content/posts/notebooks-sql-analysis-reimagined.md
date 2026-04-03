@@ -7,7 +7,7 @@ og:
   title: "Notebooks:"
   accent: "SQL Analysis, Reimagined."
   claim: "SQL cells, inline charts, cell references, AI assistance — a preview of what's taking shape inside Tabularis."
-  image: "/img/tabularis-notebooks.png"
+  image: "/img/posts/tabularis-notebook-sql-cell-pie-chart-data-grid.png"
 ---
 
 # Notebooks: SQL Analysis, Reimagined
