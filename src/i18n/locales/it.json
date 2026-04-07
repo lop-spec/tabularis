@@ -630,7 +630,13 @@
     "paramValuePlaceholder": "Valore (es. 'testo' o 123)",
     "failedCreateRow": "Impossibile creare nuova riga: ",
     "failedProcessInsertions": "Impossibile processare gli inserimenti: ",
-    "fieldRequired": "Questo campo è obbligatorio"
+    "fieldRequired": "Questo campo è obbligatorio",
+    "querySelection": {
+      "title": "Seleziona la query da eseguire",
+      "queriesFound": "{{count}} query trovate",
+      "escToCancel": "Esc per annullare",
+      "numberHint": "Premi 1-9 per selezionare, frecce per navigare"
+    }
   },
   "createTable": {
     "title": "Crea Nuova Tabella",

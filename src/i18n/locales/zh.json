@@ -602,7 +602,13 @@
     "paramValuePlaceholder": "值（例如 'text' 或 123）",
     "failedCreateRow": "创建新行失败：",
     "failedProcessInsertions": "处理插入失败：",
-    "fieldRequired": "此字段是必需的"
+    "fieldRequired": "此字段是必需的",
+    "querySelection": {
+      "title": "选择要执行的查询",
+      "queriesFound": "找到 {{count}} 个查询",
+      "escToCancel": "Esc 取消",
+      "numberHint": "按 1-9 选择，方向键导航"
+    }
   },
   "createTable": {
     "title": "创建新表",

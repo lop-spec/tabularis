@@ -630,7 +630,13 @@
     "paramValuePlaceholder": "Value (e.g. 'text' or 123)",
     "failedCreateRow": "Failed to create new row: ",
     "failedProcessInsertions": "Failed to process insertions: ",
-    "fieldRequired": "This field is required"
+    "fieldRequired": "This field is required",
+    "querySelection": {
+      "title": "Select Query to Execute",
+      "queriesFound": "{{count}} queries found",
+      "escToCancel": "Esc to cancel",
+      "numberHint": "Press 1-9 to select, arrows to navigate"
+    }
   },
   "createTable": {
     "title": "Create New Table",

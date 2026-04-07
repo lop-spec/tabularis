@@ -620,7 +620,13 @@
     "queryParameters": "Parámetros de Consulta",
     "convertToConsole": "Convertir a Consola",
     "parameters": "Parámetros",
-    "paramValuePlaceholder": "Valor (ej. 'texto' o 123)"
+    "paramValuePlaceholder": "Valor (ej. 'texto' o 123)",
+    "querySelection": {
+      "title": "Seleccionar consulta a ejecutar",
+      "queriesFound": "{{count}} consultas encontradas",
+      "escToCancel": "Esc para cancelar",
+      "numberHint": "Pulsa 1-9 para seleccionar, flechas para navegar"
+    }
   },
   "createTable": {
     "title": "Crear Nueva Tabla",
