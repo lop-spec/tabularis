@@ -3,14 +3,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use once_cell::sync::Lazy;
-use tokio::sync::{oneshot, Mutex, RwLock};
 use tauri::Emitter;
+use tokio::sync::{oneshot, Mutex, RwLock};
 
 static ACTIVE_CONNECTIONS: Lazy<Arc<RwLock<HashSet<String>>>> =
     Lazy::new(|| Arc::new(RwLock::new(HashSet::new())));
 
-static PING_STOP_TX: Lazy<Mutex<Option<oneshot::Sender<()>>>> =
-    Lazy::new(|| Mutex::new(None));
+static PING_STOP_TX: Lazy<Mutex<Option<oneshot::Sender<()>>>> = Lazy::new(|| Mutex::new(None));
 
 /// Default ping interval in seconds.
 pub const DEFAULT_PING_INTERVAL: u32 = 30;
@@ -88,10 +87,7 @@ pub async fn restart_ping_loop(app: tauri::AppHandle, interval_secs: u64) {
 
 /// Ping every registered connection. On failure beyond the threshold,
 /// close the pool and emit an event to the frontend.
-async fn ping_all_connections(
-    app: &tauri::AppHandle,
-    failure_counts: &mut HashMap<String, u32>,
-) {
+async fn ping_all_connections(app: &tauri::AppHandle, failure_counts: &mut HashMap<String, u32>) {
     // Snapshot the active set so we don't hold the lock during I/O.
     let active: Vec<String> = ACTIVE_CONNECTIONS.read().await.iter().cloned().collect();
 
@@ -141,10 +137,7 @@ async fn ping_all_connections(
 }
 
 /// Ping a single connection by resolving its params and calling driver.ping().
-async fn ping_single_connection(
-    app: &tauri::AppHandle,
-    connection_id: &str,
-) -> Result<(), String> {
+async fn ping_single_connection(app: &tauri::AppHandle, connection_id: &str) -> Result<(), String> {
     let saved_conn = crate::commands::find_connection_by_id(app, connection_id)?;
 
     let expanded_params =
