@@ -40,6 +40,29 @@ The Monaco integration brings powerful developer features:
 | **Multi-Cursor** | `Option + Click` | `Alt + Click` | Place multiple cursors for simultaneous editing (built-in Monaco). |
 | **Command Palette**| `F1` | `F1` | Open the Monaco command palette. |
 
+## Multi-Statement Query Selection
+
+When the editor contains multiple semicolon-separated queries and you press Execute, Tabularis opens a **Query Selection Modal** that lets you pick which query to run.
+
+### Keyboard Navigation
+
+| Shortcut | Action |
+|----------|--------|
+| `↑` / `↓` | Move focus between queries |
+| `Enter` | Execute the focused query |
+| `1`–`9` | Directly execute query N |
+
+The focused item shows a blue border and a numbered badge (1–9) indicating its keyboard shortcut. Hovering with the mouse syncs the keyboard focus, so mouse and keyboard selection stay in lockstep.
+
+## Autocomplete: Multi-Database and Multi-Schema
+
+Autocomplete suggestions are scoped to the active context:
+
+- **Schema-aware connections** (PostgreSQL): when a non-default schema is active, suggestions come from the tables in that schema only.
+- **Multi-database connections** (MySQL / MariaDB): suggestions come from the tables of all selected databases.
+
+This ensures that you see relevant completions regardless of how many schemas or databases your connection exposes.
+
 ## Query Execution & Data Grid
 
 When you execute a query, Tabularis handles the results asynchronously, streaming them into the integrated Data Grid.

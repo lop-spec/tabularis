@@ -31,6 +31,8 @@ Drag a column header border left or right to resize columns. Double-click the bo
 
 Click a column header to sort by that column (ascending). Click again to sort descending. A third click removes the sort. Sorting is applied server-side — a new query is issued with an `ORDER BY` clause so the sort is consistent across all pages.
 
+> **LIMIT / OFFSET preservation** — if your query includes a `LIMIT` or `OFFSET` clause, clicking a column header to sort will preserve it. Only the `ORDER BY` portion is replaced.
+
 ### Filtering
 
 A filter bar is available at the top of the grid. Type a condition to filter the results. The filter is applied as a `WHERE` clause, so it works across all pages and correctly reflects the total count.
