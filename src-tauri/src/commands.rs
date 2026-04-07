@@ -2476,6 +2476,12 @@ pub async fn get_view_columns<R: Runtime>(
     result
 }
 
+/// Register a connection as active for health-check pinging.
+#[tauri::command]
+pub async fn register_active_connection(connection_id: String) {
+    crate::health_check::register_connection(connection_id).await;
+}
+
 /// Disconnect from a database connection by closing its connection pool
 #[tauri::command]
 pub async fn disconnect_connection<R: Runtime>(
@@ -2483,6 +2489,9 @@ pub async fn disconnect_connection<R: Runtime>(
     connection_id: String,
 ) -> Result<(), String> {
     log::info!("Disconnecting from connection: {}", connection_id);
+
+    // Unregister from health check before closing the pool.
+    crate::health_check::unregister_connection(&connection_id).await;
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;

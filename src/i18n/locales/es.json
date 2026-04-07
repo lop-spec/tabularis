@@ -325,6 +325,10 @@
     "debug": "Debug",
     "warn": "Warn",
     "error": "Error",
+    "connectionHealthCheck": "Verificación de Conexión",
+    "pingInterval": "Intervalo de Ping",
+    "pingIntervalDesc": "Frecuencia con la que se verifica si las conexiones activas siguen disponibles. Establece 0 para desactivar.",
+    "seconds": "segundos",
     "erDiagram": "Diagrama ER",
     "erDiagramDefaultLayout": "Diseño Predeterminado",
     "erDiagramDefaultLayoutDesc": "Elige la dirección de diseño predeterminada para los diagramas ER",
@@ -700,6 +704,10 @@
     "cancel": "Cancelar",
     "colRequired": "Selecciona las columnas locales y referenciadas",
     "tableRequired": "Selecciona una tabla referenciada"
+  },
+  "healthCheck": {
+    "title": "Conexión Perdida",
+    "connectionLost": "Se ha perdido una conexión a la base de datos"
   },
   "erDiagram": {
     "title": "Diagrama ER",

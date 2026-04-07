@@ -7,6 +7,7 @@ interface AlertState {
   message: string;
   title: string;
   kind: AlertKind;
+  onClose?: () => void;
 }
 
 export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
@@ -17,17 +18,21 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
     kind: "error",
   });
 
-  const showAlert = useCallback((message: string, options?: { title?: string; kind?: AlertKind }) => {
+  const showAlert = useCallback((message: string, options?: { title?: string; kind?: AlertKind; onClose?: () => void }) => {
     setAlert({
       isOpen: true,
       message,
       title: options?.title ?? "",
       kind: options?.kind ?? "error",
+      onClose: options?.onClose,
     });
   }, []);
 
   const handleClose = useCallback(() => {
-    setAlert((prev) => ({ ...prev, isOpen: false }));
+    setAlert((prev) => {
+      prev.onClose?.();
+      return { ...prev, isOpen: false, onClose: undefined };
+    });
   }, []);
 
   return (

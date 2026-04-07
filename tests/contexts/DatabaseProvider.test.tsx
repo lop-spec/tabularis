@@ -9,6 +9,10 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+
 vi.mock('../../src/utils/autocomplete', () => ({
   clearAutocompleteCache: vi.fn(),
 }));
@@ -81,6 +85,7 @@ describe('DatabaseProvider', () => {
       if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
       if (cmd === 'set_window_title') return Promise.resolve(undefined);
       if (cmd === 'disconnect_connection') return Promise.resolve(undefined);
+      if (cmd === 'register_active_connection') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
   });
@@ -158,6 +163,7 @@ describe('DatabaseProvider', () => {
       if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
       if (cmd === 'set_window_title') return Promise.resolve(undefined);
       if (cmd === 'disconnect_connection') return Promise.resolve(undefined);
+      if (cmd === 'register_active_connection') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
 
@@ -196,6 +202,7 @@ describe('DatabaseProvider', () => {
       if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
       if (cmd === 'set_window_title') return Promise.resolve(undefined);
       if (cmd === 'disconnect_connection') return Promise.resolve(undefined);
+      if (cmd === 'register_active_connection') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
 
@@ -236,6 +243,7 @@ describe('DatabaseProvider', () => {
       if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
       if (cmd === 'set_window_title') return Promise.resolve(undefined);
       if (cmd === 'disconnect_connection') return Promise.resolve(undefined);
+      if (cmd === 'register_active_connection') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
 
@@ -276,6 +284,7 @@ describe('DatabaseProvider', () => {
       if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
       if (cmd === 'set_window_title') return Promise.resolve(undefined);
       if (cmd === 'disconnect_connection') return Promise.resolve(undefined);
+      if (cmd === 'register_active_connection') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
 

@@ -177,6 +177,13 @@ pub trait DatabaseDriver: Send + Sync {
         None
     }
 
+    /// Lightweight health check on an existing connection/pool.
+    /// Built-in drivers override this with a pool-based check; plugin drivers
+    /// delegate via JSON-RPC. The default falls back to `test_connection`.
+    async fn ping(&self, params: &ConnectionParams) -> Result<(), String> {
+        self.test_connection(params).await
+    }
+
     /// Tests connectivity. Default implementation uses `build_connection_url` + sqlx.
     /// Plugin drivers that manage their own connections should override this.
     async fn test_connection(&self, params: &ConnectionParams) -> Result<(), String> {

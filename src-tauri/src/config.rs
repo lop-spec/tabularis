@@ -49,6 +49,8 @@ pub struct AppConfig {
     pub editor_tab_size: Option<u32>,
     pub editor_word_wrap: Option<bool>,
     pub editor_show_line_numbers: Option<bool>,
+    /// Connection health check interval in seconds. 0 = disabled. Default: 30.
+    pub ping_interval: Option<u32>,
 }
 
 pub fn get_config_dir<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
@@ -176,6 +178,19 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.editor_show_line_numbers.is_some() {
             existing_config.editor_show_line_numbers = config.editor_show_line_numbers;
+        }
+        if config.ping_interval.is_some() {
+            let old_interval = existing_config.ping_interval;
+            existing_config.ping_interval = config.ping_interval;
+            // Restart the ping loop if the interval changed.
+            if existing_config.ping_interval != old_interval {
+                let interval = existing_config
+                    .ping_interval
+                    .unwrap_or(crate::health_check::DEFAULT_PING_INTERVAL);
+                tauri::async_runtime::spawn(
+                    crate::health_check::restart_ping_loop(app.clone(), interval as u64),
+                );
+            }
         }
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;

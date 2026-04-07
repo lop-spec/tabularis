@@ -44,6 +44,7 @@ export interface Settings {
   editorTabSize?: number;
   editorWordWrap?: boolean;
   editorShowLineNumbers?: boolean;
+  pingInterval?: number;
 }
 
 export interface SettingsContextType {
@@ -79,4 +80,5 @@ export const DEFAULT_SETTINGS: Settings = {
   editorTabSize: 2,
   editorWordWrap: true,
   editorShowLineNumbers: true,
+  pingInterval: 30,
 };

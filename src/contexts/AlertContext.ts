@@ -5,6 +5,7 @@ export type AlertKind = "error" | "info" | "warning";
 export interface AlertOptions {
   title?: string;
   kind?: AlertKind;
+  onClose?: () => void;
 }
 
 export interface AlertContextType {
