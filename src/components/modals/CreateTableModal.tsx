@@ -203,7 +203,7 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                             <tr>
                                 <th className="p-2 text-[10px] text-muted font-semibold w-8"></th>
                                 <th className="p-2 text-[10px] text-muted font-semibold">{t('createTable.colName')}</th>
-                                <th className="p-2 text-[10px] text-muted font-semibold w-32">{t('createTable.colType')}</th>
+                                <th className="p-2 text-[10px] text-muted font-semibold w-44">{t('createTable.colType')}</th>
                                 <th className="p-2 text-[10px] text-muted font-semibold w-20">{t('createTable.colLen')}</th>
                                 <th className="p-2 text-[10px] text-muted font-semibold w-10 text-center" title="Primary Key">{t('createTable.colPk')}</th>
                                 <th className="p-2 text-[10px] text-muted font-semibold w-10 text-center" title="Not Null">{t('createTable.colNn')}</th>
