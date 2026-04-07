@@ -48,6 +48,3 @@ export function getHistorySize(cell: NotebookCell): number {
   return cell.history?.length ?? 0;
 }
 
-export function clearHistory(): Partial<NotebookCell> {
-  return { history: [] };
-}

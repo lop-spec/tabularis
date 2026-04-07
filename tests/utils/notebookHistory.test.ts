@@ -4,7 +4,6 @@ import {
   createHistoryEntry,
   restoreFromHistory,
   getHistorySize,
-  clearHistory,
 } from "../../src/utils/notebookHistory";
 import type {
   CellExecutionEntry,
@@ -119,10 +118,4 @@ describe("notebookHistory", () => {
     });
   });
 
-  describe("clearHistory", () => {
-    it("should return empty history", () => {
-      const cell = makeCell({ history: [makeEntry()] });
-      expect(clearHistory(cell).history).toEqual([]);
-    });
-  });
 });
