@@ -252,6 +252,17 @@ pub async fn get_sqlite_pool_with_id(
     Ok(pool)
 }
 
+/// Check whether a connection pool exists for the given params without creating one.
+pub async fn has_pool(params: &ConnectionParams, connection_id: Option<&str>) -> bool {
+    let key = build_connection_key(params, connection_id);
+    match params.driver.as_str() {
+        "mysql" => MYSQL_POOLS.read().await.contains_key(&key),
+        "postgres" => POSTGRES_POOLS.read().await.contains_key(&key),
+        "sqlite" => SQLITE_POOLS.read().await.contains_key(&key),
+        _ => false,
+    }
+}
+
 /// Close a specific connection pool
 pub async fn close_pool(params: &ConnectionParams) {
     let connection_id = params.connection_id.as_deref();

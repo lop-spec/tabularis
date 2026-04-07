@@ -328,6 +328,10 @@
     "debug": "Debug",
     "warn": "Warn",
     "error": "Error",
+    "connectionHealthCheck": "Connection Health Check",
+    "pingInterval": "Ping Interval",
+    "pingIntervalDesc": "How often to check if active connections are still alive. Set to 0 to disable.",
+    "seconds": "seconds",
     "erDiagram": "ER Diagram",
     "erDiagramDefaultLayout": "Default Layout",
     "erDiagramDefaultLayoutDesc": "Choose the default layout direction for ER diagrams",
@@ -687,6 +691,12 @@
       "aiGenerateName": "Generate name with AI",
       "generatingName": "Generating name...",
       "aiGenerateOutlineNames": "Generate names for unnamed cells with AI"
+    },
+    "querySelection": {
+      "title": "Select Query to Execute",
+      "queriesFound": "{{count}} queries found",
+      "escToCancel": "Esc to cancel",
+      "numberHint": "Press 1-9 to select, arrows to navigate"
     }
   },
   "createTable": {
@@ -771,6 +781,10 @@
     "cancel": "Cancel",
     "colRequired": "Please select local and referenced columns",
     "tableRequired": "Please select a referenced table"
+  },
+  "healthCheck": {
+    "title": "Connection Lost",
+    "connectionLost": "A database connection was lost"
   },
   "erDiagram": {
     "title": "ER Diagram",

@@ -12,6 +12,7 @@ import { Editor } from "./pages/Editor";
 import { Settings } from "./pages/Settings";
 import { SchemaDiagramPage } from "./pages/SchemaDiagramPage";
 import { TaskManagerPage } from "./pages/TaskManagerPage";
+import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
 import { CommunityModal } from "./components/modals/CommunityModal";
 import { useUpdate } from "./hooks/useUpdate";
@@ -61,6 +62,7 @@ export function App() {
     <>
       <AlertProvider>
         <BrowserRouter>
+          <ConnectionHealthMonitor />
           <KeybindingsProvider>
             <PluginSlotProvider>
               <PluginModalProvider>

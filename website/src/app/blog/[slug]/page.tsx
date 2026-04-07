@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { GitHubIcon, DiscordIcon } from "@/components/Icons";
 import { ShareButton } from "@/components/ShareButton";
+import { PostContentLightbox } from "@/components/PostContentLightbox";
 import { getAllPosts, getPostBySlug, getAdjacentPosts } from "@/lib/posts";
 import { PostMetaBar } from "@/components/PostMetaBar";
 
@@ -69,6 +70,7 @@ export default async function BlogPostPage({ params }: PageProps) {
         <PostMetaBar date={meta.date} readingTime={meta.readingTime} release={meta.release} tags={meta.tags} />
         {htmlAfter && <div dangerouslySetInnerHTML={{ __html: htmlAfter }} />}
       </article>
+      <PostContentLightbox />
 
       <div className="post-footer-cta">
         <p>

@@ -7,6 +7,7 @@ pub mod dump_utils;
 #[cfg(test)]
 pub mod dump_commands_tests;
 pub mod export;
+pub mod health_check;
 pub mod keychain_utils;
 pub mod log_commands;
 pub mod logger;
@@ -160,6 +161,18 @@ pub fn run() {
                 crate::plugins::manager::load_plugins(&app.handle(), active_ext_drivers.as_deref()).await;
             });
 
+            // Start connection health-check ping loop.
+            {
+                let config = crate::config::load_config_internal(&app.handle());
+                let interval = config
+                    .ping_interval
+                    .unwrap_or(health_check::DEFAULT_PING_INTERVAL);
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    health_check::start_ping_loop(handle, interval as u64).await;
+                });
+            }
+
             // Open devtools automatically in debug mode
             if args.debug {
                 if let Some(window) = app.get_webview_window("main") {
@@ -186,6 +199,7 @@ pub fn run() {
             commands::get_connections,
             commands::get_connection_by_id,
             commands::disconnect_connection,
+            commands::register_active_connection,
             commands::get_data_types,
             // SSH Connections
             commands::get_ssh_connections,

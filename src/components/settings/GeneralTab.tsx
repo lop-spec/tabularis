@@ -61,6 +61,24 @@ export function GeneralTab() {
         </SettingRow>
       </SettingSection>
 
+      <SettingSection title={t("settings.connectionHealthCheck")}>
+        <SettingRow
+          label={t("settings.pingInterval")}
+          description={t("settings.pingIntervalDesc")}
+        >
+          <SettingNumberInput
+            value={settings.pingInterval ?? DEFAULT_SETTINGS.pingInterval ?? 30}
+            onChange={(v) =>
+              updateSetting("pingInterval", v ?? DEFAULT_SETTINGS.pingInterval ?? 30)
+            }
+            min={0}
+            max={120}
+            suffix={t("settings.seconds")}
+            fallback={DEFAULT_SETTINGS.pingInterval ?? 30}
+          />
+        </SettingRow>
+      </SettingSection>
+
       <SettingSection title={t("settings.erDiagram")}>
         <SettingRow
           label={t("settings.erDiagramDefaultLayout")}

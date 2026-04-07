@@ -241,6 +241,18 @@ Verify that a connection can be established.
 
 ---
 
+### `ping` *(optional)*
+
+Lightweight health check called periodically on active connections. Tabularis pings every active connection at a configurable interval (default: 30 seconds). After 2 consecutive failures, the connection is automatically disconnected and the user is notified.
+
+**Params:** `{ "params": ConnectionParams }`
+
+**Result:** `null` on success, or an error response if the connection is dead.
+
+> If not implemented, Tabularis falls back to `test_connection`. Implementing `ping` is recommended when your plugin can do a cheaper liveness check than a full connection test.
+
+---
+
 ### `get_databases`
 
 List available databases.
@@ -348,6 +360,11 @@ fn dispatch(method: &str, _params: &Value, id: Value) -> Value {
     match method {
         "test_connection" => json!({
             "jsonrpc": "2.0", "result": { "success": true }, "id": id
+        }),
+        // Optional: lightweight health check (called periodically).
+        // If omitted, Tabularis falls back to test_connection.
+        "ping" => json!({
+            "jsonrpc": "2.0", "result": null, "id": id
         }),
         "get_databases" => json!({
             "jsonrpc": "2.0", "result": ["my_database"], "id": id

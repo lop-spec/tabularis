@@ -2498,7 +2498,8 @@ pre {
   margin: 2rem 0;
 }
 
-.post-content img {
+.post-content img,
+.post-content video {
   width: 100%;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -2518,6 +2519,25 @@ pre {
   border: none;
   border-radius: 3px;
   box-shadow: none;
+}
+
+.post-content .post-gallery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1.5rem 0 0.4rem;
+}
+
+.post-content .post-gallery img {
+  margin: 0;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 768px) {
+  .post-content .post-gallery {
+    grid-template-columns: 1fr;
+  }
 }
 
 .post-content img + p > em:only-child {

@@ -328,6 +328,10 @@
     "debug": "Debug",
     "warn": "Warn",
     "error": "Error",
+    "connectionHealthCheck": "Verificación de Conexión",
+    "pingInterval": "Intervalo de Ping",
+    "pingIntervalDesc": "Frecuencia con la que se verifica si las conexiones activas siguen disponibles. Establece 0 para desactivar.",
+    "seconds": "segundos",
     "erDiagram": "Diagrama ER",
     "erDiagramDefaultLayout": "Diseño Predeterminado",
     "erDiagramDefaultLayoutDesc": "Elige la dirección de diseño predeterminada para los diagramas ER",
@@ -677,6 +681,12 @@
       "aiGenerateName": "Generar nombre con IA",
       "generatingName": "Generando nombre...",
       "aiGenerateOutlineNames": "Generar nombres para celdas sin nombre con IA"
+    },
+    "querySelection": {
+      "title": "Seleccionar consulta a ejecutar",
+      "queriesFound": "{{count}} consultas encontradas",
+      "escToCancel": "Esc para cancelar",
+      "numberHint": "Pulsa 1-9 para seleccionar, flechas para navegar"
     }
   },
   "createTable": {
@@ -761,6 +771,10 @@
     "cancel": "Cancelar",
     "colRequired": "Selecciona las columnas locales y referenciadas",
     "tableRequired": "Selecciona una tabla referenciada"
+  },
+  "healthCheck": {
+    "title": "Conexión Perdida",
+    "connectionLost": "Se ha perdido una conexión a la base de datos"
   },
   "erDiagram": {
     "title": "Diagrama ER",

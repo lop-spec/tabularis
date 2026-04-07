@@ -125,6 +125,8 @@ export const Editor = () => {
     selectedDatabases,
     activeConnectionName,
     activeDatabaseName,
+    schemaDataMap,
+    databaseDataMap,
   } = useDatabase();
   const { explorerConnectionId } = useConnectionLayoutContext();
   const { settings } = useSettings();
@@ -1610,15 +1612,21 @@ export const Editor = () => {
 
   useEffect(() => {
     if (monacoInstance && activeConnectionId) {
+      let effectiveTables = tables;
+      if (activeCapabilities?.schemas && activeSchema) {
+        effectiveTables = schemaDataMap[activeSchema]?.tables ?? tables;
+      } else if (isMultiDb) {
+        effectiveTables = selectedDatabases.flatMap(db => databaseDataMap[db]?.tables ?? []);
+      }
       const disposable = registerSqlAutocomplete(
         monacoInstance,
         activeConnectionId,
-        tables,
+        effectiveTables,
         activeSchema,
       );
       return () => disposable.dispose();
     }
-  }, [monacoInstance, activeConnectionId, tables, activeSchema]);
+  }, [monacoInstance, activeConnectionId, tables, activeSchema, activeCapabilities, schemaDataMap, databaseDataMap, isMultiDb, selectedDatabases]);
 
   useEffect(() => {
     const state = location.state as EditorState;

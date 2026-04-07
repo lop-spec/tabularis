@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import {
   DatabaseContext,
   type TableInfo,
@@ -497,6 +498,9 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(errorMsg);
       }
 
+      // Register for health-check pinging.
+      await invoke('register_active_connection', { connectionId });
+
       const isMultiDb = isMultiDatabaseCapable(capabilities) && Array.isArray(dbParam) && dbParam.length > 1;
 
       if (isMultiDb) {
@@ -728,6 +732,35 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     toDisconnect.forEach(id => disconnect(id));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.activeExternalDrivers]);
+
+  // Listen for backend health-check failures and clean up dead connections.
+  useEffect(() => {
+    const unlisten = listen<{ connectionId: string; error: string }>(
+      'connection-health-failed',
+      (event) => {
+        const { connectionId } = event.payload;
+        console.warn(`[DatabaseProvider] Connection health check failed for ${connectionId}: ${event.payload.error}`);
+
+        clearAutocompleteCache(connectionId);
+
+        setOpenConnectionIds(prev => prev.filter(id => id !== connectionId));
+        setConnectionDataMap(prev => {
+          const next = { ...prev };
+          delete next[connectionId];
+          return next;
+        });
+
+        setActiveConnectionId(prev => {
+          if (prev !== connectionId) return prev;
+          const remaining = openConnectionIdsRef.current.filter(id => id !== connectionId);
+          if (remaining.length > 0) return remaining[0];
+          setActiveTable(null);
+          return null;
+        });
+      },
+    );
+    return () => { unlisten.then(fn => fn()); };
+  }, []);
 
   // Connection Group methods
   const createGroup = useCallback(async (name: string): Promise<ConnectionGroup> => {

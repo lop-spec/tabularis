@@ -663,6 +663,12 @@
       "aiGenerateName": "使用 AI 生成名称",
       "generatingName": "正在生成名称...",
       "aiGenerateOutlineNames": "使用 AI 为未命名单元格生成名称"
+    },
+    "querySelection": {
+      "title": "选择要执行的查询",
+      "queriesFound": "找到 {{count}} 个查询",
+      "escToCancel": "Esc 取消",
+      "numberHint": "按 1-9 选择，方向键导航"
     }
   },
   "createTable": {

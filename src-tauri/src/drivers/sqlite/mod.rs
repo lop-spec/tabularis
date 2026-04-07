@@ -921,6 +921,16 @@ impl DatabaseDriver for SqliteDriver {
         }
     }
 
+    async fn ping(&self, params: &crate::models::ConnectionParams) -> Result<(), String> {
+        let conn_id = params.connection_id.as_deref();
+        if !crate::pool_manager::has_pool(params, conn_id).await {
+            return Err("No active connection pool".into());
+        }
+        let pool = crate::pool_manager::get_sqlite_pool_with_id(params, conn_id).await?;
+        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+        sqlx::Connection::ping(&mut *conn).await.map_err(|e| e.to_string())
+    }
+
     async fn test_connection(&self, params: &crate::models::ConnectionParams) -> Result<(), String> {
         // Use pool manager directly to avoid URL formatting issues with Windows paths
         crate::pool_manager::get_sqlite_pool(params).await?;

@@ -197,6 +197,17 @@ impl DatabaseDriver for RpcDriver {
         Ok(format!("{}://...", self.manifest.id))
     }
 
+    async fn ping(&self, params: &ConnectionParams) -> Result<(), String> {
+        match self.process.call("ping", json!({ "params": params })).await {
+            Ok(_) => Ok(()),
+            Err(e) if e.contains("Method not found") => {
+                // Fallback for plugins that haven't implemented ping yet
+                self.test_connection(params).await
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     async fn test_connection(&self, params: &ConnectionParams) -> Result<(), String> {
         // Delegate to the plugin process via RPC instead of using sqlx
         let res = self.process.call("test_connection", json!({ "params": params })).await?;
