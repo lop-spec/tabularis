@@ -255,6 +255,7 @@ export const ModifyColumnModal = ({
                     length: needsLength
                       ? form.length || typeInfo?.default_length || ""
                       : "",
+                    isAutoInc: typeInfo?.supports_auto_increment ? form.isAutoInc : false,
                   });
                 }}
                 disabled={!canAlterColumn && isEdit}
@@ -295,11 +296,11 @@ export const ModifyColumnModal = ({
                 {t("modifyColumn.default")}
               </label>
               <input
-                value={form.defaultValue}
+                value={form.isAutoInc ? "" : form.defaultValue}
                 onChange={(e) =>
                   setForm({ ...form, defaultValue: e.target.value })
                 }
-                disabled={!canAlterColumn && isEdit}
+                disabled={(!canAlterColumn && isEdit) || form.isAutoInc}
                 className="w-full bg-base border border-strong rounded p-2 text-primary text-sm focus:border-focus outline-none font-mono disabled:opacity-50"
                 placeholder="NULL"
               />
@@ -311,16 +312,16 @@ export const ModifyColumnModal = ({
               <input
                 type="checkbox"
                 id="isNullable"
-                checked={!form.isNullable}
+                checked={form.isAutoInc ? true : !form.isNullable}
                 onChange={(e) =>
                   setForm({ ...form, isNullable: !e.target.checked })
                 }
-                disabled={!canAlterColumn && isEdit}
-                className="accent-blue-500"
+                disabled={(!canAlterColumn && isEdit) || form.isAutoInc}
+                className="accent-blue-500 disabled:opacity-50"
               />
               <label
                 htmlFor="isNullable"
-                className="text-sm text-secondary select-none cursor-pointer"
+                className={`text-sm select-none cursor-pointer ${form.isAutoInc ? "text-muted" : "text-secondary"}`}
               >
                 {t("modifyColumn.notNull")}
               </label>

@@ -1697,6 +1697,8 @@ impl DatabaseDriver for PostgresDriver {
                 let upper = col.data_type.to_uppercase();
                 if upper.contains("BIGINT") || upper.contains("BIGSERIAL") {
                     "BIGSERIAL".to_string()
+                } else if upper.contains("SMALLINT") || upper.contains("SMALLSERIAL") {
+                    "SMALLSERIAL".to_string()
                 } else {
                     "SERIAL".to_string()
                 }
@@ -1744,6 +1746,8 @@ impl DatabaseDriver for PostgresDriver {
             let upper = column.data_type.to_uppercase();
             if upper.contains("BIGINT") || upper.contains("BIGSERIAL") {
                 "BIGSERIAL".to_string()
+            } else if upper.contains("SMALLINT") || upper.contains("SMALLSERIAL") {
+                "SMALLSERIAL".to_string()
             } else {
                 "SERIAL".to_string()
             }

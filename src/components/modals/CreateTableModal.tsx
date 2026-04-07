@@ -236,6 +236,9 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                                               } else {
                                                 updateColumn(col.id, 'length', '');
                                               }
+                                              if (!typeInfo?.supports_auto_increment) {
+                                                updateColumn(col.id, 'isAutoInc', false);
+                                              }
                                             }}
                                             placeholder={t("modifyColumn.type")}
                                             searchPlaceholder={t("common.search")}
@@ -265,9 +268,10 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                                     <td className="p-2 text-center">
                                         <input
                                             type="checkbox"
-                                            checked={!col.isNullable}
+                                            checked={col.isAutoInc ? true : !col.isNullable}
                                             onChange={(e) => updateColumn(col.id, 'isNullable', !e.target.checked)}
-                                            className="accent-blue-500"
+                                            disabled={col.isAutoInc}
+                                            className="accent-blue-500 disabled:opacity-30"
                                         />
                                     </td>
                                     <td className="p-2 text-center">
@@ -281,9 +285,10 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess }: CreateTableModa
                                     </td>
                                     <td className="p-2">
                                          <input
-                                            value={col.defaultValue}
+                                            value={col.isAutoInc ? '' : col.defaultValue}
                                             onChange={(e) => updateColumn(col.id, 'defaultValue', e.target.value)}
-                                            className="w-full bg-transparent text-xs text-secondary focus:outline-none border-b border-transparent focus:border-blue-500"
+                                            disabled={col.isAutoInc}
+                                            className="w-full bg-transparent text-xs text-secondary focus:outline-none border-b border-transparent focus:border-blue-500 disabled:opacity-30"
                                             placeholder="NULL"
                                         />
                                     </td>
