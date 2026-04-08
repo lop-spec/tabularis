@@ -6,7 +6,7 @@ import type { Tab } from '../types/editor';
 export interface CleanedTab {
   id: string;
   title: string;
-  type: 'console' | 'table' | 'query_builder';
+  type: 'console' | 'table' | 'query_builder' | 'notebook';
   query: string;
   page: number;
   activeTable: string | null;
@@ -18,11 +18,13 @@ export interface CleanedTab {
   sortClause?: string;
   limitClause?: number;
   queryParams?: Record<string, string>;
+  notebookId?: string;
 }
 
 /**
  * Removes temporary/runtime data from a tab, keeping only persistent state.
  * Excludes: result, error, executionTime, isLoading, pendingChanges, pendingDeletions, selectedRows
+ * For notebook tabs: only persists notebookId reference, not the full notebookState.
  *
  * @param tab - The tab to clean
  * @returns A cleaned tab with only persistent data
@@ -43,6 +45,7 @@ export function cleanTabForStorage(tab: Tab): CleanedTab {
     sortClause: tab.sortClause,
     limitClause: tab.limitClause,
     queryParams: tab.queryParams,
+    notebookId: tab.notebookId,
   };
 }
 
@@ -70,5 +73,7 @@ export function restoreTabFromStorage(cleanedTab: Partial<Tab>): Tab {
     pendingChanges: undefined,
     pendingDeletions: undefined,
     selectedRows: undefined,
+    notebookId: cleanedTab.notebookId,
+    notebookState: undefined,
   };
 }

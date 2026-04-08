@@ -104,6 +104,43 @@ describe('tabCleaner', () => {
       expect(cleaned.flowState).toEqual(flowState);
     });
 
+    it('should preserve notebookId and strip notebookState for notebook tabs', () => {
+      const tab: Tab = {
+        id: 'tab-nb',
+        title: 'Notebook',
+        type: 'notebook',
+        query: '',
+        page: 1,
+        activeTable: null,
+        pkColumn: null,
+        connectionId: 'conn-456',
+        result: null,
+        error: '',
+        executionTime: null,
+        notebookId: 'nb_abc123',
+        notebookState: {
+          cells: [
+            {
+              id: 'cell-1',
+              type: 'sql',
+              content: 'SELECT 1',
+              result: { columns: ['id'], rows: [[1]], affected_rows: 0 },
+              error: 'some error',
+              executionTime: 100,
+              isLoading: true,
+            },
+          ],
+        },
+      };
+
+      const cleaned = cleanTabForStorage(tab);
+
+      expect(cleaned.type).toBe('notebook');
+      expect(cleaned.notebookId).toBe('nb_abc123');
+      // notebookState should NOT be in the cleaned output
+      expect(cleaned).not.toHaveProperty('notebookState');
+    });
+
     it('should handle table type tabs', () => {
       const tab: Tab = {
         id: 'tab-123',
@@ -233,6 +270,49 @@ describe('tabCleaner', () => {
       expect(restored.sortClause).toBe('id DESC');
       expect(restored.limitClause).toBe(25);
       expect(restored.queryParams).toEqual({ startDate: '2024-01-01' });
+    });
+
+    it('should restore notebook tab with notebookId and no notebookState', () => {
+      const cleanedTab = {
+        id: 'tab-nb',
+        title: 'Notebook',
+        type: 'notebook' as const,
+        query: '',
+        page: 1,
+        activeTable: null,
+        pkColumn: null,
+        connectionId: 'conn-456',
+        notebookId: 'nb_abc123',
+      };
+
+      const restored = restoreTabFromStorage(cleanedTab);
+
+      expect(restored.type).toBe('notebook');
+      expect(restored.notebookId).toBe('nb_abc123');
+      expect(restored.notebookState).toBeUndefined();
+    });
+
+    it('should handle round-trip for notebook tabs', () => {
+      const originalTab: Tab = {
+        id: 'tab-nb-rt',
+        title: 'Notebook RT',
+        type: 'notebook',
+        query: '',
+        page: 1,
+        activeTable: null,
+        pkColumn: null,
+        connectionId: 'conn-rt',
+        result: null,
+        error: '',
+        executionTime: null,
+        notebookId: 'nb_round_trip',
+      };
+
+      const cleaned = cleanTabForStorage(originalTab);
+      const restored = restoreTabFromStorage(cleaned);
+
+      expect(restored.notebookId).toBe('nb_round_trip');
+      expect(restored.notebookState).toBeUndefined();
     });
 
     it('should handle round-trip: clean then restore', () => {
