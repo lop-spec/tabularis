@@ -6,6 +6,7 @@ import {
   countSucceeded,
   countFailed,
   totalExecutionTime,
+  removeResultEntry,
 } from "../../src/utils/multiResult";
 import type { QueryResultEntry } from "../../src/types/editor";
 
@@ -228,6 +229,65 @@ describe("multiResult", () => {
         makeEntry({ id: "b", executionTime: null }),
       ];
       expect(totalExecutionTime(entries)).toBe(0);
+    });
+  });
+
+  describe("removeResultEntry", () => {
+    it("should remove the matching entry", () => {
+      const entries = [
+        makeEntry({ id: "a" }),
+        makeEntry({ id: "b" }),
+        makeEntry({ id: "c" }),
+      ];
+      const { results } = removeResultEntry(entries, "b", "a");
+      expect(results).toHaveLength(2);
+      expect(results.map((r) => r.id)).toEqual(["a", "c"]);
+    });
+
+    it("should keep activeResultId if not removed", () => {
+      const entries = [
+        makeEntry({ id: "a" }),
+        makeEntry({ id: "b" }),
+      ];
+      const { nextActiveId } = removeResultEntry(entries, "b", "a");
+      expect(nextActiveId).toBe("a");
+    });
+
+    it("should select next sibling when active entry is removed", () => {
+      const entries = [
+        makeEntry({ id: "a" }),
+        makeEntry({ id: "b" }),
+        makeEntry({ id: "c" }),
+      ];
+      const { nextActiveId } = removeResultEntry(entries, "b", "b");
+      expect(nextActiveId).toBe("c");
+    });
+
+    it("should select previous when last entry is removed", () => {
+      const entries = [
+        makeEntry({ id: "a" }),
+        makeEntry({ id: "b" }),
+      ];
+      const { nextActiveId } = removeResultEntry(entries, "b", "b");
+      expect(nextActiveId).toBe("a");
+    });
+
+    it("should return undefined activeId when all removed", () => {
+      const entries = [makeEntry({ id: "a" })];
+      const { results, nextActiveId } = removeResultEntry(entries, "a", "a");
+      expect(results).toHaveLength(0);
+      expect(nextActiveId).toBeUndefined();
+    });
+
+    it("should be a no-op when id not found", () => {
+      const entries = [makeEntry({ id: "a" })];
+      const { results, nextActiveId } = removeResultEntry(
+        entries,
+        "nonexistent",
+        "a",
+      );
+      expect(results).toEqual(entries);
+      expect(nextActiveId).toBe("a");
     });
   });
 });

@@ -1,8 +1,10 @@
+import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Play,
   Check,
   XCircle,
+  X,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -32,12 +34,150 @@ interface MultiResultPanelProps {
   onSelectResult: (entryId: string) => void;
   onRerunEntry: (entryId: string) => void;
   onPageChange: (entryId: string, page: number) => void;
+  onCloseEntry: (entryId: string) => void;
+  onRenameEntry: (entryId: string, label: string) => void;
+}
+
+function ResultTab({
+  entry,
+  isActive,
+  index,
+  onSelect,
+  onRerun,
+  onClose,
+  onRename,
+  canClose,
+}: {
+  entry: QueryResultEntry;
+  isActive: boolean;
+  index: number;
+  onSelect: () => void;
+  onRerun: () => void;
+  onClose: () => void;
+  onRename: (label: string) => void;
+  canClose: boolean;
+}) {
+  const { t } = useTranslation();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  const displayLabel =
+    entry.label ||
+    t("editor.multiResult.query", { index: entry.queryIndex + 1 });
+
+  const startEditing = () => {
+    setEditValue(
+      entry.label ||
+        t("editor.multiResult.query", { index: entry.queryIndex + 1 }),
+    );
+    setIsEditing(true);
+  };
+
+  const commitEdit = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== displayLabel) {
+      onRename(trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  return (
+    <div
+      onClick={onSelect}
+      className={clsx(
+        "group flex items-center gap-1 pl-2.5 pr-1 py-1.5 text-xs border-r border-default shrink-0 transition-colors cursor-pointer",
+        isActive
+          ? "bg-surface-secondary text-white border-b-2 border-b-blue-500"
+          : "text-secondary hover:text-white hover:bg-surface-secondary/50",
+      )}
+    >
+      {/* Status icon */}
+      {entry.isLoading ? (
+        <Loader2 size={12} className="animate-spin text-blue-400 shrink-0" />
+      ) : entry.error ? (
+        <XCircle size={12} className="text-red-400 shrink-0" />
+      ) : (
+        <Check size={12} className="text-green-400 shrink-0" />
+      )}
+
+      {/* Label — click to edit */}
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitEdit();
+            if (e.key === "Escape") setIsEditing(false);
+            e.stopPropagation();
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-transparent border-b border-blue-500 text-white text-xs font-medium outline-none w-20 px-0.5"
+        />
+      ) : (
+        <span
+          className="font-medium cursor-text truncate max-w-[80px]"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            startEditing();
+          }}
+          title={entry.query}
+        >
+          {displayLabel}
+        </span>
+      )}
+
+      {/* SQL preview */}
+      <span
+        className="max-w-[100px] truncate text-muted text-[10px]"
+        title={entry.query}
+      >
+        {entry.query.slice(0, 40)}
+      </span>
+
+      {/* Rerun button */}
+      {!entry.isLoading && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRerun();
+          }}
+          className="p-0.5 rounded hover:bg-surface-tertiary text-muted hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
+          title={t("editor.multiResult.rerun")}
+        >
+          <Play size={10} fill="currentColor" />
+        </button>
+      )}
+
+      {/* Close button */}
+      {canClose && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="p-0.5 rounded hover:bg-surface-tertiary text-muted hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+          title={t("editor.multiResult.close")}
+        >
+          <X size={11} />
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function MultiResultPanel({
   results,
   activeResultId,
-  tabId,
   isAllDone,
   connectionId,
   copyFormat,
@@ -45,6 +185,8 @@ export function MultiResultPanel({
   onSelectResult,
   onRerunEntry,
   onPageChange,
+  onCloseEntry,
+  onRenameEntry,
 }: MultiResultPanelProps) {
   const { t } = useTranslation();
   const activeEntry = findActiveEntry(results, activeResultId);
@@ -59,51 +201,18 @@ export function MultiResultPanel({
       {/* Multi-result tab bar */}
       <div className="shrink-0 border-b border-default bg-elevated">
         <div className="flex items-center overflow-x-auto scrollbar-thin">
-          {results.map((entry) => (
-            <button
+          {results.map((entry, i) => (
+            <ResultTab
               key={entry.id}
-              onClick={() => onSelectResult(entry.id)}
-              className={clsx(
-                "flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-default shrink-0 transition-colors",
-                entry.id === activeEntry.id
-                  ? "bg-surface-secondary text-white border-b-2 border-b-blue-500"
-                  : "text-secondary hover:text-white hover:bg-surface-secondary/50",
-              )}
-            >
-              {entry.isLoading ? (
-                <Loader2
-                  size={12}
-                  className="animate-spin text-blue-400"
-                />
-              ) : entry.error ? (
-                <XCircle size={12} className="text-red-400" />
-              ) : (
-                <Check size={12} className="text-green-400" />
-              )}
-              <span>
-                {t("editor.multiResult.query", {
-                  index: entry.queryIndex + 1,
-                })}
-              </span>
-              <span
-                className="max-w-[120px] truncate text-muted text-[10px]"
-                title={entry.query}
-              >
-                {entry.query.slice(0, 40)}
-              </span>
-              {!entry.isLoading && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRerunEntry(entry.id);
-                  }}
-                  className="ml-1 p-0.5 rounded hover:bg-surface-tertiary text-muted hover:text-blue-400 transition-colors"
-                  title={t("editor.multiResult.rerun")}
-                >
-                  <Play size={10} fill="currentColor" />
-                </button>
-              )}
-            </button>
+              entry={entry}
+              isActive={entry.id === activeEntry.id}
+              index={i}
+              onSelect={() => onSelectResult(entry.id)}
+              onRerun={() => onRerunEntry(entry.id)}
+              onClose={() => onCloseEntry(entry.id)}
+              onRename={(label) => onRenameEntry(entry.id, label)}
+              canClose={results.length > 1}
+            />
           ))}
         </div>
         {/* Summary line */}

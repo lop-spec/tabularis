@@ -54,6 +54,8 @@ describe("MultiResultPanel", () => {
   const mockOnSelectResult = vi.fn();
   const mockOnRerunEntry = vi.fn();
   const mockOnPageChange = vi.fn();
+  const mockOnCloseEntry = vi.fn();
+  const mockOnRenameEntry = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,6 +70,8 @@ describe("MultiResultPanel", () => {
     onSelectResult: mockOnSelectResult,
     onRerunEntry: mockOnRerunEntry,
     onPageChange: mockOnPageChange,
+    onCloseEntry: mockOnCloseEntry,
+    onRenameEntry: mockOnRenameEntry,
   };
 
   it("renders tab buttons for each result entry", () => {
@@ -337,5 +341,73 @@ describe("MultiResultPanel", () => {
     );
     fireEvent.click(screen.getByTitle("Next Page"));
     expect(mockOnPageChange).toHaveBeenCalledWith("r-0", 2);
+  });
+
+  it("shows close button when more than one result tab", () => {
+    const results = [
+      makeEntry({ id: "r-0", isLoading: false, result: makeResult() }),
+      makeEntry({ id: "r-1", isLoading: false, result: makeResult() }),
+    ];
+    render(
+      <MultiResultPanel
+        {...defaultProps}
+        results={results}
+        activeResultId="r-0"
+      />,
+    );
+    const closeButtons = screen.getAllByTitle("editor.multiResult.close");
+    expect(closeButtons).toHaveLength(2);
+  });
+
+  it("does not show close button when only one result tab", () => {
+    const results = [
+      makeEntry({ id: "r-0", isLoading: false, result: makeResult() }),
+    ];
+    render(
+      <MultiResultPanel
+        {...defaultProps}
+        results={results}
+        activeResultId="r-0"
+      />,
+    );
+    expect(
+      screen.queryByTitle("editor.multiResult.close"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls onCloseEntry when close button is clicked", () => {
+    const results = [
+      makeEntry({ id: "r-0", isLoading: false, result: makeResult() }),
+      makeEntry({ id: "r-1", isLoading: false, result: makeResult() }),
+    ];
+    render(
+      <MultiResultPanel
+        {...defaultProps}
+        results={results}
+        activeResultId="r-0"
+      />,
+    );
+    const closeButtons = screen.getAllByTitle("editor.multiResult.close");
+    fireEvent.click(closeButtons[0]);
+    expect(mockOnCloseEntry).toHaveBeenCalledWith("r-0");
+  });
+
+  it("shows custom label when entry has one", () => {
+    const results = [
+      makeEntry({
+        id: "r-0",
+        isLoading: false,
+        result: makeResult(),
+        label: "My Query",
+      }),
+    ];
+    render(
+      <MultiResultPanel
+        {...defaultProps}
+        results={results}
+        activeResultId="r-0"
+      />,
+    );
+    expect(screen.getByText("My Query")).toBeInTheDocument();
   });
 });

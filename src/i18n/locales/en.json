@@ -646,7 +646,8 @@
     "multiResult": {
       "query": "Query {{index}}",
       "summary": "{{total}} queries: {{succeeded}} succeeded, {{failed}} failed",
-      "rerun": "Re-run query"
+      "rerun": "Re-run query",
+      "close": "Close tab"
     }
   },
   "createTable": {

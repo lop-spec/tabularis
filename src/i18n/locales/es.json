@@ -636,7 +636,8 @@
     "multiResult": {
       "query": "Consulta {{index}}",
       "summary": "{{total}} consultas: {{succeeded}} completadas, {{failed}} fallidas",
-      "rerun": "Reejecutar consulta"
+      "rerun": "Reejecutar consulta",
+      "close": "Cerrar pestaña"
     }
   },
   "createTable": {

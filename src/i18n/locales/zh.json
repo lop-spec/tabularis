@@ -617,7 +617,8 @@
     "multiResult": {
       "query": "查询 {{index}}",
       "summary": "{{total}} 个查询: {{succeeded}} 成功, {{failed}} 失败",
-      "rerun": "重新执行查询"
+      "rerun": "重新执行查询",
+      "close": "关闭标签"
     }
   },
   "createTable": {

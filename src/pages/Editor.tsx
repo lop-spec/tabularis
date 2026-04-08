@@ -64,6 +64,7 @@ import { splitQueries, extractTableName } from "../utils/sql";
 import {
   createResultEntries,
   updateResultEntry,
+  removeResultEntry,
 } from "../utils/multiResult";
 import {
   extractQueryParams,
@@ -346,6 +347,9 @@ export const Editor = () => {
 
   const tabsRef = useRef<Tab[]>([]);
   const activeTabIdRef = useRef<string | null>(null);
+  // Stable refs for functions used inside Monaco actions (which capture closures at mount time)
+  const runQueryRef = useRef<typeof runQuery>(null!);
+  const runMultipleQueriesRef = useRef<typeof runMultipleQueries>(null!);
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -884,7 +888,12 @@ export const Editor = () => {
       : undefined;
 
     if (selectedText && selection && !selection.isEmpty()) {
-      runQuery(selectedText, 1);
+      const selectedQueries = splitQueries(selectedText);
+      if (selectedQueries.length > 1) {
+        runMultipleQueries(selectedQueries);
+      } else {
+        runQuery(selectedText, 1);
+      }
       return;
     }
 
@@ -897,7 +906,11 @@ export const Editor = () => {
       setSelectableQueries(queries);
       setIsQuerySelectionModalOpen(true);
     }
-  }, [activeTab, runQuery]);
+  }, [activeTab, runQuery, runMultipleQueries]);
+
+  // Keep stable refs in sync for Monaco actions (closure-captured at mount time)
+  runQueryRef.current = runQuery;
+  runMultipleQueriesRef.current = runMultipleQueries;
 
   // Global Ctrl/Command+F5 shortcut for Run
   useEffect(() => {
@@ -1738,11 +1751,17 @@ export const Editor = () => {
       contextMenuOrder: 1.5,
       run: (ed) => {
         const selection = ed.getSelection();
-        const selectedText = ed.getModel()?.getValueInRange(selection!);
-        runQuery(
-          selectedText && !selection?.isEmpty() ? selectedText : ed.getValue(),
-          1,
-        );
+        const selectedText = selection && !selection.isEmpty()
+          ? ed.getModel()?.getValueInRange(selection)
+          : undefined;
+        const text = (selectedText || ed.getValue()).trim();
+        if (!text) return;
+        const queries = splitQueries(text);
+        if (queries.length > 1) {
+          runMultipleQueriesRef.current(queries);
+        } else {
+          runQueryRef.current(queries[0] || text, 1);
+        }
       },
     });
     editor.addCommand(
@@ -2419,6 +2438,34 @@ export const Editor = () => {
                 }
                 onRerunEntry={(entryId) => runResultEntryPage(entryId, 1)}
                 onPageChange={runResultEntryPage}
+                onCloseEntry={(entryId) => {
+                  const { results: newResults, nextActiveId } =
+                    removeResultEntry(
+                      activeTab.results!,
+                      entryId,
+                      activeTab.activeResultId,
+                    );
+                  if (newResults.length === 0) {
+                    updateTab(activeTab.id, {
+                      results: undefined,
+                      activeResultId: undefined,
+                    });
+                  } else {
+                    updateTab(activeTab.id, {
+                      results: newResults,
+                      activeResultId: nextActiveId,
+                    });
+                  }
+                }}
+                onRenameEntry={(entryId, label) => {
+                  updateTab(activeTab.id, {
+                    results: updateResultEntry(
+                      activeTab.results!,
+                      entryId,
+                      { label },
+                    ),
+                  });
+                }}
               />
             ) : activeTab.isLoading ? (
               <div className="flex flex-col items-center justify-center h-full text-muted">

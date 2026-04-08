@@ -68,3 +68,30 @@ export function countFailed(results: QueryResultEntry[]): number {
 export function totalExecutionTime(results: QueryResultEntry[]): number {
   return results.reduce((sum, r) => sum + (r.executionTime ?? 0), 0);
 }
+
+/**
+ * Removes an entry from the results array.
+ * Returns the new results and the id of the entry that should become active
+ * (next sibling, or previous if last was removed).
+ */
+export function removeResultEntry(
+  results: QueryResultEntry[],
+  entryId: string,
+  activeResultId: string | undefined,
+): { results: QueryResultEntry[]; nextActiveId: string | undefined } {
+  const idx = results.findIndex((r) => r.id === entryId);
+  if (idx === -1) return { results, nextActiveId: activeResultId };
+
+  const filtered = results.filter((r) => r.id !== entryId);
+  if (filtered.length === 0) {
+    return { results: filtered, nextActiveId: undefined };
+  }
+
+  let nextActiveId = activeResultId;
+  if (activeResultId === entryId) {
+    const nextIdx = Math.min(idx, filtered.length - 1);
+    nextActiveId = filtered[nextIdx].id;
+  }
+
+  return { results: filtered, nextActiveId };
+}

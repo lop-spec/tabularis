@@ -43,6 +43,7 @@ export interface QueryResultEntry {
   id: string;
   queryIndex: number;
   query: string;
+  label?: string;
   result: QueryResult | null;
   error: string;
   executionTime: number | null;
