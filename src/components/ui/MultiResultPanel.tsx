@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Play,
@@ -15,6 +15,9 @@ import {
   Trash2,
   Database,
   Pencil,
+  ChevronDown,
+  ChevronUp,
+  Code2,
 } from "lucide-react";
 import clsx from "clsx";
 import { DataGrid } from "./DataGrid";
@@ -222,6 +225,7 @@ export function MultiResultPanel({
     entryId: string;
   } | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [queryExpanded, setQueryExpanded] = useState(false);
   const activeEntry = findActiveEntry(results, activeResultId);
   const succeeded = countSucceeded(results);
   const failed = countFailed(results);
@@ -238,6 +242,10 @@ export function MultiResultPanel({
   useEffect(() => {
     updateScrollArrows();
   }, [results, updateScrollArrows]);
+
+  useEffect(() => {
+    setQueryExpanded(false);
+  }, [activeResultId]);
 
   const scrollTabs = (direction: "left" | "right") => {
     const el = scrollRef.current;
@@ -314,6 +322,27 @@ export function MultiResultPanel({
           </div>
         )}
       </div>
+
+      {/* Query preview */}
+      {activeEntry.query && (
+        <div
+          className="bg-surface-secondary border-b border-default px-3 py-1.5 flex items-start gap-2 cursor-pointer select-none group/qp"
+          onClick={() => setQueryExpanded((v) => !v)}
+        >
+          <Code2 size={12} className="text-muted shrink-0 mt-0.5" />
+          <pre
+            className={clsx(
+              "flex-1 text-[11px] font-mono text-secondary whitespace-pre-wrap break-all m-0",
+              !queryExpanded && "line-clamp-1",
+            )}
+          >
+            {activeEntry.query.trim()}
+          </pre>
+          <button className="text-muted hover:text-white shrink-0 mt-0.5">
+            {queryExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        </div>
+      )}
 
       {/* Active entry content */}
       <div className="flex-1 min-h-0 flex flex-col">
