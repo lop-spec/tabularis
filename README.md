@@ -66,6 +66,7 @@ _[Become a sponsor →](https://tabularis.dev/sponsors)_
   - [Connection Management](#connection-management)
   - [Database Explorer](#database-explorer)
   - [SQL Editor](#sql-editor)
+  - [SQL Notebooks](#sql-notebooks)
   - [Keyboard Shortcuts](#keyboard-shortcuts)
   - [Visual Query Builder](#visual-query-builder)
   - [Data Grid](#data-grid)
@@ -209,9 +210,25 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 - **Monaco Editor:** Syntax highlighting and auto-completion.
 - **Tabbed Interface:** Isolated connections per tab.
 - **Split View:** Open multiple database connections side-by-side in a resizable split-pane layout.
-- **Execution:** Run full scripts, selections, or specific statements.
+- **Multi-Statement Execution:** Run All, Run Selected, or pick individual queries from a multi-statement script. Results from each query appear in separate tabs with independent pagination and error handling.
+- **Multi-Result Tabs:** Close, rename, re-run, and manage result tabs via context menu. Query parameters are collected once across all queries.
+- **Smart Query Splitting:** Powered by `dbgate-query-splitter` — correctly handles stored procedures, functions, and `$$`-delimited blocks.
 - **Saved Queries:** Persist frequently used SQL.
 - **AI Assist Overlay:** AI assistance buttons accessible as a floating overlay directly in the editor.
+
+### SQL Notebooks
+
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/notebooks)
+
+- **Multi-Cell Workspace:** Combine SQL and Markdown cells in a single document.
+- **Inline Results & Charts:** View query results directly below each cell, with bar, line, and pie chart visualizations.
+- **Cross-Cell Variables:** Reference results from other cells using `{{cellName.columnName}}` syntax with automatic dependency resolution.
+- **Notebook Parameters:** Define global `{{$paramName}}` variables substituted across all cells at execution time.
+- **Run All:** Sequential execution of all SQL cells with stop-on-error option and completion summary.
+- **Drag & Drop:** Reorder cells freely, collapse/expand individual cells or all at once.
+- **AI Cell Naming:** Auto-generate descriptive cell names individually or in batch.
+- **Persistence & Export:** Auto-saved as `.tabularis-notebook` files. Export as `.tabularis-notebook`, HTML, CSV, or JSON.
+- **Outline Panel:** Side panel showing the full notebook structure with click-to-navigate.
 
 ### Keyboard Shortcuts
 

@@ -2501,6 +2501,7 @@ pre {
 .post-content img,
 .post-content video {
   width: 100%;
+  max-width: 800px;
   border-radius: 6px;
   border: 1px solid var(--border);
   display: block;

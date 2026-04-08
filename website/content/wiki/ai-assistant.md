@@ -49,6 +49,15 @@ For enterprise databases with strict compliance requirements, you cannot send sc
 The AI isn't just for writing new code. Highlight any complex, legacy 300-line SQL query, right-click, and select **"Explain Query with AI"**. 
 The AI will break down the nested subqueries, explain the logic in plain English, and even suggest optimizations (like adding missing indexes based on the `WHERE` clauses).
 
+## Notebook Cell Naming
+
+In [SQL Notebooks](/wiki/notebooks), the AI can generate descriptive names for cells based on their content:
+
+- **Single cell**: Click the AI icon on any cell header to generate a name for that cell.
+- **Batch naming**: Click **Name All** in the notebook toolbar to generate names for all unnamed cells at once.
+
+The naming prompt is customizable in **Settings > AI > Notebook Cell Name Prompt**. The cell content (SQL or Markdown) is sent as the user message alongside the prompt.
+
 ## Model Context Protocol (MCP)
 
 Tabularis ships with a built-in **MCP Server**, allowing external AI agents (like Claude Desktop or Cursor) to securely interface with your Tabularis connections.

@@ -40,9 +40,21 @@ The Monaco integration brings powerful developer features:
 | **Multi-Cursor** | `Option + Click` | `Alt + Click` | Place multiple cursors for simultaneous editing (built-in Monaco). |
 | **Command Palette**| `F1` | `F1` | Open the Monaco command palette. |
 
-## Multi-Statement Query Selection
+## Multi-Statement Execution
 
-When the editor contains multiple semicolon-separated queries and you press Execute, Tabularis opens a **Query Selection Modal** that lets you pick which query to run.
+When the editor contains multiple semicolon-separated queries and you press Execute, Tabularis opens a **Query Selection Modal** with three execution modes:
+
+### Run a Single Query
+
+Click any query in the list (or press its number `1`–`9`) to execute just that one.
+
+### Run All
+
+Click **Run All** (or press `Ctrl/Cmd + Enter` inside the modal) to execute every query in the editor. Results from each query appear in separate tabs in the results panel.
+
+### Run Selected
+
+Use the checkboxes to pick specific queries, then click **Run Selected (N)** (or press `Shift + Enter`). Only the checked queries are executed. Use **Select All / Deselect All** to toggle the entire list, or press `Space` to toggle the focused query.
 
 ### Keyboard Navigation
 
@@ -51,8 +63,50 @@ When the editor contains multiple semicolon-separated queries and you press Exec
 | `↑` / `↓` | Move focus between queries |
 | `Enter` | Execute the focused query |
 | `1`–`9` | Directly execute query N |
+| `Space` | Toggle checkbox on focused query |
+| `Ctrl/Cmd + Enter` | Run All |
+| `Shift + Enter` | Run Selected |
 
-The focused item shows a blue border and a numbered badge (1–9) indicating its keyboard shortcut. Hovering with the mouse syncs the keyboard focus, so mouse and keyboard selection stay in lockstep.
+### Execute Selection
+
+If you highlight a text selection in the editor and run it, Tabularis splits the selection by `;` and executes all contained queries concurrently. Results appear as separate tabs in the multi-result panel.
+
+## Multi-Result Tabs
+
+When multiple queries are executed (via Run All, Run Selected, or Execute Selection), results are displayed in a **tabbed results panel** at the bottom of the editor. Each query gets its own tab with independent pagination, error handling, and loading state.
+
+### Tab Management
+
+| Action | How |
+|--------|-----|
+| Switch tab | Click the tab header |
+| Close tab | Click the **X** button or middle-click |
+| Rename tab | Double-click the tab header or right-click → Rename |
+| Context menu | Right-click a tab for Close / Close Others / Close Right / Close Left / Close All |
+| Re-run | Click the play icon on a tab to re-execute that query |
+
+A summary bar shows the total number of queries and how many succeeded or failed. Each tab displays the query preview, row count, and execution time.
+
+### Query Parameters
+
+When running multiple queries that contain `:param` placeholders, Tabularis collects parameters across all queries and prompts you **once** via the parameters modal before execution begins.
+
+## Query Splitting
+
+Tabularis uses [dbgate-query-splitter](https://github.com/nicedoc/dbgate-query-splitter) to split multi-statement SQL. This handles complex syntax like stored procedures and functions that contain internal semicolons:
+
+```sql
+CREATE FUNCTION example()
+RETURNS INT
+LANGUAGE PLPGSQL
+AS $$
+BEGIN
+    RETURN 10::INT;
+END;
+$$;
+```
+
+The splitter correctly treats this as a single statement rather than breaking on the internal `;` inside the `$$` block.
 
 ## Autocomplete: Multi-Database and Multi-Schema
 

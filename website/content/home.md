@@ -28,6 +28,9 @@ Connect to remote databases securely through SSH tunnels and manage SSH connecti
 ### 📝 Modern SQL Editor
 Monaco-based editor with syntax highlighting, multiple tabs, and DataGrip-style execution (run selected, run all).
 
+### 📓 SQL Notebooks
+Interactive multi-cell workspaces combining **SQL** and **Markdown** cells. Inline results, bar/line/pie charts, cross-cell variables with `{{cellName.column}}` syntax, notebook-level parameters, and Run All with stop-on-error.
+
 ### 🪟 Split View
 Work with **multiple connections simultaneously** in a resizable split-pane layout. Open any connection directly from the sidebar context menu and compare results across databases side by side.
 

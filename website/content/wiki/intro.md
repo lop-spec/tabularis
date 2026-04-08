@@ -13,7 +13,8 @@ excerpt: "Welcome to the Tabularis Wiki. Learn how to get started with the most 
 
 - **Connects** to PostgreSQL, MySQL, MariaDB, and SQLite — including databases behind SSH tunnels.
 - **Browses** schemas, tables, views, indexes, foreign keys, and stored procedures/functions.
-- **Runs SQL** in a Monaco-based editor with live autocomplete on real table/column names.
+- **Runs SQL** in a Monaco-based editor with live autocomplete on real table/column names, with multi-statement execution and multi-result tabs.
+- **Notebooks** — interactive multi-cell workspaces combining SQL, Markdown, charts, and cross-cell variables.
 - **Edits data** inline in a virtualized data grid with pending change tracking.
 - **Builds queries visually** with a drag-and-drop canvas that generates SQL in real time.
 - **Generates ER diagrams** from your live schema using the Dagre layout engine.

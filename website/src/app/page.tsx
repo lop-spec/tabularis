@@ -348,6 +348,30 @@ export default function HomePage() {
             </div>
           </article>
           <article className="feature-card has-screenshot">
+            <Link href="/wiki/notebooks" className="feature-card-screenshot">
+              <img src="/img/posts/tabularis-notebook-sql-cell-pie-chart-data-grid.png" alt="SQL Notebooks" />
+            </Link>
+            <div className="feature-card-body">
+              <div className="feature-card-header">
+                <h3>📓 SQL Notebooks</h3>
+                <Link href="/wiki/notebooks" className="sponsor-external-link" aria-label="Learn more about SQL Notebooks">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
+                Interactive multi-cell workspaces combining <strong>SQL</strong> and{" "}
+                <strong>Markdown</strong> cells. Inline results, bar/line/pie charts,
+                cross-cell variables with <code>{"{{cellName.column}}"}</code> syntax,
+                notebook-level parameters, and Run All with stop-on-error.
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/notebooks" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
+            </div>
+          </article>
+          <article className="feature-card has-screenshot">
             <Link href="/wiki/schema-management" className="feature-card-screenshot">
               <img src="/img/tabularis-schema-management-er-diagram.png" alt="ER Diagram" />
             </Link>

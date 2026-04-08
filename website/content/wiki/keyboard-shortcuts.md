@@ -34,6 +34,14 @@ Tabularis ships with a set of keyboard shortcuts for common actions across navig
 
 ---
 
+## Notebook
+
+| Action | macOS | Windows / Linux |
+| :--- | :--- | :--- |
+| Run All Cells | `⌘+Shift+Enter` | `Ctrl+Shift+Enter` |
+
+---
+
 ## Data Grid
 
 | Action | macOS | Windows / Linux |
