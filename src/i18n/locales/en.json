@@ -639,6 +639,7 @@
       "numberHint": "Press 1-9 to select, arrows to navigate",
       "runAll": "Run All",
       "runSelected": "Run Selected ({{count}})",
+      "runSingle": "Run this query",
       "selectAll": "Select All",
       "deselectAll": "Deselect All"
     },

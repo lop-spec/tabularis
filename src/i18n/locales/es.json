@@ -629,6 +629,7 @@
       "numberHint": "Pulsa 1-9 para seleccionar, flechas para navegar",
       "runAll": "Ejecutar todas",
       "runSelected": "Ejecutar seleccionadas ({{count}})",
+      "runSingle": "Ejecutar esta consulta",
       "selectAll": "Seleccionar todas",
       "deselectAll": "Deseleccionar todas"
     },

@@ -610,6 +610,7 @@
       "numberHint": "按 1-9 选择，方向键导航",
       "runAll": "全部执行",
       "runSelected": "执行选中 ({{count}})",
+      "runSingle": "执行此查询",
       "selectAll": "全选",
       "deselectAll": "取消全选"
     },

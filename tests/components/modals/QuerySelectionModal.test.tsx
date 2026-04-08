@@ -55,9 +55,8 @@ describe("QuerySelectionModal", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders query count in footer", () => {
+  it("renders query count in header", () => {
     renderModal();
-    // The i18n mock returns the key with interpolation
     expect(
       screen.getByText(/editor\.querySelection\.queriesFound/),
     ).toBeInTheDocument();
@@ -85,14 +84,10 @@ describe("QuerySelectionModal", () => {
 
   it("calls onClose when close button is clicked", () => {
     renderModal();
-    // The header contains h3 "title" and a div with selectAll button + close button.
-    // Both are direct children in the header flex container.
-    const allButtons = screen.getAllByRole("button");
-    // The close button is inside the header, right after the selectAll button.
-    // It's the second button in the DOM (first is selectAll).
-    // Find the button that has the selectAll text, the next sibling is close.
-    const selectAllBtn = screen.getByText("editor.querySelection.selectAll");
-    const closeBtn = selectAllBtn.closest("div")?.querySelector("button:last-child");
+    // Close button is the first button in the header (next to title)
+    const title = screen.getByText("editor.querySelection.title");
+    const header = title.closest("div")!.parentElement!;
+    const closeBtn = header.querySelector("button");
     expect(closeBtn).not.toBeNull();
     fireEvent.click(closeBtn!);
     expect(mockOnClose).toHaveBeenCalled();
@@ -114,25 +109,19 @@ describe("QuerySelectionModal", () => {
 
   it("calls onRunAll on Ctrl+Enter keydown", () => {
     renderModal();
-    fireEvent.keyDown(window, {
-      key: "Enter",
-      ctrlKey: true,
-    });
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     expect(mockOnRunAll).toHaveBeenCalledWith(queries);
   });
 
   it("calls onSelect on Enter keydown (single query)", () => {
     renderModal();
     fireEvent.keyDown(window, { key: "Enter" });
-    // Focus starts on index 0
     expect(mockOnSelect).toHaveBeenCalledWith("SELECT * FROM users");
   });
 
   it("navigates focus with arrow keys", () => {
     renderModal();
-    // Move focus down
     fireEvent.keyDown(window, { key: "ArrowDown" });
-    // Now pressing Enter should select the second query
     fireEvent.keyDown(window, { key: "Enter" });
     expect(mockOnSelect).toHaveBeenCalledWith("SELECT * FROM posts");
   });
@@ -145,9 +134,7 @@ describe("QuerySelectionModal", () => {
 
   it("toggles checkbox selection with Space key", () => {
     renderModal();
-    // Press space to toggle selection on first query
     fireEvent.keyDown(window, { key: " " });
-    // Now Run Selected should be enabled — click it
     const runSelectedBtn = screen
       .getByText(/editor\.querySelection\.runSelected/)
       .closest("button");
@@ -156,7 +143,7 @@ describe("QuerySelectionModal", () => {
     expect(mockOnRunSelected).toHaveBeenCalledWith(["SELECT * FROM users"]);
   });
 
-  it("shows Select All / Deselect All toggle", () => {
+  it("shows Select All toggle", () => {
     renderModal();
     expect(
       screen.getByText("editor.querySelection.selectAll"),
@@ -165,17 +152,20 @@ describe("QuerySelectionModal", () => {
 
   it("toggles all selections when Select All is clicked", () => {
     renderModal();
-    // Click Select All
     fireEvent.click(screen.getByText("editor.querySelection.selectAll"));
-    // Now it should show Deselect All
     expect(
       screen.getByText("editor.querySelection.deselectAll"),
     ).toBeInTheDocument();
-    // Click Run Selected — should include all queries
     const runSelectedBtn = screen
       .getByText(/editor\.querySelection\.runSelected/)
       .closest("button");
     fireEvent.click(runSelectedBtn!);
     expect(mockOnRunSelected).toHaveBeenCalledWith(queries);
+  });
+
+  it("shows inline run button on hover for each query row", () => {
+    renderModal();
+    const runButtons = screen.getAllByTitle("editor.querySelection.runSingle");
+    expect(runButtons.length).toBe(queries.length);
   });
 });

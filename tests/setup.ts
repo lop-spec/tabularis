@@ -156,6 +156,7 @@ vi.mock("lucide-react", () => ({
   XCircle: () => null,
   ChevronsLeft: () => null,
   ChevronsRight: () => null,
+  ListChecks: () => null,
 }));
 
 // Mock scrollIntoView (not available in JSDOM)

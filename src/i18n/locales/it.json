@@ -639,6 +639,7 @@
       "numberHint": "Premi 1-9 per selezionare, frecce per navigare",
       "runAll": "Esegui tutte",
       "runSelected": "Esegui selezionate ({{count}})",
+      "runSingle": "Esegui questa query",
       "selectAll": "Seleziona tutte",
       "deselectAll": "Deseleziona tutte"
     },
