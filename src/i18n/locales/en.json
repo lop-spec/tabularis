@@ -647,7 +647,8 @@
       "query": "Query {{index}}",
       "summary": "{{total}} queries: {{succeeded}} succeeded, {{failed}} failed",
       "rerun": "Re-run query",
-      "close": "Close tab"
+      "close": "Close tab",
+      "rename": "Rename"
     }
   },
   "createTable": {

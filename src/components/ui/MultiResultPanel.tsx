@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Play,
@@ -13,12 +13,15 @@ import {
   ArrowRightToLine,
   ArrowLeftToLine,
   Trash2,
+  Database,
+  Pencil,
 } from "lucide-react";
 import clsx from "clsx";
 import { DataGrid } from "./DataGrid";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { ContextMenu } from "./ContextMenu";
 import { formatDuration } from "../../utils/formatTime";
+import { getTabScrollState } from "../../utils/tabScroll";
 import {
   findActiveEntry,
   countSucceeded,
@@ -49,23 +52,23 @@ interface MultiResultPanelProps {
 function ResultTab({
   entry,
   isActive,
-  index,
+  forceEdit,
   onSelect,
   onRerun,
   onClose,
   onRename,
   onContextMenu,
-  canClose,
+  onEditDone,
 }: {
   entry: QueryResultEntry;
   isActive: boolean;
-  index: number;
+  forceEdit: boolean;
   onSelect: () => void;
   onRerun: () => void;
   onClose: () => void;
   onRename: (label: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  canClose: boolean;
+  onEditDone: () => void;
 }) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
@@ -91,6 +94,13 @@ function ResultTab({
     setIsEditing(true);
   };
 
+  useEffect(() => {
+    if (forceEdit && !isEditing) {
+      startEditing();
+      onEditDone();
+    }
+  }, [forceEdit]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const commitEdit = () => {
     const trimmed = editValue.trim();
     if (trimmed && trimmed !== displayLabel) {
@@ -103,66 +113,76 @@ function ResultTab({
     <div
       onClick={onSelect}
       onContextMenu={onContextMenu}
+      onAuxClick={(e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          onClose();
+        }
+      }}
       className={clsx(
-        "group flex items-center gap-1 pl-2.5 pr-1 py-1.5 text-xs border-r border-default shrink-0 transition-colors cursor-pointer",
+        "flex items-center gap-2 px-3 h-full border-r border-default cursor-pointer min-w-[120px] max-w-[220px] text-xs transition-all group relative select-none",
         isActive
-          ? "bg-surface-secondary text-white border-b-2 border-b-blue-500"
-          : "text-secondary hover:text-white hover:bg-surface-secondary/50",
+          ? "bg-base text-primary font-medium"
+          : "text-muted hover:bg-surface-secondary hover:text-secondary",
       )}
     >
+      {/* Active indicator — top bar */}
+      {isActive && (
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-500" />
+      )}
+
+      {/* Loading indicator — bottom bar */}
+      {entry.isLoading && (
+        <div className="absolute bottom-0 left-0 h-0.5 bg-blue-500 animate-pulse w-full" />
+      )}
+
       {/* Status icon */}
       {entry.isLoading ? (
         <Loader2 size={12} className="animate-spin text-blue-400 shrink-0" />
       ) : entry.error ? (
         <XCircle size={12} className="text-red-400 shrink-0" />
       ) : (
-        <Check size={12} className="text-green-400 shrink-0" />
+        <Database size={12} className="text-green-400 shrink-0" />
       )}
 
-      {/* Label — click to edit */}
-      {isEditing ? (
-        <input
-          ref={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={commitEdit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitEdit();
-            if (e.key === "Escape") setIsEditing(false);
-            e.stopPropagation();
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="bg-transparent border-b border-blue-500 text-white text-xs font-medium outline-none w-20 px-0.5"
-        />
-      ) : (
-        <span
-          className="font-medium cursor-text truncate max-w-[80px]"
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            startEditing();
-          }}
-          title={entry.query}
-        >
-          {displayLabel}
-        </span>
-      )}
-
-      {/* SQL preview */}
-      <span
-        className="max-w-[100px] truncate text-muted text-[10px]"
-        title={entry.query}
-      >
-        {entry.query.slice(0, 40)}
+      {/* Label */}
+      <span className="truncate flex-1 flex items-center gap-1">
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitEdit();
+              if (e.key === "Escape") setIsEditing(false);
+              e.stopPropagation();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-transparent border-b border-blue-500 text-white text-xs font-medium outline-none w-full px-0"
+          />
+        ) : (
+          <span
+            className="truncate"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              startEditing();
+            }}
+            title={entry.query}
+          >
+            {displayLabel}
+          </span>
+        )}
       </span>
 
-      {/* Rerun button */}
+      {/* Rerun button — hover only */}
       {!entry.isLoading && (
         <button
           onClick={(e) => {
             e.stopPropagation();
             onRerun();
           }}
-          className="p-0.5 rounded hover:bg-surface-tertiary text-muted hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
+          className="p-0.5 rounded-sm hover:bg-surface-secondary transition-opacity shrink-0 opacity-0 group-hover:opacity-100"
           title={t("editor.multiResult.rerun")}
         >
           <Play size={10} fill="currentColor" />
@@ -170,18 +190,18 @@ function ResultTab({
       )}
 
       {/* Close button */}
-      {canClose && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          className="p-0.5 rounded hover:bg-surface-tertiary text-muted hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-          title={t("editor.multiResult.close")}
-        >
-          <X size={11} />
-        </button>
-      )}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        className={clsx(
+          "p-0.5 rounded-sm hover:bg-surface-secondary transition-opacity shrink-0",
+          isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+        )}
+      >
+        <X size={12} />
+      </button>
     </div>
   );
 }
@@ -204,15 +224,40 @@ export function MultiResultPanel({
   onRenameEntry,
 }: MultiResultPanelProps) {
   const { t } = useTranslation();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
     entryId: string;
   } | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const activeEntry = findActiveEntry(results, activeResultId);
   const succeeded = countSucceeded(results);
   const failed = countFailed(results);
   const totalTime = totalExecutionTime(results);
+
+  const updateScrollArrows = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const state = getTabScrollState(el);
+    setCanScrollLeft(state.canScrollLeft);
+    setCanScrollRight(state.canScrollRight);
+  }, []);
+
+  useEffect(() => {
+    updateScrollArrows();
+  }, [results, updateScrollArrows]);
+
+  const scrollTabs = (direction: "left" | "right") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({
+      left: direction === "left" ? -200 : 200,
+      behavior: "smooth",
+    });
+  };
 
   if (!activeEntry) return null;
 
@@ -223,35 +268,56 @@ export function MultiResultPanel({
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      {/* Multi-result tab bar */}
-      <div className="shrink-0 border-b border-default bg-elevated">
-        <div className="flex items-center overflow-x-auto scrollbar-thin">
-          {results.map((entry, i) => (
+      {/* Tab bar — mirrors main editor tab bar */}
+      <div className="flex items-center bg-elevated border-b border-default h-9 shrink-0">
+        <button
+          onClick={() => scrollTabs("left")}
+          disabled={!canScrollLeft}
+          className="flex items-center justify-center w-7 h-full text-muted border-r border-default shrink-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:enabled:text-white hover:enabled:bg-surface-secondary"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <button
+          onClick={() => scrollTabs("right")}
+          disabled={!canScrollRight}
+          className="flex items-center justify-center w-7 h-full text-muted border-r border-default shrink-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:enabled:text-white hover:enabled:bg-surface-secondary"
+        >
+          <ChevronRight size={14} />
+        </button>
+        <div
+          ref={scrollRef}
+          onScroll={updateScrollArrows}
+          className="flex flex-1 overflow-x-auto no-scrollbar h-full"
+        >
+          {results.map((entry) => (
             <ResultTab
               key={entry.id}
               entry={entry}
               isActive={entry.id === activeEntry.id}
-              index={i}
+              forceEdit={editingEntryId === entry.id}
+              onEditDone={() => setEditingEntryId(null)}
               onSelect={() => onSelectResult(entry.id)}
               onRerun={() => onRerunEntry(entry.id)}
               onClose={() => onCloseEntry(entry.id)}
               onRename={(label) => onRenameEntry(entry.id, label)}
               onContextMenu={(e) => handleContextMenu(entry.id, e)}
-              canClose={results.length > 1}
             />
           ))}
         </div>
-        {/* Summary line */}
+        {/* Summary badge */}
         {isAllDone && (
-          <div className="px-3 py-1 text-[10px] text-muted border-t border-default bg-elevated/50">
-            {t("editor.multiResult.summary", {
-              total: results.length,
-              succeeded,
-              failed,
-            })}
+          <div className="flex items-center gap-2 px-3 h-full text-[10px] text-muted border-l border-default shrink-0">
+            <span>
+              {succeeded > 0 && (
+                <span className="text-green-400">{succeeded}<Check size={9} className="inline ml-0.5" /></span>
+              )}
+              {failed > 0 && (
+                <span className="text-red-400 ml-1.5">{failed}<XCircle size={9} className="inline ml-0.5" /></span>
+              )}
+            </span>
             {totalTime > 0 && (
-              <span className="ml-2 font-mono">
-                ({formatDuration(totalTime)})
+              <span className="font-mono text-muted">
+                {formatDuration(totalTime)}
               </span>
             )}
           </div>
@@ -399,10 +465,15 @@ export function MultiResultPanel({
           onClose={() => setContextMenu(null)}
           items={[
             {
+              label: t("editor.multiResult.rename"),
+              icon: Pencil,
+              action: () => setEditingEntryId(contextMenu.entryId),
+            },
+            { separator: true },
+            {
               label: t("editor.closeTab"),
               icon: X,
               action: () => onCloseEntry(contextMenu.entryId),
-              disabled: results.length <= 1,
             },
             {
               label: t("editor.closeOthers"),

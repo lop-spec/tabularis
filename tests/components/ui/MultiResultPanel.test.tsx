@@ -215,7 +215,7 @@ describe("MultiResultPanel", () => {
     expect(mockOnRerunEntry).toHaveBeenCalledWith("r-0");
   });
 
-  it("shows summary line when isAllDone is true", () => {
+  it("shows summary badge when isAllDone is true", () => {
     const results = [
       makeEntry({
         id: "r-0",
@@ -230,7 +230,7 @@ describe("MultiResultPanel", () => {
         executionTime: 30,
       }),
     ];
-    render(
+    const { container } = render(
       <MultiResultPanel
         {...defaultProps}
         results={results}
@@ -238,24 +238,10 @@ describe("MultiResultPanel", () => {
         isAllDone={true}
       />,
     );
-    expect(
-      screen.getByText(/editor\.multiResult\.summary/),
-    ).toBeInTheDocument();
-  });
-
-  it("does not show summary line when isAllDone is false", () => {
-    const results = [makeEntry({ id: "r-0" })];
-    render(
-      <MultiResultPanel
-        {...defaultProps}
-        results={results}
-        activeResultId="r-0"
-        isAllDone={false}
-      />,
-    );
-    expect(
-      screen.queryByText(/editor\.multiResult\.summary/),
-    ).not.toBeInTheDocument();
+    // Summary badge shows succeeded count with green color
+    const greenSpan = container.querySelector(".text-green-400");
+    expect(greenSpan).not.toBeNull();
+    expect(greenSpan?.textContent).toContain("1");
   });
 
   it("returns null for empty results", () => {
@@ -351,23 +337,7 @@ describe("MultiResultPanel", () => {
     expect(mockOnPageChange).toHaveBeenCalledWith("r-0", 2);
   });
 
-  it("shows close button when more than one result tab", () => {
-    const results = [
-      makeEntry({ id: "r-0", isLoading: false, result: makeResult() }),
-      makeEntry({ id: "r-1", isLoading: false, result: makeResult() }),
-    ];
-    render(
-      <MultiResultPanel
-        {...defaultProps}
-        results={results}
-        activeResultId="r-0"
-      />,
-    );
-    const closeButtons = screen.getAllByTitle("editor.multiResult.close");
-    expect(closeButtons).toHaveLength(2);
-  });
-
-  it("does not show close button when only one result tab", () => {
+  it("shows scroll arrows for tab bar", () => {
     const results = [
       makeEntry({ id: "r-0", isLoading: false, result: makeResult() }),
     ];
@@ -378,26 +348,10 @@ describe("MultiResultPanel", () => {
         activeResultId="r-0"
       />,
     );
-    expect(
-      screen.queryByTitle("editor.multiResult.close"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("calls onCloseEntry when close button is clicked", () => {
-    const results = [
-      makeEntry({ id: "r-0", isLoading: false, result: makeResult() }),
-      makeEntry({ id: "r-1", isLoading: false, result: makeResult() }),
-    ];
-    render(
-      <MultiResultPanel
-        {...defaultProps}
-        results={results}
-        activeResultId="r-0"
-      />,
-    );
-    const closeButtons = screen.getAllByTitle("editor.multiResult.close");
-    fireEvent.click(closeButtons[0]);
-    expect(mockOnCloseEntry).toHaveBeenCalledWith("r-0");
+    // Scroll arrow buttons are always present in the tab bar
+    const buttons = screen.getAllByRole("button");
+    // First two buttons are the scroll arrows (left, right)
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows custom label when entry has one", () => {

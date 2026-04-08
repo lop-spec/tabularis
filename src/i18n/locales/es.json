@@ -637,7 +637,8 @@
       "query": "Consulta {{index}}",
       "summary": "{{total}} consultas: {{succeeded}} completadas, {{failed}} fallidas",
       "rerun": "Reejecutar consulta",
-      "close": "Cerrar pestaña"
+      "close": "Cerrar pestaña",
+      "rename": "Renombrar"
     }
   },
   "createTable": {

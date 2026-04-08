@@ -647,7 +647,8 @@
       "query": "Query {{index}}",
       "summary": "{{total}} query: {{succeeded}} completate, {{failed}} fallite",
       "rerun": "Riesegui query",
-      "close": "Chiudi tab"
+      "close": "Chiudi tab",
+      "rename": "Rinomina"
     }
   },
   "createTable": {
