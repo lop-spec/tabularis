@@ -234,6 +234,7 @@ export const Editor = () => {
     pendingPageNum: number;
     pendingTabId?: string;
     mode: "run" | "save";
+    pendingMultiQueries?: string[];
   }>({
     isOpen: false,
     sql: "",
@@ -686,12 +687,39 @@ export const Editor = () => {
   );
 
   const runMultipleQueries = useCallback(
-    async (queries: string[]) => {
+    async (queries: string[], paramsOverride?: Record<string, string>) => {
       const targetTabId = activeTabIdRef.current;
       if (!activeConnectionId || !targetTabId) return;
 
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
+
+      // Collect all unique parameters across all queries
+      const allParams = [
+        ...new Set(queries.flatMap((q) => extractQueryParams(q))),
+      ];
+      if (allParams.length > 0) {
+        const storedParams =
+          paramsOverride || targetTab.queryParams || {};
+        const missingParams = allParams.filter(
+          (p) =>
+            storedParams[p] === undefined || storedParams[p].trim() === "",
+        );
+        if (missingParams.length > 0) {
+          setQueryParamsModal({
+            isOpen: true,
+            sql: queries.join(";\n"),
+            parameters: allParams,
+            pendingPageNum: 1,
+            pendingTabId: targetTabId,
+            mode: "run",
+            pendingMultiQueries: queries,
+          });
+          return;
+        }
+        // Interpolate all queries with the stored params
+        queries = queries.map((q) => interpolateQueryParams(q, storedParams));
+      }
 
       const pageSize =
         settings.resultPageSize && settings.resultPageSize > 0
@@ -1625,7 +1653,8 @@ export const Editor = () => {
 
   const handleParamsSubmit = useCallback(
     (values: Record<string, string>) => {
-      const { pendingTabId, mode, sql, pendingPageNum } = queryParamsModal;
+      const { pendingTabId, mode, sql, pendingPageNum, pendingMultiQueries } =
+        queryParamsModal;
       if (!pendingTabId) return;
 
       // Update tab with new params (merge with existing)
@@ -1639,10 +1668,14 @@ export const Editor = () => {
 
       // If mode was run, execute query immediately
       if (mode === "run") {
-        runQuery(sql, pendingPageNum, pendingTabId, newParams);
+        if (pendingMultiQueries) {
+          runMultipleQueries(pendingMultiQueries, newParams);
+        } else {
+          runQuery(sql, pendingPageNum, pendingTabId, newParams);
+        }
       }
     },
-    [queryParamsModal, updateTab, runQuery],
+    [queryParamsModal, updateTab, runQuery, runMultipleQueries],
   );
 
   const handleEditParams = useCallback(() => {
