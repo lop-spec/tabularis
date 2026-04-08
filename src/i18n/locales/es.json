@@ -687,7 +687,19 @@
       "title": "Seleccionar consulta a ejecutar",
       "queriesFound": "{{count}} consultas encontradas",
       "escToCancel": "Esc para cancelar",
-      "numberHint": "Pulsa 1-9 para seleccionar, flechas para navegar"
+      "numberHint": "Pulsa 1-9 para seleccionar, flechas para navegar",
+      "runAll": "Ejecutar todas",
+      "runSelected": "Ejecutar seleccionadas ({{count}})",
+      "runSingle": "Ejecutar esta consulta",
+      "selectAll": "Seleccionar todas",
+      "deselectAll": "Deseleccionar todas"
+    },
+    "multiResult": {
+      "query": "Consulta {{index}}",
+      "summary": "{{total}} consultas: {{succeeded}} completadas, {{failed}} fallidas",
+      "rerun": "Reejecutar consulta",
+      "close": "Cerrar pestaña",
+      "rename": "Renombrar"
     }
   },
   "createTable": {

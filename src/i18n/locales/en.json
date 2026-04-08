@@ -697,7 +697,19 @@
       "title": "Select Query to Execute",
       "queriesFound": "{{count}} queries found",
       "escToCancel": "Esc to cancel",
-      "numberHint": "Press 1-9 to select, arrows to navigate"
+      "numberHint": "Press 1-9 to select, arrows to navigate",
+      "runAll": "Run All",
+      "runSelected": "Run Selected ({{count}})",
+      "runSingle": "Run this query",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All"
+    },
+    "multiResult": {
+      "query": "Query {{index}}",
+      "summary": "{{total}} queries: {{succeeded}} succeeded, {{failed}} failed",
+      "rerun": "Re-run query",
+      "close": "Close tab",
+      "rename": "Rename"
     }
   },
   "createTable": {

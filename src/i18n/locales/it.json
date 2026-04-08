@@ -697,7 +697,19 @@
       "title": "Seleziona la query da eseguire",
       "queriesFound": "{{count}} query trovate",
       "escToCancel": "Esc per annullare",
-      "numberHint": "Premi 1-9 per selezionare, frecce per navigare"
+      "numberHint": "Premi 1-9 per selezionare, frecce per navigare",
+      "runAll": "Esegui tutte",
+      "runSelected": "Esegui selezionate ({{count}})",
+      "runSingle": "Esegui questa query",
+      "selectAll": "Seleziona tutte",
+      "deselectAll": "Deseleziona tutte"
+    },
+    "multiResult": {
+      "query": "Query {{index}}",
+      "summary": "{{total}} query: {{succeeded}} completate, {{failed}} fallite",
+      "rerun": "Riesegui query",
+      "close": "Chiudi tab",
+      "rename": "Rinomina"
     }
   },
   "createTable": {
