@@ -53,6 +53,7 @@ export interface QueryResultEntry {
   pkColumn: string | null;
 }
 
+import type { NotebookState } from "./notebook";
 import type { Node, Edge } from "@xyflow/react";
 
 export interface FlowState {
@@ -69,7 +70,7 @@ export interface PendingInsertion {
 export interface Tab {
   id: string;
   title: string;
-  type: "console" | "table" | "query_builder";
+  type: "console" | "table" | "query_builder" | "notebook";
   query: string;
   result: QueryResult | null;
   error: string;
@@ -99,6 +100,8 @@ export interface Tab {
   schema?: string; // Schema name (PostgreSQL) for query reconstruction
   results?: QueryResultEntry[];
   activeResultId?: string;
+  notebookId?: string; // Reference to notebook file in config dir
+  notebookState?: NotebookState; // Deprecated: kept for migration of old tabs
 }
 
 export interface EditorPreferences {

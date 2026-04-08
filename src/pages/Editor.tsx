@@ -75,6 +75,9 @@ import {
 } from "../utils/queryParameters";
 import { formatDuration } from "../utils/formatTime";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
+import { NotebookView } from "../components/notebook/NotebookView";
+import { extractSqlFromCells } from "../utils/notebook";
+import { createNotebook } from "../utils/notebookStore";
 import { registerSqlAutocomplete } from "../utils/autocomplete";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -204,6 +207,18 @@ export const Editor = () => {
       const tab = tabsRef.current.find((t) => t.id === tabId);
       if (!tab) return;
 
+      // Notebook: extract all SQL cells
+      if (tab.type === "notebook" && tab.notebookState) {
+        const allSql = extractSqlFromCells(tab.notebookState.cells);
+        addTab({
+          type: "console",
+          title: `Console - ${tab.title}`,
+          query: allSql,
+          connectionId: tab.connectionId,
+        });
+        return;
+      }
+
       const effectiveSchema =
         activeCapabilities?.schemas === true ? tab.schema : undefined;
       const tabForQuery = { ...tab, schema: effectiveSchema };
@@ -275,6 +290,7 @@ export const Editor = () => {
   const activeTabType = activeTab?.type;
   const activeTabQuery = activeTab?.query;
   const isTableTab = activeTab?.type === "table";
+  const isNotebookTab = activeTab?.type === "notebook";
   const isMultiDb =
     isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
   const isEditorOpen =
@@ -2098,6 +2114,8 @@ export const Editor = () => {
                 <TableIcon size={12} className="text-blue-400 shrink-0" />
               ) : tab.type === "query_builder" ? (
                 <Network size={12} className="text-purple-400 shrink-0" />
+              ) : tab.type === "notebook" ? (
+                <BookOpen size={12} className="text-orange-400 shrink-0" />
               ) : (
                 <FileCode size={12} className="text-green-500 shrink-0" />
               )}
@@ -2148,10 +2166,25 @@ export const Editor = () => {
         >
           <Network size={16} />
         </button>
+        <button
+          onClick={async () => {
+            const title = "Notebook";
+            const { notebookId } = await createNotebook(title);
+            addTab({
+              type: "notebook",
+              notebookId,
+              ...(isMultiDb ? { schema: selectedDatabases[0] } : {}),
+            });
+          }}
+          className="flex items-center justify-center w-9 h-full text-orange-400 hover:text-white hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
+          title={t("editor.newNotebook")}
+        >
+          <BookOpen size={16} />
+        </button>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-2 h-[50px]">
+      {/* Toolbar — hidden for notebook tabs */}
+      {!isNotebookTab && <div className="flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-2 h-[50px]">
         {activeTab.isLoading ? (
           <button
             onClick={stopQuery}
@@ -2329,13 +2362,31 @@ export const Editor = () => {
               : t("editor.disconnected")}
           </span>
         )}
-      </div>
+      </div>}
 
       {/* Render all non-table tabs to prevent Monaco remounting */}
       {tabs.map((tab) => {
         if (tab.type === "table") return null;
 
         const isActive = tab.id === activeTabId;
+
+        // Notebook tabs get full-height rendering
+        if (tab.type === "notebook") {
+          return (
+            <div
+              key={tab.id}
+              style={{ display: isActive ? "flex" : "none" }}
+              className="flex-1 flex flex-col min-h-0 overflow-hidden"
+            >
+              <NotebookView
+                tab={tab}
+                updateTab={updateTab}
+                connectionId={activeConnectionId || ""}
+              />
+            </div>
+          );
+        }
+
         const isVisible = isActive && !isTableTab && isEditorOpen;
 
         return (
@@ -2399,7 +2450,7 @@ export const Editor = () => {
       })}
 
       {/* Resize Bar & Results Panel */}
-      {isTableTab || !isResultsCollapsed ? (
+      {!isNotebookTab && (isTableTab || !isResultsCollapsed) ? (
         <>
           {isTableTab ? (
             <TableToolbar

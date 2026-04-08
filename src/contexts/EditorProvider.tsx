@@ -22,6 +22,11 @@ import {
   shouldUseCachedSchema,
   createSchemaCacheEntry,
 } from "../utils/editor";
+import {
+  createNotebookFromState,
+  evictFromCache,
+  flushAllPendingSaves,
+} from "../utils/notebookStore";
 
 export const EditorProvider = ({ children }: { children: ReactNode }) => {
   const { activeConnectionId } = useDatabase();
@@ -48,6 +53,22 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(true);
       try {
         const { tabs: loadedTabs, activeTabId: loadedActiveTabId } = await loadEditorPreferences(activeConnectionId);
+
+        // Migrate old notebook tabs: notebookState → notebookId
+        for (const tab of loadedTabs) {
+          if (tab.type === "notebook" && tab.notebookState && !tab.notebookId) {
+            try {
+              const { notebookId } = await createNotebookFromState(
+                tab.title,
+                tab.notebookState,
+              );
+              tab.notebookId = notebookId;
+              tab.notebookState = undefined;
+            } catch (e) {
+              console.error("Failed to migrate notebook tab:", e);
+            }
+          }
+        }
 
         if (loadedTabs.length > 0) {
           // Merge loaded tabs with tabs from other connections
@@ -97,6 +118,15 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     },
     [activeConnectionId],
   );
+
+  // Flush all pending notebook saves on app close
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      flushAllPendingSaves();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   // Save tabs to file storage when they change
   useEffect(() => {
@@ -157,6 +187,12 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
 
   const closeTab = useCallback(
     (id: string) => {
+      // Flush and evict notebook cache for the closed tab
+      const closedTab = tabsRef.current.find((t) => t.id === id);
+      if (closedTab?.notebookId) {
+        evictFromCache(closedTab.notebookId);
+      }
+
       setTabs((prev) => {
         const {
           newTabs,

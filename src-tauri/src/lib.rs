@@ -16,6 +16,7 @@ pub mod models;
 pub mod paths; // Added
 pub mod persistence;
 pub mod pool_manager;
+pub mod notebooks;
 pub mod preferences;
 pub mod saved_queries;
 pub mod ssh_tunnel;
@@ -268,9 +269,13 @@ pub fn run() {
             config::get_explain_prompt,
             config::save_explain_prompt,
             config::reset_explain_prompt,
+            config::get_cellname_prompt,
+            config::save_cellname_prompt,
+            config::reset_cellname_prompt,
             // AI
             ai::generate_ai_query,
             ai::explain_ai_query,
+            ai::generate_cell_name,
             ai::get_ai_models,
             commands::get_schema_snapshot,
             // DDL generation
@@ -318,6 +323,11 @@ pub fn run() {
             preferences::load_editor_preferences,
             preferences::delete_editor_preferences,
             preferences::list_all_preferences,
+            // Notebooks
+            notebooks::create_notebook,
+            notebooks::save_notebook,
+            notebooks::load_notebook,
+            notebooks::delete_notebook,
             // Plugin Registry
             plugins::commands::fetch_plugin_registry,
             plugins::commands::install_plugin,
