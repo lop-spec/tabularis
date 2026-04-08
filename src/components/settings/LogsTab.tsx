@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
+import { ask, save } from "@tauri-apps/plugin-dialog";
 import {
   Trash2,
   FileDown,
@@ -74,7 +74,6 @@ export function LogsTab() {
 
   const handleClearLogs = useCallback(async () => {
     try {
-      const { ask } = await import("@tauri-apps/plugin-dialog");
       const confirmed = await ask(t("settings.clearLogsConfirm"), {
         title: t("common.delete"),
         kind: "warning",

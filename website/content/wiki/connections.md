@@ -144,6 +144,32 @@ When connected to PostgreSQL, Tabularis loads all schemas by default. To control
 
 The schema preference (which schema is "active" for DDL operations like `CREATE TABLE`) is also persisted per connection under `schemaPreferences`.
 
+## Connection Health Check
+
+Tabularis continuously monitors every active connection with a lightweight ping loop. If the backend detects that a connection is no longer reachable, it automatically disconnects it and notifies you with a toast alert.
+
+### How it works
+
+1. Every **N seconds** (default: 30), Tabularis sends a ping to each open connection.
+2. Built-in drivers (PostgreSQL, MySQL, SQLite) use a pool-level `ping` — no extra query is executed.
+3. Plugin drivers receive a `ping` JSON-RPC call. If the plugin has not implemented `ping`, Tabularis falls back to `test_connection` automatically.
+4. After **2 consecutive failures**, the connection pool is closed, the connection is removed from the active set, and a `connection-health-failed` event is emitted to the UI.
+
+### Configuring the interval
+
+Open **Settings → General → Connection Health Check** and adjust the **Ping Interval** slider (0–120 seconds). Setting it to **0** disables health checks entirely.
+
+The setting maps to the `pingInterval` key in `config.json` (see [Configuration](/wiki/configuration)).
+
+### What happens on failure
+
+When a health check failure triggers a disconnection:
+
+- The connection pool is closed and resources are freed.
+- Any SSH tunnel associated with the connection is torn down.
+- A toast notification appears with the error message and a button to navigate back to the Connections page.
+- You can reconnect at any time by clicking the connection again.
+
 ## Read-Only Mode
 
 Toggle **Read-Only** on a connection to block DML and DDL statements at the application layer. Tabularis parses the SQL AST before execution and refuses to run `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `CREATE`, or `ALTER` statements. This is a client-side guard — not a substitute for proper database-level permissions.

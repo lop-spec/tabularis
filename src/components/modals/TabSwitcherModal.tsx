@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { X, FileCode, Network } from "lucide-react";
+import { X, FileCode, Network, BookOpen } from "lucide-react";
 import { Table as TableIcon } from "lucide-react";
 import type { Tab } from "../../types/editor";
 import { getTabSwitcherRowClassName } from "../../utils/tabScroll";
@@ -68,6 +68,8 @@ export const TabSwitcherModal = ({
               >
                 {tab.type === "table" ? (
                   <TableIcon size={14} className="text-blue-400 shrink-0" />
+                ) : tab.type === "notebook" ? (
+                  <BookOpen size={14} className="text-orange-400 shrink-0" />
                 ) : tab.type === "query_builder" ? (
                   <Network size={14} className="text-purple-400 shrink-0" />
                 ) : (

@@ -1,3 +1,23 @@
+## [0.9.14](https://github.com/debba/tabularis/compare/v0.9.13...v0.9.14) (2026-04-07)
+
+
+### Bug Fixes
+
+* **driver:** fallback to test_connection when ping not implemented ([3b99ed2](https://github.com/debba/tabularis/commit/3b99ed24c1b127761d4d79e316cf7fb9229acead))
+* **drivers:** handle ORDER BY without swallowing LIMIT/OFFSET ([094fca3](https://github.com/debba/tabularis/commit/094fca39bb868d95f2e086f5163e96d7850e2874))
+* **modals:** improve modal UI and fix column type parsing ([39671f2](https://github.com/debba/tabularis/commit/39671f210cb357c97c3f06ae1f64ead6b2e097d7))
+* **website:** correct video path and move asset to videos/posts ([c1841e8](https://github.com/debba/tabularis/commit/c1841e894c28c305ccbb9b5f9c7d224b552fe900))
+
+
+### Features
+
+* **blog:** add notebooks post and image lightbox ([1b4302a](https://github.com/debba/tabularis/commit/1b4302ac2079025111bef2f7f47dd0847508d71e))
+* **column-types:** add column type parsing and extension support ([aeb146c](https://github.com/debba/tabularis/commit/aeb146c61864554d5363a9adf7b15a4a848302b3))
+* **health-check:** add periodic connection ping and auto-disconnect ([a815da1](https://github.com/debba/tabularis/commit/a815da199eca39ed202ddedda47c7112787059e6))
+* **modals:** add keyboard navigation and i18n to query selection modal ([ae4220f](https://github.com/debba/tabularis/commit/ae4220f91253176c2934eb17e0c98b5a1dfaba8b))
+* **modals:** replace native selects with Select component ([d68ca23](https://github.com/debba/tabularis/commit/d68ca23b20809d62743652fe650156b5b7fa99bd))
+* **postgres:** support SMALLSERIAL auto increment and sync UI behavior ([7fe6c03](https://github.com/debba/tabularis/commit/7fe6c038fdf46cbaa1446a572c26289413606ffc))
+
 ## [0.9.13](https://github.com/debba/tabularis/compare/v0.9.12...v0.9.13) (2026-04-02)
 
 

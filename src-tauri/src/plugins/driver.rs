@@ -200,7 +200,7 @@ impl DatabaseDriver for RpcDriver {
     async fn ping(&self, params: &ConnectionParams) -> Result<(), String> {
         match self.process.call("ping", json!({ "params": params })).await {
             Ok(_) => Ok(()),
-            Err(e) if e.contains("Method not found") => {
+            Err(e) if e.contains("Method not found") || e.contains("not implemented") => {
                 // Fallback for plugins that haven't implemented ping yet
                 self.test_connection(params).await
             }
