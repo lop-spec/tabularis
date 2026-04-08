@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Play,
@@ -18,8 +18,10 @@ import {
   ChevronDown,
   ChevronUp,
   Code2,
+  Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
+import { invoke } from "@tauri-apps/api/core";
 import { DataGrid } from "./DataGrid";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { ContextMenu } from "./ContextMenu";
@@ -31,6 +33,7 @@ import {
   countFailed,
   totalExecutionTime,
 } from "../../utils/multiResult";
+import { useSettings } from "../../hooks/useSettings";
 import type { QueryResultEntry } from "../../types/editor";
 
 interface MultiResultPanelProps {
@@ -56,19 +59,25 @@ function ResultTab({
   entry,
   isActive,
   initialEditing,
+  aiEnabled,
+  aiRenaming,
   onSelect,
   onRerun,
   onClose,
   onRename,
+  onAiRename,
   onContextMenu,
 }: {
   entry: QueryResultEntry;
   isActive: boolean;
   initialEditing: boolean;
+  aiEnabled: boolean;
+  aiRenaming: boolean;
   onSelect: () => void;
   onRerun: () => void;
   onClose: () => void;
   onRename: (label: string) => void;
+  onAiRename: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
@@ -167,6 +176,25 @@ function ResultTab({
         )}
       </span>
 
+      {/* AI rename button — hover only */}
+      {aiEnabled && !entry.isLoading && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAiRename();
+          }}
+          disabled={aiRenaming}
+          className="p-0.5 rounded-sm hover:bg-surface-secondary transition-opacity shrink-0 opacity-0 group-hover:opacity-100 disabled:opacity-50"
+          title={aiRenaming ? t("editor.multiResult.generatingName") : t("editor.multiResult.aiGenerateName")}
+        >
+          {aiRenaming ? (
+            <Loader2 size={10} className="animate-spin" />
+          ) : (
+            <Sparkles size={10} className="text-purple-300" />
+          )}
+        </button>
+      )}
+
       {/* Rerun button — hover only */}
       {!entry.isLoading && (
         <button
@@ -216,6 +244,7 @@ export function MultiResultPanel({
   onRenameEntry,
 }: MultiResultPanelProps) {
   const { t } = useTranslation();
+  const { settings } = useSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -226,6 +255,7 @@ export function MultiResultPanel({
   } | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [queryExpanded, setQueryExpanded] = useState(false);
+  const [aiRenamingEntryId, setAiRenamingEntryId] = useState<string | null>(null);
   const activeEntry = findActiveEntry(results, activeResultId);
   const succeeded = countSucceeded(results);
   const failed = countFailed(results);
@@ -263,6 +293,28 @@ export function MultiResultPanel({
     setContextMenu({ x: e.clientX, y: e.clientY, entryId });
   };
 
+  const handleAiRename = async (entryId: string) => {
+    const entry = results.find((r) => r.id === entryId);
+    if (!entry?.query.trim() || !settings.aiProvider) return;
+    setAiRenamingEntryId(entryId);
+    try {
+      const name = await invoke<string>("generate_tab_rename", {
+        req: {
+          provider: settings.aiProvider,
+          model: settings.aiModel || "",
+          query: entry.query,
+        },
+      });
+      onRenameEntry(entryId, name.trim());
+    } catch (e) {
+      console.error("Failed to generate tab name:", e);
+    } finally {
+      setAiRenamingEntryId(null);
+    }
+  };
+
+  const aiEnabled = !!(settings.aiEnabled && settings.aiProvider);
+
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       {/* Tab bar — mirrors main editor tab bar */}
@@ -294,10 +346,13 @@ export function MultiResultPanel({
               entry={entry}
               isActive={entry.id === activeEntry.id}
               initialEditing={shouldEdit}
+              aiEnabled={aiEnabled}
+              aiRenaming={aiRenamingEntryId === entry.id}
               onSelect={() => { if (shouldEdit) setEditingEntryId(null); onSelectResult(entry.id); }}
               onRerun={() => onRerunEntry(entry.id)}
               onClose={() => onCloseEntry(entry.id)}
               onRename={(label) => onRenameEntry(entry.id, label)}
+              onAiRename={() => handleAiRename(entry.id)}
               onContextMenu={(e) => handleContextMenu(entry.id, e)}
             />
             );
@@ -489,6 +544,18 @@ export function MultiResultPanel({
               icon: Pencil,
               action: () => setEditingEntryId(contextMenu.entryId),
             },
+            ...(aiEnabled
+              ? [
+                  {
+                    label: aiRenamingEntryId === contextMenu.entryId
+                      ? t("editor.multiResult.generatingName")
+                      : t("editor.multiResult.aiGenerateName"),
+                    icon: Sparkles,
+                    action: () => handleAiRename(contextMenu.entryId),
+                    disabled: aiRenamingEntryId !== null,
+                  },
+                ]
+              : []),
             { separator: true },
             {
               label: t("editor.closeTab"),

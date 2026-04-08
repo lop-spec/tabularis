@@ -32,6 +32,13 @@ pub struct AiCellNameRequest {
     pub query: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AiTabRenameRequest {
+    pub provider: String,
+    pub model: String,
+    pub query: String,
+}
+
 #[derive(Deserialize, Debug)]
 struct OllamaTagsResponse {
     models: Vec<OllamaModel>,
@@ -352,79 +359,86 @@ pub async fn generate_cell_name(app: AppHandle, req: AiCellNameRequest) -> Resul
     generate_cellname(app, req).await
 }
 
-// --- Logic Implementation ---
+// --- Shared helpers ---
 
-pub async fn generate_query(app: AppHandle, mut req: AiGenerateRequest) -> Result<String, String> {
-    log::info!("Generating AI query using provider: {}", req.provider);
-    log::debug!(
-        "Prompt length: {} chars, Schema length: {} chars",
-        req.prompt.len(),
-        req.schema.len()
-    );
-
-    // Load config to get Ollama port and custom OpenAI settings
-    let app_config = config::load_config_internal(&app);
-    let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
-
-    // If no model selected, pick default
-    if req.model.is_empty() {
-        if req.provider == "ollama" {
-            let ollama_models = fetch_ollama_models(ollama_port).await;
-            let default = ollama_models
+async fn resolve_model(
+    provider: &str,
+    model: &str,
+    app_config: &config::AppConfig,
+    ollama_port: u16,
+) -> Result<String, String> {
+    if !model.is_empty() {
+        return Ok(model.to_string());
+    }
+    match provider {
+        "ollama" => {
+            let models = fetch_ollama_models(ollama_port).await;
+            models
                 .first()
-                .ok_or("No Ollama models found. Is Ollama running?")?;
-            req.model = default.clone();
-        } else if req.provider == "custom-openai" {
-            // Use configured custom OpenAI model or require user to set one
-            if let Some(ref custom_model) = app_config.ai_custom_openai_model {
-                if !custom_model.is_empty() {
-                    req.model = custom_model.clone();
-                } else {
-                    return Err("No model specified for custom OpenAI provider. Please configure a model in Settings.".to_string());
-                }
-            } else {
-                return Err("No model specified for custom OpenAI provider. Please configure a model in Settings.".to_string());
-            }
-        } else {
-            let models = load_default_models(); // Use hardcoded defaults for fallback logic
-            let default_model = models
-                .get(&req.provider)
+                .cloned()
+                .ok_or_else(|| "No Ollama models found. Is Ollama running?".to_string())
+        }
+        "custom-openai" => app_config
+            .ai_custom_openai_model
+            .as_ref()
+            .filter(|m| !m.is_empty())
+            .cloned()
+            .ok_or_else(|| "No model specified for custom OpenAI provider.".to_string()),
+        _ => {
+            let models = load_default_models();
+            models
+                .get(provider)
                 .and_then(|m| m.first())
-                .ok_or_else(|| format!("No models found for provider {}", req.provider))?;
-            req.model = default_model.clone();
+                .cloned()
+                .ok_or_else(|| format!("No models found for provider {}", provider))
         }
     }
+}
 
-    let client = Client::new();
-
-    let raw_prompt = config::get_system_prompt(app);
-    let system_prompt = raw_prompt.replace("{{SCHEMA}}", &req.schema);
-
-    let api_key = if req.provider != "ollama" {
-        config::get_ai_api_key(&req.provider)?
+async fn dispatch_provider(
+    app_config: &config::AppConfig,
+    gen_req: &AiGenerateRequest,
+    system_prompt: &str,
+    ollama_port: u16,
+) -> Result<String, String> {
+    let api_key = if gen_req.provider != "ollama" {
+        config::get_ai_api_key(&gen_req.provider)?
     } else {
         String::new()
     };
 
-    let result = match req.provider.as_str() {
-        "openai" => generate_openai(&client, &api_key, &req, &system_prompt).await,
-        "anthropic" => generate_anthropic(&client, &api_key, &req, &system_prompt).await,
-        "openrouter" => generate_openrouter(&client, &api_key, &req, &system_prompt).await,
-        "ollama" => generate_ollama(&client, &req, &system_prompt, ollama_port).await,
+    let client = Client::new();
+    match gen_req.provider.as_str() {
+        "openai" => generate_openai(&client, &api_key, gen_req, system_prompt).await,
+        "anthropic" => generate_anthropic(&client, &api_key, gen_req, system_prompt).await,
+        "openrouter" => generate_openrouter(&client, &api_key, gen_req, system_prompt).await,
+        "ollama" => generate_ollama(&client, gen_req, system_prompt, ollama_port).await,
         "custom-openai" => {
             let base_url = app_config
                 .ai_custom_openai_url
-                .ok_or("Custom OpenAI URL not configured. Please set it in Settings.")?;
-            if base_url.is_empty() {
-                return Err(
-                    "Custom OpenAI URL not configured. Please set it in Settings.".to_string(),
-                );
-            }
-            generate_custom_openai(&client, &api_key, &req, &system_prompt, &base_url).await
+                .as_ref()
+                .filter(|u| !u.is_empty())
+                .ok_or("Custom OpenAI URL not configured.")?;
+            generate_custom_openai(&client, &api_key, gen_req, system_prompt, base_url).await
         }
-        "minimax" => generate_minimax(&client, &api_key, &req, &system_prompt).await,
-        _ => Err(format!("Unsupported provider: {}", req.provider)),
-    };
+        "minimax" => generate_minimax(&client, &api_key, gen_req, system_prompt).await,
+        _ => Err(format!("Unsupported provider: {}", gen_req.provider)),
+    }
+}
+
+// --- Logic Implementation ---
+
+pub async fn generate_query(app: AppHandle, mut req: AiGenerateRequest) -> Result<String, String> {
+    log::info!("Generating AI query using provider: {}", req.provider);
+
+    let app_config = config::load_config_internal(&app);
+    let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
+    req.model = resolve_model(&req.provider, &req.model, &app_config, ollama_port).await?;
+
+    let raw_prompt = config::get_system_prompt(app);
+    let system_prompt = raw_prompt.replace("{{SCHEMA}}", &req.schema);
+
+    let result = dispatch_provider(&app_config, &req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(_) => log::info!("AI query generated successfully using {}", req.model),
@@ -437,166 +451,70 @@ pub async fn generate_query(app: AppHandle, mut req: AiGenerateRequest) -> Resul
 pub async fn explain_query(app: AppHandle, mut req: AiExplainRequest) -> Result<String, String> {
     log::info!("Explaining query using AI provider: {}", req.provider);
 
-    // Load config to get Ollama port and custom OpenAI settings
     let app_config = config::load_config_internal(&app);
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
+    req.model = resolve_model(&req.provider, &req.model, &app_config, ollama_port).await?;
 
-    if req.model.is_empty() {
-        if req.provider == "ollama" {
-            let ollama_models = fetch_ollama_models(ollama_port).await;
-            let default = ollama_models
-                .first()
-                .ok_or("No Ollama models found. Is Ollama running?")?;
-            req.model = default.clone();
-        } else if req.provider == "custom-openai" {
-            // Use configured custom OpenAI model or require user to set one
-            if let Some(ref custom_model) = app_config.ai_custom_openai_model {
-                if !custom_model.is_empty() {
-                    req.model = custom_model.clone();
-                } else {
-                    return Err("No model specified for custom OpenAI provider. Please configure a model in Settings.".to_string());
-                }
-            } else {
-                return Err("No model specified for custom OpenAI provider. Please configure a model in Settings.".to_string());
-            }
-        } else {
-            let models = load_default_models();
-            let default_model = models
-                .get(&req.provider)
-                .and_then(|m| m.first())
-                .ok_or_else(|| format!("No models found for provider {}", req.provider))?;
-            req.model = default_model.clone();
-        }
-    }
-
-    let api_key = if req.provider != "ollama" {
-        config::get_ai_api_key(&req.provider)?
-    } else {
-        String::new()
-    };
-
-    let client = Client::new();
     let raw_prompt = config::get_explain_prompt(app);
     let system_prompt = raw_prompt.replace("{{LANGUAGE}}", &req.language);
 
-    let prompt = format!(
-        "Query:\n\
-        {query}\n",
-        query = req.query
-    );
-
-    // Create a generate request wrapper to reuse helper functions
     let gen_req = AiGenerateRequest {
         provider: req.provider.clone(),
         model: req.model.clone(),
-        prompt: prompt,
+        prompt: format!("Query:\n{}\n", req.query),
         schema: String::new(),
     };
 
-    let result = match req.provider.as_str() {
-        "openai" => generate_openai(&client, &api_key, &gen_req, &system_prompt).await,
-        "anthropic" => generate_anthropic(&client, &api_key, &gen_req, &system_prompt).await,
-        "openrouter" => generate_openrouter(&client, &api_key, &gen_req, &system_prompt).await,
-        "ollama" => generate_ollama(&client, &gen_req, &system_prompt, ollama_port).await,
-        "custom-openai" => {
-            let base_url = app_config
-                .ai_custom_openai_url
-                .ok_or("Custom OpenAI URL not configured. Please set it in Settings.")?;
-            if base_url.is_empty() {
-                return Err(
-                    "Custom OpenAI URL not configured. Please set it in Settings.".to_string(),
-                );
-            }
-            generate_custom_openai(&client, &api_key, &gen_req, &system_prompt, &base_url).await
-        }
-        "minimax" => generate_minimax(&client, &api_key, &gen_req, &system_prompt).await,
-        _ => Err(format!("Unsupported provider: {}", req.provider)),
-    };
+    let result = dispatch_provider(&app_config, &gen_req, &system_prompt, ollama_port).await;
 
     match &result {
-        Ok(_) => log::info!(
-            "Query explanation generated successfully using {}",
-            req.model
-        ),
+        Ok(_) => log::info!("Query explanation generated successfully using {}", req.model),
         Err(e) => log::error!("Query explanation generation failed: {}", e),
     }
 
     result
 }
 
-pub async fn generate_cellname(app: AppHandle, mut req: AiCellNameRequest) -> Result<String, String> {
-    log::info!("Generating cell name using AI provider: {}", req.provider);
+async fn generate_with_simple_prompt(
+    app: AppHandle,
+    provider: String,
+    model: String,
+    query: String,
+    get_prompt: fn(AppHandle) -> String,
+    label: &str,
+) -> Result<String, String> {
+    log::info!("Generating {} using AI provider: {}", label, provider);
 
     let app_config = config::load_config_internal(&app);
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
+    let resolved_model = resolve_model(&provider, &model, &app_config, ollama_port).await?;
 
-    if req.model.is_empty() {
-        if req.provider == "ollama" {
-            let ollama_models = fetch_ollama_models(ollama_port).await;
-            let default = ollama_models
-                .first()
-                .ok_or("No Ollama models found. Is Ollama running?")?;
-            req.model = default.clone();
-        } else if req.provider == "custom-openai" {
-            if let Some(ref custom_model) = app_config.ai_custom_openai_model {
-                if !custom_model.is_empty() {
-                    req.model = custom_model.clone();
-                } else {
-                    return Err("No model specified for custom OpenAI provider.".to_string());
-                }
-            } else {
-                return Err("No model specified for custom OpenAI provider.".to_string());
-            }
-        } else {
-            let models = load_default_models();
-            let default_model = models
-                .get(&req.provider)
-                .and_then(|m| m.first())
-                .ok_or_else(|| format!("No models found for provider {}", req.provider))?;
-            req.model = default_model.clone();
-        }
-    }
-
-    let api_key = if req.provider != "ollama" {
-        config::get_ai_api_key(&req.provider)?
-    } else {
-        String::new()
-    };
-
-    let client = Client::new();
-    let system_prompt = config::get_cellname_prompt(app);
+    let system_prompt = get_prompt(app);
 
     let gen_req = AiGenerateRequest {
-        provider: req.provider.clone(),
-        model: req.model.clone(),
-        prompt: req.query,
+        provider: provider.clone(),
+        model: resolved_model.clone(),
+        prompt: query,
         schema: String::new(),
     };
 
-    let result = match req.provider.as_str() {
-        "openai" => generate_openai(&client, &api_key, &gen_req, &system_prompt).await,
-        "anthropic" => generate_anthropic(&client, &api_key, &gen_req, &system_prompt).await,
-        "openrouter" => generate_openrouter(&client, &api_key, &gen_req, &system_prompt).await,
-        "ollama" => generate_ollama(&client, &gen_req, &system_prompt, ollama_port).await,
-        "custom-openai" => {
-            let base_url = app_config
-                .ai_custom_openai_url
-                .ok_or("Custom OpenAI URL not configured.")?;
-            if base_url.is_empty() {
-                return Err("Custom OpenAI URL not configured.".to_string());
-            }
-            generate_custom_openai(&client, &api_key, &gen_req, &system_prompt, &base_url).await
-        }
-        "minimax" => generate_minimax(&client, &api_key, &gen_req, &system_prompt).await,
-        _ => Err(format!("Unsupported provider: {}", req.provider)),
-    };
+    let result = dispatch_provider(&app_config, &gen_req, &system_prompt, ollama_port).await;
 
     match &result {
-        Ok(name) => log::info!("Cell name generated: {}", name),
-        Err(e) => log::error!("Cell name generation failed: {}", e),
+        Ok(v) => log::info!("{} generated: {}", label, v),
+        Err(e) => log::error!("{} generation failed: {}", label, e),
     }
 
     result
+}
+
+pub async fn generate_cellname(app: AppHandle, req: AiCellNameRequest) -> Result<String, String> {
+    generate_with_simple_prompt(app, req.provider, req.model, req.query, config::get_cellname_prompt, "Cell name").await
+}
+
+#[tauri::command]
+pub async fn generate_tab_rename(app: AppHandle, req: AiTabRenameRequest) -> Result<String, String> {
+    generate_with_simple_prompt(app, req.provider, req.model, req.query, config::get_tabrename_prompt, "Tab name").await
 }
 
 // --- Provider Implementations ---

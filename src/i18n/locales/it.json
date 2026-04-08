@@ -280,6 +280,9 @@
       "cellnamePrompt": "Prompt Nome Cella Notebook",
       "cellnamePromptDesc": "Personalizza le istruzioni per la generazione AI del nome cella nei notebook. Il contenuto della cella (SQL o Markdown) viene inviato come messaggio utente.",
       "enterCellnamePrompt": "Inserisci prompt nome cella...",
+      "tabrenamePrompt": "Prompt Nome Tab Query",
+      "tabrenamePromptDesc": "Personalizza le istruzioni per la generazione AI del nome delle tab risultato query. La query SQL viene inviata come messaggio utente.",
+      "enterTabrenamePrompt": "Inserisci prompt nome tab query...",
       "keySaved": "Chiave API salvata in modo sicuro",
       "promptSaved": "Prompt di sistema salvato con successo",
       "explainPromptSaved": "Prompt di spiegazione salvato con successo",
@@ -709,7 +712,9 @@
       "summary": "{{total}} query: {{succeeded}} completate, {{failed}} fallite",
       "rerun": "Riesegui query",
       "close": "Chiudi tab",
-      "rename": "Rinomina"
+      "rename": "Rinomina",
+      "aiGenerateName": "Genera nome con AI",
+      "generatingName": "Generazione nome..."
     }
   },
   "createTable": {

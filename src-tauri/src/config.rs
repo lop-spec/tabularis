@@ -381,119 +381,87 @@ const DEFAULT_SYSTEM_PROMPT: &str = "You are an expert SQL assistant. Your task 
 const DEFAULT_EXPLAIN_PROMPT: &str =
     "You are a helpful SQL assistant. Explain SQL queries in {{LANGUAGE}}.";
 const DEFAULT_CELLNAME_PROMPT: &str = "You are an assistant that generates concise, descriptive names for notebook cells.\nGiven a SQL query or Markdown content, return ONLY a short name (3-6 words max) that describes what the cell does or what it is about.\nDo not include quotes, punctuation, or explanations. Just the name.";
+const DEFAULT_TABRENAME_PROMPT: &str = "You are an assistant that generates concise, descriptive names for SQL query result tabs.\nGiven a SQL query, return ONLY a short name (3-6 words max) that describes what the query does.\nDo not include quotes, punctuation, or explanations. Just the name.";
+
+fn get_prompt(app: &AppHandle, filename: &str, default: &str) -> String {
+    if let Some(config_dir) = get_config_dir(app) {
+        let path = config_dir.join(filename);
+        if let Ok(content) = fs::read_to_string(path) {
+            return content;
+        }
+    }
+    default.to_string()
+}
+
+fn save_prompt(app: &AppHandle, filename: &str, prompt: &str) -> Result<(), String> {
+    let config_dir = get_config_dir(app)
+        .ok_or("Could not resolve config directory")?;
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    }
+    fs::write(config_dir.join(filename), prompt).map_err(|e| e.to_string())
+}
+
+fn reset_prompt(app: &AppHandle, filename: &str, default: &str) -> Result<String, String> {
+    if let Some(config_dir) = get_config_dir(app) {
+        let path = config_dir.join(filename);
+        if path.exists() {
+            fs::remove_file(path).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(default.to_string())
+}
 
 #[tauri::command]
 pub fn get_system_prompt(app: AppHandle) -> String {
-    if let Some(config_dir) = get_config_dir(&app) {
-        let prompt_path = config_dir.join("prompt_query.txt");
-        if prompt_path.exists() {
-            if let Ok(content) = fs::read_to_string(prompt_path) {
-                return content;
-            }
-        }
-    }
-    DEFAULT_SYSTEM_PROMPT.to_string()
+    get_prompt(&app, "prompt_query.txt", DEFAULT_SYSTEM_PROMPT)
 }
-
 #[tauri::command]
 pub fn save_system_prompt(app: AppHandle, prompt: String) -> Result<(), String> {
-    if let Some(config_dir) = get_config_dir(&app) {
-        if !config_dir.exists() {
-            fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-        }
-        let prompt_path = config_dir.join("prompt_query.txt");
-        fs::write(prompt_path, prompt).map_err(|e| e.to_string())?;
-        Ok(())
-    } else {
-        Err("Could not resolve config directory".to_string())
-    }
+    save_prompt(&app, "prompt_query.txt", &prompt)
 }
-
 #[tauri::command]
 pub fn reset_system_prompt(app: AppHandle) -> Result<String, String> {
-    if let Some(config_dir) = get_config_dir(&app) {
-        let prompt_path = config_dir.join("prompt_query.txt");
-        if prompt_path.exists() {
-            fs::remove_file(prompt_path).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(DEFAULT_SYSTEM_PROMPT.to_string())
+    reset_prompt(&app, "prompt_query.txt", DEFAULT_SYSTEM_PROMPT)
 }
 
 #[tauri::command]
 pub fn get_explain_prompt(app: AppHandle) -> String {
-    if let Some(config_dir) = get_config_dir(&app) {
-        let prompt_path = config_dir.join("prompt_explain.txt");
-        if prompt_path.exists() {
-            if let Ok(content) = fs::read_to_string(prompt_path) {
-                return content;
-            }
-        }
-    }
-    DEFAULT_EXPLAIN_PROMPT.to_string()
+    get_prompt(&app, "prompt_explain.txt", DEFAULT_EXPLAIN_PROMPT)
 }
-
 #[tauri::command]
 pub fn save_explain_prompt(app: AppHandle, prompt: String) -> Result<(), String> {
-    if let Some(config_dir) = get_config_dir(&app) {
-        if !config_dir.exists() {
-            fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-        }
-        let prompt_path = config_dir.join("prompt_explain.txt");
-        fs::write(prompt_path, prompt).map_err(|e| e.to_string())?;
-        Ok(())
-    } else {
-        Err("Could not resolve config directory".to_string())
-    }
+    save_prompt(&app, "prompt_explain.txt", &prompt)
 }
-
 #[tauri::command]
 pub fn reset_explain_prompt(app: AppHandle) -> Result<String, String> {
-    if let Some(config_dir) = get_config_dir(&app) {
-        let prompt_path = config_dir.join("prompt_explain.txt");
-        if prompt_path.exists() {
-            fs::remove_file(prompt_path).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(DEFAULT_EXPLAIN_PROMPT.to_string())
+    reset_prompt(&app, "prompt_explain.txt", DEFAULT_EXPLAIN_PROMPT)
 }
 
 #[tauri::command]
 pub fn get_cellname_prompt(app: AppHandle) -> String {
-    if let Some(config_dir) = get_config_dir(&app) {
-        let prompt_path = config_dir.join("prompt_cellname.txt");
-        if prompt_path.exists() {
-            if let Ok(content) = fs::read_to_string(prompt_path) {
-                return content;
-            }
-        }
-    }
-    DEFAULT_CELLNAME_PROMPT.to_string()
+    get_prompt(&app, "prompt_cellname.txt", DEFAULT_CELLNAME_PROMPT)
 }
-
 #[tauri::command]
 pub fn save_cellname_prompt(app: AppHandle, prompt: String) -> Result<(), String> {
-    if let Some(config_dir) = get_config_dir(&app) {
-        if !config_dir.exists() {
-            fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-        }
-        let prompt_path = config_dir.join("prompt_cellname.txt");
-        fs::write(prompt_path, prompt).map_err(|e| e.to_string())?;
-        Ok(())
-    } else {
-        Err("Could not resolve config directory".to_string())
-    }
+    save_prompt(&app, "prompt_cellname.txt", &prompt)
+}
+#[tauri::command]
+pub fn reset_cellname_prompt(app: AppHandle) -> Result<String, String> {
+    reset_prompt(&app, "prompt_cellname.txt", DEFAULT_CELLNAME_PROMPT)
 }
 
 #[tauri::command]
-pub fn reset_cellname_prompt(app: AppHandle) -> Result<String, String> {
-    if let Some(config_dir) = get_config_dir(&app) {
-        let prompt_path = config_dir.join("prompt_cellname.txt");
-        if prompt_path.exists() {
-            fs::remove_file(prompt_path).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(DEFAULT_CELLNAME_PROMPT.to_string())
+pub fn get_tabrename_prompt(app: AppHandle) -> String {
+    get_prompt(&app, "prompt_tabrename.txt", DEFAULT_TABRENAME_PROMPT)
+}
+#[tauri::command]
+pub fn save_tabrename_prompt(app: AppHandle, prompt: String) -> Result<(), String> {
+    save_prompt(&app, "prompt_tabrename.txt", &prompt)
+}
+#[tauri::command]
+pub fn reset_tabrename_prompt(app: AppHandle) -> Result<String, String> {
+    reset_prompt(&app, "prompt_tabrename.txt", DEFAULT_TABRENAME_PROMPT)
 }
 
 #[tauri::command]

@@ -272,10 +272,14 @@ pub fn run() {
             config::get_cellname_prompt,
             config::save_cellname_prompt,
             config::reset_cellname_prompt,
+            config::get_tabrename_prompt,
+            config::save_tabrename_prompt,
+            config::reset_tabrename_prompt,
             // AI
             ai::generate_ai_query,
             ai::explain_ai_query,
             ai::generate_cell_name,
+            ai::generate_tab_rename,
             ai::get_ai_models,
             commands::get_schema_snapshot,
             // DDL generation

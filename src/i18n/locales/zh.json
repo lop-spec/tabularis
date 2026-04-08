@@ -255,6 +255,9 @@
       "cellnamePrompt": "Notebook 单元格名称提示词",
       "cellnamePromptDesc": "自定义 AI Notebook 单元格名称生成的指令。单元格内容（SQL 或 Markdown）作为用户消息发送。",
       "enterCellnamePrompt": "输入单元格名称提示词...",
+      "tabrenamePrompt": "查询标签页名称提示词",
+      "tabrenamePromptDesc": "自定义 AI 查询结果标签页名称生成的指令。SQL 查询作为用户消息发送。",
+      "enterTabrenamePrompt": "输入查询标签页名称提示词...",
       "keySaved": "API 密钥已安全保存",
       "promptSaved": "系统提示词保存成功",
       "explainPromptSaved": "解释提示词保存成功",
@@ -680,7 +683,9 @@
       "summary": "{{total}} 个查询: {{succeeded}} 成功, {{failed}} 失败",
       "rerun": "重新执行查询",
       "close": "关闭标签",
-      "rename": "重命名"
+      "rename": "重命名",
+      "aiGenerateName": "使用 AI 生成名称",
+      "generatingName": "正在生成名称..."
     }
   },
   "createTable": {
