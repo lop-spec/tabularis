@@ -39,6 +39,19 @@ export interface QueryResult {
   pagination?: Pagination;
 }
 
+export interface QueryResultEntry {
+  id: string;
+  queryIndex: number;
+  query: string;
+  result: QueryResult | null;
+  error: string;
+  executionTime: number | null;
+  isLoading: boolean;
+  page: number;
+  activeTable: string | null;
+  pkColumn: string | null;
+}
+
 import type { Node, Edge } from "@xyflow/react";
 
 export interface FlowState {
@@ -83,6 +96,8 @@ export interface Tab {
   limitClause?: number; // SQL LIMIT value
   queryParams?: Record<string, string>; // Saved values for query parameters
   schema?: string; // Schema name (PostgreSQL) for query reconstruction
+  results?: QueryResultEntry[];
+  activeResultId?: string;
 }
 
 export interface EditorPreferences {

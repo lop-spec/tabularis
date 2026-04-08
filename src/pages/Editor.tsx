@@ -46,6 +46,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { TableToolbar } from "../components/ui/TableToolbar";
 import { DataGrid } from "../components/ui/DataGrid";
+import { MultiResultPanel } from "../components/ui/MultiResultPanel";
 import { ErrorDisplay } from "../components/ui/ErrorDisplay";
 import { NewRowModal } from "../components/modals/NewRowModal";
 import { QuerySelectionModal } from "../components/modals/QuerySelectionModal";
@@ -60,6 +61,10 @@ import {
   type ExportStatus,
 } from "../components/modals/ExportProgressModal";
 import { splitQueries, extractTableName } from "../utils/sql";
+import {
+  createResultEntries,
+  updateResultEntry,
+} from "../utils/multiResult";
 import {
   extractQueryParams,
   interpolateQueryParams,
@@ -584,6 +589,9 @@ export const Editor = () => {
         result: null,
         executionTime: null,
         page: pageNum,
+        // Clear multi-result state when running a single query
+        results: undefined,
+        activeResultId: undefined,
         // Clear pending changes and selection when running a new query (unless preserving)
         pendingChanges: preservePendingChanges?.pendingChanges,
         pendingDeletions: preservePendingChanges?.pendingDeletions,
@@ -668,6 +676,155 @@ export const Editor = () => {
       activeCapabilities?.schemas,
       views,
     ],
+  );
+
+  const runMultipleQueries = useCallback(
+    async (queries: string[]) => {
+      const targetTabId = activeTabIdRef.current;
+      if (!activeConnectionId || !targetTabId) return;
+
+      const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
+      if (!targetTab) return;
+
+      const pageSize =
+        settings.resultPageSize && settings.resultPageSize > 0
+          ? settings.resultPageSize
+          : 100;
+      const schema = targetTab?.schema ?? activeSchema;
+
+      const entries = createResultEntries(targetTabId, queries);
+      // Local mutable array shared across concurrent promises.
+      // JS is single-threaded: between each `await` resume and the next
+      // yield point, mutations are atomic — no interleaving can occur.
+      const liveResults = [...entries];
+
+      setIsResultsCollapsed(false);
+      updateTab(targetTabId, {
+        results: liveResults,
+        activeResultId: entries[0].id,
+        result: null,
+        error: "",
+        isLoading: true,
+        executionTime: null,
+      });
+
+      // Execute all queries concurrently
+      await Promise.allSettled(
+        entries.map(async (entry, idx) => {
+          const start = performance.now();
+          try {
+            const res = await invoke<QueryResult>("execute_query", {
+              connectionId: activeConnectionId,
+              query: entry.query,
+              limit: pageSize,
+              page: 1,
+              ...(schema ? { schema } : {}),
+            });
+            const end = performance.now();
+            const tableName = extractTableName(entry.query) ?? null;
+
+            liveResults[idx] = {
+              ...liveResults[idx],
+              result: res,
+              executionTime: end - start,
+              isLoading: false,
+              activeTable: tableName,
+            };
+            updateTab(targetTabId, { results: [...liveResults] });
+          } catch (err) {
+            const end = performance.now();
+            liveResults[idx] = {
+              ...liveResults[idx],
+              error:
+                typeof err === "string" ? err : t("editor.queryFailed"),
+              executionTime: end - start,
+              isLoading: false,
+            };
+            updateTab(targetTabId, { results: [...liveResults] });
+          }
+        }),
+      );
+
+      updateTab(targetTabId, { isLoading: false });
+    },
+    [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t],
+  );
+
+  const runResultEntryPage = useCallback(
+    async (entryId: string, pageNum: number) => {
+      const targetTabId = activeTabIdRef.current;
+      if (!activeConnectionId || !targetTabId) return;
+
+      const currentTab = tabsRef.current.find((t) => t.id === targetTabId);
+      const entry = currentTab?.results?.find((r) => r.id === entryId);
+      if (!entry) return;
+
+      const pageSize =
+        settings.resultPageSize && settings.resultPageSize > 0
+          ? settings.resultPageSize
+          : 100;
+      const schema = currentTab?.schema ?? activeSchema;
+
+      // Mark this entry as loading
+      if (currentTab?.results) {
+        updateTab(targetTabId, {
+          results: updateResultEntry(currentTab.results, entryId, {
+            isLoading: true,
+          }),
+        });
+      }
+
+      try {
+        const start = performance.now();
+        const res = await invoke<QueryResult>("execute_query", {
+          connectionId: activeConnectionId,
+          query: entry.query,
+          limit: pageSize,
+          page: pageNum,
+          ...(schema ? { schema } : {}),
+        });
+        const end = performance.now();
+
+        const latestTab = tabsRef.current.find((t) => t.id === targetTabId);
+        if (latestTab?.results) {
+          const previousTotalRows =
+            entry.result?.pagination?.total_rows ?? null;
+          const resultWithCount =
+            res.pagination &&
+            res.pagination.total_rows === null &&
+            previousTotalRows !== null
+              ? {
+                  ...res,
+                  pagination: {
+                    ...res.pagination,
+                    total_rows: previousTotalRows,
+                  },
+                }
+              : res;
+
+          updateTab(targetTabId, {
+            results: updateResultEntry(latestTab.results, entryId, {
+              result: resultWithCount,
+              executionTime: end - start,
+              isLoading: false,
+              page: pageNum,
+            }),
+          });
+        }
+      } catch (err) {
+        const latestTab = tabsRef.current.find((t) => t.id === targetTabId);
+        if (latestTab?.results) {
+          updateTab(targetTabId, {
+            results: updateResultEntry(latestTab.results, entryId, {
+              error:
+                typeof err === "string" ? err : t("editor.queryFailed"),
+              isLoading: false,
+            }),
+          });
+        }
+      }
+    },
+    [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t],
   );
 
   const loadCount = useCallback(async () => {
@@ -2248,7 +2405,22 @@ export const Editor = () => {
 
           {/* Results Panel */}
           <div className="flex-1 overflow-hidden bg-elevated flex flex-col min-h-0">
-            {activeTab.isLoading ? (
+            {activeTab.results && activeTab.results.length > 0 ? (
+              <MultiResultPanel
+                results={activeTab.results}
+                activeResultId={activeTab.activeResultId}
+                tabId={activeTab.id}
+                isAllDone={!activeTab.isLoading}
+                connectionId={activeConnectionId}
+                copyFormat={copyFormat}
+                csvDelimiter={csvDelimiter}
+                onSelectResult={(entryId) =>
+                  updateTab(activeTab.id, { activeResultId: entryId })
+                }
+                onRerunEntry={(entryId) => runResultEntryPage(entryId, 1)}
+                onPageChange={runResultEntryPage}
+              />
+            ) : activeTab.isLoading ? (
               <div className="flex flex-col items-center justify-center h-full text-muted">
                 <div className="w-12 h-12 border-4 border-surface-secondary border-t-blue-500 rounded-full animate-spin mb-4"></div>
                 <p className="text-sm">{t("editor.executingQuery")}</p>
@@ -2615,6 +2787,14 @@ export const Editor = () => {
         queries={selectableQueries}
         onSelect={(q) => {
           runQuery(q, 1);
+          setIsQuerySelectionModalOpen(false);
+        }}
+        onRunAll={(queries) => {
+          runMultipleQueries(queries);
+          setIsQuerySelectionModalOpen(false);
+        }}
+        onRunSelected={(queries) => {
+          runMultipleQueries(queries);
           setIsQuerySelectionModalOpen(false);
         }}
         onClose={() => setIsQuerySelectionModalOpen(false)}
