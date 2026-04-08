@@ -15,6 +15,18 @@ vi.mock("../../../src/components/ui/ErrorDisplay", () => ({
   ),
 }));
 
+// Mock useSettings
+vi.mock("../../../src/hooks/useSettings", () => ({
+  useSettings: () => ({
+    settings: {
+      aiEnabled: false,
+      aiProvider: null,
+      aiModel: "",
+    },
+    updateSettings: vi.fn(),
+  }),
+}));
+
 // Mock clsx
 vi.mock("clsx", () => ({
   default: (...args: unknown[]) =>
