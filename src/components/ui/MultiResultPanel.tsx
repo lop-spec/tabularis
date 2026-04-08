@@ -8,8 +8,6 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   ArrowRightToLine,
   ArrowLeftToLine,
   Trash2,
@@ -19,11 +17,15 @@ import {
   ChevronUp,
   Code2,
   Sparkles,
+  PanelTop,
+  Rows3,
+  ChevronsDownUp,
+  ChevronsUpDown,
 } from "lucide-react";
 import clsx from "clsx";
 import { invoke } from "@tauri-apps/api/core";
-import { DataGrid } from "./DataGrid";
-import { ErrorDisplay } from "./ErrorDisplay";
+import { ResultEntryContent } from "./ResultEntryContent";
+import { StackedResultItem } from "./StackedResultItem";
 import { ContextMenu } from "./ContextMenu";
 import { formatDuration } from "../../utils/formatTime";
 import { getTabScrollState } from "../../utils/tabScroll";
@@ -32,6 +34,7 @@ import {
   countSucceeded,
   countFailed,
   totalExecutionTime,
+  getEntryDisplayLabel,
 } from "../../utils/multiResult";
 import { useSettings } from "../../hooks/useSettings";
 import type { QueryResultEntry } from "../../types/editor";
@@ -61,6 +64,7 @@ function ResultTab({
   initialEditing,
   aiEnabled,
   aiRenaming,
+  queryPrefix,
   onSelect,
   onRerun,
   onClose,
@@ -73,6 +77,7 @@ function ResultTab({
   initialEditing: boolean;
   aiEnabled: boolean;
   aiRenaming: boolean;
+  queryPrefix: string;
   onSelect: () => void;
   onRerun: () => void;
   onClose: () => void;
@@ -81,9 +86,7 @@ function ResultTab({
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
-  const displayLabel =
-    entry.label ||
-    t("editor.multiResult.query", { index: entry.queryIndex + 1 });
+  const displayLabel = getEntryDisplayLabel(entry, queryPrefix);
   const [isEditing, setIsEditing] = useState(initialEditing);
   const [editValue, setEditValue] = useState(
     initialEditing ? (entry.label || displayLabel) : "",
@@ -255,11 +258,14 @@ export function MultiResultPanel({
   } | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [queryExpanded, setQueryExpanded] = useState(false);
+  const [viewMode, setViewMode] = useState<"tabs" | "stacked">("tabs");
   const [aiRenamingEntryId, setAiRenamingEntryId] = useState<string | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const activeEntry = findActiveEntry(results, activeResultId);
   const succeeded = countSucceeded(results);
   const failed = countFailed(results);
   const totalTime = totalExecutionTime(results);
+  const queryPrefix = t("editor.multiResult.queryPrefix");
 
   const updateScrollArrows = useCallback(() => {
     const el = scrollRef.current;
@@ -315,222 +321,184 @@ export function MultiResultPanel({
 
   const aiEnabled = !!(settings.aiEnabled && settings.aiProvider);
 
+  const viewToggle = results.length > 1 && (
+    <button
+      onClick={() => setViewMode((v) => (v === "tabs" ? "stacked" : "tabs"))}
+      className="flex items-center justify-center w-8 h-full text-muted border-l border-default shrink-0 transition-colors hover:text-white hover:bg-surface-secondary"
+      title={viewMode === "tabs" ? t("editor.multiResult.viewStacked") : t("editor.multiResult.viewTabs")}
+    >
+      {viewMode === "tabs" ? <Rows3 size={14} /> : <PanelTop size={14} />}
+    </button>
+  );
+
+  const summaryBadge = isAllDone && (
+    <div className="flex items-center gap-2 px-3 h-full text-[10px] text-muted border-l border-default shrink-0">
+      <span>
+        {succeeded > 0 && (
+          <span className="text-green-400">{succeeded}<Check size={9} className="inline ml-0.5" /></span>
+        )}
+        {failed > 0 && (
+          <span className="text-red-400 ml-1.5">{failed}<XCircle size={9} className="inline ml-0.5" /></span>
+        )}
+      </span>
+      {totalTime > 0 && (
+        <span className="font-mono text-muted">
+          {formatDuration(totalTime)}
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      {/* Tab bar — mirrors main editor tab bar */}
-      <div className="flex items-center bg-elevated border-b border-default h-9 shrink-0">
-        <button
-          onClick={() => scrollTabs("left")}
-          disabled={!canScrollLeft}
-          className="flex items-center justify-center w-7 h-full text-muted border-r border-default shrink-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:enabled:text-white hover:enabled:bg-surface-secondary"
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <button
-          onClick={() => scrollTabs("right")}
-          disabled={!canScrollRight}
-          className="flex items-center justify-center w-7 h-full text-muted border-r border-default shrink-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:enabled:text-white hover:enabled:bg-surface-secondary"
-        >
-          <ChevronRight size={14} />
-        </button>
-        <div
-          ref={scrollRef}
-          onScroll={updateScrollArrows}
-          className="flex flex-1 overflow-x-auto no-scrollbar h-full"
-        >
-          {results.map((entry) => {
-            const shouldEdit = editingEntryId === entry.id;
-            return (
-            <ResultTab
-              key={shouldEdit ? `${entry.id}-edit` : entry.id}
-              entry={entry}
-              isActive={entry.id === activeEntry.id}
-              initialEditing={shouldEdit}
-              aiEnabled={aiEnabled}
-              aiRenaming={aiRenamingEntryId === entry.id}
-              onSelect={() => { if (shouldEdit) setEditingEntryId(null); onSelectResult(entry.id); }}
-              onRerun={() => onRerunEntry(entry.id)}
-              onClose={() => onCloseEntry(entry.id)}
-              onRename={(label) => onRenameEntry(entry.id, label)}
-              onAiRename={() => handleAiRename(entry.id)}
-              onContextMenu={(e) => handleContextMenu(entry.id, e)}
-            />
-            );
-          })}
-        </div>
-        {/* Summary badge */}
-        {isAllDone && (
-          <div className="flex items-center gap-2 px-3 h-full text-[10px] text-muted border-l border-default shrink-0">
-            <span>
-              {succeeded > 0 && (
-                <span className="text-green-400">{succeeded}<Check size={9} className="inline ml-0.5" /></span>
-              )}
-              {failed > 0 && (
-                <span className="text-red-400 ml-1.5">{failed}<XCircle size={9} className="inline ml-0.5" /></span>
-              )}
-            </span>
-            {totalTime > 0 && (
-              <span className="font-mono text-muted">
-                {formatDuration(totalTime)}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Query preview */}
-      {activeEntry.query && (
-        <div
-          className="bg-surface-secondary border-b border-default px-3 py-1.5 flex items-start gap-2 cursor-pointer select-none group/qp"
-          onClick={() => setQueryExpanded((v) => !v)}
-        >
-          <Code2 size={12} className="text-muted shrink-0 mt-0.5" />
-          <pre
-            className={clsx(
-              "flex-1 text-[11px] font-mono text-secondary whitespace-pre-wrap break-all m-0",
-              !queryExpanded && "line-clamp-1",
-            )}
-          >
-            {activeEntry.query.trim()}
-          </pre>
-          <button className="text-muted hover:text-white shrink-0 mt-0.5">
-            {queryExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </button>
-        </div>
-      )}
-
-      {/* Active entry content */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        {activeEntry.isLoading ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted">
-            <div className="w-12 h-12 border-4 border-surface-secondary border-t-blue-500 rounded-full animate-spin mb-4"></div>
-            <p className="text-sm">{t("editor.executingQuery")}</p>
-          </div>
-        ) : activeEntry.error ? (
-          <ErrorDisplay error={activeEntry.error} t={t} />
-        ) : activeEntry.result ? (
-          <div className="flex-1 min-h-0 flex flex-col">
-            <div className="p-2 bg-elevated text-xs text-secondary border-b border-default flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-4">
-                <span>
-                  {t("editor.rowsRetrieved", {
-                    count: activeEntry.result.rows.length,
-                  })}{" "}
-                  {activeEntry.executionTime !== null && (
-                    <span className="text-muted ml-2 font-mono">
-                      ({formatDuration(activeEntry.executionTime)})
-                    </span>
-                  )}
-                </span>
-                {activeEntry.result.pagination?.has_more && (
-                  <span className="px-2 py-0.5 bg-yellow-900/30 text-yellow-400 rounded text-[10px] font-semibold uppercase tracking-wide border border-yellow-500/30">
-                    {t("editor.autoPaginated")}
-                  </span>
-                )}
-              </div>
-              {/* Pagination Controls */}
-              {activeEntry.result.pagination && (
-                <div className="flex items-center gap-1 bg-surface-secondary rounded border border-strong">
-                  <button
-                    disabled={
-                      activeEntry.result.pagination.page === 1 ||
-                      activeEntry.isLoading
-                    }
-                    onClick={() => onPageChange(activeEntry.id, 1)}
-                    className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="First Page"
-                  >
-                    <ChevronsLeft size={14} />
-                  </button>
-                  <button
-                    disabled={
-                      activeEntry.result.pagination.page === 1 ||
-                      activeEntry.isLoading
-                    }
-                    onClick={() =>
-                      onPageChange(
-                        activeEntry.id,
-                        activeEntry.result!.pagination!.page - 1,
-                      )
-                    }
-                    className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
-                    title="Previous Page"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <div className="px-3 text-secondary text-xs font-medium min-w-[80px] text-center py-1">
-                    {activeEntry.result.pagination.total_rows !== null
-                      ? t("editor.pageOf", {
-                          current: activeEntry.result.pagination.page,
-                          total: Math.ceil(
-                            activeEntry.result.pagination.total_rows /
-                              activeEntry.result.pagination.page_size,
-                          ),
-                        })
-                      : t("editor.page", {
-                          current: activeEntry.result.pagination.page,
-                        })}
-                  </div>
-                  <button
-                    disabled={
-                      !activeEntry.result.pagination.has_more ||
-                      activeEntry.isLoading
-                    }
-                    onClick={() =>
-                      onPageChange(
-                        activeEntry.id,
-                        activeEntry.result!.pagination!.page + 1,
-                      )
-                    }
-                    className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
-                    title="Next Page"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                  <button
-                    disabled={
-                      activeEntry.result.pagination.total_rows === null ||
-                      activeEntry.isLoading
-                    }
-                    onClick={() =>
-                      onPageChange(
-                        activeEntry.id,
-                        Math.ceil(
-                          activeEntry.result!.pagination!.total_rows! /
-                            activeEntry.result!.pagination!.page_size,
-                        ),
-                      )
-                    }
-                    className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
-                    title="Last Page"
-                  >
-                    <ChevronsRight size={14} />
-                  </button>
-                </div>
-              )}
+      {viewMode === "tabs" ? (
+        <>
+          {/* Tab bar */}
+          <div className="flex items-center bg-elevated border-b border-default h-9 shrink-0">
+            <button
+              onClick={() => scrollTabs("left")}
+              disabled={!canScrollLeft}
+              className="flex items-center justify-center w-7 h-full text-muted border-r border-default shrink-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:enabled:text-white hover:enabled:bg-surface-secondary"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button
+              onClick={() => scrollTabs("right")}
+              disabled={!canScrollRight}
+              className="flex items-center justify-center w-7 h-full text-muted border-r border-default shrink-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:enabled:text-white hover:enabled:bg-surface-secondary"
+            >
+              <ChevronRight size={14} />
+            </button>
+            <div
+              ref={scrollRef}
+              onScroll={updateScrollArrows}
+              className="flex flex-1 overflow-x-auto no-scrollbar h-full"
+            >
+              {results.map((entry) => {
+                const shouldEdit = editingEntryId === entry.id;
+                return (
+                <ResultTab
+                  key={shouldEdit ? `${entry.id}-edit` : entry.id}
+                  entry={entry}
+                  isActive={entry.id === activeEntry.id}
+                  initialEditing={shouldEdit}
+                  aiEnabled={aiEnabled}
+                  aiRenaming={aiRenamingEntryId === entry.id}
+                  queryPrefix={queryPrefix}
+                  onSelect={() => { if (shouldEdit) setEditingEntryId(null); onSelectResult(entry.id); }}
+                  onRerun={() => onRerunEntry(entry.id)}
+                  onClose={() => onCloseEntry(entry.id)}
+                  onRename={(label) => onRenameEntry(entry.id, label)}
+                  onAiRename={() => handleAiRename(entry.id)}
+                  onContextMenu={(e) => handleContextMenu(entry.id, e)}
+                />
+                );
+              })}
             </div>
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <DataGrid
-                key={`${activeEntry.id}-${activeEntry.result.rows.length}`}
-                columns={activeEntry.result.columns}
-                data={activeEntry.result.rows}
-                tableName={null}
-                pkColumn={null}
+            {summaryBadge}
+            {viewToggle}
+          </div>
+
+          {/* Query preview */}
+          {activeEntry.query && (
+            <div
+              className="bg-surface-secondary border-b border-default px-3 py-1.5 flex items-start gap-2 cursor-pointer select-none group/qp"
+              onClick={() => setQueryExpanded((v) => !v)}
+            >
+              <Code2 size={12} className="text-muted shrink-0 mt-0.5" />
+              <pre
+                className={clsx(
+                  "flex-1 text-[11px] font-mono text-secondary whitespace-pre-wrap break-all m-0",
+                  !queryExpanded && "line-clamp-1",
+                )}
+              >
+                {activeEntry.query.trim()}
+              </pre>
+              <button className="text-muted hover:text-white shrink-0 mt-0.5">
+                {queryExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            </div>
+          )}
+
+          {/* Active entry content */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            <ResultEntryContent
+              entry={activeEntry}
+              connectionId={connectionId}
+              copyFormat={copyFormat}
+              csvDelimiter={csvDelimiter}
+              onPageChange={(page) => onPageChange(activeEntry.id, page)}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Stacked header */}
+          <div className="flex items-center bg-elevated border-b border-default h-9 shrink-0">
+            <div className="flex items-center gap-2 px-3 flex-1 text-xs text-secondary">
+              <Database size={12} className="text-muted shrink-0" />
+              <span className="font-medium text-primary">
+                {t("editor.multiResult.results")}
+              </span>
+              <span className="text-muted">
+                ({results.length})
+              </span>
+            </div>
+            {summaryBadge}
+            {/* Collapse all / Expand all */}
+            <button
+              onClick={() => {
+                const allCollapsed = collapsedIds.size === results.length;
+                setCollapsedIds(
+                  allCollapsed ? new Set() : new Set(results.map((r) => r.id)),
+                );
+              }}
+              className="flex items-center justify-center w-8 h-full text-muted border-l border-default shrink-0 transition-colors hover:text-white hover:bg-surface-secondary"
+              title={
+                collapsedIds.size === results.length
+                  ? t("editor.multiResult.expandAll")
+                  : t("editor.multiResult.collapseAll")
+              }
+            >
+              {collapsedIds.size === results.length ? (
+                <ChevronsUpDown size={14} />
+              ) : (
+                <ChevronsDownUp size={14} />
+              )}
+            </button>
+            {viewToggle}
+          </div>
+
+          {/* Stacked results */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {results.map((entry) => (
+              <StackedResultItem
+                key={entry.id}
+                entry={entry}
                 connectionId={connectionId}
-                selectedRows={new Set()}
-                onSelectionChange={() => {}}
                 copyFormat={copyFormat}
                 csvDelimiter={csvDelimiter}
-                readonly={true}
+                collapsed={collapsedIds.has(entry.id)}
+                aiEnabled={aiEnabled}
+                aiRenaming={aiRenamingEntryId === entry.id}
+                onToggleCollapse={() =>
+                  setCollapsedIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(entry.id)) next.delete(entry.id);
+                    else next.add(entry.id);
+                    return next;
+                  })
+                }
+                onPageChange={(page) => onPageChange(entry.id, page)}
+                onRename={(label) => onRenameEntry(entry.id, label)}
+                onRerun={() => onRerunEntry(entry.id)}
+                onAiRename={() => handleAiRename(entry.id)}
+                onClose={() => onCloseEntry(entry.id)}
               />
-            </div>
+            ))}
           </div>
-        ) : (
-          <div className="flex items-center justify-center h-full text-surface-tertiary text-sm">
-            {t("editor.executePrompt")}
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Tab context menu */}
       {contextMenu && (

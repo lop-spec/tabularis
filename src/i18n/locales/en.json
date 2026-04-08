@@ -714,7 +714,14 @@
       "close": "Close tab",
       "rename": "Rename",
       "aiGenerateName": "Generate name with AI",
-      "generatingName": "Generating name..."
+      "generatingName": "Generating name...",
+      "viewTabs": "Tab view",
+      "viewStacked": "Stacked view",
+      "queryPrefix": "Query",
+      "results": "Results",
+      "collapseAll": "Collapse all",
+      "expandAll": "Expand all",
+      "collapsed": "Collapsed"
     }
   },
   "createTable": {
@@ -854,6 +861,15 @@
     "discordTitle": "Join Discord",
     "discordDesc": "Chat with the community, get help, suggest features",
     "dismiss": "Maybe later"
+  },
+  "whatsNew": {
+    "title": "What's New",
+    "subtitle": "Version {{version}}",
+    "features": "New Features",
+    "bugFixes": "Bug Fixes",
+    "breakingChanges": "Breaking Changes",
+    "readMore": "Read more",
+    "dismiss": "Got it"
   },
   "dump": {
     "title": "Dump Database",

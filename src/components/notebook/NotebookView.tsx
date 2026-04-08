@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
@@ -120,7 +120,7 @@ export function NotebookView({
 
   const cells = notebook?.cells ?? [];
   const stopOnError = notebook?.stopOnError ?? false;
-  const params = notebook?.params ?? [];
+  const params = useMemo(() => notebook?.params ?? [], [notebook?.params]);
 
   const updateNotebook = useCallback(
     (

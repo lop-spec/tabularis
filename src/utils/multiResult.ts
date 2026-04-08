@@ -126,6 +126,31 @@ export function removeEntriesToRight(
 }
 
 /**
+ * Computes the height (in px) for a stacked result grid based on row count.
+ * Accounts for header row (35px) and data rows (35px each), capped at maxHeight.
+ */
+export function getStackedGridHeight(
+  rowCount: number,
+  maxHeight = 400,
+): number {
+  const ROW_HEIGHT = 35;
+  const HEADER_HEIGHT = 35;
+  const contentHeight = HEADER_HEIGHT + rowCount * ROW_HEIGHT;
+  return Math.min(contentHeight, maxHeight);
+}
+
+/**
+ * Returns the display label for a result entry.
+ * Uses the custom label if set, otherwise falls back to "Query {index+1}".
+ */
+export function getEntryDisplayLabel(
+  entry: QueryResultEntry,
+  fallbackPrefix: string,
+): string {
+  return entry.label || `${fallbackPrefix} ${entry.queryIndex + 1}`;
+}
+
+/**
  * Removes all entries to the left of the given id.
  */
 export function removeEntriesToLeft(

@@ -704,7 +704,14 @@
       "close": "Cerrar pestaña",
       "rename": "Renombrar",
       "aiGenerateName": "Generar nombre con IA",
-      "generatingName": "Generando nombre..."
+      "generatingName": "Generando nombre...",
+      "viewTabs": "Vista en pestañas",
+      "viewStacked": "Vista apilada",
+      "queryPrefix": "Consulta",
+      "results": "Resultados",
+      "collapseAll": "Contraer todo",
+      "expandAll": "Expandir todo",
+      "collapsed": "Contraído"
     }
   },
   "createTable": {

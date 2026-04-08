@@ -714,7 +714,14 @@
       "close": "Chiudi tab",
       "rename": "Rinomina",
       "aiGenerateName": "Genera nome con AI",
-      "generatingName": "Generazione nome..."
+      "generatingName": "Generazione nome...",
+      "viewTabs": "Vista a tab",
+      "viewStacked": "Vista impilata",
+      "queryPrefix": "Query",
+      "results": "Risultati",
+      "collapseAll": "Comprimi tutto",
+      "expandAll": "Espandi tutto",
+      "collapsed": "Compresso"
     }
   },
   "createTable": {
@@ -854,6 +861,15 @@
     "discordTitle": "Unisciti su Discord",
     "discordDesc": "Chatta con la community, ricevi aiuto, suggerisci funzionalità",
     "dismiss": "Forse più tardi"
+  },
+  "whatsNew": {
+    "title": "Novità",
+    "subtitle": "Versione {{version}}",
+    "features": "Nuove Funzionalità",
+    "bugFixes": "Correzioni Bug",
+    "breakingChanges": "Modifiche Incompatibili",
+    "readMore": "Leggi di più",
+    "dismiss": "Ho capito"
   },
   "dump": {
     "title": "Esporta Database",

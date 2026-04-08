@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
@@ -12,14 +13,17 @@ import {
   Loader2,
   ExternalLink,
   Activity,
+  Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
 import { useUpdate } from "../../hooks/useUpdate";
+import { useChangelog } from "../../hooks/useChangelog";
 import { APP_VERSION } from "../../version";
 import { ROADMAP } from "../../utils/settings";
 import { SettingRow, SettingSection, SettingToggle } from "./SettingControls";
+import { WhatsNewModal } from "../modals/WhatsNewModal";
 
 export function InfoTab() {
   const { t } = useTranslation();
@@ -33,6 +37,11 @@ export function InfoTab() {
     isUpToDate,
     installationSource,
   } = useUpdate();
+  const {
+    entries: changelogEntries,
+    isLoading: isChangelogLoading,
+  } = useChangelog();
+  const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
 
   return (
     <div>
@@ -78,6 +87,13 @@ export function InfoTab() {
               {APP_VERSION} (Beta)
             </span>
           </div>
+          <button
+            onClick={() => setIsWhatsNewOpen(true)}
+            className="flex items-center gap-2 bg-purple-900/20 hover:bg-purple-900/30 text-purple-400 px-4 py-2 rounded-lg font-medium transition-colors border border-purple-500/30"
+          >
+            <Sparkles size={18} />
+            {t("whatsNew.title")}
+          </button>
         </div>
       </div>
 
@@ -267,6 +283,13 @@ export function InfoTab() {
           </button>
         </div>
       </SettingSection>
+
+      <WhatsNewModal
+        isOpen={isWhatsNewOpen}
+        onClose={() => setIsWhatsNewOpen(false)}
+        entries={changelogEntries}
+        isLoading={isChangelogLoading}
+      />
     </div>
   );
 }

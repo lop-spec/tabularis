@@ -10,6 +10,8 @@ import {
   removeOtherEntries,
   removeEntriesToRight,
   removeEntriesToLeft,
+  getEntryDisplayLabel,
+  getStackedGridHeight,
 } from "../../src/utils/multiResult";
 import type { QueryResultEntry } from "../../src/types/editor";
 
@@ -371,6 +373,68 @@ describe("multiResult", () => {
       ];
       const { nextActiveId } = removeEntriesToLeft(entries, "b", "c");
       expect(nextActiveId).toBe("c");
+    });
+  });
+
+  describe("getEntryDisplayLabel", () => {
+    it("should return custom label when set", () => {
+      const entry = makeEntry({ label: "Users query" });
+      expect(getEntryDisplayLabel(entry, "Query")).toBe("Users query");
+    });
+
+    it("should return fallback with queryIndex + 1 when no label", () => {
+      const entry = makeEntry({ queryIndex: 0 });
+      expect(getEntryDisplayLabel(entry, "Query")).toBe("Query 1");
+    });
+
+    it("should use correct index for non-zero queryIndex", () => {
+      const entry = makeEntry({ queryIndex: 4 });
+      expect(getEntryDisplayLabel(entry, "Query")).toBe("Query 5");
+    });
+
+    it("should work with different prefix strings", () => {
+      const entry = makeEntry({ queryIndex: 2 });
+      expect(getEntryDisplayLabel(entry, "Consulta")).toBe("Consulta 3");
+    });
+
+    it("should prefer label over fallback", () => {
+      const entry = makeEntry({ queryIndex: 0, label: "My Label" });
+      expect(getEntryDisplayLabel(entry, "Query")).toBe("My Label");
+    });
+
+    it("should use fallback for empty string label", () => {
+      const entry = makeEntry({ queryIndex: 0, label: "" });
+      expect(getEntryDisplayLabel(entry, "Query")).toBe("Query 1");
+    });
+  });
+
+  describe("getStackedGridHeight", () => {
+    it("should compute height for a single row", () => {
+      // header (35) + 1 row (35) = 70
+      expect(getStackedGridHeight(1)).toBe(70);
+    });
+
+    it("should compute height for multiple rows", () => {
+      // header (35) + 5 rows (175) = 210
+      expect(getStackedGridHeight(5)).toBe(210);
+    });
+
+    it("should cap at default maxHeight of 400", () => {
+      expect(getStackedGridHeight(20)).toBe(400);
+    });
+
+    it("should cap at custom maxHeight", () => {
+      expect(getStackedGridHeight(20, 250)).toBe(250);
+    });
+
+    it("should return header height for zero rows", () => {
+      expect(getStackedGridHeight(0)).toBe(35);
+    });
+
+    it("should return exact height when it equals maxHeight", () => {
+      // header (35) + rows * 35 = 400 → rows = (400 - 35) / 35 ≈ 10.43 → 10 rows = 385, 11 rows = 420 > 400
+      expect(getStackedGridHeight(10)).toBe(385);
+      expect(getStackedGridHeight(11)).toBe(400);
     });
   });
 });

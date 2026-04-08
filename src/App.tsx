@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { MainLayout } from "./components/layout/MainLayout";
@@ -15,9 +15,13 @@ import { TaskManagerPage } from "./pages/TaskManagerPage";
 import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
 import { CommunityModal } from "./components/modals/CommunityModal";
+import { WhatsNewModal } from "./components/modals/WhatsNewModal";
 import { useUpdate } from "./hooks/useUpdate";
+import { useChangelog } from "./hooks/useChangelog";
+import { APP_VERSION } from "./version";
 
 const COMMUNITY_MODAL_KEY = "tabularis_community_modal_dismissed";
+const WHATS_NEW_VERSION_KEY = "tabularis_last_seen_version";
 
 export function App() {
   const {
@@ -33,9 +37,27 @@ export function App() {
     () => !localStorage.getItem(COMMUNITY_MODAL_KEY),
   );
 
+  const lastSeenVersion = localStorage.getItem(WHATS_NEW_VERSION_KEY);
+  const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(
+    () => lastSeenVersion !== null && lastSeenVersion !== APP_VERSION,
+  );
+
+  const { entries: allEntries, isLoading: isChangelogLoading } = useChangelog();
+
+  const whatsNewEntries = useMemo(() => {
+    if (!lastSeenVersion) return [];
+    return allEntries.filter((entry) => entry.version > lastSeenVersion);
+  }, [lastSeenVersion, allEntries]);
+
   const dismissCommunityModal = useCallback(() => {
     localStorage.setItem(COMMUNITY_MODAL_KEY, "1");
+    localStorage.setItem(WHATS_NEW_VERSION_KEY, APP_VERSION);
     setIsCommunityModalOpen(false);
+  }, []);
+
+  const dismissWhatsNew = useCallback(() => {
+    localStorage.setItem(WHATS_NEW_VERSION_KEY, APP_VERSION);
+    setIsWhatsNewOpen(false);
   }, []);
 
   useEffect(() => {
@@ -103,6 +125,13 @@ export function App() {
       <CommunityModal
         isOpen={isCommunityModalOpen}
         onClose={dismissCommunityModal}
+      />
+
+      <WhatsNewModal
+        isOpen={isWhatsNewOpen && !isCommunityModalOpen}
+        onClose={dismissWhatsNew}
+        entries={whatsNewEntries}
+        isLoading={isChangelogLoading}
       />
     </>
   );
