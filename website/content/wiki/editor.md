@@ -71,21 +71,42 @@ Use the checkboxes to pick specific queries, then click **Run Selected (N)** (or
 
 If you highlight a text selection in the editor and run it, Tabularis splits the selection by `;` and executes all contained queries concurrently. Results appear as separate tabs in the multi-result panel.
 
-## Multi-Result Tabs
+## Multi-Result Panel
 
-When multiple queries are executed (via Run All, Run Selected, or Execute Selection), results are displayed in a **tabbed results panel** at the bottom of the editor. Each query gets its own tab with independent pagination, error handling, and loading state.
+When multiple queries are executed (via Run All, Run Selected, or Execute Selection), results are displayed in a **results panel** at the bottom of the editor. Each query gets its own result with independent pagination, error handling, and loading state.
 
-### Tab Management
+The panel supports two view modes — **Tab view** (default) and **Stacked view** — switchable via the toggle button in the top-right corner of the results bar.
+
+### Tab View
+
+The default view. Each query result lives in its own tab. Click a tab to switch between results.
 
 | Action | How |
 |--------|-----|
 | Switch tab | Click the tab header |
 | Close tab | Click the **X** button or middle-click |
 | Rename tab | Double-click the tab header or right-click → Rename |
+| AI rename | Click the sparkles icon (requires AI enabled in Settings) |
 | Context menu | Right-click a tab for Close / Close Others / Close Right / Close Left / Close All |
 | Re-run | Click the play icon on a tab to re-execute that query |
 
-A summary bar shows the total number of queries and how many succeeded or failed. Each tab displays the query preview, row count, and execution time.
+A summary bar shows the total number of queries and how many succeeded or failed. Each tab displays a collapsible query preview, row count, and execution time.
+
+### Stacked View
+
+Inspired by SQL Server Management Studio, the stacked view displays **all query results vertically** in a single scrollable panel — no tab switching required.
+
+| Action | How |
+|--------|-----|
+| Collapse / Expand | Click a result header to toggle its content |
+| Collapse All / Expand All | Click the collapse button in the top bar |
+| Close result | Click the **X** button or middle-click on the header |
+| Rename | Double-click the result label |
+| AI rename | Click the sparkles icon on the header |
+| Re-run | Click the play icon on the header |
+| Resize | Drag the resize handle between results to adjust height |
+
+Each result section shows the query label, a collapsible SQL preview, row count, execution time, and pagination controls — all inline in the header. When collapsed, the header still shows key metadata (row count, execution time, error summary).
 
 ### Query Parameters
 
