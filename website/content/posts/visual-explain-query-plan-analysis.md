@@ -196,3 +196,14 @@ The result is that most developers avoid EXPLAIN until something is already on f
 Visual EXPLAIN puts execution plan analysis where it belongs — inside the database client, presented visually, with AI to bridge the gap when you are not sure what you are looking at. Write a query, see the plan, spot the bottleneck, fix it. No context switches, no copy-pasting into web visualizers, no separate tools.
 
 This is landing soon. Follow the progress on [`feat/visual-explain-analyze`](https://github.com/debba/tabularis/tree/feat/visual-explain-analyze).
+
+---
+
+## Try It Yourself
+
+If you want to test Visual EXPLAIN on MySQL or MariaDB with queries that produce diverse and interesting execution plans, I put together a demo database and a Tabularis notebook with 25+ queries covering table scans, index access patterns, joins, subqueries, CTEs, aggregation, UNIONs, and intentionally expensive worst-case scenarios.
+
+- [`explain-demo-database.sql`](https://github.com/debba/tabularis/blob/feat/visual-explain-analyze/docs/test-data/explain-demo-database.sql) — MySQL/MariaDB schema with ~15k rows across 8 tables, a mix of indexed and unindexed columns
+- [`explain-showcase.tabularis-notebook`](https://github.com/debba/tabularis/blob/feat/visual-explain-analyze/docs/test-data/explain-showcase.tabularis-notebook) — importable notebook with annotated queries, one per optimizer strategy
+
+Run the SQL file on your server, import the notebook into Tabularis, and click Explain on any cell.
