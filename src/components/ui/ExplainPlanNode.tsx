@@ -3,7 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useTranslation } from "react-i18next";
 import type { ExplainNode } from "../../types/explain";
 import {
-  getNodeCostColor,
+  getNodeCostStyle,
   formatCost,
   formatTime,
   formatRows,
@@ -23,18 +23,18 @@ export const ExplainPlanNodeComponent = memo(
   ({ data }: NodeProps<ExplainPlanNodeType>) => {
     const { t } = useTranslation();
     const { node, maxCost, hasAnalyzeData } = data;
-    const costColor = getNodeCostColor(node.total_cost ?? 0, maxCost);
+    const costStyle = getNodeCostStyle(node.total_cost ?? 0, maxCost);
 
     return (
       <div
         className={clsx(
           "bg-elevated border border-strong rounded shadow-xl min-w-[260px] max-w-[300px] overflow-hidden",
           "border-l-4",
-          costColor,
+          costStyle.border,
         )}
       >
         {/* Header */}
-        <div className="bg-base px-3 py-2 border-b border-default">
+        <div className={clsx("px-3 py-2 border-b border-default", costStyle.headerBg)}>
           <div className="text-sm font-bold text-primary">{node.node_type}</div>
           {node.relation && (
             <div className="text-xs text-muted mt-0.5">

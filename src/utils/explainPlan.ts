@@ -93,12 +93,17 @@ export function layoutExplainNodes(
 // Color helpers
 // ---------------------------------------------------------------------------
 
-export function getNodeCostColor(cost: number, maxCost: number): string {
-  if (maxCost <= 0) return "border-green-500";
+export interface NodeCostStyle {
+  border: string;
+  headerBg: string;
+}
+
+export function getNodeCostStyle(cost: number, maxCost: number): NodeCostStyle {
+  if (maxCost <= 0) return { border: "border-l-green-500", headerBg: "bg-green-950/30" };
   const ratio = cost / maxCost;
-  if (ratio < 0.2) return "border-green-500";
-  if (ratio < 0.6) return "border-yellow-500";
-  return "border-red-500";
+  if (ratio < 0.2) return { border: "border-l-green-500", headerBg: "bg-green-950/30" };
+  if (ratio < 0.6) return { border: "border-l-yellow-500", headerBg: "bg-yellow-950/30" };
+  return { border: "border-l-red-500", headerBg: "bg-red-950/30" };
 }
 
 // ---------------------------------------------------------------------------

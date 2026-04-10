@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   explainPlanToFlow,
-  getNodeCostColor,
+  getNodeCostStyle,
   formatCost,
   formatTime,
   formatRows,
@@ -118,37 +118,43 @@ describe("explainPlan", () => {
   // getNodeCostColor
   // ---------------------------------------------------------------------------
 
-  describe("getNodeCostColor", () => {
+  describe("getNodeCostStyle", () => {
     it("should return green for low cost", () => {
-      expect(getNodeCostColor(10, 100)).toBe("border-green-500");
+      const style = getNodeCostStyle(10, 100);
+      expect(style.border).toBe("border-l-green-500");
+      expect(style.headerBg).toBe("bg-green-950/30");
     });
 
     it("should return yellow for medium cost", () => {
-      expect(getNodeCostColor(40, 100)).toBe("border-yellow-500");
+      const style = getNodeCostStyle(40, 100);
+      expect(style.border).toBe("border-l-yellow-500");
+      expect(style.headerBg).toBe("bg-yellow-950/30");
     });
 
     it("should return red for high cost", () => {
-      expect(getNodeCostColor(80, 100)).toBe("border-red-500");
+      const style = getNodeCostStyle(80, 100);
+      expect(style.border).toBe("border-l-red-500");
+      expect(style.headerBg).toBe("bg-red-950/30");
     });
 
     it("should handle zero maxCost", () => {
-      expect(getNodeCostColor(0, 0)).toBe("border-green-500");
+      expect(getNodeCostStyle(0, 0).border).toBe("border-l-green-500");
     });
 
     it("should handle cost equal to maxCost", () => {
-      expect(getNodeCostColor(100, 100)).toBe("border-red-500");
+      expect(getNodeCostStyle(100, 100).border).toBe("border-l-red-500");
     });
 
     it("should return green at exactly 19%", () => {
-      expect(getNodeCostColor(19, 100)).toBe("border-green-500");
+      expect(getNodeCostStyle(19, 100).border).toBe("border-l-green-500");
     });
 
     it("should return yellow at exactly 20%", () => {
-      expect(getNodeCostColor(20, 100)).toBe("border-yellow-500");
+      expect(getNodeCostStyle(20, 100).border).toBe("border-l-yellow-500");
     });
 
     it("should return red at exactly 60%", () => {
-      expect(getNodeCostColor(60, 100)).toBe("border-red-500");
+      expect(getNodeCostStyle(60, 100).border).toBe("border-l-red-500");
     });
   });
 
