@@ -35,10 +35,7 @@ export const Sidebar = () => {
     activeConnectionId,
     connectionGroups,
     connections,
-    updateGroup,
-    deleteGroup,
     moveConnectionToGroup,
-    toggleGroupCollapsed,
   } = useDatabase();
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,6 +43,7 @@ export const Sidebar = () => {
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [showShortcutHints, setShowShortcutHints] = useState(false);
+  const [sidebarCollapsedGroups, setSidebarCollapsedGroups] = useState<Set<string>>(new Set());
   const { isMac } = useKeybindings();
 
   useEffect(() => {
@@ -213,13 +211,16 @@ export const Sidebar = () => {
                 return (
                   <ConnectionGroupFolder
                     key={group.id}
-                    group={group}
+                    group={{ ...group, collapsed: sidebarCollapsedGroups.has(group.id) }}
                     connections={nonSplitConns}
                     allDrivers={allDrivers}
                     selectedConnectionIds={selectedConnectionIds}
-                    onToggleCollapsed={() => void toggleGroupCollapsed(group.id)}
-                    onRename={(newName) => void updateGroup(group.id, { name: newName })}
-                    onDelete={() => void deleteGroup(group.id)}
+                    onToggleCollapsed={() => setSidebarCollapsedGroups(prev => {
+                      const next = new Set(prev);
+                      if (next.has(group.id)) next.delete(group.id);
+                      else next.add(group.id);
+                      return next;
+                    })}
                     onSwitch={handleSwitchOrSetExplorer}
                     onOpenInEditor={handleOpenInEditor}
                     onDisconnect={handleDisconnectConnection}
