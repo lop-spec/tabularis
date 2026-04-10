@@ -120,6 +120,56 @@ pub fn calculate_offset(page: u32, page_size: u32) -> u32 {
     (page - 1) * page_size
 }
 
+/// Remove trailing LIMIT and OFFSET clauses from a SQL query.
+///
+/// Uses `rfind` to locate the last `LIMIT` keyword and strips everything from
+/// there onwards (which includes any subsequent OFFSET). Falls back to looking
+/// for a standalone `OFFSET` when no LIMIT is present.
+pub fn strip_limit_offset(query: &str) -> &str {
+    let upper = query.to_uppercase();
+    if let Some(pos) = upper.rfind("LIMIT") {
+        query[..pos].trim()
+    } else if let Some(pos) = upper.rfind("OFFSET") {
+        query[..pos].trim()
+    } else {
+        query.trim()
+    }
+}
+
+/// Extract the numeric value from a trailing LIMIT clause, if present.
+pub fn extract_user_limit(query: &str) -> Option<u32> {
+    let upper = query.to_uppercase();
+    let pos = upper.rfind("LIMIT")?;
+    let after = query[pos + 5..].trim();
+    let num_str: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+    num_str.parse().ok()
+}
+
+/// Build a paginated query by stripping any user-supplied LIMIT/OFFSET and
+/// appending pagination clauses directly.  ORDER BY is left in place so that
+/// table-qualified column references (e.g. `o.created_at`) remain valid —
+/// wrapping the original query in a subquery would move those references out
+/// of scope and cause "unknown column" errors.
+///
+/// When the user wrote an explicit LIMIT, it is honoured as a cap on the total
+/// number of rows returned across all pages.
+pub fn build_paginated_query(query: &str, page_size: u32, page: u32) -> String {
+    let offset = calculate_offset(page, page_size);
+    let user_limit = extract_user_limit(query);
+    let base = strip_limit_offset(query);
+
+    let fetch_count = match user_limit {
+        Some(ul) => {
+            let remaining = ul.saturating_sub(offset);
+            // +1 for has_more detection, but capped by user's LIMIT
+            remaining.min(page_size + 1)
+        }
+        None => page_size + 1,
+    };
+
+    format!("{} LIMIT {} OFFSET {}", base, fetch_count, offset)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +229,105 @@ mod tests {
         assert_eq!(calculate_offset(2, 100), 100);
         assert_eq!(calculate_offset(3, 50), 100);
         assert_eq!(calculate_offset(10, 25), 225);
+    }
+
+    #[test]
+    fn test_strip_limit_offset_with_limit() {
+        assert_eq!(
+            strip_limit_offset("SELECT * FROM t ORDER BY id LIMIT 50"),
+            "SELECT * FROM t ORDER BY id"
+        );
+    }
+
+    #[test]
+    fn test_strip_limit_offset_with_limit_and_offset() {
+        assert_eq!(
+            strip_limit_offset("SELECT * FROM t ORDER BY id LIMIT 50 OFFSET 10"),
+            "SELECT * FROM t ORDER BY id"
+        );
+    }
+
+    #[test]
+    fn test_strip_limit_offset_no_limit() {
+        assert_eq!(
+            strip_limit_offset("SELECT * FROM t ORDER BY id"),
+            "SELECT * FROM t ORDER BY id"
+        );
+    }
+
+    #[test]
+    fn test_strip_limit_offset_only_offset() {
+        assert_eq!(
+            strip_limit_offset("SELECT * FROM t OFFSET 5"),
+            "SELECT * FROM t"
+        );
+    }
+
+    #[test]
+    fn test_extract_user_limit_present() {
+        assert_eq!(
+            extract_user_limit("SELECT * FROM t LIMIT 50"),
+            Some(50)
+        );
+    }
+
+    #[test]
+    fn test_extract_user_limit_with_offset() {
+        assert_eq!(
+            extract_user_limit("SELECT * FROM t LIMIT 100 OFFSET 20"),
+            Some(100)
+        );
+    }
+
+    #[test]
+    fn test_extract_user_limit_absent() {
+        assert_eq!(
+            extract_user_limit("SELECT * FROM t ORDER BY id"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_build_paginated_query_no_user_limit() {
+        let q = "SELECT o.id FROM orders o ORDER BY o.created_at DESC";
+        let result = build_paginated_query(q, 100, 1);
+        assert_eq!(
+            result,
+            "SELECT o.id FROM orders o ORDER BY o.created_at DESC LIMIT 101 OFFSET 0"
+        );
+    }
+
+    #[test]
+    fn test_build_paginated_query_replaces_user_limit() {
+        let q = "SELECT * FROM t ORDER BY id LIMIT 50";
+        let result = build_paginated_query(q, 100, 1);
+        // User wanted 50 rows. page_size=100, so remaining=50, fetch = min(50, 101) = 50
+        assert_eq!(
+            result,
+            "SELECT * FROM t ORDER BY id LIMIT 50 OFFSET 0"
+        );
+    }
+
+    #[test]
+    fn test_build_paginated_query_user_limit_second_page() {
+        let q = "SELECT * FROM t ORDER BY id LIMIT 250";
+        let result = build_paginated_query(q, 100, 2);
+        // offset=100, remaining=150, fetch = min(150, 101) = 101
+        assert_eq!(
+            result,
+            "SELECT * FROM t ORDER BY id LIMIT 101 OFFSET 100"
+        );
+    }
+
+    #[test]
+    fn test_build_paginated_query_user_limit_exhausted() {
+        let q = "SELECT * FROM t LIMIT 50";
+        let result = build_paginated_query(q, 100, 2);
+        // offset=100, remaining=0 (50-100 saturates to 0), fetch = min(0, 101) = 0
+        assert_eq!(
+            result,
+            "SELECT * FROM t LIMIT 0 OFFSET 100"
+        );
     }
 
     #[test]
