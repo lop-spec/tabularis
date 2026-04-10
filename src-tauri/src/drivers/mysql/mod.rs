@@ -2,8 +2,8 @@ pub mod extract;
 pub mod types;
 
 use crate::models::{
-    ConnectionParams, ForeignKey, Index, Pagination, QueryResult, RoutineInfo, RoutineParameter,
-    TableColumn, TableInfo, ViewInfo,
+    ConnectionParams, ExplainNode, ExplainPlan, ForeignKey, Index, Pagination, QueryResult,
+    RoutineInfo, RoutineParameter, TableColumn, TableInfo, ViewInfo,
 };
 use crate::pool_manager::get_mysql_pool;
 use extract::extract_value;
@@ -1040,6 +1040,214 @@ pub async fn execute_query(
     })
 }
 
+// ---------------------------------------------------------------------------
+// EXPLAIN QUERY
+// ---------------------------------------------------------------------------
+
+pub async fn explain_query(
+    params: &ConnectionParams,
+    query: &str,
+    analyze: bool,
+    schema: Option<&str>,
+) -> Result<ExplainPlan, String> {
+    let effective_params;
+    let pool = if let Some(db) = schema {
+        effective_params = {
+            let mut p = params.clone();
+            p.database = crate::models::DatabaseSelection::Single(db.to_string());
+            p
+        };
+        get_mysql_pool(&effective_params).await?
+    } else {
+        get_mysql_pool(params).await?
+    };
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+
+    // Try EXPLAIN FORMAT=JSON first (MySQL 5.7+)
+    let explain_json_sql = format!("EXPLAIN FORMAT=JSON {}", query);
+    let json_result: Result<String, String> = {
+        let row = sqlx::query(&explain_json_sql)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+        let val: String = row.try_get(0).map_err(|e| e.to_string())?;
+        Ok(val)
+    };
+
+    let raw_json = json_result?;
+    let raw_output = raw_json.clone();
+
+    let json_val: serde_json::Value = serde_json::from_str(&raw_json)
+        .map_err(|e| format!("Failed to parse EXPLAIN JSON: {}", e))?;
+
+    let query_block = json_val
+        .get("query_block")
+        .ok_or("EXPLAIN JSON missing 'query_block'")?;
+
+    let mut counter: u32 = 0;
+    let root = parse_mysql_query_block(query_block, &mut counter);
+
+    // If analyze requested, try EXPLAIN ANALYZE (MySQL 8.0.18+)
+    let mut has_analyze_data = false;
+    let mut final_raw = raw_output.clone();
+
+    if analyze {
+        // Re-acquire connection for EXPLAIN ANALYZE
+        let mut conn2 = pool.acquire().await.map_err(|e| e.to_string())?;
+        let analyze_sql = format!("EXPLAIN ANALYZE {}", query);
+        match sqlx::query(&analyze_sql)
+            .fetch_all(&mut *conn2)
+            .await
+        {
+            Ok(rows) => {
+                let mut lines = Vec::new();
+                for row in &rows {
+                    if let Ok(line) = row.try_get::<String, _>(0) {
+                        lines.push(line);
+                    }
+                }
+                if !lines.is_empty() {
+                    has_analyze_data = true;
+                    final_raw = lines.join("\n");
+                }
+            }
+            Err(_) => {
+                // MySQL < 8.0.18, EXPLAIN ANALYZE not available — use JSON-only
+            }
+        }
+    }
+
+    Ok(ExplainPlan {
+        root,
+        planning_time_ms: None,
+        execution_time_ms: None,
+        original_query: query.to_string(),
+        driver: "mysql".to_string(),
+        has_analyze_data,
+        raw_output: Some(final_raw),
+    })
+}
+
+fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> ExplainNode {
+    let id = format!("node_{}", counter);
+    *counter += 1;
+
+    // Determine node type from the query block structure
+    let (node_type, relation, plan_rows, total_cost, filter) = if let Some(table) = block.get("table") {
+        let access = table
+            .get("access_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("ALL");
+        let node_type = match access {
+            "ALL" => "Full Table Scan",
+            "index" => "Index Scan",
+            "range" => "Range Scan",
+            "ref" => "Index Lookup",
+            "eq_ref" => "Unique Index Lookup",
+            "const" | "system" => "Const Lookup",
+            "fulltext" => "Fulltext Search",
+            other => other,
+        }
+        .to_string();
+        let rel = table.get("table_name").and_then(|v| v.as_str()).map(String::from);
+        let rows = table
+            .get("rows_examined_per_scan")
+            .and_then(|v| v.as_f64());
+        let cost = table
+            .get("cost_info")
+            .and_then(|c| c.get("read_cost"))
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<f64>().ok());
+        let filt = table
+            .get("attached_condition")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        (node_type, rel, rows, cost, filt)
+    } else {
+        ("Query Block".to_string(), None, None, None, None)
+    };
+
+    // Collect extra fields from the table object
+    let known_keys: &[&str] = &[
+        "access_type", "table_name", "rows_examined_per_scan", "cost_info",
+        "attached_condition", "key", "possible_keys", "used_key_parts",
+    ];
+    let mut extra = std::collections::HashMap::new();
+    if let Some(table) = block.get("table").and_then(|t| t.as_object()) {
+        for (k, v) in table {
+            if !known_keys.contains(&k.as_str()) {
+                extra.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    if let Some(table) = block.get("table") {
+        if let Some(key) = table.get("key").and_then(|v| v.as_str()) {
+            extra.insert("key".to_string(), serde_json::Value::String(key.to_string()));
+        }
+    }
+
+    // Parse children from nested_loop, ordering_operation, subqueries, etc.
+    let mut children = Vec::new();
+
+    if let Some(nested_loop) = block.get("nested_loop").and_then(|v| v.as_array()) {
+        for item in nested_loop {
+            if item.get("table").is_some() {
+                children.push(parse_mysql_query_block(item, counter));
+            }
+        }
+    }
+
+    if let Some(order_op) = block.get("ordering_operation") {
+        children.push(parse_mysql_query_block(order_op, counter));
+    }
+
+    if let Some(group_op) = block.get("grouping_operation") {
+        children.push(parse_mysql_query_block(group_op, counter));
+    }
+
+    if let Some(dup_op) = block.get("duplicates_removal") {
+        children.push(parse_mysql_query_block(dup_op, counter));
+    }
+
+    if let Some(subqueries) = block.get("optimized_away_subqueries").and_then(|v| v.as_array()) {
+        for sq in subqueries {
+            children.push(parse_mysql_query_block(sq, counter));
+        }
+    }
+
+    if let Some(attached) = block.get("attached_subqueries").and_then(|v| v.as_array()) {
+        for sq in attached {
+            children.push(parse_mysql_query_block(sq, counter));
+        }
+    }
+
+    let index_condition = block
+        .get("table")
+        .and_then(|t| t.get("key"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    ExplainNode {
+        id,
+        node_type,
+        relation,
+        startup_cost: None,
+        total_cost,
+        plan_rows,
+        actual_rows: None,
+        actual_time_ms: None,
+        actual_loops: None,
+        buffers_hit: None,
+        buffers_read: None,
+        filter,
+        index_condition,
+        join_type: None,
+        hash_condition: None,
+        extra,
+        children,
+    }
+}
+
 // ============================================================
 // Plugin wrapper
 // ============================================================
@@ -1188,6 +1396,10 @@ impl DatabaseDriver for MysqlDriver {
 
     async fn execute_query(&self, params: &crate::models::ConnectionParams, query: &str, limit: Option<u32>, page: u32, schema: Option<&str>) -> Result<crate::models::QueryResult, String> {
         execute_query(params, query, limit, page, schema).await
+    }
+
+    async fn explain_query(&self, params: &crate::models::ConnectionParams, query: &str, analyze: bool, schema: Option<&str>) -> Result<crate::models::ExplainPlan, String> {
+        explain_query(params, query, analyze, schema).await
     }
 
     async fn insert_record(&self, params: &crate::models::ConnectionParams, table: &str, data: std::collections::HashMap<String, serde_json::Value>, _schema: Option<&str>, max_blob_size: u64) -> Result<u64, String> {

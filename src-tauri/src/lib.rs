@@ -233,6 +233,7 @@ pub fn run() {
             commands::get_file_stats,
             commands::read_file_as_data_url,
             commands::execute_query,
+            commands::explain_query_plan,
             commands::count_query,
             commands::cancel_query,
             commands::get_views,
