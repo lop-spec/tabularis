@@ -2088,6 +2088,13 @@ pub async fn explain_query_plan<R: Runtime>(
         .replace('\u{201D}', "\"")
         .to_string();
 
+    if !crate::drivers::common::is_explainable_query(&sanitized_query) {
+        return Err(
+            "EXPLAIN is only supported for DML statements (SELECT, INSERT, UPDATE, DELETE, REPLACE). DDL statements like CREATE, DROP, or ALTER cannot be explained."
+                .into(),
+        );
+    }
+
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;

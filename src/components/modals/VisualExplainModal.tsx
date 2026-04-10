@@ -7,6 +7,7 @@ import { useSettings } from "../../hooks/useSettings";
 import MonacoEditor from "@monaco-editor/react";
 import type { ExplainPlan } from "../../types/explain";
 import { isDataModifyingQuery } from "../../utils/explainPlan";
+import { isExplainableQuery } from "../../utils/sql";
 import {
   ExplainSummaryBar,
   type ExplainViewMode,
@@ -43,6 +44,11 @@ export const VisualExplainModal = ({
 
   const handleExplain = useCallback(async () => {
     if (!query?.trim() || !connectionId) return;
+
+    if (!isExplainableQuery(query)) {
+      setError(t("editor.visualExplain.notExplainable"));
+      return;
+    }
 
     setIsLoading(true);
     setError(null);

@@ -665,6 +665,7 @@
       "analyze": "Analyze",
       "analyzeWarning": "ANALYZE executes the query. Use with caution on data-modifying statements.",
       "notSupported": "EXPLAIN is not supported for this connection type.",
+      "notExplainable": "EXPLAIN is only supported for DML statements (SELECT, INSERT, UPDATE, DELETE). DDL statements like CREATE, DROP, or ALTER cannot be explained.",
       "rerun": "Re-run",
       "close": "Close",
       "graphView": "Graph",
