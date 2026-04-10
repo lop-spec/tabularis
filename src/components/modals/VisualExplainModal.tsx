@@ -65,6 +65,7 @@ export const VisualExplainModal = ({
 
   useEffect(() => {
     if (isOpen && query?.trim() && connectionId) {
+      setViewMode("graph");
       handleExplain();
     }
   }, [isOpen, query, connectionId, handleExplain]);

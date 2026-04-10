@@ -994,6 +994,46 @@ pub async fn execute_query(
 // EXPLAIN QUERY
 // ---------------------------------------------------------------------------
 
+/// Server capabilities detected via `SELECT VERSION()`.
+struct MysqlCapabilities {
+    /// EXPLAIN FORMAT=JSON (MySQL 5.6+ / MariaDB 10.1+)
+    supports_json_format: bool,
+    /// EXPLAIN ANALYZE (MySQL 8.0.18+ only)
+    supports_explain_analyze: bool,
+    /// ANALYZE FORMAT=JSON (MariaDB 10.1+ only)
+    supports_analyze_format: bool,
+}
+
+fn parse_mysql_version(version_str: &str) -> MysqlCapabilities {
+    let is_mariadb = version_str.to_lowercase().contains("mariadb");
+
+    // Extract "5.5.24" from "5.5.24-55-log" or "10.5.22-MariaDB"
+    let version_part = version_str.split('-').next().unwrap_or("");
+    let parts: Vec<u32> = version_part
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    let ver = (
+        parts.first().copied().unwrap_or(0),
+        parts.get(1).copied().unwrap_or(0),
+        parts.get(2).copied().unwrap_or(0),
+    );
+
+    if is_mariadb {
+        MysqlCapabilities {
+            supports_json_format: ver >= (10, 1, 0),
+            supports_explain_analyze: false,
+            supports_analyze_format: ver >= (10, 1, 0),
+        }
+    } else {
+        MysqlCapabilities {
+            supports_json_format: ver >= (5, 6, 0),
+            supports_explain_analyze: ver >= (8, 0, 18),
+            supports_analyze_format: false,
+        }
+    }
+}
+
 pub async fn explain_query(
     params: &ConnectionParams,
     query: &str,
@@ -1011,102 +1051,186 @@ pub async fn explain_query(
     } else {
         get_mysql_pool(params).await?
     };
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    // Try EXPLAIN FORMAT=JSON first (MySQL 5.7+ / MariaDB 10.1+)
-    let explain_json_sql = format!("EXPLAIN FORMAT=JSON {}", query);
-    let json_result: Result<String, String> = async {
-        let row = sqlx::query(&explain_json_sql)
-            .fetch_one(&mut *conn)
+    // Detect server version to skip unsupported EXPLAIN variants
+    let caps = {
+        let mut vc = pool.acquire().await.map_err(|e| e.to_string())?;
+        let ver_row = sqlx::query("SELECT VERSION()")
+            .fetch_one(&mut *vc)
             .await
-            .map_err(|e| e.to_string())?;
-        let val: String = row.try_get(0).map_err(|e| e.to_string())?;
-        Ok(val)
+            .ok();
+        let ver_str: String = ver_row
+            .and_then(|r| r.try_get(0).ok())
+            .unwrap_or_default();
+        log::debug!("MySQL/MariaDB version: {}", ver_str);
+        parse_mysql_version(&ver_str)
+    };
+
+    // EXPLAIN ANALYZE — MySQL 8.0.18+ text tree with estimated + actual data
+    if analyze && caps.supports_explain_analyze {
+        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+        let analyze_sql = format!("EXPLAIN ANALYZE {}", query);
+        if let Ok(rows) = sqlx::query(&analyze_sql).fetch_all(&mut *conn).await {
+            let mut lines = Vec::new();
+            for row in &rows {
+                if let Ok(line) = row.try_get::<String, _>(0) {
+                    lines.push(line);
+                }
+            }
+            if !lines.is_empty() {
+                let raw_output = lines.join("\n");
+                let mut counter: u32 = 0;
+                let root = parse_mysql_analyze_text(&raw_output, &mut counter);
+                let has_analyze = has_analyze_data_recursive(&root);
+
+                return Ok(ExplainPlan {
+                    root,
+                    planning_time_ms: None,
+                    execution_time_ms: None,
+                    original_query: query.to_string(),
+                    driver: "mysql".to_string(),
+                    has_analyze_data: has_analyze,
+                    raw_output: Some(raw_output),
+                });
+            }
+        }
     }
-    .await;
 
-    let (root, final_raw, has_analyze_data) = match json_result {
-        Ok(raw_json) => {
-            let raw_output = raw_json.clone();
+    // ANALYZE FORMAT=JSON — MariaDB 10.1+ (executes the query and returns JSON
+    // with both estimated and r_* actual fields)
+    if analyze && caps.supports_analyze_format {
+        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+        let maria_sql = format!("ANALYZE FORMAT=JSON {}", query);
+        if let Ok(row) = sqlx::query(&maria_sql).fetch_one(&mut *conn).await {
+            if let Ok(raw_json) = row.try_get::<String, _>(0) {
+                if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&raw_json) {
+                    if let Some(query_block) = json_val.get("query_block") {
+                        let mut counter: u32 = 0;
+                        let root = parse_mysql_query_block(query_block, &mut counter);
+                        let has_analyze = has_analyze_data_recursive(&root);
 
-            let json_val: serde_json::Value = serde_json::from_str(&raw_json)
-                .map_err(|e| format!("Failed to parse EXPLAIN JSON: {}", e))?;
-
-            let query_block = json_val
-                .get("query_block")
-                .ok_or("EXPLAIN JSON missing 'query_block'")?;
-
-            let mut counter: u32 = 0;
-            let root = parse_mysql_query_block(query_block, &mut counter);
-
-            // If analyze requested, try EXPLAIN ANALYZE (MySQL 8.0.18+)
-            let mut has_analyze_data = false;
-            let mut final_raw = raw_output;
-
-            if analyze {
-                let mut conn2 = pool.acquire().await.map_err(|e| e.to_string())?;
-                let analyze_sql = format!("EXPLAIN ANALYZE {}", query);
-                match sqlx::query(&analyze_sql).fetch_all(&mut *conn2).await {
-                    Ok(rows) => {
-                        let mut lines = Vec::new();
-                        for row in &rows {
-                            if let Ok(line) = row.try_get::<String, _>(0) {
-                                lines.push(line);
-                            }
-                        }
-                        if !lines.is_empty() {
-                            has_analyze_data = true;
-                            final_raw = lines.join("\n");
-                        }
-                    }
-                    Err(_) => {
-                        // EXPLAIN ANALYZE not available — use JSON-only
+                        return Ok(ExplainPlan {
+                            root,
+                            planning_time_ms: None,
+                            execution_time_ms: None,
+                            original_query: query.to_string(),
+                            driver: "mysql".to_string(),
+                            has_analyze_data: has_analyze,
+                            raw_output: Some(raw_json),
+                        });
                     }
                 }
             }
-
-            (root, final_raw, has_analyze_data)
         }
-        Err(_) => {
-            // FORMAT=JSON not supported — fall back to plain EXPLAIN
-            let mut conn2 = pool.acquire().await.map_err(|e| e.to_string())?;
-            let explain_sql = format!("EXPLAIN {}", query);
-            let rows = sqlx::query(&explain_sql)
-                .fetch_all(&mut *conn2)
+    }
+
+    // EXPLAIN FORMAT=JSON — MySQL 5.6+ / MariaDB 10.1+
+    if caps.supports_json_format {
+        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+        let json_sql = format!("EXPLAIN FORMAT=JSON {}", query);
+        let json_result: Result<String, String> = async {
+            let row = sqlx::query(&json_sql)
+                .fetch_one(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
-
-            let (root, raw) = parse_mysql_tabular_explain(&rows);
-            (root, raw, false)
+            row.try_get::<String, _>(0).map_err(|e| e.to_string())
         }
-    };
+        .await;
 
+        if let Ok(raw_json) = json_result {
+            if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&raw_json) {
+                if let Some(query_block) = json_val.get("query_block") {
+                    let mut counter: u32 = 0;
+                    let root = parse_mysql_query_block(query_block, &mut counter);
+                    let has_analyze = has_analyze_data_recursive(&root);
+
+                    return Ok(ExplainPlan {
+                        root,
+                        planning_time_ms: None,
+                        execution_time_ms: None,
+                        original_query: query.to_string(),
+                        driver: "mysql".to_string(),
+                        has_analyze_data: has_analyze,
+                        raw_output: Some(raw_json),
+                    });
+                }
+            }
+        }
+    }
+
+    // Tabular fallback — works on all MySQL/MariaDB versions
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let explain_sql = format!("EXPLAIN {}", query);
+    let rows = sqlx::query(&explain_sql)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let (root, raw) = parse_mysql_tabular_explain(&rows);
     Ok(ExplainPlan {
         root,
         planning_time_ms: None,
         execution_time_ms: None,
         original_query: query.to_string(),
         driver: "mysql".to_string(),
-        has_analyze_data,
-        raw_output: Some(final_raw),
+        has_analyze_data: false,
+        raw_output: Some(raw),
     })
 }
 
 /// Parse the tabular output from plain `EXPLAIN` (for MySQL/MariaDB without FORMAT=JSON).
-/// Columns: id, select_type, table, partitions, type, possible_keys, key, key_len, ref, rows, filtered, Extra
+///
+/// MySQL 5.5:  id, select_type, table, type, possible_keys, key, key_len, ref, rows, Extra
+/// MySQL 5.7+: id, select_type, table, partitions, type, possible_keys, key, key_len, ref, rows, filtered, Extra
+///
+/// Uses column-name lookup + `mysql_row_str` / `mysql_row_str_opt` to handle
+/// MySQL versions that return VARBINARY instead of VARCHAR.
 fn parse_mysql_tabular_explain(rows: &[sqlx::mysql::MySqlRow]) -> (ExplainNode, String) {
     let mut raw_lines = Vec::new();
     let mut children = Vec::new();
 
+    /// Find a column index by name (case-insensitive).
+    fn col_idx(row: &sqlx::mysql::MySqlRow, name: &str) -> Option<usize> {
+        row.columns()
+            .iter()
+            .position(|c| c.name().eq_ignore_ascii_case(name))
+    }
+
     for (i, row) in rows.iter().enumerate() {
-        let select_type: String = row.try_get("select_type").unwrap_or_default();
-        let table: String = row.try_get("table").unwrap_or_default();
-        let access_type: String = row.try_get("type").unwrap_or_default();
-        let possible_keys: Option<String> = row.try_get("possible_keys").ok();
-        let key: Option<String> = row.try_get("key").ok();
-        let plan_rows: Option<i64> = row.try_get("rows").ok();
-        let filtered: Option<f64> = row.try_get("filtered").ok();
-        let extra: Option<String> = row.try_get("Extra").ok();
+        let select_type = col_idx(row, "select_type")
+            .map(|idx| mysql_row_str(row, idx))
+            .unwrap_or_default();
+        let table = col_idx(row, "table")
+            .and_then(|idx| mysql_row_str_opt(row, idx))
+            .unwrap_or_default();
+        let access_type = col_idx(row, "type")
+            .and_then(|idx| mysql_row_str_opt(row, idx))
+            .unwrap_or_default();
+        let possible_keys = col_idx(row, "possible_keys")
+            .and_then(|idx| mysql_row_str_opt(row, idx));
+        let key = col_idx(row, "key")
+            .and_then(|idx| mysql_row_str_opt(row, idx));
+        let plan_rows: Option<i64> = col_idx(row, "rows")
+            .and_then(|idx| {
+                row.try_get::<Option<i64>, _>(idx)
+                    .unwrap_or(None)
+                    .or_else(|| {
+                        // Fallback: read as string and parse
+                        mysql_row_str_opt(row, idx)
+                            .and_then(|s| s.parse::<i64>().ok())
+                    })
+            });
+        let filtered: Option<f64> = col_idx(row, "filtered")
+            .and_then(|idx| {
+                row.try_get::<Option<f64>, _>(idx)
+                    .unwrap_or(None)
+                    .or_else(|| {
+                        mysql_row_str_opt(row, idx)
+                            .and_then(|s| s.parse::<f64>().ok())
+                    })
+            });
+        let extra = col_idx(row, "Extra")
+            .and_then(|idx| mysql_row_str_opt(row, idx));
 
         let node_type = match access_type.as_str() {
             "ALL" => "Full Table Scan",
@@ -1116,6 +1240,7 @@ fn parse_mysql_tabular_explain(rows: &[sqlx::mysql::MySqlRow]) -> (ExplainNode, 
             "eq_ref" => "Unique Index Lookup",
             "const" | "system" => "Const Lookup",
             "fulltext" => "Fulltext Search",
+            "" => "Unknown",
             other => other,
         }
         .to_string();
@@ -1140,7 +1265,10 @@ fn parse_mysql_tabular_explain(rows: &[sqlx::mysql::MySqlRow]) -> (ExplainNode, 
         if let Some(f) = filtered {
             node_extra.insert(
                 "filtered".to_string(),
-                serde_json::Value::Number(serde_json::Number::from_f64(f).unwrap_or(serde_json::Number::from(0))),
+                serde_json::Value::Number(
+                    serde_json::Number::from_f64(f)
+                        .unwrap_or(serde_json::Number::from(0)),
+                ),
             );
         }
         if let Some(e) = &extra {
@@ -1157,7 +1285,7 @@ fn parse_mysql_tabular_explain(rows: &[sqlx::mysql::MySqlRow]) -> (ExplainNode, 
         children.push(ExplainNode {
             id: format!("node_{}", i + 1),
             node_type,
-            relation: Some(table),
+            relation: if table.is_empty() { None } else { Some(table) },
             startup_cost: None,
             total_cost: None,
             plan_rows: plan_rows.map(|r| r as f64),
@@ -1198,12 +1326,20 @@ fn parse_mysql_tabular_explain(rows: &[sqlx::mysql::MySqlRow]) -> (ExplainNode, 
     (root, raw_lines.join("\n"))
 }
 
+/// Parse a JSON value that might be a string number or a numeric value.
+fn parse_json_number(v: &serde_json::Value) -> Option<f64> {
+    v.as_f64()
+        .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+}
+
 fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> ExplainNode {
     let id = format!("node_{}", counter);
     *counter += 1;
 
     // Determine node type from the query block structure
-    let (node_type, relation, plan_rows, total_cost, filter) = if let Some(table) = block.get("table") {
+    let (node_type, relation, plan_rows, startup_cost, total_cost, filter) = if let Some(table) =
+        block.get("table")
+    {
         let access = table
             .get("access_type")
             .and_then(|v| v.as_str())
@@ -1219,28 +1355,75 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
             other => other,
         }
         .to_string();
-        let rel = table.get("table_name").and_then(|v| v.as_str()).map(String::from);
+        let rel = table
+            .get("table_name")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        // Rows: MySQL 8 uses rows_examined_per_scan, MariaDB uses rows
         let rows = table
             .get("rows_examined_per_scan")
-            .and_then(|v| v.as_f64());
-        let cost = table
-            .get("cost_info")
+            .and_then(|v| v.as_f64())
+            .or_else(|| table.get("rows").and_then(|v| v.as_f64()));
+
+        // Cost: MySQL 8 uses cost_info.prefix_cost / read_cost;
+        // MariaDB puts "cost" directly on the table object.
+        let cost_info = table.get("cost_info");
+        let startup = cost_info
             .and_then(|c| c.get("read_cost"))
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<f64>().ok());
+            .and_then(parse_json_number);
+        let total = cost_info
+            .and_then(|c| c.get("prefix_cost"))
+            .and_then(parse_json_number)
+            .or(startup)
+            .or_else(|| table.get("cost").and_then(parse_json_number));
+
         let filt = table
             .get("attached_condition")
             .and_then(|v| v.as_str())
             .map(String::from);
-        (node_type, rel, rows, cost, filt)
+        (node_type, rel, rows, startup, total, filt)
     } else {
-        ("Query Block".to_string(), None, None, None, None)
+        // Non-table node: detect operation type
+        let node_type = if block
+            .get("using_filesort")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            "Filesort".to_string()
+        } else if block.get("grouping_operation").is_some() {
+            "Group".to_string()
+        } else if block.get("duplicates_removal").is_some() {
+            "Duplicate Removal".to_string()
+        } else {
+            "Query Block".to_string()
+        };
+
+        // Extract cost from block-level cost_info (MySQL) or direct "cost" (MariaDB)
+        let cost_info = block.get("cost_info");
+        let total = cost_info
+            .and_then(|c| {
+                c.get("query_cost")
+                    .or_else(|| c.get("sort_cost"))
+                    .or_else(|| c.get("prefix_cost"))
+            })
+            .and_then(parse_json_number)
+            .or_else(|| block.get("cost").and_then(parse_json_number));
+
+        (node_type, None, None, None, total, None)
     };
 
     // Collect extra fields from the table object
     let known_keys: &[&str] = &[
-        "access_type", "table_name", "rows_examined_per_scan", "cost_info",
-        "attached_condition", "key", "possible_keys", "used_key_parts",
+        "access_type",
+        "table_name",
+        "rows_examined_per_scan",
+        "rows",
+        "cost_info",
+        "attached_condition",
+        "key",
+        "possible_keys",
+        "used_key_parts",
     ];
     let mut extra = std::collections::HashMap::new();
     if let Some(table) = block.get("table").and_then(|t| t.as_object()) {
@@ -1252,7 +1435,10 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
     }
     if let Some(table) = block.get("table") {
         if let Some(key) = table.get("key").and_then(|v| v.as_str()) {
-            extra.insert("key".to_string(), serde_json::Value::String(key.to_string()));
+            extra.insert(
+                "key".to_string(),
+                serde_json::Value::String(key.to_string()),
+            );
         }
     }
 
@@ -1279,13 +1465,19 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
         children.push(parse_mysql_query_block(dup_op, counter));
     }
 
-    if let Some(subqueries) = block.get("optimized_away_subqueries").and_then(|v| v.as_array()) {
+    if let Some(subqueries) = block
+        .get("optimized_away_subqueries")
+        .and_then(|v| v.as_array())
+    {
         for sq in subqueries {
             children.push(parse_mysql_query_block(sq, counter));
         }
     }
 
-    if let Some(attached) = block.get("attached_subqueries").and_then(|v| v.as_array()) {
+    if let Some(attached) = block
+        .get("attached_subqueries")
+        .and_then(|v| v.as_array())
+    {
         for sq in attached {
             children.push(parse_mysql_query_block(sq, counter));
         }
@@ -1297,16 +1489,34 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
         .and_then(|v| v.as_str())
         .map(String::from);
 
+    // MariaDB ANALYZE data: r_total_time_ms, r_rows, r_loops on the table object
+    let table_obj = block.get("table");
+    let actual_time_ms = table_obj
+        .and_then(|t| t.get("r_total_time_ms"))
+        .and_then(|v| v.as_f64());
+    let actual_rows = table_obj
+        .and_then(|t| t.get("r_rows"))
+        .and_then(|v| v.as_f64());
+    let actual_loops = table_obj
+        .and_then(|t| t.get("r_loops"))
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            table_obj
+                .and_then(|t| t.get("r_loops"))
+                .and_then(|v| v.as_f64())
+                .map(|f| f as u64)
+        });
+
     ExplainNode {
         id,
         node_type,
         relation,
-        startup_cost: None,
+        startup_cost,
         total_cost,
         plan_rows,
-        actual_rows: None,
-        actual_time_ms: None,
-        actual_loops: None,
+        actual_rows,
+        actual_time_ms,
+        actual_loops,
         buffers_hit: None,
         buffers_read: None,
         filter,
@@ -1315,6 +1525,343 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
         hash_condition: None,
         extra,
         children,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// EXPLAIN ANALYZE text parser (MySQL 8.0.18+)
+// ---------------------------------------------------------------------------
+
+struct AnalyzeParsedLine {
+    depth: usize,
+    node_type: String,
+    relation: Option<String>,
+    filter: Option<String>,
+    index_condition: Option<String>,
+    join_type: Option<String>,
+    est_cost: Option<f64>,
+    est_rows: Option<f64>,
+    actual_time_ms: Option<f64>,
+    actual_rows: Option<f64>,
+    actual_loops: Option<u64>,
+}
+
+/// Check recursively whether any node in the tree has actual analyze data.
+fn has_analyze_data_recursive(node: &ExplainNode) -> bool {
+    if node.actual_rows.is_some() || node.actual_time_ms.is_some() {
+        return true;
+    }
+    node.children.iter().any(has_analyze_data_recursive)
+}
+
+/// Parse MySQL EXPLAIN ANALYZE text output into a plan tree.
+///
+/// Each line looks like:
+/// `    -> Table scan on t1  (cost=1.25 rows=10) (actual time=0.045..0.145 rows=10 loops=1)`
+fn parse_mysql_analyze_text(text: &str, counter: &mut u32) -> ExplainNode {
+    let mut parsed_lines: Vec<AnalyzeParsedLine> = Vec::new();
+
+    for line in text.lines() {
+        let trimmed = line.trim_end();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Count leading spaces for depth (4 spaces = 1 level)
+        let leading = trimmed.len() - trimmed.trim_start().len();
+        let depth = leading / 4;
+
+        let content = trimmed.trim_start();
+
+        // Lines must start with "-> "
+        let desc_rest = match content.strip_prefix("-> ") {
+            Some(r) => r,
+            None => continue,
+        };
+
+        // Description ends at double-space-paren "  ("
+        let desc_end = desc_rest.find("  (").unwrap_or(desc_rest.len());
+        let description = &desc_rest[..desc_end];
+        let metrics = &desc_rest[desc_end..];
+
+        let (est_cost, est_rows) = parse_analyze_estimated(metrics);
+        let (actual_time_ms, actual_rows, actual_loops) = parse_analyze_actual(metrics);
+        let (node_type, relation, filter, index_condition, join_type) =
+            map_analyze_description(description);
+
+        parsed_lines.push(AnalyzeParsedLine {
+            depth,
+            node_type,
+            relation,
+            filter,
+            index_condition,
+            join_type,
+            est_cost,
+            est_rows,
+            actual_time_ms,
+            actual_rows,
+            actual_loops,
+        });
+    }
+
+    if parsed_lines.is_empty() {
+        let id = format!("node_{}", counter);
+        *counter += 1;
+        return ExplainNode {
+            id,
+            node_type: "Query".to_string(),
+            relation: None,
+            startup_cost: None,
+            total_cost: None,
+            plan_rows: None,
+            actual_rows: None,
+            actual_time_ms: None,
+            actual_loops: None,
+            buffers_hit: None,
+            buffers_read: None,
+            filter: None,
+            index_condition: None,
+            join_type: None,
+            hash_condition: None,
+            extra: std::collections::HashMap::new(),
+            children: vec![],
+        };
+    }
+
+    let (mut roots, _) = build_analyze_tree(&parsed_lines, 0, -1, counter);
+    if roots.len() == 1 {
+        roots.remove(0)
+    } else {
+        // Multiple roots — wrap in a Query node
+        let id = format!("node_{}", counter);
+        *counter += 1;
+        ExplainNode {
+            id,
+            node_type: "Query".to_string(),
+            relation: None,
+            startup_cost: None,
+            total_cost: None,
+            plan_rows: None,
+            actual_rows: None,
+            actual_time_ms: None,
+            actual_loops: None,
+            buffers_hit: None,
+            buffers_read: None,
+            filter: None,
+            index_condition: None,
+            join_type: None,
+            hash_condition: None,
+            extra: std::collections::HashMap::new(),
+            children: roots,
+        }
+    }
+}
+
+/// Recursively build a tree from parsed lines using indentation depth.
+fn build_analyze_tree(
+    lines: &[AnalyzeParsedLine],
+    start: usize,
+    parent_depth: i32,
+    counter: &mut u32,
+) -> (Vec<ExplainNode>, usize) {
+    let mut children = Vec::new();
+    let mut i = start;
+
+    while i < lines.len() {
+        let depth = lines[i].depth as i32;
+        if depth <= parent_depth {
+            break;
+        }
+
+        let id = format!("node_{}", counter);
+        *counter += 1;
+
+        let (grandchildren, next_i) = build_analyze_tree(lines, i + 1, depth, counter);
+
+        children.push(ExplainNode {
+            id,
+            node_type: lines[i].node_type.clone(),
+            relation: lines[i].relation.clone(),
+            startup_cost: None,
+            total_cost: lines[i].est_cost,
+            plan_rows: lines[i].est_rows,
+            actual_rows: lines[i].actual_rows,
+            actual_time_ms: lines[i].actual_time_ms,
+            actual_loops: lines[i].actual_loops,
+            buffers_hit: None,
+            buffers_read: None,
+            filter: lines[i].filter.clone(),
+            index_condition: lines[i].index_condition.clone(),
+            join_type: lines[i].join_type.clone(),
+            hash_condition: None,
+            extra: std::collections::HashMap::new(),
+            children: grandchildren,
+        });
+
+        i = next_i;
+    }
+
+    (children, i)
+}
+
+/// Extract estimated cost and rows from "(cost=X rows=Y)" section.
+fn parse_analyze_estimated(s: &str) -> (Option<f64>, Option<f64>) {
+    // Find "(cost=" that is NOT inside "(actual"
+    let idx = match s.find("(cost=") {
+        Some(i) => i,
+        None => return (None, None),
+    };
+    let section = &s[idx..];
+    let end = match section.find(')') {
+        Some(e) => e,
+        None => return (None, None),
+    };
+    let inner = &section[1..end]; // "cost=X rows=Y"
+    let mut cost = None;
+    let mut rows = None;
+    for part in inner.split_whitespace() {
+        if let Some(val) = part.strip_prefix("cost=") {
+            cost = val.parse().ok();
+        } else if let Some(val) = part.strip_prefix("rows=") {
+            rows = val.parse().ok();
+        }
+    }
+    (cost, rows)
+}
+
+/// Extract actual time, rows, loops from "(actual time=X..Y rows=Z loops=W)" section.
+fn parse_analyze_actual(s: &str) -> (Option<f64>, Option<f64>, Option<u64>) {
+    let idx = match s.find("(actual time=") {
+        Some(i) => i,
+        None => return (None, None, None),
+    };
+    let section = &s[idx..];
+    let end = match section.find(')') {
+        Some(e) => e,
+        None => return (None, None, None),
+    };
+    let inner = &section[1..end]; // "actual time=X..Y rows=Z loops=W"
+    let mut time_ms = None;
+    let mut rows = None;
+    let mut loops = None;
+    for part in inner.split_whitespace() {
+        if let Some(val) = part.strip_prefix("time=") {
+            // Use end time (after "..") as total time
+            if let Some(dot_pos) = val.find("..") {
+                time_ms = val[dot_pos + 2..].parse().ok();
+            } else {
+                time_ms = val.parse().ok();
+            }
+        } else if let Some(val) = part.strip_prefix("rows=") {
+            rows = val.parse().ok();
+        } else if let Some(val) = part.strip_prefix("loops=") {
+            loops = val.parse().ok();
+        }
+    }
+    (time_ms, rows, loops)
+}
+
+/// Map an EXPLAIN ANALYZE description to (node_type, relation, filter, index_condition, join_type).
+fn map_analyze_description(
+    desc: &str,
+) -> (
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
+    let lower = desc.to_lowercase();
+    let relation = extract_on_relation(desc);
+    let index_cond = extract_using_index(desc);
+
+    let (node_type, filter, join_type) = if lower.starts_with("table scan") {
+        ("Full Table Scan".into(), None, None)
+    } else if lower.starts_with("covering index scan") {
+        ("Index Only Scan".into(), None, None)
+    } else if lower.starts_with("index range scan") || lower.starts_with("range scan") {
+        ("Range Scan".into(), None, None)
+    } else if lower.starts_with("index scan") {
+        ("Index Scan".into(), None, None)
+    } else if lower.starts_with("single-row index lookup") {
+        ("Unique Index Lookup".into(), None, None)
+    } else if lower.starts_with("index lookup") || lower.starts_with("multi-range index lookup") {
+        ("Index Lookup".into(), None, None)
+    } else if lower.starts_with("constant row") {
+        ("Const Lookup".into(), None, None)
+    } else if lower.starts_with("nested loop") {
+        let jt = if lower.contains("inner") {
+            Some("Inner".into())
+        } else if lower.contains("left") {
+            Some("Left".into())
+        } else if lower.contains("semijoin") {
+            Some("Semi".into())
+        } else if lower.contains("antijoin") || lower.contains("anti") {
+            Some("Anti".into())
+        } else {
+            None
+        };
+        ("Nested Loop".into(), None, jt)
+    } else if lower.contains("hash join") {
+        let jt = if lower.contains("left") {
+            Some("Left".into())
+        } else {
+            Some("Inner".into())
+        };
+        ("Hash Join".into(), None, jt)
+    } else if lower.starts_with("filter:") {
+        let filt = desc
+            .get(7..)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        ("Filter".into(), filt, None)
+    } else if lower.starts_with("sort:") || lower.starts_with("sort row") {
+        ("Sort".into(), None, None)
+    } else if lower.starts_with("limit:") || lower.starts_with("limit ") {
+        ("Limit".into(), None, None)
+    } else if lower.starts_with("group aggregate") || lower.starts_with("aggregate") {
+        ("Aggregate".into(), None, None)
+    } else if lower.starts_with("temporary table") || lower.starts_with("materialize") {
+        ("Materialize".into(), None, None)
+    } else if lower.starts_with("stream results") || lower.starts_with("stream") {
+        ("Stream".into(), None, None)
+    } else if lower.starts_with("window aggregate") || lower.starts_with("window") {
+        ("Window".into(), None, None)
+    } else {
+        (desc.to_string(), None, None)
+    };
+
+    (node_type, relation, filter, index_cond, join_type)
+}
+
+/// Extract table/relation name from "... on <table> ..." pattern.
+fn extract_on_relation(desc: &str) -> Option<String> {
+    let pos = desc.find(" on ")?;
+    let after = &desc[pos + 4..];
+    let end = after
+        .find(|c: char| c == ' ' || c == '(')
+        .unwrap_or(after.len());
+    let name = after[..end].trim();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_string())
+    }
+}
+
+/// Extract index name from "... using <index> ..." pattern.
+fn extract_using_index(desc: &str) -> Option<String> {
+    let lower = desc.to_lowercase();
+    let pos = lower.find(" using ")?;
+    let after = &desc[pos + 7..];
+    let end = after
+        .find(|c: char| c == ' ' || c == '(')
+        .unwrap_or(after.len());
+    let name = after[..end].trim();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_string())
     }
 }
 
