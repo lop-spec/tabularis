@@ -1332,6 +1332,194 @@ fn parse_json_number(v: &serde_json::Value) -> Option<f64> {
         .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
 }
 
+/// Parse a MariaDB `filesort` JSON object into an ExplainNode.
+///
+/// MariaDB ANALYZE FORMAT=JSON emits `"filesort": { sort_key, r_total_time_ms,
+/// temporary_table | nested_loop, … }` as a nested object — unlike MySQL which
+/// uses the boolean flag `"using_filesort": true`.
+fn parse_mariadb_filesort(filesort: &serde_json::Value, counter: &mut u32) -> ExplainNode {
+    let id = format!("node_{}", counter);
+    *counter += 1;
+
+    let actual_time_ms = filesort.get("r_total_time_ms").and_then(|v| v.as_f64());
+    let actual_rows = filesort.get("r_output_rows").and_then(|v| v.as_f64());
+    let actual_loops = filesort
+        .get("r_loops")
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            filesort
+                .get("r_loops")
+                .and_then(|v| v.as_f64())
+                .map(|f| f as u64)
+        });
+
+    let mut extra = std::collections::HashMap::new();
+    for key in &["sort_key", "r_sort_mode", "r_buffer_size"] {
+        if let Some(val) = filesort.get(*key) {
+            extra.insert(key.to_string(), val.clone());
+        }
+    }
+
+    let mut children = Vec::new();
+    if let Some(tmp_tbl) = filesort.get("temporary_table") {
+        children.push(parse_mariadb_temporary_table(tmp_tbl, counter));
+    }
+    if let Some(nested_loop) = filesort.get("nested_loop").and_then(|v| v.as_array()) {
+        for item in nested_loop {
+            children.push(parse_mysql_query_block(item, counter));
+        }
+    }
+    if let Some(order_op) = filesort.get("ordering_operation") {
+        children.push(parse_mysql_query_block(order_op, counter));
+    }
+
+    ExplainNode {
+        id,
+        node_type: "Filesort".to_string(),
+        relation: None,
+        startup_cost: None,
+        total_cost: None,
+        plan_rows: None,
+        actual_rows,
+        actual_time_ms,
+        actual_loops,
+        buffers_hit: None,
+        buffers_read: None,
+        filter: None,
+        index_condition: None,
+        join_type: None,
+        hash_condition: None,
+        extra,
+        children,
+    }
+}
+
+/// Parse a MariaDB `temporary_table` JSON wrapper into an ExplainNode.
+///
+/// MariaDB wraps `nested_loop` (and sometimes `filesort`) inside a
+/// `"temporary_table": { … }` object when a temp table is materialised.
+fn parse_mariadb_temporary_table(
+    tmp_tbl: &serde_json::Value,
+    counter: &mut u32,
+) -> ExplainNode {
+    let id = format!("node_{}", counter);
+    *counter += 1;
+
+    let mut children = Vec::new();
+    if let Some(nested_loop) = tmp_tbl.get("nested_loop").and_then(|v| v.as_array()) {
+        for item in nested_loop {
+            children.push(parse_mysql_query_block(item, counter));
+        }
+    }
+    if let Some(filesort) = tmp_tbl.get("filesort") {
+        children.push(parse_mariadb_filesort(filesort, counter));
+    }
+
+    ExplainNode {
+        id,
+        node_type: "Temporary Table".to_string(),
+        relation: None,
+        startup_cost: None,
+        total_cost: None,
+        plan_rows: None,
+        actual_rows: None,
+        actual_time_ms: None,
+        actual_loops: None,
+        buffers_hit: None,
+        buffers_read: None,
+        filter: None,
+        index_condition: None,
+        join_type: None,
+        hash_condition: None,
+        extra: std::collections::HashMap::new(),
+        children,
+    }
+}
+
+/// Generic parser for MariaDB wrapper nodes (materialized, union_result,
+/// buffer_result, window_functions_computation, expression_cache,
+/// read_sorted_file).  These share a common pattern: an object that may
+/// contain nested_loop, table, filesort, query_specifications, or other
+/// recursive structures.
+fn parse_mariadb_wrapper(
+    obj: &serde_json::Value,
+    label: &str,
+    counter: &mut u32,
+) -> ExplainNode {
+    let id = format!("node_{}", counter);
+    *counter += 1;
+
+    let actual_time_ms = obj.get("r_total_time_ms").and_then(|v| v.as_f64());
+    let actual_rows = obj
+        .get("r_rows")
+        .or_else(|| obj.get("r_output_rows"))
+        .and_then(|v| v.as_f64());
+    let actual_loops = obj
+        .get("r_loops")
+        .and_then(|v| v.as_u64())
+        .or_else(|| obj.get("r_loops").and_then(|v| v.as_f64()).map(|f| f as u64));
+
+    let mut children = Vec::new();
+
+    // The wrapper may directly contain a table
+    if obj.get("table").is_some() {
+        children.push(parse_mysql_query_block(obj, counter));
+    }
+
+    if let Some(nl) = obj.get("nested_loop").and_then(|v| v.as_array()) {
+        for item in nl {
+            children.push(parse_mysql_query_block(item, counter));
+        }
+    }
+    if let Some(fs) = obj.get("filesort") {
+        if fs.is_object() {
+            children.push(parse_mariadb_filesort(fs, counter));
+        }
+    }
+    if let Some(tmp) = obj.get("temporary_table") {
+        children.push(parse_mariadb_temporary_table(tmp, counter));
+    }
+    if let Some(qb) = obj.get("query_block") {
+        children.push(parse_mysql_query_block(qb, counter));
+    }
+    if let Some(specs) = obj.get("query_specifications").and_then(|v| v.as_array()) {
+        for spec in specs {
+            children.push(parse_mysql_query_block(spec, counter));
+        }
+    }
+    if let Some(order_op) = obj.get("ordering_operation") {
+        children.push(parse_mysql_query_block(order_op, counter));
+    }
+    if let Some(group_op) = obj.get("grouping_operation") {
+        children.push(parse_mysql_query_block(group_op, counter));
+    }
+    if let Some(subs) = obj.get("attached_subqueries").and_then(|v| v.as_array()) {
+        for sq in subs {
+            children.push(parse_mysql_query_block(sq, counter));
+        }
+    }
+
+    ExplainNode {
+        id,
+        node_type: label.to_string(),
+        relation: None,
+        startup_cost: None,
+        total_cost: obj.get("cost").and_then(parse_json_number),
+        plan_rows: None,
+        actual_rows,
+        actual_time_ms,
+        actual_loops,
+        buffers_hit: None,
+        buffers_read: None,
+        filter: None,
+        index_condition: None,
+        join_type: None,
+        hash_condition: None,
+        extra: std::collections::HashMap::new(),
+        children,
+    }
+}
+
 fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> ExplainNode {
     let id = format!("node_{}", counter);
     *counter += 1;
@@ -1384,7 +1572,7 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
             .map(String::from);
         (node_type, rel, rows, startup, total, filt)
     } else {
-        // Non-table node: detect operation type
+        // Non-table node: detect operation type from child keys
         let node_type = if block
             .get("using_filesort")
             .and_then(|v| v.as_bool())
@@ -1395,6 +1583,10 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
             "Group".to_string()
         } else if block.get("duplicates_removal").is_some() {
             "Duplicate Removal".to_string()
+        } else if block.get("having_condition").is_some() {
+            "Having Filter".to_string()
+        } else if block.get("window_functions_computation").is_some() {
+            "Window Functions".to_string()
         } else {
             "Query Block".to_string()
         };
@@ -1410,7 +1602,12 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
             .and_then(parse_json_number)
             .or_else(|| block.get("cost").and_then(parse_json_number));
 
-        (node_type, None, None, None, total, None)
+        let filt = block
+            .get("having_condition")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        (node_type, None, None, None, total, filt)
     };
 
     // Collect extra fields from the table object
@@ -1483,26 +1680,99 @@ fn parse_mysql_query_block(block: &serde_json::Value, counter: &mut u32) -> Expl
         }
     }
 
+    // MariaDB: filesort as nested object (not the boolean using_filesort flag)
+    if let Some(filesort) = block.get("filesort") {
+        if filesort.is_object() {
+            children.push(parse_mariadb_filesort(filesort, counter));
+        }
+    }
+
+    // MariaDB: temporary_table wrapper around nested_loop
+    if let Some(tmp_tbl) = block.get("temporary_table") {
+        children.push(parse_mariadb_temporary_table(tmp_tbl, counter));
+    }
+
+    // MariaDB: materialized subquery (e.g. IN (SELECT …) materialised as temp table)
+    if let Some(mat) = block.get("materialized") {
+        children.push(parse_mariadb_wrapper(mat, "Materialized Subquery", counter));
+    }
+
+    // MariaDB / MySQL: union_result — combines rows from UNION branches
+    if let Some(union_res) = block.get("union_result") {
+        children.push(parse_mariadb_wrapper(union_res, "Union Result", counter));
+    }
+
+    // MariaDB: buffer_result (SQL_BUFFER_RESULT hint)
+    if let Some(buf) = block.get("buffer_result") {
+        children.push(parse_mariadb_wrapper(buf, "Buffer Result", counter));
+    }
+
+    // MariaDB: window_functions_computation (window functions)
+    if let Some(wf) = block.get("window_functions_computation") {
+        children.push(parse_mariadb_wrapper(wf, "Window Functions", counter));
+    }
+
+    // MariaDB: expression_cache (cached subquery results)
+    if let Some(ec) = block.get("expression_cache") {
+        children.push(parse_mariadb_wrapper(ec, "Expression Cache", counter));
+    }
+
+    // MariaDB: read_sorted_file (after filesort writes to disk)
+    if let Some(rsf) = block.get("read_sorted_file") {
+        children.push(parse_mariadb_wrapper(rsf, "Read Sorted File", counter));
+    }
+
+    // MariaDB: query_specifications inside union_result
+    if let Some(specs) = block.get("query_specifications").and_then(|v| v.as_array()) {
+        for spec in specs {
+            children.push(parse_mysql_query_block(spec, counter));
+        }
+    }
+
     let index_condition = block
         .get("table")
         .and_then(|t| t.get("key"))
         .and_then(|v| v.as_str())
         .map(String::from);
 
-    // MariaDB ANALYZE data: r_total_time_ms, r_rows, r_loops on the table object
+    // MariaDB ANALYZE data: r_total_time_ms, r_rows, r_loops.
+    // Table objects may use r_table_time_ms + r_other_time_ms instead of
+    // r_total_time_ms. Non-table nodes (query_block) carry these at block level.
     let table_obj = block.get("table");
     let actual_time_ms = table_obj
         .and_then(|t| t.get("r_total_time_ms"))
-        .and_then(|v| v.as_f64());
+        .and_then(|v| v.as_f64())
+        .or_else(|| {
+            // MariaDB tables: r_table_time_ms + r_other_time_ms
+            let tbl = table_obj?;
+            let table_ms = tbl.get("r_table_time_ms").and_then(|v| v.as_f64());
+            let other_ms = tbl.get("r_other_time_ms").and_then(|v| v.as_f64());
+            match (table_ms, other_ms) {
+                (Some(t), Some(o)) => Some(t + o),
+                (Some(t), None) => Some(t),
+                _ => None,
+            }
+        })
+        // Fallback: block-level r_total_time_ms (non-table nodes)
+        .or_else(|| block.get("r_total_time_ms").and_then(|v| v.as_f64()));
     let actual_rows = table_obj
         .and_then(|t| t.get("r_rows"))
-        .and_then(|v| v.as_f64());
+        .and_then(|v| v.as_f64())
+        .or_else(|| block.get("r_rows").and_then(|v| v.as_f64()));
     let actual_loops = table_obj
         .and_then(|t| t.get("r_loops"))
         .and_then(|v| v.as_u64())
         .or_else(|| {
             table_obj
                 .and_then(|t| t.get("r_loops"))
+                .and_then(|v| v.as_f64())
+                .map(|f| f as u64)
+        })
+        // Fallback: block-level r_loops
+        .or_else(|| block.get("r_loops").and_then(|v| v.as_u64()))
+        .or_else(|| {
+            block
+                .get("r_loops")
                 .and_then(|v| v.as_f64())
                 .map(|f| f as u64)
         });
@@ -2239,5 +2509,314 @@ impl DatabaseDriver for MysqlDriver {
             columns: columns_map.remove(&t.name).unwrap_or_default(),
             foreign_keys: fks_map.remove(&t.name).unwrap_or_default(),
         }).collect())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: parse a MariaDB ANALYZE FORMAT=JSON string and return the root node.
+    fn parse_json(json: &str) -> ExplainNode {
+        let val: serde_json::Value = serde_json::from_str(json).expect("invalid JSON");
+        let qb = val.get("query_block").expect("missing query_block");
+        let mut counter = 0u32;
+        parse_mysql_query_block(qb, &mut counter)
+    }
+
+    /// Helper: flatten a tree into a vec in pre-order.
+    fn flatten(node: &ExplainNode) -> Vec<&ExplainNode> {
+        let mut out = vec![node];
+        for child in &node.children {
+            out.extend(flatten(child));
+        }
+        out
+    }
+
+    // -- MariaDB filesort → temporary_table → nested_loop → table ------------
+
+    #[test]
+    fn test_mariadb_filesort_temporary_table() {
+        let root = parse_json(r#"{
+            "query_block": {
+                "select_id": 1,
+                "cost": 0.87,
+                "r_loops": 1,
+                "r_total_time_ms": 3.22,
+                "filesort": {
+                    "sort_key": "count(0) desc",
+                    "r_loops": 1,
+                    "r_total_time_ms": 0.02,
+                    "r_output_rows": 4,
+                    "r_buffer_size": "360",
+                    "r_sort_mode": "sort_key,rowid",
+                    "temporary_table": {
+                        "nested_loop": [
+                            {
+                                "table": {
+                                    "table_name": "audit_log",
+                                    "access_type": "ALL",
+                                    "rows": 5131,
+                                    "r_rows": 5146,
+                                    "cost": 0.87,
+                                    "r_table_time_ms": 1.77,
+                                    "r_other_time_ms": 1.41,
+                                    "attached_condition": "audit_log.`action` = 'login'"
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }"#);
+
+        let nodes = flatten(&root);
+        assert_eq!(nodes.len(), 4, "expected 4 nodes: QueryBlock → Filesort → TempTable → TableScan");
+
+        // Root: Query Block with block-level timing
+        assert_eq!(root.node_type, "Query Block");
+        assert!((root.total_cost.unwrap() - 0.87).abs() < 0.01);
+        assert!((root.actual_time_ms.unwrap() - 3.22).abs() < 0.01);
+
+        // Filesort with sort_key extra
+        let filesort = &root.children[0];
+        assert_eq!(filesort.node_type, "Filesort");
+        assert!((filesort.actual_time_ms.unwrap() - 0.02).abs() < 0.01);
+        assert_eq!(
+            filesort.extra.get("sort_key").and_then(|v| v.as_str()),
+            Some("count(0) desc")
+        );
+
+        // Temporary Table
+        let tmp = &filesort.children[0];
+        assert_eq!(tmp.node_type, "Temporary Table");
+
+        // Table scan with r_table_time_ms + r_other_time_ms
+        let scan = &tmp.children[0];
+        assert_eq!(scan.node_type, "Full Table Scan");
+        assert_eq!(scan.relation.as_deref(), Some("audit_log"));
+        assert!((scan.plan_rows.unwrap() - 5131.0).abs() < 0.1);
+        assert!((scan.actual_rows.unwrap() - 5146.0).abs() < 0.1);
+        assert_eq!(
+            scan.filter.as_deref(),
+            Some("audit_log.`action` = 'login'")
+        );
+        // r_table_time_ms(1.77) + r_other_time_ms(1.41) = 3.18
+        assert!((scan.actual_time_ms.unwrap() - 3.18).abs() < 0.01);
+    }
+
+    // -- Simple table scan without wrappers ------------------------------------
+
+    #[test]
+    fn test_simple_table_scan() {
+        let root = parse_json(r#"{
+            "query_block": {
+                "select_id": 1,
+                "table": {
+                    "table_name": "users",
+                    "access_type": "ALL",
+                    "rows": 1000,
+                    "filtered": 100,
+                    "r_rows": 998,
+                    "r_total_time_ms": 0.5
+                }
+            }
+        }"#);
+
+        assert_eq!(root.node_type, "Full Table Scan");
+        assert_eq!(root.relation.as_deref(), Some("users"));
+        assert!((root.plan_rows.unwrap() - 1000.0).abs() < 0.1);
+        assert!((root.actual_time_ms.unwrap() - 0.5).abs() < 0.01);
+    }
+
+    // -- Nested loop join (two tables) ----------------------------------------
+
+    #[test]
+    fn test_nested_loop_join() {
+        let root = parse_json(r#"{
+            "query_block": {
+                "select_id": 1,
+                "cost": 5.0,
+                "nested_loop": [
+                    {
+                        "table": {
+                            "table_name": "orders",
+                            "access_type": "ALL",
+                            "rows": 100
+                        }
+                    },
+                    {
+                        "table": {
+                            "table_name": "items",
+                            "access_type": "ref",
+                            "rows": 5
+                        }
+                    }
+                ]
+            }
+        }"#);
+
+        assert_eq!(root.node_type, "Query Block");
+        assert_eq!(root.children.len(), 2);
+        assert_eq!(root.children[0].relation.as_deref(), Some("orders"));
+        assert_eq!(root.children[0].node_type, "Full Table Scan");
+        assert_eq!(root.children[1].relation.as_deref(), Some("items"));
+        assert_eq!(root.children[1].node_type, "Index Lookup");
+    }
+
+    // -- Materialized subquery -------------------------------------------------
+
+    #[test]
+    fn test_materialized_subquery() {
+        let root = parse_json(r#"{
+            "query_block": {
+                "select_id": 1,
+                "nested_loop": [
+                    {
+                        "table": {
+                            "table_name": "orders",
+                            "access_type": "ALL",
+                            "rows": 100
+                        }
+                    }
+                ],
+                "materialized": {
+                    "query_block": {
+                        "select_id": 2,
+                        "table": {
+                            "table_name": "big_lookup",
+                            "access_type": "ALL",
+                            "rows": 50000
+                        }
+                    }
+                }
+            }
+        }"#);
+
+        let nodes = flatten(&root);
+        // QueryBlock → orders (from nested_loop) + Materialized → QueryBlock → big_lookup
+        assert_eq!(nodes.len(), 4);
+
+        let mat = nodes.iter().find(|n| n.node_type == "Materialized Subquery");
+        assert!(mat.is_some(), "should have Materialized Subquery node");
+
+        let big = nodes.iter().find(|n| n.relation.as_deref() == Some("big_lookup"));
+        assert!(big.is_some(), "should have big_lookup table");
+    }
+
+    // -- Union result ---------------------------------------------------------
+
+    #[test]
+    fn test_union_result() {
+        let root = parse_json(r#"{
+            "query_block": {
+                "select_id": 1,
+                "union_result": {
+                    "table_name": "<union1,2>",
+                    "access_type": "ALL",
+                    "r_loops": 1,
+                    "r_total_time_ms": 0.5,
+                    "query_specifications": [
+                        {
+                            "query_block": {
+                                "select_id": 1,
+                                "table": {
+                                    "table_name": "users",
+                                    "access_type": "ALL",
+                                    "rows": 100
+                                }
+                            }
+                        },
+                        {
+                            "query_block": {
+                                "select_id": 2,
+                                "table": {
+                                    "table_name": "admins",
+                                    "access_type": "ALL",
+                                    "rows": 10
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }"#);
+
+        let nodes = flatten(&root);
+        let union = nodes.iter().find(|n| n.node_type == "Union Result");
+        assert!(union.is_some(), "should have Union Result node");
+        let u = union.unwrap();
+        assert!((u.actual_time_ms.unwrap() - 0.5).abs() < 0.01);
+        // Union result should have 2 children (the query_specifications)
+        assert_eq!(u.children.len(), 2);
+    }
+
+    // -- Having condition -----------------------------------------------------
+
+    #[test]
+    fn test_having_condition() {
+        let root = parse_json(r#"{
+            "query_block": {
+                "select_id": 1,
+                "cost": 1.5,
+                "having_condition": "cnt > 5",
+                "filesort": {
+                    "sort_key": "cnt desc",
+                    "r_loops": 1,
+                    "r_total_time_ms": 0.01,
+                    "temporary_table": {
+                        "nested_loop": [
+                            {
+                                "table": {
+                                    "table_name": "events",
+                                    "access_type": "ALL",
+                                    "rows": 500
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }"#);
+
+        // Root should be "Having Filter" because having_condition is present
+        assert_eq!(root.node_type, "Having Filter");
+        assert_eq!(root.filter.as_deref(), Some("cnt > 5"));
+    }
+
+    // -- MariaDB filesort directly wrapping nested_loop (no temp table) -------
+
+    #[test]
+    fn test_filesort_without_temporary_table() {
+        let root = parse_json(r#"{
+            "query_block": {
+                "select_id": 1,
+                "filesort": {
+                    "sort_key": "t.name",
+                    "r_loops": 1,
+                    "r_total_time_ms": 0.1,
+                    "nested_loop": [
+                        {
+                            "table": {
+                                "table_name": "t",
+                                "access_type": "range",
+                                "rows": 50
+                            }
+                        }
+                    ]
+                }
+            }
+        }"#);
+
+        assert_eq!(root.node_type, "Query Block");
+        let filesort = &root.children[0];
+        assert_eq!(filesort.node_type, "Filesort");
+        assert_eq!(filesort.children.len(), 1);
+        assert_eq!(filesort.children[0].node_type, "Range Scan");
+        assert_eq!(filesort.children[0].relation.as_deref(), Some("t"));
     }
 }
