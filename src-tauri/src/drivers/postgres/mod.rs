@@ -866,41 +866,6 @@ pub async fn insert_record(
     execute(&pool, &query, &params).await
 }
 
-/// Extracts ORDER BY clause from a SQL query (case-insensitive),
-/// stopping before any trailing LIMIT/OFFSET so they stay with the subquery.
-fn extract_order_by(query: &str) -> String {
-    let query_upper = query.to_uppercase();
-    if let Some(pos) = query_upper.rfind("ORDER BY") {
-        let after_order = &query[pos..];
-        let upper_after = after_order.to_uppercase();
-        if let Some(limit_pos) = upper_after.find("LIMIT") {
-            after_order[..limit_pos].trim().to_string()
-        } else {
-            after_order.trim().to_string()
-        }
-    } else {
-        String::new()
-    }
-}
-
-/// Removes ORDER BY clause from a SQL query, preserving any trailing
-/// LIMIT/OFFSET that the user wrote.
-fn remove_order_by(query: &str) -> String {
-    let query_upper = query.to_uppercase();
-    if let Some(pos) = query_upper.rfind("ORDER BY") {
-        let before = query[..pos].trim();
-        let after_order = &query[pos..];
-        let upper_after = after_order.to_uppercase();
-        if let Some(limit_pos) = upper_after.find("LIMIT") {
-            let suffix = after_order[limit_pos..].trim();
-            format!("{} {}", before, suffix)
-        } else {
-            before.to_string()
-        }
-    } else {
-        query.to_string()
-    }
-}
 
 pub async fn get_table_ddl(
     params: &ConnectionParams,
@@ -957,26 +922,8 @@ pub async fn execute_query(
     // No COUNT query is issued; total_rows stays None until explicitly requested.
     let (final_query, pagination_meta) = if is_select && limit.is_some() {
         let l = limit.unwrap();
-        let offset = (page - 1) * l;
 
-        let order_by_clause = extract_order_by(query);
-        let data_query = if !order_by_clause.is_empty() {
-            let query_without_order = remove_order_by(query);
-            format!(
-                "SELECT * FROM ({}) as data_wrapper {} LIMIT {} OFFSET {}",
-                query_without_order,
-                order_by_clause,
-                l + 1,
-                offset
-            )
-        } else {
-            format!(
-                "SELECT * FROM ({}) as data_wrapper LIMIT {} OFFSET {}",
-                query,
-                l + 1,
-                offset
-            )
-        };
+        let data_query = crate::drivers::common::build_paginated_query(query, l, page);
 
         manual_limit = None;
         (data_query, Some((l, page)))
