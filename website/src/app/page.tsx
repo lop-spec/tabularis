@@ -18,6 +18,45 @@ import { CarouselGrid } from "@/components/CarouselGrid";
 const GITHUB_EDIT_HOME_URL =
   "https://github.com/debba/tabularis/edit/main/website/content/home.md";
 
+const SEO_ENTRY_POINTS = [
+  {
+    href: "/solutions/postgresql-client",
+    title: "PostgreSQL Client",
+    excerpt:
+      "A developer-focused PostgreSQL workflow with SQL editing, schema tools, SSH, and notebooks.",
+  },
+  {
+    href: "/solutions/sql-notebooks",
+    title: "SQL Notebooks",
+    excerpt:
+      "Reusable SQL analysis with cells, markdown, inline charts, and parameters.",
+  },
+  {
+    href: "/solutions/mcp-database-client",
+    title: "MCP Database Client",
+    excerpt:
+      "A local database workflow for Claude, Cursor, and other MCP-compatible AI tools.",
+  },
+  {
+    href: "/compare/dbeaver-alternative",
+    title: "DBeaver Alternative",
+    excerpt:
+      "A focused comparison for developers evaluating a more modern open-source SQL workflow.",
+  },
+  {
+    href: "/solutions/open-source-database-client-linux",
+    title: "Database Client for Linux",
+    excerpt:
+      "An open-source desktop workflow for Linux users who want SQL editing, SSH, and cross-platform parity.",
+  },
+  {
+    href: "/solutions/sqlite-client-for-developers",
+    title: "SQLite Client",
+    excerpt:
+      "A stronger desktop workflow for SQLite-based apps, prototypes, migrations, and local debugging.",
+  },
+];
+
 // Helper to parse home.md into sections
 function getHomeContent() {
   const filePath = path.join(process.cwd(), "content", "home.md");
@@ -536,6 +575,23 @@ export default function HomePage() {
             </div>
           </article>
         </CarouselGrid>
+      </section>
+
+      <section className="section">
+        <h2>_explore_by_intent</h2>
+        <p>
+          Start from the workflow you actually care about: PostgreSQL work,
+          reusable SQL analysis, AI-native database tooling, or tool
+          comparisons.
+        </p>
+        <div className="wiki-index-grid" style={{ marginTop: "1.5rem" }}>
+          {SEO_ENTRY_POINTS.map((entry) => (
+            <Link key={entry.href} href={entry.href} className="wiki-index-card">
+              <span className="wiki-index-card-title">{entry.title}</span>
+              <span className="wiki-index-card-excerpt">{entry.excerpt}</span>
+            </Link>
+          ))}
+        </div>
       </section>
 
       {/* PLUGINS */}

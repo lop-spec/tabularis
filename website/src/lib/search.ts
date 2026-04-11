@@ -15,7 +15,7 @@ const SCHEMA = {
 } as const;
 
 export interface SearchDoc {
-  type: "post" | "wiki" | "plugin";
+  type: "post" | "wiki" | "plugin" | "page";
   slug: string;
   title: string;
   body: string;
@@ -43,7 +43,7 @@ async function getDb(): Promise<Orama<typeof SCHEMA>> {
 
 export async function searchIndex(
   term: string,
-  filterType?: "post" | "wiki" | "plugin",
+  filterType?: "post" | "wiki" | "plugin" | "page",
 ): Promise<Results<Orama<typeof SCHEMA>>> {
   const db = await getDb();
   return oramaSearch(db, {

@@ -1321,6 +1321,18 @@ pre {
   margin-bottom: 1rem;
 }
 
+.seo-content-box {
+  margin-top: 0;
+}
+
+.seo-content-box .post-content {
+  max-width: none;
+}
+
+.seo-content-box .post-content > :first-child {
+  margin-top: 0;
+}
+
 /* SPONSORS */
 .sponsors-grid {
   display: grid;

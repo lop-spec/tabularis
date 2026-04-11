@@ -6,6 +6,7 @@ import { create, insert, save } from "@orama/orama";
 const CONTENT_DIR = path.join(process.cwd(), "content");
 const WIKI_DIR = path.join(CONTENT_DIR, "wiki");
 const POSTS_DIR = path.join(CONTENT_DIR, "posts");
+const SEO_DIR = path.join(CONTENT_DIR, "seo");
 const REGISTRY_PATH = path.join(process.cwd(), "..", "plugins", "registry.json");
 const OUT_PATH = path.join(process.cwd(), "public", "search-index.json");
 
@@ -80,6 +81,29 @@ if (fs.existsSync(POSTS_DIR)) {
   }
 }
 
+// SEO pages
+if (fs.existsSync(SEO_DIR)) {
+  const files = fs.readdirSync(SEO_DIR).filter((f) => f.endsWith(".md"));
+  for (const file of files) {
+    const slug = file.replace(/\.md$/, "");
+    const raw = fs.readFileSync(path.join(SEO_DIR, file), "utf-8");
+    const { data, content } = matter(raw);
+    const section = data.section ?? "solutions";
+    insert(db, {
+      type: "page",
+      slug,
+      title: data.title ?? "",
+      body: stripMarkdown(content),
+      excerpt: data.excerpt ?? "",
+      meta: section === "compare" ? "Compare" : "Solutions",
+      badge: "",
+      url: `/${section}/${slug}`,
+      category: section,
+      tags: "",
+    });
+  }
+}
+
 // Plugins
 if (fs.existsSync(REGISTRY_PATH)) {
   try {
@@ -106,14 +130,15 @@ if (fs.existsSync(REGISTRY_PATH)) {
 const serialized = save(db);
 fs.writeFileSync(OUT_PATH, JSON.stringify(serialized));
 
-const stats = { wiki: 0, post: 0, plugin: 0 };
+const stats = { wiki: 0, post: 0, plugin: 0, page: 0 };
 const docs = serialized.docs?.docs ?? {};
 for (const doc of Object.values(docs)) {
   if (doc?.type) stats[doc.type]++;
 }
 console.log(
-  "Generated search-index.json: %d wiki, %d posts, %d plugins",
+  "Generated search-index.json: %d wiki, %d posts, %d plugins, %d pages",
   stats.wiki,
   stats.post,
   stats.plugin,
+  stats.page,
 );

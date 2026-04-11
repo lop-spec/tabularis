@@ -5,6 +5,7 @@ import { Footer } from "@/components/Footer";
 import { DownloadInline } from "@/components/DownloadInline";
 import { APP_VERSION } from "@/lib/version";
 import { OG_IMAGE_URL } from "@/lib/siteConfig";
+import { getReleaseDate, formatDate } from "@/lib/posts";
 
 export const metadata: Metadata = {
   title: "Download | Tabularis",
@@ -29,10 +30,9 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadPage() {
-  const releaseDate = new Date("2026-03-14T12:00:00Z").toLocaleDateString(
-    "en-US",
-    { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" },
-  );
+  const rawDate = getReleaseDate(APP_VERSION);
+  const isoDate = rawDate?.slice(0, 10) ?? "";
+  const releaseDate = rawDate ? formatDate(rawDate) : "";
 
   return (
     <div className="container">
@@ -44,7 +44,7 @@ export default function DownloadPage() {
           <div className="dl-page-meta">
             <h1 className="dl-page-version">v{APP_VERSION}</h1>
             <div className="dl-page-submeta">
-              <time dateTime="2026-03-14">{releaseDate}</time>
+              {releaseDate && <time dateTime={isoDate}>{releaseDate}</time>}
               <span className="dl-page-sep">·</span>
               <Link href="/changelog" className="dl-page-changelog-link">
                 View changelog →
@@ -70,6 +70,12 @@ export default function DownloadPage() {
           >
             All releases →
           </a>
+          <Link href="/solutions/postgresql-client">
+            PostgreSQL client guide →
+          </Link>
+          <Link href="/solutions/sql-notebooks">
+            SQL notebooks guide →
+          </Link>
         </div>
       </section>
 
