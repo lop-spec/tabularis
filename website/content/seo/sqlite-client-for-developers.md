@@ -5,6 +5,9 @@ order: 6
 excerpt: "A lightweight desktop workflow for developers who use SQLite for local apps, prototypes, tooling, and embedded products."
 description: "Explore Tabularis as a SQLite client for developers who want local SQL editing, schema browsing, data inspection, and reusable notebook workflows."
 image: "/img/tabularis-sql-editor-data-grid.png"
+audience: "App developers"
+useCase: "SQLite workflows"
+format: "Guide"
 ---
 
 # SQLite Client for Developers

@@ -5,6 +5,9 @@ order: 2
 excerpt: "A notebook workflow for SQL analysis with cells, markdown, inline charts, parameters, and reusable query context."
 description: "Explore Tabularis SQL notebooks for analysts and developers who want a local notebook workflow built around SQL, markdown, parameters, and inline charts."
 image: "/img/posts/tabularis-notebook-sql-cell-pie-chart-data-grid.png"
+audience: "Analysts & developers"
+useCase: "Reusable SQL analysis"
+format: "Guide"
 ---
 
 # SQL Notebooks for Database Analysis

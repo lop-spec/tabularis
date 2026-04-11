@@ -5,6 +5,9 @@ order: 1
 excerpt: "A developer-focused PostgreSQL desktop client with SQL editing, notebooks, schema tools, SSH, and local AI workflows."
 description: "Explore Tabularis as a PostgreSQL client for developers who want a local desktop workflow with SQL editing, schema inspection, notebooks, SSH tunneling, and MCP support."
 image: "/img/tabularis-connection-manager.png"
+audience: "Developers"
+useCase: "PostgreSQL workflow"
+format: "Guide"
 ---
 
 # PostgreSQL Client for Developers

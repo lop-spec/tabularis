@@ -5,6 +5,9 @@ order: 3
 excerpt: "Use Tabularis as a local database client and MCP bridge so AI tools can inspect schema and run SQL through a real desktop app."
 description: "Explore Tabularis as an MCP-enabled database client for local AI workflows with Claude, Cursor, and other MCP-compatible tools."
 image: "/img/tabularis-mcp-server.png"
+audience: "AI-native builders"
+useCase: "Local MCP workflows"
+format: "Guide"
 ---
 
 # MCP Database Client for AI Workflows

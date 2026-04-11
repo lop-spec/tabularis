@@ -5,6 +5,9 @@ order: 2
 excerpt: "An open-source alternative for teams that want a local SQL workspace across Windows, macOS, and Linux."
 description: "Compare Tabularis and TablePlus for cross-platform developer teams evaluating SQL workflow, extensibility, notebooks, and local AI-ready database tooling."
 image: "/img/overview.png"
+audience: "Cross-platform teams"
+useCase: "Tool evaluation"
+format: "Comparison"
 ---
 
 # TablePlus Alternative for Cross-Platform Teams

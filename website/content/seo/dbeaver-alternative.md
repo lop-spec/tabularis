@@ -5,6 +5,9 @@ order: 1
 excerpt: "A modern open-source alternative for developers who want notebooks, MCP workflows, plugins, and a cleaner desktop SQL experience."
 description: "Compare Tabularis and DBeaver across developer workflow, SQL analysis, extensibility, and AI-native database use cases."
 image: "/img/overview.png"
+audience: "Developer teams"
+useCase: "Tool evaluation"
+format: "Comparison"
 ---
 
 # DBeaver Alternative for Developers

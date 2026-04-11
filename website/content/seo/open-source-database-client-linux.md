@@ -5,6 +5,9 @@ order: 4
 excerpt: "A local desktop database client for Linux users who want PostgreSQL, MySQL/MariaDB, SQLite, SSH, and a modern SQL workflow."
 description: "Explore Tabularis as an open-source database client for Linux with support for PostgreSQL, MySQL/MariaDB, SQLite, notebooks, and SSH workflows."
 image: "/img/overview.png"
+audience: "Linux users"
+useCase: "Cross-platform SQL work"
+format: "Guide"
 ---
 
 # Open-Source Database Client for Linux

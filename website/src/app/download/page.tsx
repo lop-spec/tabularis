@@ -77,6 +77,24 @@ export default function DownloadPage() {
             SQL notebooks guide →
           </Link>
         </div>
+
+        <div className="plugin-cta dl-mirror-box">
+          <h3>Alternative Mirrors</h3>
+          <p>
+            Prefer a secondary download mirror? Tabularis is also available on
+            SourceForge. The primary and most up-to-date release channel remains
+            GitHub Releases.
+          </p>
+          <a
+            href="https://sourceforge.net/projects/tabularis/files/latest/download"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-download"
+            style={{ display: "inline-flex", width: "auto" }}
+          >
+            Download from SourceForge &rarr;
+          </a>
+        </div>
       </section>
 
       <Footer />

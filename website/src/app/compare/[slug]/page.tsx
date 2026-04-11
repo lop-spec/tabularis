@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { WikiContent } from "@/components/WikiContent";
+import { SeoPageHeroVisual } from "@/components/SeoPagePreview";
 import {
   getAdjacentSeoPages,
   getSeoPageBySlug,
@@ -66,11 +67,7 @@ export default async function CompareDetailPage({ params }: PageProps) {
 
       <section>
         <div className="blog-intro">
-          <img
-            src={page.meta.image || "/img/logo.png"}
-            alt={page.meta.title}
-            className="blog-intro-logo"
-          />
+          <SeoPageHeroVisual meta={page.meta} />
           <div className="blog-intro-body">
             <h3>{page.meta.title}</h3>
             <p>{page.meta.excerpt}</p>

@@ -13,6 +13,9 @@ export interface SeoMeta {
   description: string;
   section: SeoSection;
   image?: string;
+  audience?: string;
+  useCase?: string;
+  format?: string;
 }
 
 const SEO_DIR = path.join(process.cwd(), "content", "seo");
@@ -26,6 +29,9 @@ function parseSeoMeta(slug: string, data: Record<string, unknown>): SeoMeta {
     description: (data.description as string) ?? "",
     section: (data.section as SeoSection) ?? "solutions",
     image: data.image as string | undefined,
+    audience: data.audience as string | undefined,
+    useCase: data.useCase as string | undefined,
+    format: data.format as string | undefined,
   };
 }
 

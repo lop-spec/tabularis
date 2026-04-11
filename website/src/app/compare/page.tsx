@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { getSeoPagesBySection, getSeoPagePath } from "@/lib/seoPages";
+import { SeoPageThumb } from "@/components/SeoPagePreview";
 
 export const metadata: Metadata = {
   title: "Compare | Tabularis",
@@ -36,7 +37,8 @@ export default function ComparePage() {
 
         <div className="plugin-list">
           {pages.map((page) => (
-            <div key={page.slug} className="plugin-entry">
+            <div key={page.slug} className="plugin-entry seo-entry">
+              <SeoPageThumb meta={page} className="seo-entry-thumb" />
               <div className="plugin-entry-info">
                 <div className="plugin-entry-header">
                   <Link
@@ -45,8 +47,14 @@ export default function ComparePage() {
                   >
                     {page.title}
                   </Link>
+                  <span className="plugin-badge">{page.format || "Guide"}</span>
                 </div>
                 <p className="plugin-desc">{page.excerpt}</p>
+                <div className="plugin-meta">
+                  {page.audience && <span>{page.audience}</span>}
+                  {page.audience && page.useCase && <span>&nbsp;&middot;&nbsp;</span>}
+                  {page.useCase && <span>{page.useCase}</span>}
+                </div>
               </div>
               <Link
                 href={getSeoPagePath("compare", page.slug)}
@@ -56,6 +64,21 @@ export default function ComparePage() {
               </Link>
             </div>
           ))}
+        </div>
+
+        <div className="plugin-cta">
+          <h3>Prefer to explore by use case?</h3>
+          <p>
+            If you are earlier in the decision process, start from the workflow
+            itself instead of the tool comparison.
+          </p>
+          <Link
+            href="/solutions"
+            className="btn-download"
+            style={{ display: "inline-flex", width: "auto" }}
+          >
+            Browse solutions &rarr;
+          </Link>
         </div>
       </section>
 
