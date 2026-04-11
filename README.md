@@ -21,11 +21,11 @@
   <a href="https://winstall.app/apps/Debba.Tabularis"><img src="https://img.shields.io/winget/v/Debba.Tabularis?label=WinGet&logo=windows&color=0078D4" alt="WinGet" /></a>
 </p>
 
-A lightweight, cross-platform database client for developers, built with Tauri and React.
+An open-source desktop client for modern databases. Supports PostgreSQL, MySQL/MariaDB, and SQLite, and is hackable with plugins, with notebooks, AI, and MCP built in.
 
 **Available in:** English, Italian, Spanish, Chinese (Simplified)
 
-**Discord** - [Join our discord server](https://discord.gg/YrZPHAwMSG) and chat with the maintainers.
+**Discord** - [Join our Discord server](https://discord.gg/YrZPHAwMSG) to talk with the maintainers, share feedback, and get help from the community.
 
 <div align="center">
   <img src="website/public/img/overview.png?v" width="80%" alt="Tabularis" />
@@ -171,7 +171,7 @@ You can also manually check for updates or download the latest version directly 
 
 ## Discord
 
-Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the maintainers, suggest features, or get help from the community.
+Join our [Discord server](https://discord.gg/YrZPHAwMSG) to talk with the maintainers, share feedback, suggest features, or get help from the community.
 
 ## [Changelog](./CHANGELOG.md)
 
@@ -264,7 +264,7 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to chat with the mainta
 
 > [Full reference on tabularis.dev →](https://tabularis.dev/wiki/plugins)
 
-Tabularis supports extending its database support via an **external plugin system**. Plugins are standalone executables that communicate with the app over **JSON-RPC 2.0 via stdin/stdout**, and can be written in any language.
+Tabularis is **hackable with an external plugin system**. Plugins are standalone executables that communicate with the app over **JSON-RPC 2.0 via stdin/stdout**, and can be written in any language.
 
 - **Install Plugins:** Browse and install community drivers from **Settings → Available Plugins** — no restart required.
 - **Manage Drivers:** View all registered drivers (built-in and plugins) in **Settings → Installed Drivers** and uninstall plugins with one click.
@@ -443,14 +443,14 @@ Once connected, your AI agent can:
 ### Setup
 
 ```bash
-npm install
-npm run tauri dev
+pnpm install
+pnpm tauri dev
 ```
 
 ### Build
 
 ```bash
-npm run tauri build
+pnpm tauri build
 ```
 
 ## Roadmap
