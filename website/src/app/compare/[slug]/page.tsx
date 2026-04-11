@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLd } from "@/components/JsonLd";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { WikiContent } from "@/components/WikiContent";
@@ -11,6 +12,7 @@ import {
   getSeoPagesBySection,
   getSeoPagePath,
 } from "@/lib/seoPages";
+import { buildArticleJsonLd, buildBreadcrumbJsonLd } from "@/lib/seo";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -58,6 +60,21 @@ export default async function CompareDetailPage({ params }: PageProps) {
 
   return (
     <div className="container">
+      <JsonLd
+        data={[
+          buildBreadcrumbJsonLd([
+            { name: "Home", path: "/" },
+            { name: "Compare", path: "/compare" },
+            { name: page.meta.title, path: getSeoPagePath("compare", slug) },
+          ]),
+          buildArticleJsonLd({
+            title: page.meta.title,
+            description: page.meta.description || page.meta.excerpt,
+            path: getSeoPagePath("compare", slug),
+            image: page.meta.image,
+          }),
+        ]}
+      />
       <SiteHeader
         crumbs={[
           { label: "compare", href: "/compare" },

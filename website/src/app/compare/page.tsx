@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/JsonLd";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { getSeoPagesBySection, getSeoPagePath } from "@/lib/seoPages";
 import { SeoPageThumb } from "@/components/SeoPagePreview";
+import { buildBreadcrumbJsonLd } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Compare | Tabularis",
@@ -17,6 +19,12 @@ export default function ComparePage() {
 
   return (
     <div className="container">
+      <JsonLd
+        data={buildBreadcrumbJsonLd([
+          { name: "Home", path: "/" },
+          { name: "Compare", path: "/compare" },
+        ])}
+      />
       <SiteHeader crumbs={[{ label: "compare" }]} />
 
       <section>

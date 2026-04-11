@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/JsonLd";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { DownloadInline } from "@/components/DownloadInline";
 import { APP_VERSION } from "@/lib/version";
 import { OG_IMAGE_URL } from "@/lib/siteConfig";
 import { getReleaseDate, formatDate } from "@/lib/posts";
+import {
+  buildBreadcrumbJsonLd,
+  buildSoftwareApplicationJsonLd,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Download | Tabularis",
@@ -36,6 +41,15 @@ export default function DownloadPage() {
 
   return (
     <div className="container">
+      <JsonLd
+        data={[
+          buildBreadcrumbJsonLd([
+            { name: "Home", path: "/" },
+            { name: "Download", path: "/download" },
+          ]),
+          buildSoftwareApplicationJsonLd(),
+        ]}
+      />
       <SiteHeader crumbs={[{ label: "download" }]} />
 
       <section className="dl-page">

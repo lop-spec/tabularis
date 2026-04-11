@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLd } from "@/components/JsonLd";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { WikiContent } from "@/components/WikiContent";
@@ -10,6 +11,7 @@ import {
   getSeoPagesBySection,
   getSeoPagePath,
 } from "@/lib/seoPages";
+import { buildArticleJsonLd, buildBreadcrumbJsonLd } from "@/lib/seo";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -57,6 +59,21 @@ export default async function SolutionDetailPage({ params }: PageProps) {
 
   return (
     <div className="container">
+      <JsonLd
+        data={[
+          buildBreadcrumbJsonLd([
+            { name: "Home", path: "/" },
+            { name: "Solutions", path: "/solutions" },
+            { name: page.meta.title, path: getSeoPagePath("solutions", slug) },
+          ]),
+          buildArticleJsonLd({
+            title: page.meta.title,
+            description: page.meta.description || page.meta.excerpt,
+            path: getSeoPagePath("solutions", slug),
+            image: page.meta.image,
+          }),
+        ]}
+      />
       <SiteHeader
         crumbs={[
           { label: "solutions", href: "/solutions" },

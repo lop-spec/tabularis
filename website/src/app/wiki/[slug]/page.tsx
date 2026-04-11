@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLd } from "@/components/JsonLd";
 import { SiteHeader } from "@/components/SiteHeader";
 import { GitHubIcon, DiscordIcon } from "@/components/Icons";
 import { ShareButton } from "@/components/ShareButton";
@@ -15,6 +16,9 @@ import {
   getWikiPagesByCategory,
   WIKI_CATEGORIES,
 } from "@/lib/wiki";
+import { buildArticleJsonLd, buildBreadcrumbJsonLd } from "@/lib/seo";
+import { getRelatedLinksForWiki } from "@/lib/seoRelated";
+import { RelatedLinks } from "@/components/RelatedLinks";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -77,12 +81,28 @@ export default async function WikiPageDetail({ params }: PageProps) {
   const { meta, html } = page;
   const { prev, next } = getAdjacentWikiPages(slug);
   const categories = buildCategories();
+  const relatedLinks = getRelatedLinksForWiki(slug);
 
   const crumbTitle =
     meta.title.length > 40 ? meta.title.slice(0, 40) + "\u2026" : meta.title;
 
   return (
     <div className="container wiki-container">
+      <JsonLd
+        data={[
+          buildBreadcrumbJsonLd([
+            { name: "Home", path: "/" },
+            { name: "Wiki", path: "/wiki" },
+            { name: meta.title, path: `/wiki/${slug}` },
+          ]),
+          buildArticleJsonLd({
+            title: meta.title,
+            description: meta.excerpt,
+            path: `/wiki/${slug}`,
+            image: "/img/og.png",
+          }),
+        ]}
+      />
       <SiteHeader
         crumbs={[{ label: "wiki", href: "/wiki" }, { label: crumbTitle }]}
       />
@@ -92,6 +112,8 @@ export default async function WikiPageDetail({ params }: PageProps) {
         rightSidebar={<WikiTableOfContents />}
       >
         <WikiContent html={html} />
+
+        <RelatedLinks title="Related Guides" links={relatedLinks} />
 
         <div className="wiki-edit-link-container">
           <a

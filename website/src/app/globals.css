@@ -4162,6 +4162,14 @@ footer {
   margin-top: 2rem;
 }
 
+.related-links-box {
+  margin-top: 2rem;
+}
+
+.related-links-box .plugin-list {
+  margin-bottom: 0;
+}
+
 @media (max-width: 720px) {
   .dli-grid {
     grid-template-columns: 1fr;

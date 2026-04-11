@@ -1,6 +1,7 @@
 import Link from "next/link";
 import fs from "fs";
 import path from "path";
+import { JsonLd } from "@/components/JsonLd";
 import { marked } from "@/lib/markdown";
 import { Footer } from "@/components/Footer";
 import { DiscordIcon } from "@/components/Icons";
@@ -14,6 +15,10 @@ import { DownloadButtons } from "@/components/DownloadButtons";
 import { SponsorsSection, IconExternalLink, IconArrow } from "@/components/SponsorsSection";
 import { ExpandableText } from "@/components/ExpandableText";
 import { CarouselGrid } from "@/components/CarouselGrid";
+import {
+  buildBreadcrumbJsonLd,
+  buildSoftwareApplicationJsonLd,
+} from "@/lib/seo";
 
 const GITHUB_EDIT_HOME_URL =
   "https://github.com/debba/tabularis/edit/main/website/content/home.md";
@@ -123,6 +128,12 @@ export default function HomePage() {
 
   return (
     <div className="container">
+      <JsonLd
+        data={[
+          buildBreadcrumbJsonLd([{ name: "Home", path: "/" }]),
+          buildSoftwareApplicationJsonLd(),
+        ]}
+      />
       <SiteHeader />
       {/* HERO */}
       <header className="hero">
@@ -777,6 +788,11 @@ export default function HomePage() {
         <p className="blog-all-link" style={{ marginTop: "2rem" }}>
           <Link href="/blog" style={{ fontWeight: 600 }}>
             View all posts →
+          </Link>
+        </p>
+        <p className="blog-all-link" style={{ marginTop: "0.75rem" }}>
+          <Link href="/compare/datagrip-alternative" style={{ fontWeight: 600 }}>
+            Compare Tabularis with DataGrip →
           </Link>
         </p>
       </section>

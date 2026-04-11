@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/JsonLd";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { getSeoPagesBySection, getSeoPagePath } from "@/lib/seoPages";
+import { buildBreadcrumbJsonLd } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Solutions | Tabularis",
@@ -16,6 +18,12 @@ export default function SolutionsPage() {
 
   return (
     <div className="container">
+      <JsonLd
+        data={buildBreadcrumbJsonLd([
+          { name: "Home", path: "/" },
+          { name: "Solutions", path: "/solutions" },
+        ])}
+      />
       <SiteHeader crumbs={[{ label: "solutions" }]} />
 
       <section>
