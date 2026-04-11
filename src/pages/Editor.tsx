@@ -3028,7 +3028,7 @@ export const Editor = () => {
         onClose={() => setIsVisualExplainOpen(false)}
         query={activeTab?.query ?? ""}
         connectionId={activeConnectionId ?? ""}
-        schema={activeTab?.schema ?? activeSchema}
+        schema={activeTab?.schema ?? activeSchema ?? undefined}
       />
       {tabContextMenu && (
         <ContextMenu
