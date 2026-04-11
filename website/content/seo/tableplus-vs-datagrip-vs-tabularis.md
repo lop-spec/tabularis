@@ -1,6 +1,7 @@
 ---
 section: "compare"
 title: "TablePlus vs DataGrip vs Tabularis"
+metaTitle: "TablePlus vs DataGrip vs Tabularis | Which SQL Tool Fits Best?"
 order: 6
 excerpt: "A practical comparison for teams choosing between a proprietary desktop client, an IDE-style database tool, and an open-source SQL workspace."
 description: "Compare TablePlus, DataGrip, and Tabularis across workflow style, openness, notebooks, extensibility, and AI-ready local database use cases."

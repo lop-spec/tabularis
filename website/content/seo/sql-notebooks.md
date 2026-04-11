@@ -1,6 +1,7 @@
 ---
 section: "solutions"
 title: "SQL Notebooks for Database Analysis"
+metaTitle: "SQL Notebooks for Database Analysis | Tabularis"
 order: 2
 excerpt: "A notebook workflow for SQL analysis with cells, markdown, inline charts, parameters, and reusable query context."
 description: "Explore Tabularis SQL notebooks for analysts and developers who want a local notebook workflow built around SQL, markdown, parameters, and inline charts."

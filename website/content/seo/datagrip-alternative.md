@@ -1,6 +1,7 @@
 ---
 section: "compare"
 title: "DataGrip Alternative for Developer SQL Workflows"
+metaTitle: "DataGrip Alternative for Developer SQL Workflows | Tabularis"
 order: 3
 excerpt: "An open-source alternative for developers who want a local SQL workspace with notebooks, plugins, and AI-native direction."
 description: "Compare Tabularis and DataGrip for developer SQL workflows across openness, extensibility, notebooks, and local AI-ready database tooling."

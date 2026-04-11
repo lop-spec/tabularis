@@ -8,6 +8,7 @@ export type SeoSection = "solutions" | "compare";
 export interface SeoMeta {
   slug: string;
   title: string;
+  metaTitle?: string;
   order: number;
   excerpt: string;
   description: string;
@@ -24,6 +25,7 @@ function parseSeoMeta(slug: string, data: Record<string, unknown>): SeoMeta {
   return {
     slug,
     title: (data.title as string) ?? "",
+    metaTitle: data.metaTitle as string | undefined,
     order: (data.order as number) ?? 99,
     excerpt: (data.excerpt as string) ?? "",
     description: (data.description as string) ?? "",

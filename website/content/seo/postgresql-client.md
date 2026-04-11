@@ -1,6 +1,7 @@
 ---
 section: "solutions"
 title: "PostgreSQL Client for Developers"
+metaTitle: "PostgreSQL Client for Developers | Tabularis"
 order: 1
 excerpt: "A developer-focused PostgreSQL desktop client with SQL editing, notebooks, schema tools, SSH, and local AI workflows."
 description: "Explore Tabularis as a PostgreSQL client for developers who want a local desktop workflow with SQL editing, schema inspection, notebooks, SSH tunneling, and MCP support."

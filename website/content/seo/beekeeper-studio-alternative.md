@@ -1,6 +1,7 @@
 ---
 section: "compare"
 title: "Beekeeper Studio Alternative for Developers"
+metaTitle: "Beekeeper Studio Alternative for Developers | Tabularis"
 order: 4
 excerpt: "An open-source alternative for developers who want a broader SQL workspace with notebooks, plugins, and AI-native direction."
 description: "Compare Tabularis and Beekeeper Studio for developer SQL workflows across openness, extensibility, notebooks, and local AI-ready database tooling."

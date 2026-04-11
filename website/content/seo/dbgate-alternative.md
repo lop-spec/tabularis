@@ -1,6 +1,7 @@
 ---
 section: "compare"
 title: "DbGate Alternative for Modern SQL Workflows"
+metaTitle: "DbGate Alternative for Modern SQL Workflows | Tabularis"
 order: 5
 excerpt: "An open-source alternative for teams that want a more opinionated desktop SQL workspace with notebooks and AI-native direction."
 description: "Compare Tabularis and DbGate for modern SQL workflows across open-source positioning, extensibility, notebooks, and local AI-ready database tooling."

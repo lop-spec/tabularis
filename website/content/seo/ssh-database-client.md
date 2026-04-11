@@ -1,6 +1,7 @@
 ---
 section: "solutions"
 title: "SSH Database Client for Remote Environments"
+metaTitle: "SSH Database Client for Remote Environments | Tabularis"
 order: 5
 excerpt: "A desktop SQL workflow with built-in SSH tunneling for working against remote PostgreSQL, MySQL/MariaDB, and other private environments."
 description: "Use Tabularis as an SSH database client for remote development, staging, and production environments with local credential handling and a modern SQL workflow."

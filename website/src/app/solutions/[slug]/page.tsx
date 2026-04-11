@@ -29,7 +29,7 @@ export async function generateMetadata({
   if (!page) return {};
 
   return {
-    title: `${page.meta.title} | Tabularis`,
+    title: page.meta.metaTitle || `${page.meta.title} | Tabularis`,
     description: page.meta.description || page.meta.excerpt,
     alternates: {
       canonical: getSeoPagePath("solutions", slug),
@@ -37,13 +37,13 @@ export async function generateMetadata({
     openGraph: {
       type: "article",
       url: getSeoPagePath("solutions", slug),
-      title: `${page.meta.title} | Tabularis`,
+      title: page.meta.metaTitle || `${page.meta.title} | Tabularis`,
       description: page.meta.description || page.meta.excerpt,
       images: page.meta.image ? [page.meta.image] : undefined,
     },
     twitter: {
       card: "summary_large_image",
-      title: `${page.meta.title} | Tabularis`,
+      title: page.meta.metaTitle || `${page.meta.title} | Tabularis`,
       description: page.meta.description || page.meta.excerpt,
       images: page.meta.image ? [page.meta.image] : undefined,
     },
