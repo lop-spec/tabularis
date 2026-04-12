@@ -18,7 +18,7 @@ Open the Settings panel from:
 
 ![General settings panel with data editor, ping interval, and ER diagram layout options](/img/tabularis-settings-general.png)
 
-- **Language Support**: Native translations for **English**, **Italian**, **Spanish**, and **Chinese (Simplified)**. The app defaults to your OS locale. Changing the language requires a restart.
+- **Language Support**: Native translations for **English**, **Italian**, **Spanish**, and **Chinese (Simplified)**. The app defaults to your OS locale, and changing the language applies immediately.
 - **Update Checks**: Enable or disable automatic update checks on startup. Checks query the GitHub Releases API — no version data is sent, only a GET request is made.
 
 ## Storage Paths & config.json
@@ -58,14 +58,12 @@ Any key omitted from the file falls back to its default value. You do not need a
 | `fontFamily` | `string` | `"System"` | Editor font. Must be installed on the system. |
 | `fontSize` | `number` | `14` | Editor font size in pixels. |
 | `aiEnabled` | `boolean` | `false` | Master toggle for all AI features. |
-| `aiProvider` | `string` | `null` | Active AI provider: `openai`, `anthropic`, `ollama`, `openrouter`, `custom-openai`. |
+| `aiProvider` | `string` | `null` | Active AI provider: `openai`, `anthropic`, `minimax`, `ollama`, `openrouter`, `custom-openai`. |
 | `aiModel` | `string` | `null` | The model identifier string sent to the provider. |
 | `aiCustomModels` | `object` | `null` | Custom model lists per provider (map of provider ID → string[]). |
 | `aiOllamaPort` | `number` | `11434` | Local port for the Ollama daemon. |
 | `aiCustomOpenaiUrl` | `string` | `null` | Base URL for OpenAI-compatible endpoints (e.g., LM Studio, vLLM). |
 | `aiCustomOpenaiModel` | `string` | `null` | Model name to use with the custom OpenAI-compatible endpoint. |
-| `loggingEnabled` | `boolean` | `true` | Enable or disable the in-app log panel (UI preference only). |
-| `maxLogEntries` | `number` | `1000` | Maximum number of log entries retained in the UI log panel (UI preference only). |
 | `checkForUpdates` | `boolean` | `true` | Enable or disable update checks entirely. |
 | `autoCheckUpdatesOnStartup` | `boolean` | `true` | Checks GitHub Releases API on boot. |
 | `lastDismissedVersion` | `string` | `null` | Version string of the last dismissed update notification. |
@@ -73,9 +71,21 @@ Any key omitted from the file falls back to its default value. You do not need a
 | `schemaPreferences` | `object` | `{}` | Per-connection active schema for DDL operations (map of connection ID → schema name). |
 | `selectedSchemas` | `object` | `{}` | Per-connection visible schemas in the sidebar (map of connection ID → string[]). |
 | `maxBlobSize` | `number` | `1048576` | Max bytes to load into UI for BLOB/bytea columns (default 1 MB). |
+| `copyFormat` | `string` | `"csv"` | Default row copy format: `csv` or `json`. |
+| `csvDelimiter` | `string` | `","` | Default delimiter used when copying or exporting CSV. |
 | `pingInterval` | `number` | `30` | Connection health check interval in seconds. `0` disables pings. See [Connection Health Check](/wiki/connections#connection-health-check). |
 | `activeExternalDrivers` | `string[]` | `[]` | List of plugin driver IDs loaded at startup. |
 | `customRegistryUrl` | `string` | `null` | Custom URL for the plugin registry. Overrides the default official registry when fetching and installing plugins. |
+| `plugins` | `object` | `{}` | Per-plugin config, including optional interpreter overrides and plugin settings values. |
+| `editorTheme` | `string` | `null` | Monaco editor theme ID. |
+| `editorFontFamily` | `string` | `"JetBrains Mono"` | SQL editor font family. |
+| `editorFontSize` | `number` | `14` | SQL editor font size in pixels. |
+| `editorLineHeight` | `number` | `1.5` | SQL editor line height multiplier. |
+| `editorTabSize` | `number` | `2` | SQL editor tab width. |
+| `editorWordWrap` | `boolean` | `true` | Whether the SQL editor wraps long lines. |
+| `editorShowLineNumbers` | `boolean` | `true` | Whether the SQL editor shows line numbers. |
+
+The in-app log viewer has its own backend settings and commands, but those are not stored as `loggingEnabled` or `maxLogEntries` fields in `config.json`.
 
 ## Application Logs
 

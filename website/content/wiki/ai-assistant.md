@@ -7,7 +7,7 @@ category: "AI & Integration"
 
 # AI Assistant & Context Engine
 
-Tabularis integrates a powerful, privacy-first AI assistant directly into the SQL Editor. It goes beyond simple autocomplete by deeply understanding your database structure to generate accurate, syntactically correct queries.
+Tabularis integrates a privacy-first AI assistant directly into the SQL Editor and notebooks. It goes beyond simple autocomplete by understanding your database structure to generate, explain, and label queries.
 
 ![AI Assistant](/img/tabularis-ai-assistant.png)
 
@@ -32,10 +32,11 @@ By feeding this exact structural context to the LLM alongside your natural langu
 Tabularis is provider-agnostic. Configure your preferred engine in Settings:
 
 ### 1. Cloud Providers
-- **OpenAI** (`openai`): Supports `gpt-4o`, `gpt-4o-mini`, and other GPT models. Requires your own API Key.
-- **Anthropic** (`anthropic`): Supports Claude Opus, Sonnet, and Haiku (claude-opus-4.5, claude-sonnet-4.5, claude-haiku-4.5, claude-3.5-sonnet, claude-3.5-haiku). Excellent for complex query explanations.
-- **OpenRouter** (`openrouter`): Access hundreds of models (GPT-4o, Gemini, Claude, Deepseek, and more) via a unified API.
-- **Custom OpenAI-compatible** (`custom-openai`): Any endpoint that speaks the OpenAI API (e.g., LM Studio, vLLM). Set `aiCustomOpenaiUrl` and `aiCustomOpenaiModel` in Settings.
+- **OpenAI** (`openai`): Uses your own API key and supports the model list shipped by the app plus any custom model entries you add.
+- **Anthropic** (`anthropic`): Good for complex query explanations and structured reasoning.
+- **MiniMax** (`minimax`): Available as a first-class provider in the AI settings.
+- **OpenRouter** (`openrouter`): Access a broader multi-model catalog through a unified API.
+- **Custom OpenAI-compatible** (`custom-openai`): Any endpoint that speaks the OpenAI API (e.g. LM Studio, vLLM, Groq-compatible gateways). Set `aiCustomOpenaiUrl` and choose a model in Settings.
 
 ### 2. Local Execution (Zero-Knowledge Privacy)
 For enterprise databases with strict compliance requirements, you cannot send schema data to third-party servers. Tabularis natively integrates with **Ollama**.
@@ -46,8 +47,7 @@ For enterprise databases with strict compliance requirements, you cannot send sc
 
 ## Explain & Optimize Queries
 
-The AI isn't just for writing new code. Highlight any complex, legacy 300-line SQL query, right-click, and select **"Explain Query with AI"**. 
-The AI will break down the nested subqueries, explain the logic in plain English, and even suggest optimizations (like adding missing indexes based on the `WHERE` clauses).
+The AI is not limited to generating SQL. From the editor you can ask it to explain the current query, and the explanation prompt is configurable in Settings. The assistant breaks down joins, subqueries, and filters in plain language and can suggest likely optimization directions.
 
 ## Notebook Cell Naming
 
@@ -58,9 +58,23 @@ In [SQL Notebooks](/wiki/notebooks), the AI can generate descriptive names for c
 
 The naming prompt is customizable in **Settings > AI > Notebook Cell Name Prompt**. The cell content (SQL or Markdown) is sent as the user message alongside the prompt.
 
+## Query Tab Naming
+
+Tabularis can also generate short names for SQL result tabs. In multi-result views, the AI uses the current SQL text and a dedicated **Query Tab Name Prompt** from Settings to propose a concise label.
+
+## Custom Prompts
+
+The AI settings currently expose four editable prompts:
+
+- **System Prompt** for SQL generation
+- **Explain Prompt** for query explanations
+- **Notebook Cell Name Prompt**
+- **Query Tab Name Prompt**
+
 ## Model Context Protocol (MCP)
 
-Tabularis ships with a built-in **MCP Server**, allowing external AI agents (like Claude Desktop or Cursor) to securely interface with your Tabularis connections.
-- Enable the MCP server in Settings.
-- Connect your external agent to the local endpoint.
-- The agent can now request schema reads and execute specific queries against your local databases, turning Tabularis into a powerful bridge for AI workflows.
+Tabularis ships with a built-in **MCP Server**, allowing external AI agents like Claude Desktop, Claude Code, Cursor, Windsurf, or Antigravity to interface with your saved connections over stdio.
+
+- Open the MCP integration panel from the sidebar or Settings.
+- Install the config for your target client.
+- The agent can then list saved connections, inspect schemas and tables, and execute SQL through the Tabularis MCP server.
