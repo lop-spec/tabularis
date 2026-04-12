@@ -1321,6 +1321,27 @@ pre {
   margin-bottom: 1rem;
 }
 
+.btn-plugin {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.btn-plugin:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 768px) {
+  .plugin-entry {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+}
+
 .seo-entry {
   align-items: flex-start;
 }
@@ -1447,8 +1468,9 @@ pre {
 
 @media (max-width: 768px) {
   .seo-compare-hero {
-    width: 168px;
-    height: 100px;
+    width: 100%;
+    height: auto;
+    min-height: 100px;
     padding: 0.7rem 0.8rem;
   }
 }
@@ -2532,6 +2554,14 @@ pre {
   color: var(--accent);
 }
 
+@media (max-width: 768px) {
+  .blog-intro {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+}
+
 /* CTA STRIP */
 .cta-strip {
   display: flex;
@@ -3072,6 +3102,16 @@ pre {
 
 .post-nav-empty {
   display: block;
+}
+
+@media (max-width: 768px) {
+  .post-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .post-nav-next a {
+    text-align: left;
+  }
 }
 
 /* POST AUTHOR */
