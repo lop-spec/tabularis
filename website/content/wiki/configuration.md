@@ -16,6 +16,8 @@ Open the Settings panel from:
 
 ## General Settings
 
+![General settings panel with data editor, ping interval, and ER diagram layout options](/img/tabularis-settings-general.png)
+
 - **Language Support**: Native translations for **English**, **Italian**, **Spanish**, and **Chinese (Simplified)**. The app defaults to your OS locale. Changing the language requires a restart.
 - **Update Checks**: Enable or disable automatic update checks on startup. Checks query the GitHub Releases API — no version data is sent, only a GET request is made.
 

@@ -9,6 +9,8 @@ category: "AI & Integration"
 
 While Tabularis supports major relational databases natively via Rust, the ecosystem of data stores is vast. The Plugin System allows anyone to add support for external databases (like DuckDB, ClickHouse, or Redis) using **any programming language**.
 
+![Plugin manager showing installed and available drivers](/img/tabularis-plugin-manager.png)
+
 For the complete protocol reference, see [`plugins/PLUGIN_GUIDE.md`](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md) in the repository.
 
 ## Architecture: JSON-RPC over STDIO
@@ -106,6 +108,8 @@ Every plugin must include a `manifest.json` that tells Tabularis its capabilitie
 ## Plugin Settings
 
 Plugins can declare custom configuration fields in their `manifest.json`. Tabularis renders these fields in **Settings → gear icon** next to the plugin. Users fill them in, the values are persisted in `config.json`, and Tabularis delivers them to the plugin at startup.
+
+![Plugin settings modal with configurable fields](/img/posts/plugin-settings-modal.png)
 
 ### Declaring settings in `manifest.json`
 
