@@ -577,7 +577,7 @@ export function AiTab() {
         )}
 
         {/* Prompt customization */}
-        <SettingSection title={t("settings.ai.systemPrompt")}>
+        <SettingSection title={t("settings.ai.promptCustomization")}>
           {(["system", "explain", "cellname", "tabrename", "explainplan"] as const).map((type) => {
             const isOpen = promptSectionOpen === type;
             const promptMap = { system: systemPrompt, explain: explainPrompt, cellname: cellnamePrompt, tabrename: tabrenamePrompt, explainplan: explainplanPrompt };

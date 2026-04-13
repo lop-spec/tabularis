@@ -12,6 +12,7 @@ import {
 } from "../utils/pendingInsertions";
 import { AiQueryModal } from "../components/modals/AiQueryModal";
 import { AiExplainModal } from "../components/modals/AiExplainModal";
+import { AiDropdownButton } from "../components/ui/AiDropdownButton";
 import { VisualExplainModal } from "../components/modals/VisualExplainModal";
 import {
   Play,
@@ -37,7 +38,6 @@ import {
   Trash2,
   Check,
   Undo2,
-  Sparkles,
   BookOpen,
   Hash,
   Loader2,
@@ -2437,28 +2437,14 @@ export const Editor = () => {
                   <Network size={12} />
                   {t("editor.visualExplain.buttonShort")}
                 </button>
-                {/* AI buttons — only if AI enabled */}
+                {/* AI dropdown — only if AI enabled */}
                 {settings.aiEnabled && (
-                  <>
-                    <button
-                      onClick={() => setIsAiModalOpen(true)}
-                      disabled={!activeConnectionId}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-muted hover:text-purple-300 bg-elevated/80 hover:bg-purple-900/40 border border-default hover:border-purple-500/40 transition-all disabled:opacity-30 disabled:pointer-events-none backdrop-blur-sm"
-                      title="Generate SQL with AI"
-                    >
-                      <Sparkles size={12} />
-                      AI
-                    </button>
-                    <button
-                      onClick={() => setIsAiExplainModalOpen(true)}
-                      disabled={!activeConnectionId || !tab.query?.trim()}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-muted hover:text-blue-300 bg-elevated/80 hover:bg-blue-900/40 border border-default hover:border-blue-500/40 transition-all disabled:opacity-30 disabled:pointer-events-none backdrop-blur-sm"
-                      title="Explain this Query"
-                    >
-                      <BookOpen size={12} />
-                      Explain
-                    </button>
-                  </>
+                  <AiDropdownButton
+                    onGenerate={() => setIsAiModalOpen(true)}
+                    onExplain={() => setIsAiExplainModalOpen(true)}
+                    disableAll={!activeConnectionId}
+                    disableExplain={!tab.query?.trim()}
+                  />
                 )}
               </div>
             )}
