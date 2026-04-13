@@ -9,6 +9,8 @@ category: "Customization"
 
 A developer tool should adapt to your preferences. Tabularis ships with a robust, CSS-variable-based theming engine that ensures every pixel—from the sidebar to the SQL editor—feels cohesive.
 
+![Theme management screen with preset appearance options](/img/tabularis-theme-management.png)
+
 ## Built-In Themes
 
 Switch themes instantly in **Settings → Appearance**. Changes apply immediately without requiring a restart or refreshing the DOM.

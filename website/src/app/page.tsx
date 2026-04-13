@@ -1,6 +1,7 @@
 import Link from "next/link";
 import fs from "fs";
 import path from "path";
+import { JsonLd } from "@/components/JsonLd";
 import { marked } from "@/lib/markdown";
 import { Footer } from "@/components/Footer";
 import { DiscordIcon } from "@/components/Icons";
@@ -14,9 +15,76 @@ import { DownloadButtons } from "@/components/DownloadButtons";
 import { SponsorsSection, IconExternalLink, IconArrow } from "@/components/SponsorsSection";
 import { ExpandableText } from "@/components/ExpandableText";
 import { CarouselGrid } from "@/components/CarouselGrid";
+import {
+  buildBreadcrumbJsonLd,
+  buildSoftwareApplicationJsonLd,
+} from "@/lib/seo";
 
 const GITHUB_EDIT_HOME_URL =
   "https://github.com/debba/tabularis/edit/main/website/content/home.md";
+
+const SEO_ENTRY_POINTS = [
+  {
+    href: "/solutions/postgresql-client",
+    title: "PostgreSQL Client",
+    excerpt:
+      "A developer-focused PostgreSQL workflow with SQL editing, schema tools, SSH, and notebooks.",
+  },
+  {
+    href: "/solutions/sql-notebooks",
+    title: "SQL Notebooks",
+    excerpt:
+      "Reusable SQL analysis with cells, markdown, inline charts, and parameters.",
+  },
+  {
+    href: "/solutions/mcp-database-client",
+    title: "MCP Database Client",
+    excerpt:
+      "A local database workflow for Claude, Cursor, and other MCP-compatible AI tools.",
+  },
+  {
+    href: "/compare/dbeaver-alternative",
+    title: "DBeaver Alternative",
+    excerpt:
+      "A focused comparison for developers evaluating a more modern open-source SQL workflow.",
+  },
+  {
+    href: "/solutions/open-source-database-client-linux",
+    title: "Database Client for Linux",
+    excerpt:
+      "An open-source desktop workflow for Linux users who want SQL editing, SSH, and cross-platform parity.",
+  },
+  {
+    href: "/solutions/sqlite-client-for-developers",
+    title: "SQLite Client",
+    excerpt:
+      "A stronger desktop workflow for SQLite-based apps, prototypes, migrations, and local debugging.",
+  },
+  {
+    href: "/solutions/mysql-client-for-developers",
+    title: "MySQL Client",
+    excerpt:
+      "A developer-focused MySQL and MariaDB workflow with SQL editing, SSH, and reusable notebook analysis.",
+  },
+  {
+    href: "/solutions/secure-database-client",
+    title: "Secure Database Client",
+    excerpt:
+      "A local-first database workflow with SSH tunneling, system keychain storage, and controlled desktop access.",
+  },
+  {
+    href: "/solutions/plugin-based-database-client",
+    title: "Plugin-Based Database Client",
+    excerpt:
+      "An extensible database client with a plugin system for custom engines and broader database workflows.",
+  },
+  {
+    href: "/solutions/duckdb-redis-database-workflows",
+    title: "DuckDB and Redis Workflows",
+    excerpt:
+      "Extend beyond built-in engines with plugin-driven workflows for analytical and mixed-stack database use cases.",
+  },
+];
 
 // Helper to parse home.md into sections
 function getHomeContent() {
@@ -84,6 +152,12 @@ export default function HomePage() {
 
   return (
     <div className="container">
+      <JsonLd
+        data={[
+          buildBreadcrumbJsonLd([{ name: "Home", path: "/" }]),
+          buildSoftwareApplicationJsonLd(),
+        ]}
+      />
       <SiteHeader />
       {/* HERO */}
       <header className="hero">
@@ -538,6 +612,28 @@ export default function HomePage() {
         </CarouselGrid>
       </section>
 
+      <section className="section">
+        <h2>_explore_by_intent</h2>
+        <p>
+          Start from the workflow you actually care about: PostgreSQL work,
+          MySQL and SQLite work, reusable SQL analysis, secure access,
+          extensibility, AI-native database tooling, or tool comparisons.
+        </p>
+        <div className="wiki-index-grid" style={{ marginTop: "1.5rem" }}>
+          {SEO_ENTRY_POINTS.map((entry) => (
+            <Link key={entry.href} href={entry.href} className="wiki-index-card">
+              <span className="wiki-index-card-title">{entry.title}</span>
+              <span className="wiki-index-card-excerpt">{entry.excerpt}</span>
+            </Link>
+          ))}
+        </div>
+        <p className="blog-all-link" style={{ marginTop: "1.25rem" }}>
+          <Link href="/solutions" style={{ fontWeight: 600 }}>
+            Browse all solutions →
+          </Link>
+        </p>
+      </section>
+
       {/* PLUGINS */}
       <section className="section" id="plugins">
         <h2>_plugins</h2>
@@ -721,6 +817,11 @@ export default function HomePage() {
         <p className="blog-all-link" style={{ marginTop: "2rem" }}>
           <Link href="/blog" style={{ fontWeight: 600 }}>
             View all posts →
+          </Link>
+        </p>
+        <p className="blog-all-link" style={{ marginTop: "0.75rem" }}>
+          <Link href="/compare/datagrip-alternative" style={{ fontWeight: 600 }}>
+            Compare Tabularis with DataGrip →
           </Link>
         </p>
       </section>

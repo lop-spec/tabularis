@@ -200,6 +200,12 @@ function renderContributorsHtml(usernames: string[], release?: string): string {
   return `<div class="contributors-block"><span class="contributors-label">${label}</span><div class="contributors-list">${items}</div></div>`;
 }
 
+export function getReleaseDate(version: string): string | null {
+  const tag = version.startsWith("v") ? version : `v${version}`;
+  const post = getAllPosts().find((p) => p.release === tag);
+  return post?.date ?? null;
+}
+
 export function getAdjacentPosts(slug: string): {
   prev: PostMeta | null;
   next: PostMeta | null;

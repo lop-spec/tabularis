@@ -9,6 +9,8 @@ category: "Database Objects"
 
 The **ER Diagram** viewer generates a live, interactive entity-relationship diagram directly from your database schema. Tables appear as nodes; foreign key relationships appear as edges connecting them. The layout is computed automatically using the [Dagre](https://github.com/dagrejs/dagre) graph layout engine.
 
+![ER diagram window with table relationships and schema graph](/img/tabularis-schema-management-er-diagram.png)
+
 ## Opening the ER Diagram
 
 Right-click a **database** or **schema** in the sidebar and choose **Open ER Diagram**. The diagram opens in a new window dedicated to that connection and schema.

@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { searchIndex, type SearchDoc } from "@/lib/search";
 
 type SearchResult = {
-  type: "post" | "wiki" | "plugin";
+  type: "post" | "wiki" | "plugin" | "page";
   slug: string;
   title: string;
   excerpt: string;
@@ -15,14 +15,47 @@ type SearchResult = {
   score: number;
 };
 
+function SearchTypeGlyph({ type }: { type: SearchResult["type"] }) {
+  if (type === "page") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M7 3.75h7.5L19.25 8.5v11.75a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15.5a1 1 0 0 1 1-1Z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M14.5 3.75V8.5h4.75"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9 12h6M9 15.5h6M9 19h4"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  return <>{type === "post" ? "\u2726" : type === "wiki" ? "\u25C8" : "\u2B21"}</>;
+}
+
 const TYPE_CONFIG = {
-  post: { label: "Blog", color: "var(--warning)", icon: "\u2726" },
-  wiki: { label: "Wiki", color: "var(--accent)", icon: "\u25C8" },
-  plugin: { label: "Plugin", color: "var(--success)", icon: "\u2B21" },
+  post: { label: "Blog", color: "var(--warning)" },
+  wiki: { label: "Wiki", color: "var(--accent)" },
+  plugin: { label: "Plugin", color: "var(--success)" },
+  page: { label: "Guide", color: "var(--brand)" },
 } as const;
 
 const SUGGESTIONS: ({ label: string; query: string } | { label: string; href: string })[] = [
   { label: "Installation guide", query: "install" },
+  { label: "DBeaver alternative", query: "dbeaver alternative" },
+  { label: "SQL notebooks", query: "sql notebooks" },
+  { label: "SSH database client", query: "ssh database client" },
   { label: "Plugin registry", query: "plugin" },
   { label: "Configuration", query: "config" },
   { label: "Getting started", query: "getting started" },
@@ -54,7 +87,12 @@ export function SearchModal() {
         window.open(result.url, "_blank");
         return;
       }
-      const path = result.type === "post" ? `/blog/${result.slug}` : `/wiki/${result.slug}`;
+      const path =
+        result.type === "post"
+          ? `/blog/${result.slug}`
+          : result.type === "page" && result.url
+            ? result.url
+            : `/wiki/${result.slug}`;
       router.push(path);
     },
     [closeModal, router]
@@ -183,7 +221,7 @@ export function SearchModal() {
             ref={inputRef}
             className="search-input"
             type="text"
-            placeholder={wikiOnly ? "Search docs..." : "Search wiki, blog, plugins..."}
+            placeholder={wikiOnly ? "Search docs..." : "Search wiki, blog, guides, plugins..."}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyboardNav}
@@ -242,7 +280,7 @@ export function SearchModal() {
                     onMouseEnter={() => setActiveIndex(i)}
                   >
                     <span className="search-result-type-icon" style={{ color: cfg.color }}>
-                      {cfg.icon}
+                      <SearchTypeGlyph type={result.type} />
                     </span>
                     <div className="search-result-body">
                       <div className="search-result-title">

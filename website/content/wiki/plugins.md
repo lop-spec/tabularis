@@ -9,6 +9,8 @@ category: "AI & Integration"
 
 While Tabularis supports major relational databases natively via Rust, the ecosystem of data stores is vast. The Plugin System allows anyone to add support for external databases (like DuckDB, ClickHouse, or Redis) using **any programming language**.
 
+![Plugin manager showing installed and available drivers](/img/tabularis-plugin-manager.png)
+
 For the complete protocol reference, see [`plugins/PLUGIN_GUIDE.md`](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md) in the repository.
 
 ## Architecture: JSON-RPC over STDIO
@@ -40,8 +42,8 @@ plugins/
 | Platform | Path |
 |----------|------|
 | Linux | `~/.local/share/tabularis/plugins/` |
-| macOS | `~/Library/Application Support/com.debba.tabularis/plugins/` |
-| Windows | `%APPDATA%\com.debba.tabularis\plugins\` |
+| macOS | `~/Library/Application Support/tabularis/plugins/` |
+| Windows | `%APPDATA%\tabularis\plugins\` |
 
 ## The `manifest.json`
 
@@ -87,7 +89,7 @@ Every plugin must include a `manifest.json` that tells Tabularis its capabilitie
 | `folder_based` | bool | `true` for databases that target a folder rather than a file or host (e.g., CSV plugin). Replaces host/port with a folder picker. |
 | `no_connection_required` | bool | `true` for API-based plugins that need no host, port, or credentials (e.g. a public REST API). Hides the entire connection form — the user only fills in the connection name. |
 | `connection_string` | bool | Set `false` to hide the connection string import UI for this driver. Defaults to `true` for network drivers; automatically skipped for `file_based` and `folder_based` drivers. |
-| `connection_string_example` | string | Optional placeholder example shown in the connection string import field (e.g. `"clickhouse://user:pass@localhost:9000/db"`). |
+| `connection_string_example` | string | Optional placeholder example shown in the connection string import field (e.g. `"clickhouse://user:pass@localhost:9000/db"`). `connectionStringExample` is also accepted. |
 | `manage_tables` | bool | `true` to enable table and column management UI (Create Table, Add/Modify/Drop Column, Drop Table). Does not control index or FK operations. Defaults to `true`. |
 | `readonly` | bool | When `true`, the driver is read-only: all data modification operations (INSERT, UPDATE, DELETE) are disabled in the UI. Table and column management is also hidden regardless of `manage_tables`. Defaults to `false`. |
 
@@ -106,6 +108,8 @@ Every plugin must include a `manifest.json` that tells Tabularis its capabilitie
 ## Plugin Settings
 
 Plugins can declare custom configuration fields in their `manifest.json`. Tabularis renders these fields in **Settings → gear icon** next to the plugin. Users fill them in, the values are persisted in `config.json`, and Tabularis delivers them to the plugin at startup.
+
+![Plugin settings modal with configurable fields](/img/posts/plugin-settings-modal.png)
 
 ### Declaring settings in `manifest.json`
 
@@ -161,6 +165,8 @@ After spawning the plugin process, Tabularis immediately sends an `initialize` J
 ```
 
 Returning an error from `initialize` is safe — Tabularis ignores it silently. Plugins that do not implement `initialize` are completely unaffected.
+
+Plugin settings are stored under the top-level `plugins` key in `config.json`, keyed by plugin ID.
 
 For the full developer reference (field schema, code examples in Rust and Python), see the [Plugin Guide](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md).
 
@@ -301,15 +307,16 @@ Get column metadata for a table.
 
 ### `execute_query`
 
-Execute a SQL query and return paginated results.
+Execute a SQL query and return results.
 
 **Params:**
 ```json
 {
   "params": ConnectionParams,
   "query": "SELECT * FROM users",
+  "limit": 100,
   "page": 1,
-  "page_size": 100
+  "schema": null
 }
 ```
 
@@ -410,7 +417,7 @@ You should see a valid JSON-RPC response on `stdout`.
    ```
 2. Place your `manifest.json` and the compiled executable there.
 3. On Linux/macOS, make it executable: `chmod +x myplugin`
-4. Open Tabularis **Settings → Available Plugins** and install it — no restart required.
+4. Open Tabularis and refresh the plugins list if needed. A locally installed plugin can be loaded directly from the plugins directory.
 
 ## Using a Custom Plugin Registry
 

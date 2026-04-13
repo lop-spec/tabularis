@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLd } from "@/components/JsonLd";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { GitHubIcon, DiscordIcon } from "@/components/Icons";
@@ -8,6 +9,9 @@ import { ShareButton } from "@/components/ShareButton";
 import { PostContentLightbox } from "@/components/PostContentLightbox";
 import { getAllPosts, getPostBySlug, getAdjacentPosts } from "@/lib/posts";
 import { PostMetaBar } from "@/components/PostMetaBar";
+import { buildArticleJsonLd, buildBreadcrumbJsonLd } from "@/lib/seo";
+import { getRelatedLinksForPost } from "@/lib/seoRelated";
+import { RelatedLinks } from "@/components/RelatedLinks";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -55,12 +59,29 @@ export default async function BlogPostPage({ params }: PageProps) {
   const htmlAfter = h1End >= 0 ? html.slice(h1End + 5) : "";
 
   const { prev, next } = getAdjacentPosts(slug);
+  const relatedLinks = getRelatedLinksForPost(meta.tags);
 
   const crumbTitle =
     meta.title.length > 40 ? meta.title.slice(0, 40) + "…" : meta.title;
 
   return (
     <div className="container">
+      <JsonLd
+        data={[
+          buildBreadcrumbJsonLd([
+            { name: "Home", path: "/" },
+            { name: "Blog", path: "/blog" },
+            { name: meta.title, path: `/blog/${slug}` },
+          ]),
+          buildArticleJsonLd({
+            title: meta.title,
+            description: meta.excerpt,
+            path: `/blog/${slug}`,
+            publishedTime: meta.date,
+            image: meta.og?.image,
+          }),
+        ]}
+      />
       <SiteHeader
         crumbs={[{ label: "blog", href: "/blog" }, { label: crumbTitle }]}
       />
@@ -71,6 +92,8 @@ export default async function BlogPostPage({ params }: PageProps) {
         {htmlAfter && <div dangerouslySetInnerHTML={{ __html: htmlAfter }} />}
       </article>
       <PostContentLightbox />
+
+      <RelatedLinks title="Related Guides" links={relatedLinks} />
 
       <div className="post-footer-cta">
         <p>

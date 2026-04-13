@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
 import { Analytics } from "@/components/Analytics";
 import { CookieConsent } from "@/components/CookieConsent";
+import { JsonLd } from "@/components/JsonLd";
 import { SearchModal } from "@/components/SearchModal";
 import { OG_IMAGE_URL } from "@/lib/siteConfig";
+import {
+  buildOrganizationJsonLd,
+  buildSoftwareApplicationJsonLd,
+} from "@/lib/seo";
 import "./globals.css";
 import "highlight.js/styles/atom-one-dark.css";
 
@@ -41,6 +46,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <JsonLd
+          data={[
+            buildOrganizationJsonLd(),
+            buildSoftwareApplicationJsonLd(),
+          ]}
+        />
         {children}
         <Analytics />
         <CookieConsent />

@@ -1,3 +1,18 @@
+## [0.9.16](https://github.com/debba/tabularis/compare/v0.9.15...v0.9.16) (2026-04-12)
+
+
+### Features
+
+* **scripts:** add snap preview banner generator HTML tool ([fffb27f](https://github.com/debba/tabularis/commit/fffb27fd30d37599ba2c8d6cca01051ad8f456c7))
+* **seo:** add comparison pages and preview components ([36acd1b](https://github.com/debba/tabularis/commit/36acd1ba38ac682ba1b042cf2624781f5d713e4f))
+* **seo:** add JSON-LD structured data and related links ([9292f88](https://github.com/debba/tabularis/commit/9292f88f829cc5de24df9b3b6b6936a5c5566daf))
+* **seo:** add metaTitle support and expand related links ([9c2dc4f](https://github.com/debba/tabularis/commit/9c2dc4fc795d1ad2f9e5b03897c6f96d6dd17093))
+* **seo:** add solution pages and update related links ([548cad9](https://github.com/debba/tabularis/commit/548cad9d1d820146c17c53dc8a1ea277e966ee5b))
+* **seo:** add solutions and compare pages with routing ([99911a0](https://github.com/debba/tabularis/commit/99911a0900558143dc344a578fa2475d10fba6a2))
+* **ui:** add drag and drop functionality for connection groups ([21ebf4a](https://github.com/debba/tabularis/commit/21ebf4ace2233cd4ebb0c4de374fa6a9bf5ecd6d))
+* **ui:** corrected useDatabase destructure ([bbf2998](https://github.com/debba/tabularis/commit/bbf29984962b3df14ce01e0d9fb594b4e0a2b45b))
+* **website:** add solution links and workflow exploration content ([2a1aeb1](https://github.com/debba/tabularis/commit/2a1aeb14c924839990bab058ed3b5b6e135fdbd2))
+
 ## [0.9.15](https://github.com/debba/tabularis/compare/v0.9.14...v0.9.15) (2026-04-08)
 
 
