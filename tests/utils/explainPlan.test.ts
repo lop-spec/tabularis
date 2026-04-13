@@ -1,12 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
   explainPlanToFlow,
+  findExplainNode,
+  flattenExplainNodes,
   getNodeCostStyle,
   formatCost,
+  formatRatio,
   formatTime,
   formatRows,
+  getExplainDriverLegend,
+  getExplainPlanSummary,
   getMaxCost,
   getMaxTime,
+  getRowEstimateRatio,
   isDataModifyingQuery,
 } from "../../src/utils/explainPlan";
 import type { ExplainNode, ExplainPlan } from "../../src/types/explain";
@@ -111,6 +117,19 @@ describe("explainPlan", () => {
         expect(typeof node.position.x).toBe("number");
         expect(typeof node.position.y).toBe("number");
       }
+    });
+
+    it("should mark the selected node in data", () => {
+      const child = makeNode({ id: "node_1" });
+      const root = makeNode({ id: "node_0", children: [child] });
+      const plan = makePlan({ root });
+
+      const { nodes } = explainPlanToFlow(plan, "node_1");
+      const selectedNode = nodes.find((node) => node.id === "node_1");
+      const unselectedNode = nodes.find((node) => node.id === "node_0");
+
+      expect(selectedNode?.data.isSelected).toBe(true);
+      expect(unselectedNode?.data.isSelected).toBe(false);
     });
   });
 
@@ -224,6 +243,17 @@ describe("explainPlan", () => {
     });
   });
 
+  describe("formatRatio", () => {
+    it("should format small ratios with 2 decimals", () => {
+      expect(formatRatio(2.345)).toBe("2.35x");
+    });
+
+    it("should format large ratios with 1 decimal or integer precision", () => {
+      expect(formatRatio(12.34)).toBe("12.3x");
+      expect(formatRatio(120.34)).toBe("120x");
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // getMaxCost
   // ---------------------------------------------------------------------------
@@ -268,6 +298,90 @@ describe("explainPlan", () => {
 
     it("should return 0 when no times are set", () => {
       expect(getMaxTime(makeNode())).toBe(0);
+    });
+  });
+
+  describe("flattenExplainNodes", () => {
+    it("should flatten a tree in traversal order", () => {
+      const grandchild = makeNode({ id: "node_2" });
+      const child = makeNode({ id: "node_1", children: [grandchild] });
+      const root = makeNode({ id: "node_0", children: [child] });
+
+      expect(flattenExplainNodes(root).map((node) => node.id)).toEqual([
+        "node_0",
+        "node_1",
+        "node_2",
+      ]);
+    });
+  });
+
+  describe("findExplainNode", () => {
+    it("should find a node recursively", () => {
+      const grandchild = makeNode({ id: "node_2" });
+      const child = makeNode({ id: "node_1", children: [grandchild] });
+      const root = makeNode({ id: "node_0", children: [child] });
+
+      expect(findExplainNode(root, "node_2")?.id).toBe("node_2");
+      expect(findExplainNode(root, "missing")).toBeNull();
+    });
+  });
+
+  describe("getRowEstimateRatio", () => {
+    it("should return actual to estimated ratio", () => {
+      expect(
+        getRowEstimateRatio(makeNode({ plan_rows: 100, actual_rows: 500 })),
+      ).toBe(5);
+    });
+
+    it("should return null when data is missing or zero", () => {
+      expect(getRowEstimateRatio(makeNode({ plan_rows: 0, actual_rows: 10 }))).toBeNull();
+      expect(getRowEstimateRatio(makeNode({ plan_rows: 10, actual_rows: null }))).toBeNull();
+    });
+  });
+
+  describe("getExplainPlanSummary", () => {
+    it("should compute highest cost, slowest node, mismatch, and operation counts", () => {
+      const child = makeNode({
+        id: "node_1",
+        node_type: "Sort",
+        total_cost: 400,
+        actual_time_ms: 25,
+        plan_rows: 10,
+        actual_rows: 200,
+        extra: { using: "Using filesort" },
+      });
+      const root = makeNode({
+        id: "node_0",
+        node_type: "Seq Scan",
+        total_cost: 100,
+        actual_time_ms: 5,
+        children: [child],
+      });
+      const plan = makePlan({ root, has_analyze_data: true });
+
+      const summary = getExplainPlanSummary(plan);
+
+      expect(summary.highestCostNode?.nodeId).toBe("node_1");
+      expect(summary.slowestNode?.nodeId).toBe("node_1");
+      expect(summary.largestRowMismatchNode?.nodeId).toBe("node_1");
+      expect(summary.sequentialScans).toBe(1);
+      expect(summary.tempOperations).toBe(1);
+    });
+  });
+
+  describe("getExplainDriverLegend", () => {
+    it("should return postgres notes", () => {
+      const legend = getExplainDriverLegend(
+        makePlan({ driver: "postgres", has_analyze_data: true }),
+      );
+
+      expect(legend).toHaveLength(2);
+      expect(legend[0]).toBe("editor.visualExplain.postgresAnalyzeLegend1");
+    });
+
+    it("should return sqlite notes", () => {
+      const legend = getExplainDriverLegend(makePlan({ driver: "sqlite" }));
+      expect(legend[0]).toBe("editor.visualExplain.sqliteLegend1");
     });
   });
 

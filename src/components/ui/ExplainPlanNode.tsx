@@ -5,6 +5,8 @@ import type { ExplainNode } from "../../types/explain";
 import {
   getNodeCostStyle,
   formatCost,
+  formatRatio,
+  getRowEstimateRatio,
   formatTime,
   formatRows,
 } from "../../utils/explainPlan";
@@ -15,6 +17,7 @@ export interface ExplainPlanNodeData extends Record<string, unknown> {
   maxCost: number;
   maxTime: number;
   hasAnalyzeData: boolean;
+  isSelected: boolean;
 }
 
 export type ExplainPlanNodeType = Node<ExplainPlanNodeData, "explainPlan">;
@@ -22,15 +25,29 @@ export type ExplainPlanNodeType = Node<ExplainPlanNodeData, "explainPlan">;
 export const ExplainPlanNodeComponent = memo(
   ({ data }: NodeProps<ExplainPlanNodeType>) => {
     const { t } = useTranslation();
-    const { node, maxCost, hasAnalyzeData } = data;
+    const { node, maxCost, hasAnalyzeData, isSelected } = data;
     const costStyle = getNodeCostStyle(node.total_cost ?? 0, maxCost);
+    const rowRatio = getRowEstimateRatio(node);
+    const mismatch =
+      rowRatio != null && (rowRatio >= 4 || rowRatio <= 0.25)
+        ? rowRatio >= 1
+          ? {
+              value: formatRatio(rowRatio),
+              label: t("editor.visualExplain.overEstimate"),
+            }
+          : {
+              value: formatRatio(1 / rowRatio),
+              label: t("editor.visualExplain.underEstimate"),
+            }
+        : null;
 
     return (
       <div
         className={clsx(
-          "bg-elevated border border-strong rounded shadow-xl min-w-[260px] max-w-[300px] overflow-hidden",
+          "bg-elevated border border-strong rounded shadow-xl min-w-[260px] max-w-[300px] overflow-hidden transition-all",
           "border-l-4",
           costStyle.border,
+          isSelected && "ring-2 ring-blue-400/70 border-blue-400/70",
         )}
       >
         {/* Header */}
@@ -61,6 +78,17 @@ export const ExplainPlanNodeComponent = memo(
               </span>
               <span className="text-secondary font-mono">
                 {formatCost(node.total_cost)}
+              </span>
+            </div>
+          )}
+
+          {mismatch && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted">
+                {t("editor.visualExplain.largestEstimateGap")}
+              </span>
+              <span className="text-amber-300 font-mono font-semibold">
+                {mismatch.value}
               </span>
             </div>
           )}
@@ -107,6 +135,12 @@ export const ExplainPlanNodeComponent = memo(
           {node.index_condition && (
             <div className="text-[10px] text-muted font-mono truncate">
               {t("editor.visualExplain.indexCondition")}: {node.index_condition}
+            </div>
+          )}
+
+          {mismatch && (
+            <div className="text-[10px] text-amber-300 font-mono truncate">
+              {mismatch.label}
             </div>
           )}
         </div>

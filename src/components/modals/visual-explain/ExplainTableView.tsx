@@ -1,29 +1,37 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import type { ExplainNode, ExplainPlan } from "../../../types/explain";
-import { formatCost, formatTime, formatRows } from "../../../utils/explainPlan";
+import {
+  findExplainNode,
+  formatCost,
+  formatRatio,
+  formatRows,
+  formatTime,
+  getRowEstimateRatio,
+} from "../../../utils/explainPlan";
+import { ExplainNodeDetails } from "./ExplainNodeDetails";
 
 interface ExplainTableViewProps {
   plan: ExplainPlan;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
 }
 
-export function ExplainTableView({ plan }: ExplainTableViewProps) {
+export function ExplainTableView({
+  plan,
+  selectedId,
+  onSelect,
+}: ExplainTableViewProps) {
   const { t } = useTranslation();
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
-    // Expand all nodes by default
-    const ids = new Set<string>();
-    function collectIds(node: ExplainNode) {
-      ids.add(node.id);
-      for (const child of node.children) collectIds(child);
-    }
-    collectIds(plan.root);
-    return ids;
-  });
-  const [selectedId, setSelectedId] = useState<string | null>(
-    plan.root.id,
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() =>
+    collectExpandedIds(plan.root),
   );
+
+  useEffect(() => {
+    setExpandedIds(collectExpandedIds(plan.root));
+  }, [plan]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {
@@ -34,11 +42,10 @@ export function ExplainTableView({ plan }: ExplainTableViewProps) {
     });
   }, []);
 
-  const selectedNode = findNode(plan.root, selectedId);
+  const selectedNode = findExplainNode(plan.root, selectedId);
 
   return (
     <div className="flex h-full">
-      {/* Left: Tree Table */}
       <div className="flex-1 overflow-auto border-r border-default min-w-0">
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10 bg-base border-b border-default">
@@ -58,6 +65,9 @@ export function ExplainTableView({ plan }: ExplainTableViewProps) {
               <th className="text-right px-3 py-2 text-muted font-semibold whitespace-nowrap">
                 {t("editor.visualExplain.time")}
               </th>
+              <th className="text-right px-3 py-2 text-muted font-semibold whitespace-nowrap">
+                {t("editor.visualExplain.largestEstimateGap")}
+              </th>
               <th className="text-left px-3 py-2 text-muted font-semibold whitespace-nowrap">
                 {t("editor.visualExplain.filter")}
               </th>
@@ -70,33 +80,22 @@ export function ExplainTableView({ plan }: ExplainTableViewProps) {
               expandedIds={expandedIds}
               selectedId={selectedId}
               onToggle={toggleExpand}
-              onSelect={setSelectedId}
+              onSelect={onSelect}
               hasAnalyzeData={plan.has_analyze_data}
             />
           </tbody>
         </table>
       </div>
 
-      {/* Right: Detail Panel */}
       <div className="w-[320px] shrink-0 overflow-y-auto bg-base/50">
-        {selectedNode ? (
-          <NodeDetailPanel
-            node={selectedNode}
-            hasAnalyzeData={plan.has_analyze_data}
-          />
-        ) : (
-          <div className="p-4 text-xs text-muted">
-            {t("editor.visualExplain.selectNode")}
-          </div>
-        )}
+        <ExplainNodeDetails
+          node={selectedNode}
+          hasAnalyzeData={plan.has_analyze_data}
+        />
       </div>
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Tree Rows (recursive)
-// ---------------------------------------------------------------------------
 
 interface TreeRowsProps {
   node: ExplainNode;
@@ -134,19 +133,23 @@ function TreeRows({
       : "-";
 
   const rowsStr = node.plan_rows != null ? formatRows(node.plan_rows) : "-";
+  const rowRatio = getRowEstimateRatio(node);
+  const ratioStr =
+    rowRatio != null
+      ? rowRatio >= 1
+        ? formatRatio(rowRatio)
+        : formatRatio(1 / rowRatio)
+      : "-";
 
   return (
     <>
       <tr
         className={clsx(
           "cursor-pointer transition-colors border-b border-default/30",
-          isSelected
-            ? "bg-blue-900/30"
-            : "hover:bg-surface-hover",
+          isSelected ? "bg-blue-900/30" : "hover:bg-surface-hover",
         )}
         onClick={() => onSelect(node.id)}
       >
-        {/* Node Type with indentation + expand toggle */}
         <td className="px-3 py-1.5 whitespace-nowrap">
           <div
             className="flex items-center gap-1"
@@ -184,6 +187,20 @@ function TreeRows({
         <td className="px-3 py-1.5 text-right text-secondary font-mono whitespace-nowrap">
           {timeStr}
         </td>
+        <td className="px-3 py-1.5 text-right whitespace-nowrap">
+          <span
+            className={clsx(
+              "font-mono",
+              rowRatio == null
+                ? "text-secondary"
+                : rowRatio >= 4 || rowRatio <= 0.25
+                  ? "text-amber-300"
+                  : "text-secondary",
+            )}
+          >
+            {ratioStr}
+          </span>
+        </td>
         <td className="px-3 py-1.5 text-muted truncate max-w-[200px]">
           {node.filter ?? ""}
         </td>
@@ -205,127 +222,17 @@ function TreeRows({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Detail Panel
-// ---------------------------------------------------------------------------
+function collectExpandedIds(root: ExplainNode): Set<string> {
+  const ids = new Set<string>();
 
-interface NodeDetailPanelProps {
-  node: ExplainNode;
-  hasAnalyzeData: boolean;
-}
-
-function NodeDetailPanel({ node, hasAnalyzeData }: NodeDetailPanelProps) {
-  const { t } = useTranslation();
-
-  const generalEntries: [string, string][] = [
-    [t("editor.visualExplain.nodeType"), node.node_type],
-    ...(node.relation
-      ? [[t("editor.visualExplain.relation"), node.relation] as [string, string]]
-      : []),
-    ...(node.startup_cost != null && node.total_cost != null
-      ? [
-          [
-            t("editor.visualExplain.cost"),
-            `${formatCost(node.startup_cost)} - ${formatCost(node.total_cost)}`,
-          ] as [string, string],
-        ]
-      : node.total_cost != null
-        ? [[t("editor.visualExplain.cost"), formatCost(node.total_cost)] as [string, string]]
-        : []),
-    ...(node.plan_rows != null
-      ? [[t("editor.visualExplain.estRows"), formatRows(node.plan_rows)] as [string, string]]
-      : []),
-    ...(node.filter
-      ? [[t("editor.visualExplain.filter"), node.filter] as [string, string]]
-      : []),
-    ...(node.index_condition
-      ? [[t("editor.visualExplain.indexCondition"), node.index_condition] as [string, string]]
-      : []),
-    ...(node.join_type
-      ? [[t("editor.visualExplain.joinType"), node.join_type] as [string, string]]
-      : []),
-    ...(node.hash_condition
-      ? [[t("editor.visualExplain.hashCondition"), node.hash_condition] as [string, string]]
-      : []),
-  ];
-
-  const analyzeEntries: [string, string][] = hasAnalyzeData
-    ? [
-        ...(node.actual_rows != null
-          ? [[t("editor.visualExplain.actualRows"), formatRows(node.actual_rows)] as [string, string]]
-          : []),
-        ...(node.actual_time_ms != null
-          ? [[t("editor.visualExplain.time"), formatTime(node.actual_time_ms)] as [string, string]]
-          : []),
-        ...(node.actual_loops != null
-          ? [[t("editor.visualExplain.loops"), String(node.actual_loops)] as [string, string]]
-          : []),
-        ...(node.buffers_hit != null
-          ? [[t("editor.visualExplain.buffersHit"), String(node.buffers_hit)] as [string, string]]
-          : []),
-        ...(node.buffers_read != null
-          ? [[t("editor.visualExplain.buffersRead"), String(node.buffers_read)] as [string, string]]
-          : []),
-      ]
-    : [];
-
-  const extraEntries: [string, string][] = Object.entries(node.extra).map(
-    ([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)],
-  );
-
-  return (
-    <div className="text-xs">
-      <DetailSection title={t("editor.visualExplain.general")} entries={generalEntries} />
-      {analyzeEntries.length > 0 && (
-        <DetailSection title={t("editor.visualExplain.analyzeData")} entries={analyzeEntries} />
-      )}
-      {extraEntries.length > 0 && (
-        <DetailSection title={t("editor.visualExplain.extraDetails")} entries={extraEntries} />
-      )}
-    </div>
-  );
-}
-
-function DetailSection({
-  title,
-  entries,
-}: {
-  title: string;
-  entries: [string, string][];
-}) {
-  return (
-    <div className="border-b border-default">
-      <div className="px-3 py-1.5 bg-base text-muted font-semibold uppercase tracking-wider text-[10px]">
-        {title}
-      </div>
-      {entries.map(([name, value], i) => (
-        <div
-          key={`${name}-${i}`}
-          className="flex items-start justify-between px-3 py-1 border-b border-default/30 last:border-0"
-        >
-          <span className="text-muted shrink-0 mr-3">{name}</span>
-          <span className="text-primary font-mono text-right break-all">
-            {value}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function findNode(
-  root: ExplainNode,
-  id: string | null,
-): ExplainNode | null {
-  if (!id) return null;
-  if (root.id === id) return root;
-  for (const child of root.children) {
-    const found = findNode(child, id);
-    if (found) return found;
+  function walk(node: ExplainNode) {
+    ids.add(node.id);
+    for (const child of node.children) {
+      walk(child);
+    }
   }
-  return null;
+
+  walk(root);
+
+  return ids;
 }

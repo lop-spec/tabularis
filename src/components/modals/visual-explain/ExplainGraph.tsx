@@ -20,14 +20,20 @@ const nodeTypes = {
 
 interface ExplainGraphInnerProps {
   plan: ExplainPlan;
+  selectedNodeId: string | null;
+  onSelectNode: (nodeId: string) => void;
 }
 
-function ExplainGraphInner({ plan }: ExplainGraphInnerProps) {
+function ExplainGraphInner({
+  plan,
+  selectedNodeId,
+  onSelectNode,
+}: ExplainGraphInnerProps) {
   const { fitView } = useReactFlow();
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => explainPlanToFlow(plan),
-    [plan],
+    () => explainPlanToFlow(plan, selectedNodeId),
+    [plan, selectedNodeId],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -50,6 +56,7 @@ function ExplainGraphInner({ plan }: ExplainGraphInnerProps) {
       onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
       onInit={handleInit}
+      onNodeClick={(_, node) => onSelectNode(node.id)}
       fitView
       proOptions={{ hideAttribution: true }}
       minZoom={0.1}
@@ -69,13 +76,23 @@ function ExplainGraphInner({ plan }: ExplainGraphInnerProps) {
 
 interface ExplainGraphProps {
   plan: ExplainPlan;
+  selectedNodeId: string | null;
+  onSelectNode: (nodeId: string) => void;
 }
 
-export const ExplainGraph = ({ plan }: ExplainGraphProps) => {
+export const ExplainGraph = ({
+  plan,
+  selectedNodeId,
+  onSelectNode,
+}: ExplainGraphProps) => {
   return (
     <div className="h-full w-full">
       <ReactFlowProvider>
-        <ExplainGraphInner plan={plan} />
+        <ExplainGraphInner
+          plan={plan}
+          selectedNodeId={selectedNodeId}
+          onSelectNode={onSelectNode}
+        />
       </ReactFlowProvider>
     </div>
   );

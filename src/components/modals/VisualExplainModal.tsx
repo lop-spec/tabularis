@@ -1,13 +1,25 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Loader2, Network, RefreshCw, AlertTriangle } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Network,
+  RefreshCw,
+  AlertTriangle,
+} from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTheme } from "../../hooks/useTheme";
 import { useSettings } from "../../hooks/useSettings";
+import { useDatabase } from "../../hooks/useDatabase";
+import { useDrivers } from "../../hooks/useDrivers";
 import MonacoEditor from "@monaco-editor/react";
 import type { ExplainPlan } from "../../types/explain";
-import { isDataModifyingQuery } from "../../utils/explainPlan";
+import {
+  findExplainNode,
+  isDataModifyingQuery,
+} from "../../utils/explainPlan";
 import { isExplainableQuery } from "../../utils/sql";
+import { getDriverIcon } from "../../utils/driverUI";
 import {
   ExplainSummaryBar,
   type ExplainViewMode,
@@ -15,6 +27,8 @@ import {
 import { ExplainGraph } from "./visual-explain/ExplainGraph";
 import { ExplainTableView } from "./visual-explain/ExplainTableView";
 import { ExplainAiAnalysis } from "./visual-explain/ExplainAiAnalysis";
+import { ExplainNodeDetails } from "./visual-explain/ExplainNodeDetails";
+import { ExplainOverviewBar } from "./visual-explain/ExplainOverviewBar";
 
 interface VisualExplainModalProps {
   isOpen: boolean;
@@ -34,13 +48,46 @@ export const VisualExplainModal = ({
   const { t } = useTranslation();
   const { currentTheme } = useTheme();
   const { settings } = useSettings();
+  const { getConnectionData } = useDatabase();
+  const { allDrivers } = useDrivers();
   const [plan, setPlan] = useState<ExplainPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ExplainViewMode>("graph");
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const isDml = query ? isDataModifyingQuery(query) : false;
   const [analyze, setAnalyze] = useState(!isDml);
+  const connectionData = getConnectionData(connectionId);
+  const effectiveDriver =
+    connectionData?.driver ?? plan?.driver ?? "sqlite";
+  const driverManifest =
+    allDrivers.find((driver) => driver.id === effectiveDriver) ?? null;
+  const driverLabel = driverManifest?.name ?? effectiveDriver;
+  const connectionLabel = connectionData?.connectionName ?? connectionId;
+  const schemaLabel = schema ?? connectionData?.activeSchema ?? null;
+  const databaseLabel = connectionData?.databaseName ?? schema ?? "";
+  const locationLabel =
+    schemaLabel && schemaLabel !== databaseLabel
+      ? `${databaseLabel} / ${schemaLabel}`
+      : databaseLabel;
+
+  const selectedNode = useMemo(
+    () => (plan ? findExplainNode(plan.root, selectedNodeId) : null),
+    [plan, selectedNodeId],
+  );
+  const rawLanguage = useMemo(() => {
+    if (!plan?.raw_output) {
+      return "plaintext";
+    }
+
+    const trimmed = plan.raw_output.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      return "json";
+    }
+
+    return "plaintext";
+  }, [plan]);
 
   const handleExplain = useCallback(async () => {
     if (!query?.trim() || !connectionId) return;
@@ -62,6 +109,7 @@ export const VisualExplainModal = ({
         schema: schema || null,
       });
       setPlan(result);
+      setSelectedNodeId(result.root.id);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -91,7 +139,23 @@ export const VisualExplainModal = ({
               <h2 className="text-lg font-semibold text-primary">
                 {t("editor.visualExplain.title")}
               </h2>
-              <p className="text-xs text-secondary">{plan?.driver ?? ""}</p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <div className="inline-flex items-center gap-2 rounded-lg border border-default bg-surface-secondary/50 px-2.5 py-1 text-xs text-secondary">
+                  <span className="text-primary">{getDriverIcon(driverManifest, 14)}</span>
+                  <span className="font-medium text-primary">
+                    {connectionLabel}
+                  </span>
+                </div>
+                {locationLabel && (
+                  <div className="inline-flex items-center gap-2 rounded-lg border border-default bg-base/70 px-2.5 py-1 text-xs text-secondary">
+                    <span className="uppercase tracking-wide text-muted">
+                      {driverLabel}
+                    </span>
+                    <span className="text-muted">•</span>
+                    <span className="font-mono">{locationLabel}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <button
@@ -109,6 +173,12 @@ export const VisualExplainModal = ({
           onViewModeChange={setViewMode}
           aiEnabled={!!settings.aiEnabled}
         />
+        {plan && (
+          <ExplainOverviewBar
+            plan={plan}
+            onSelectNode={setSelectedNodeId}
+          />
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden min-h-0">
@@ -129,7 +199,7 @@ export const VisualExplainModal = ({
             viewMode === "raw" && plan.raw_output ? (
               <MonacoEditor
                 height="100%"
-                language="json"
+                language={rawLanguage}
                 theme={currentTheme.id}
                 value={plan.raw_output}
                 options={{
@@ -143,9 +213,27 @@ export const VisualExplainModal = ({
             ) : viewMode === "ai" ? (
               <ExplainAiAnalysis plan={plan} />
             ) : viewMode === "table" ? (
-              <ExplainTableView plan={plan} />
+              <ExplainTableView
+                plan={plan}
+                selectedId={selectedNodeId}
+                onSelect={setSelectedNodeId}
+              />
             ) : (
-              <ExplainGraph plan={plan} />
+              <div className="flex h-full">
+                <div className="flex-1 min-w-0 border-r border-default">
+                  <ExplainGraph
+                    plan={plan}
+                    selectedNodeId={selectedNodeId}
+                    onSelectNode={setSelectedNodeId}
+                  />
+                </div>
+                <div className="w-[320px] shrink-0 overflow-y-auto bg-base/50">
+                  <ExplainNodeDetails
+                    node={selectedNode}
+                    hasAnalyzeData={plan.has_analyze_data}
+                  />
+                </div>
+              </div>
             )
           ) : null}
         </div>
