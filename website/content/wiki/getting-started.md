@@ -13,6 +13,8 @@ This guide walks you through the first things to do after installing Tabularis.
 
 Click the **`+`** button in the left sidebar to open the New Connection form.
 
+![Connection manager with connection form fields](/img/tabularis-connection-manager.png)
+
 Fill in the required fields:
 
 | Field | Notes |
@@ -47,6 +49,8 @@ For PostgreSQL connections with multiple schemas, use the schema selector in the
 ## 3. Run a query
 
 Click the **SQL Editor** tab or open a new editor tab. Type your SQL, then execute it with:
+
+![SQL editor with query results in the data grid](/img/tabularis-sql-editor-data-grid.png)
 
 | Action | macOS | Windows / Linux |
 | :--- | :--- | :--- |

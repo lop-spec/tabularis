@@ -1,6 +1,7 @@
 import Link from "next/link";
 import fs from "fs";
 import path from "path";
+import { JsonLd } from "@/components/JsonLd";
 import { marked } from "@/lib/markdown";
 import { Footer } from "@/components/Footer";
 import { DiscordIcon } from "@/components/Icons";
@@ -14,9 +15,76 @@ import { DownloadButtons } from "@/components/DownloadButtons";
 import { SponsorsSection, IconExternalLink, IconArrow } from "@/components/SponsorsSection";
 import { ExpandableText } from "@/components/ExpandableText";
 import { CarouselGrid } from "@/components/CarouselGrid";
+import {
+  buildBreadcrumbJsonLd,
+  buildSoftwareApplicationJsonLd,
+} from "@/lib/seo";
 
 const GITHUB_EDIT_HOME_URL =
   "https://github.com/debba/tabularis/edit/main/website/content/home.md";
+
+const SEO_ENTRY_POINTS = [
+  {
+    href: "/solutions/postgresql-client",
+    title: "PostgreSQL Client",
+    excerpt:
+      "A developer-focused PostgreSQL workflow with SQL editing, schema tools, SSH, and notebooks.",
+  },
+  {
+    href: "/solutions/sql-notebooks",
+    title: "SQL Notebooks",
+    excerpt:
+      "Reusable SQL analysis with cells, markdown, inline charts, and parameters.",
+  },
+  {
+    href: "/solutions/mcp-database-client",
+    title: "MCP Database Client",
+    excerpt:
+      "A local database workflow for Claude, Cursor, and other MCP-compatible AI tools.",
+  },
+  {
+    href: "/compare/dbeaver-alternative",
+    title: "DBeaver Alternative",
+    excerpt:
+      "A focused comparison for developers evaluating a more modern open-source SQL workflow.",
+  },
+  {
+    href: "/solutions/open-source-database-client-linux",
+    title: "Database Client for Linux",
+    excerpt:
+      "An open-source desktop workflow for Linux users who want SQL editing, SSH, and cross-platform parity.",
+  },
+  {
+    href: "/solutions/sqlite-client-for-developers",
+    title: "SQLite Client",
+    excerpt:
+      "A stronger desktop workflow for SQLite-based apps, prototypes, migrations, and local debugging.",
+  },
+  {
+    href: "/solutions/mysql-client-for-developers",
+    title: "MySQL Client",
+    excerpt:
+      "A developer-focused MySQL and MariaDB workflow with SQL editing, SSH, and reusable notebook analysis.",
+  },
+  {
+    href: "/solutions/secure-database-client",
+    title: "Secure Database Client",
+    excerpt:
+      "A local-first database workflow with SSH tunneling, system keychain storage, and controlled desktop access.",
+  },
+  {
+    href: "/solutions/plugin-based-database-client",
+    title: "Plugin-Based Database Client",
+    excerpt:
+      "An extensible database client with a plugin system for custom engines and broader database workflows.",
+  },
+  {
+    href: "/solutions/duckdb-redis-database-workflows",
+    title: "DuckDB and Redis Workflows",
+    excerpt:
+      "Extend beyond built-in engines with plugin-driven workflows for analytical and mixed-stack database use cases.",
+  },
+];
 
 // Helper to parse home.md into sections
 function getHomeContent() {
@@ -84,6 +152,12 @@ export default function HomePage() {
 
   return (
     <div className="container">
+      <JsonLd
+        data={[
+          buildBreadcrumbJsonLd([{ name: "Home", path: "/" }]),
+          buildSoftwareApplicationJsonLd(),
+        ]}
+      />
       <SiteHeader />
       {/* HERO */}
       <header className="hero">
@@ -101,12 +175,12 @@ export default function HomePage() {
             marginTop: "1rem",
           }}
         >
-          A lightweight, developer-focused database management tool.
+          An open-source desktop client for modern databases.
           <br />
-          Supports <strong>MySQL</strong>, <strong>PostgreSQL</strong> and{" "}
-          <strong>SQLite</strong>. Hackable with plugins.
+          Supports <strong>PostgreSQL</strong>, <strong>MySQL/MariaDB</strong>,
+          and <strong>SQLite</strong>. Hackable with plugins.
           <br />
-          Built for speed, security, and aesthetics.
+          Notebooks, AI, and MCP included for real daily work.
         </p>
 
         <DownloadButtons showInstallLink />
@@ -243,10 +317,10 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                First-class support for <strong>PostgreSQL</strong> (with
-                multi-schema support), <strong>MySQL/MariaDB</strong>, and{" "}
-                <strong>SQLite</strong>. Manage multiple connection profiles with
-                secure local persistence.
+                Work across <strong>PostgreSQL</strong>,{" "}
+                <strong>MySQL/MariaDB</strong>, and <strong>SQLite</strong> from
+                one consistent interface. Save multiple connection profiles
+                locally and switch between them without friction.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/connections" className="sponsor-learn-btn">
@@ -267,10 +341,10 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Generate SQL from natural language (&quot;Show me active
-                users&quot;) and get explanations for complex queries. Securely
-                integrated with OpenAI, Anthropic, OpenRouter, and{" "}
-                <strong>Ollama (Local LLM)</strong> for total privacy.
+                Draft SQL from plain English, explain unfamiliar queries, and
+                iterate faster while staying in control of your provider. Works
+                with OpenAI, Anthropic, OpenRouter, and{" "}
+                <strong>Ollama (local models)</strong>.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/ai-assistant" className="sponsor-learn-btn">
@@ -291,9 +365,9 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Built-in <strong>Model Context Protocol</strong> support. Expose
-                your database schemas and run queries directly from Claude or
-                other MCP-compatible AI agents.
+                Built-in <strong>Model Context Protocol</strong> support lets AI
+                agents inspect your schemas and run database actions through
+                Tabularis instead of ad-hoc scripts.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/mcp-server" className="sponsor-learn-btn">
@@ -314,9 +388,9 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Construct complex queries visually. Drag tables, connect columns
-                for JOINs, and let the tool write the SQL for you. Includes
-                aggregate functions and advanced filtering.
+                Build joins, filters, and aggregations visually, then inspect the
+                generated SQL. Useful when exploring a schema or assembling a
+                query before dropping down to raw SQL.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/visual-query-builder" className="sponsor-learn-btn">
@@ -337,8 +411,9 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Monaco-based editor with syntax highlighting, multiple tabs, and
-                DataGrip-style execution (run selected, run all).
+                Monaco-powered editing with multiple tabs, syntax highlighting,
+                and precise execution controls. Run the current selection or the
+                whole script without leaving the keyboard.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/editor" className="sponsor-learn-btn">
@@ -359,10 +434,10 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Interactive multi-cell workspaces combining <strong>SQL</strong> and{" "}
-                <strong>Markdown</strong> cells. Inline results, bar/line/pie charts,
-                cross-cell variables with <code>{"{{cellName.column}}"}</code> syntax,
-                notebook-level parameters, and Run All with stop-on-error.
+                Combine <strong>SQL</strong> and <strong>Markdown</strong> in
+                reusable, multi-cell workflows. Keep inline results, lightweight
+                charts, shared variables, parameters, and repeatable analysis in
+                one place.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/notebooks" className="sponsor-learn-btn">
@@ -383,10 +458,9 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                <strong>Inline editing</strong> of table and column properties
-                directly from the sidebar. GUI wizards to Create Tables, Modify
-                Columns, and Manage Indexes/Foreign Keys. Visualize your database
-                structure with an interactive <strong>ER Diagram</strong>.
+                Edit tables and columns inline, use guided schema dialogs for
+                structural changes, and inspect relationships with an interactive{" "}
+                <strong>ER diagram</strong>.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/schema-management" className="sponsor-learn-btn">
@@ -431,9 +505,9 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Inline editing, row deletion, and easy data entry. Copy selected
-                rows to the clipboard, or export results to JSON or CSV with a
-                single click.
+                Browse and edit result sets without leaving the query workflow.
+                Update rows inline, remove records, copy selections, or export
+                results to JSON and CSV in one step.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/data-grid" className="sponsor-learn-btn">
@@ -454,10 +528,9 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Connect to remote databases securely through SSH tunnels and
-                manage SSH connections right from the connection manager.
-                Passwords and API Keys are stored securely in your system&apos;s
-                Keychain.
+                Reach remote databases through SSH tunnels and keep secrets out
+                of plain text. Passwords and API keys are stored in your
+                system&apos;s keychain.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/connections" className="sponsor-learn-btn">
@@ -478,10 +551,9 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Work with <strong>multiple connections simultaneously</strong> in
-                a resizable split-pane layout. Open any connection directly from
-                the sidebar context menu and compare results across databases side
-                by side.
+                Open <strong>multiple connections at once</strong> in a
+                resizable split layout and compare datasets side by side without
+                jumping between windows.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/split-view" className="sponsor-learn-btn">
@@ -502,8 +574,9 @@ export default function HomePage() {
                 </Link>
               </div>
               <ExpandableText>
-                Export full database dumps and re-import SQL with a guided flow,
-                making migrations and backups fast and safe.
+                Export full SQL dumps and bring them back with a guided import
+                flow. Useful for backups, local restores, and quick migration
+                loops.
               </ExpandableText>
               <div className="sponsor-card-footer">
                 <Link href="/wiki/dump-import" className="sponsor-learn-btn">
@@ -537,6 +610,28 @@ export default function HomePage() {
             </div>
           </article>
         </CarouselGrid>
+      </section>
+
+      <section className="section">
+        <h2>_explore_by_intent</h2>
+        <p>
+          Start from the workflow you actually care about: PostgreSQL work,
+          MySQL and SQLite work, reusable SQL analysis, secure access,
+          extensibility, AI-native database tooling, or tool comparisons.
+        </p>
+        <div className="wiki-index-grid" style={{ marginTop: "1.5rem" }}>
+          {SEO_ENTRY_POINTS.map((entry) => (
+            <Link key={entry.href} href={entry.href} className="wiki-index-card">
+              <span className="wiki-index-card-title">{entry.title}</span>
+              <span className="wiki-index-card-excerpt">{entry.excerpt}</span>
+            </Link>
+          ))}
+        </div>
+        <p className="blog-all-link" style={{ marginTop: "1.25rem" }}>
+          <Link href="/solutions" style={{ fontWeight: 600 }}>
+            Browse all solutions →
+          </Link>
+        </p>
       </section>
 
       {/* PLUGINS */}
@@ -643,10 +738,9 @@ export default function HomePage() {
       <section className="section">
         <h2>_themes</h2>
         <p>
-          Why stare at a dull interface? Tabularis brings a first-class theming
-          experience. Switch instantly between <strong>10+ presets</strong>{" "}
-          without restarting. Syntax highlighting is automatically generated
-          from the UI theme.
+          Tabularis treats themes as part of the workflow, not a cosmetic extra.
+          Switch between <strong>10+ presets</strong> instantly, with editor
+          syntax colors generated to stay coherent with the active UI theme.
         </p>
 
         <div className="theme-grid">
@@ -702,8 +796,8 @@ export default function HomePage() {
       <section className="section" id="wiki">
         <h2>_wiki</h2>
         <p>
-          Need a deeper dive? Explore our documentation to learn about all the
-          powerful features Tabularis has to offer.
+          Need implementation details, setup steps, or feature walkthroughs? The
+          wiki covers the workflows behind the UI.
         </p>
         <p className="blog-all-link" style={{ marginTop: "1rem" }}>
           <Link href="/wiki" style={{ fontWeight: 600 }}>
@@ -725,14 +819,19 @@ export default function HomePage() {
             View all posts →
           </Link>
         </p>
+        <p className="blog-all-link" style={{ marginTop: "0.75rem" }}>
+          <Link href="/compare/datagrip-alternative" style={{ fontWeight: 600 }}>
+            Compare Tabularis with DataGrip →
+          </Link>
+        </p>
       </section>
 
       {/* COMMUNITY */}
       <section className="section">
         <h2>_community</h2>
         <p>
-          Join our <strong>Discord server</strong> to chat with the maintainers,
-          suggest new features, or get help from the community.
+          Join the <strong>Discord server</strong> to talk with maintainers,
+          share feedback, report friction, and help shape the roadmap.
         </p>
         <div style={{ marginTop: "2rem" }}>
           <a

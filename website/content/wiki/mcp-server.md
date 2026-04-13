@@ -7,7 +7,7 @@ category: "AI & Integration"
 
 # MCP Server
 
-Tabularis includes a built-in **Model Context Protocol (MCP)** server. Once configured, external AI assistants — including **Claude Desktop**, **Claude Code**, **Cursor**, **Windsurf**, and **Antigravity** — can list your saved connections, read database schemas, and run SQL queries, all without leaving their chat interface.
+Tabularis includes a built-in **Model Context Protocol (MCP)** server. Once configured, external AI assistants — including **Claude Desktop**, **Claude Code**, **Cursor**, **Windsurf**, and **Antigravity** — can list your saved connections, inspect schemas, describe tables, and run SQL queries, all without leaving their chat interface.
 
 ![MCP Server Integration](/img/tabularis-mcp-server.png)
 
@@ -28,7 +28,7 @@ Starting with v0.9.9, Tabularis detects all supported AI clients automatically a
 
 1. Open **Settings → MCP** (or click the plug icon in the sidebar).
 2. The **MCP Server Integration** panel lists every detected AI client alongside the resolved path to its config file.
-3. Click **Install Config** next to the client you want to connect. Tabularis writes (or patches) the required `mcpServers` entry directly into that config file.
+3. Click **Install Config** next to the client you want to connect. For file-based clients, Tabularis writes or patches the required `mcpServers` entry directly into the config file. For Claude Code, it runs `claude mcp add --scope user ...` instead.
 4. Restart the target AI client. It will immediately see Tabularis as an available MCP server.
 
 ### Supported AI Clients
@@ -45,7 +45,7 @@ On macOS and Windows the paths are resolved automatically to their platform equi
 
 ## Manual Configuration
 
-If you prefer to configure it manually, the **Manual Configuration** section at the bottom of the integration panel shows the exact JSON block to paste, with the correct binary path pre-filled for your system.
+If you prefer to configure it manually, the **Manual Configuration** section at the bottom of the integration panel shows the exact JSON block to paste for file-based clients, with the correct binary path pre-filled for your system.
 
 The block to add looks like:
 
@@ -70,6 +70,12 @@ The block to add looks like:
 
 Replace `/path/to/tabularis` with the actual path to the Tabularis binary on your system. After saving the file, restart the AI client.
 
+For Claude Code, the equivalent manual command is:
+
+```bash
+claude mcp add --scope user tabularis /path/to/tabularis -- --mcp
+```
+
 ## Resources
 
 Resources are read by the AI to understand your data environment without executing queries.
@@ -88,7 +94,7 @@ Returns the list of all saved connections (id, name, driver, host, database). Pa
 
 ### `tabularis://{connection_id}/schema`
 
-Returns the table list for a specific connection. The `{connection_id}` can be the connection's UUID **or** its human-readable name (case-insensitive, partial match supported).
+Returns the table list for a specific connection. The `{connection_id}` can be the connection UUID, the exact connection name (case-insensitive), or a partial name match.
 
 **Example:**
 ```
@@ -100,6 +106,33 @@ tabularis://abc123/schema
 
 Tools are actions the AI can call to retrieve or manipulate data.
 
+### `list_connections`
+
+Returns the same safe connection list exposed by `tabularis://connections`.
+
+### `list_tables`
+
+Lists tables for a connection.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `connection_id` | `string` | Connection UUID or exact name |
+| `schema` | `string` | Optional schema name. Defaults to `public` for PostgreSQL. |
+
+### `describe_table`
+
+Returns columns, foreign keys, and indexes for one table.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `connection_id` | `string` | Connection UUID or exact name |
+| `table_name` | `string` | Table to inspect |
+| `schema` | `string` | Optional schema name. Defaults to `public` for PostgreSQL. |
+
 ### `run_query`
 
 Executes a SQL query on a specific connection and returns the results.
@@ -108,10 +141,10 @@ Executes a SQL query on a specific connection and returns the results.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `connection_id` | `string` | The connection UUID or name (partial match supported) |
+| `connection_id` | `string` | Connection UUID or exact name |
 | `query` | `string` | The SQL query to execute |
 
-**Returns:** query results as JSON with `columns`, `rows`, `total_count`, and `execution_time_ms`.
+**Returns:** query results as JSON. The MCP server currently caps query results to 100 rows per call.
 
 **Example prompts:**
 
@@ -121,7 +154,7 @@ Executes a SQL query on a specific connection and returns the results.
 
 > "Which indexes are missing on the `events` table in my analytics database?"
 
-Claude (or any connected AI) will call `run_query` with the appropriate `connection_id` and SQL statement, then format the results into a readable answer.
+Claude (or any connected AI) will call the appropriate tool with the resolved `connection_id`, then format the result into a readable answer.
 
 ## Security Considerations
 
@@ -140,7 +173,10 @@ Claude (or any connected AI) will call `run_query` with the appropriate `connect
 - Use the **Install Config** button in Tabularis to let it write the correct path automatically.
 
 **`run_query` returns "Connection not found"**
-- The `connection_id` must match a name or UUID in your saved connections. Use the `tabularis://connections` resource to list available IDs.
+- Tool calls match by UUID or exact connection name. Use `tabularis://connections` or `list_connections` to see the available identifiers.
+
+**A schema resource works but shows only the `public` schema on PostgreSQL**
+- That is expected for the `tabularis://{connection_id}/schema` resource. Use `list_tables` or `describe_table` with an explicit `schema` argument when you need a different PostgreSQL schema.
 
 **No resources appear in the AI client**
 - Tabularis reads connections from `connections.json` at the standard app data path. If you haven't saved any connections yet, the resource list will be empty.

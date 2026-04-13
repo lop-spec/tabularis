@@ -1,58 +1,60 @@
 # Why Tabularis
 
-This project was born from frustration with existing database tools. Most current solutions feel clunky, outdated, or bloated with poor user experience.
+Tabularis started from a simple frustration: too many database clients make routine work feel heavier than it should.
 
-**Tabularis** is the answer: a refreshing alternative built to prioritize UX without sacrificing power. It bridges the gap between native performance and web flexibility, using Tauri to keep the footprint tiny and startup instant.
+**Tabularis** is an open-source desktop database client. It gives you one fast workspace for everyday SQL work without locking you into a single engine or a bloated UI.
+
+It supports **PostgreSQL**, **MySQL/MariaDB**, and **SQLite** out of the box, and it is **hackable with plugins** when your workflow needs more. Query data, inspect schemas, manage connections, and document analysis without constantly switching tools.
 
 # Capabilities
 
 ### 🔌 Multi-Database
-First-class support for **PostgreSQL** (with multi-schema support), **MySQL/MariaDB**, and **SQLite**. Manage multiple connection profiles with secure local persistence.
+Use **PostgreSQL** (with multi-schema support), **MySQL/MariaDB**, and **SQLite** from one consistent interface. Save connection profiles locally and switch contexts quickly.
 
 ### 🤖 AI Assistance (Experimental)
-Generate SQL from natural language ("Show me active users") and get explanations for complex queries. Securely integrated with OpenAI, Anthropic, OpenRouter, and **Ollama (Local LLM)** for total privacy.
+Draft SQL from natural language, explain unfamiliar queries, and iterate faster with AI help. Supports OpenAI, Anthropic, OpenRouter, and **Ollama** for local models.
 
 ### 🔌 MCP Server
-Built-in **Model Context Protocol** support. Expose your database schemas and run queries directly from Claude or other MCP-compatible AI agents.
+Built-in **Model Context Protocol** support lets compatible AI agents inspect your schemas and work through Tabularis as the database bridge.
 
 ### 🎨 Visual Query Builder
-Construct complex queries visually. Drag tables, connect columns for JOINs, and let the tool write the SQL for you. Includes aggregate functions and advanced filtering.
+Assemble joins, filters, and aggregations visually, then inspect the SQL that gets generated. Useful for exploration and for validating query structure before editing by hand.
 
 ### ⌨️ Keyboard Shortcuts & Custom Bindings
 
-Built-in shortcuts for navigation, the SQL editor, and the data grid — all customizable from **Settings → Keyboard Shortcuts**. Remap any shortcut to your preferred combo, reset it with one click, or edit `keybindings.json` directly. Changes persist across sessions.
+Built-in shortcuts cover navigation, the SQL editor, and the data grid. Remap combinations from **Settings → Keyboard Shortcuts**, reset them in one click, or edit `keybindings.json` directly.
 
 ### 🔒 SSH Tunneling & Security
-Connect to remote databases securely through SSH tunnels and manage SSH connections right from the connection manager. Passwords and API Keys are stored securely in your system's Keychain.
+Reach remote databases through SSH tunnels directly from the connection manager. Passwords and API keys are stored securely in your system keychain.
 
 ### 📝 Modern SQL Editor
-Monaco-based editor with syntax highlighting, multiple tabs, and DataGrip-style execution (run selected, run all).
+Monaco-powered SQL editing with syntax highlighting, multiple tabs, and precise execution controls for selected text or full scripts.
 
 ### 📓 SQL Notebooks
-Interactive multi-cell workspaces combining **SQL** and **Markdown** cells. Inline results, bar/line/pie charts, cross-cell variables with `{{cellName.column}}` syntax, notebook-level parameters, and Run All with stop-on-error.
+Reusable multi-cell workspaces that combine **SQL** and **Markdown**. Keep inline results, simple charts, shared variables, notebook parameters, and repeatable analysis together.
 
 ### 🪟 Split View
-Work with **multiple connections simultaneously** in a resizable split-pane layout. Open any connection directly from the sidebar context menu and compare results across databases side by side.
+Open **multiple connections simultaneously** in a resizable split layout and compare queries or data across databases side by side.
 
 ### 🗄️ Schema Management
-**Inline editing** of table and column properties directly from the sidebar. GUI wizards to Create Tables, Modify Columns, and Manage Indexes/Foreign Keys.
+Edit table and column properties inline, then use guided dialogs to create tables, modify columns, and manage indexes or foreign keys.
 
 # Plugins
 
-Tabularis supports extending its database support via an **external plugin system**. Plugins are standalone executables that communicate with the app through **JSON-RPC 2.0 over stdin/stdout**. They can be written in any programming language and distributed independently of the main app.
+Tabularis is **hackable with an external plugin system**. Plugins are standalone executables that communicate with the app over **JSON-RPC 2.0 via stdin/stdout**, so database support can evolve independently from the core release cycle.
 
 ### 🧩 Language-Agnostic
-Write your driver in Rust, Go, Python, Node.js — anything that speaks JSON-RPC over stdin/stdout. No SDK required.
+Write a driver in Rust, Go, Python, Node.js, or any language that can speak JSON-RPC over stdin/stdout. No heavyweight SDK required.
 
 ### ⚡ Hot Install
-Install, update, and remove plugins from **Settings → Plugins** without restarting. New drivers appear instantly in the connection form.
+Install, update, and remove plugins from **Settings → Plugins** without restarting the app. New drivers appear immediately in the connection form.
 
 ### 🔒 Process Isolation
-Each plugin runs as a separate process. A crashing plugin never takes down the app — only the affected connection fails.
+Each plugin runs in its own process. If a plugin crashes, the failure is isolated to that integration instead of taking down the whole app.
 
 # Themes
 
-Why stare at a dull interface? Tabularis brings a first-class theming experience. Switch instantly between **10+ presets** without restarting. Syntax highlighting is automatically generated from the UI theme, ensuring perfect visual harmony.
+Themes are part of the product experience, not an afterthought. Switch instantly between **10+ presets** without restarting, with syntax highlighting generated to stay coherent with the active UI theme.
 
 # Installation
 
@@ -96,6 +98,6 @@ Requires Node.js and Rust installed on your machine.
 ```bash
 git clone https://github.com/debba/tabularis.git
 cd tabularis
-npm install
-npm run tauri build
+pnpm install
+pnpm tauri build
 ```

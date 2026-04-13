@@ -1,17 +1,41 @@
 name: tabularis
 base: core24
 version: "0.0.0"
-summary: A lightweight, developer-focused database management tool
+summary: Open-source database client with AI, notebooks, and plugins
 website: https://tabularis.dev
 issues: https://github.com/debba/tabularis/issues
 source-code: https://github.com/debba/tabularis
 title: Tabularis
 contact: andrea@debbaweb.it
 description: |
-  Tabularis is a lightweight, developer-focused database management tool
-  supporting MySQL, PostgreSQL, and SQLite. Features include SSH tunneling,
-  visual schema explorer, AI-powered SQL assistance, and system keychain
-  integration.
+  Tabularis is a free, open-source desktop database client for PostgreSQL,
+  MySQL/MariaDB, and SQLite. Built with Rust (Tauri v2) and React, it is
+  fast, lightweight, and designed for everyday SQL work.
+
+  SQL Notebooks: combine SQL and Markdown cells with inline charts, cross-cell
+  variables, parameters, and export to HTML/CSV/JSON.
+
+  AI-Powered SQL Assistant: generate SQL from natural language, explain queries,
+  and get optimization suggestions. Supports OpenAI, Claude, Ollama (local),
+  OpenRouter, and any OpenAI-compatible API.
+
+  MCP Server: built-in Model Context Protocol server for AI agent integration
+  with Claude Desktop, Claude Code, Cursor, and Windsurf.
+
+  Visual Query Builder: drag-and-drop interface for JOINs, filters, aggregates,
+  and sorting with real-time SQL generation.
+
+  Plugin System: add any database driver (DuckDB, ClickHouse, MongoDB, etc.)
+  using JSON-RPC plugins in any language.
+
+  Also includes: Monaco-based SQL editor with smart autocomplete, high-performance
+  virtualized data grid with inline editing, ER diagram visualization, SSH
+  tunneling, system keychain credential storage, split view, SQL dump/import,
+  10+ themes, customizable keyboard shortcuts, and multi-language support
+  (EN, IT, ES, ZH).
+
+  Website: https://tabularis.dev
+  Source: https://github.com/debba/tabularis
 
 grade: stable
 confinement: strict
