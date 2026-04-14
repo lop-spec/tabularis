@@ -46,7 +46,7 @@ export function ExplainOverviewBar({
       ),
       nodeId: summary.highestCostNode.nodeId,
       icon: Layers2,
-      tone: "blue",
+      tone: "blue" as const,
     },
     summary.slowestNode && {
       key: "slowest-step",
@@ -58,7 +58,7 @@ export function ExplainOverviewBar({
       ),
       nodeId: summary.slowestNode.nodeId,
       icon: Clock3,
-      tone: "amber",
+      tone: "amber" as const,
     },
     summary.largestRowMismatchNode?.ratio != null && {
       key: "estimate-gap",
@@ -71,7 +71,7 @@ export function ExplainOverviewBar({
       ),
       nodeId: summary.largestRowMismatchNode.nodeId,
       icon: AlertTriangle,
-      tone: "red",
+      tone: "red" as const,
     },
     summary.sequentialScans > 0 && {
       key: "sequential-scans",
@@ -80,7 +80,7 @@ export function ExplainOverviewBar({
       description: t("editor.visualExplain.scanOperations"),
       nodeId: summary.highestCostNode?.nodeId ?? plan.root.id,
       icon: ScanSearch,
-      tone: "amber",
+      tone: "amber" as const,
     },
     summary.tempOperations > 0 && {
       key: "temp-operations",
@@ -89,7 +89,7 @@ export function ExplainOverviewBar({
       description: t("editor.visualExplain.sortOrTempOperations"),
       nodeId: summary.slowestNode?.nodeId ?? plan.root.id,
       icon: Database,
-      tone: "purple",
+      tone: "purple" as const,
     },
   ].filter(Boolean);
 
