@@ -400,6 +400,29 @@ export default function HomePage() {
             </div>
           </article>
           <article className="feature-card has-screenshot">
+            <Link href="/wiki/visual-explain" className="feature-card-screenshot">
+              <img src="/img/posts/tabularis-visual-explain-graph-view-execution-plan.png" alt="Visual EXPLAIN" />
+            </Link>
+            <div className="feature-card-body">
+              <div className="feature-card-header">
+                <h3>🧠 Visual EXPLAIN</h3>
+                <Link href="/wiki/visual-explain" className="sponsor-external-link" aria-label="Learn more about Visual EXPLAIN">
+                  <IconExternalLink size={13} />
+                </Link>
+              </div>
+              <ExpandableText>
+                Turn execution plans into interactive graphs, exact node tables,
+                raw output, and optional AI analysis. Useful for spotting costly
+                scans, estimate gaps, and optimizer choices faster.
+              </ExpandableText>
+              <div className="sponsor-card-footer">
+                <Link href="/wiki/visual-explain" className="sponsor-learn-btn">
+                  Learn more <IconArrow size={12} />
+                </Link>
+              </div>
+            </div>
+          </article>
+          <article className="feature-card has-screenshot">
             <Link href="/wiki/editor" className="feature-card-screenshot">
               <img src="/img/tabularis-sql-editor-data-grid.png" alt="SQL Editor" />
             </Link>

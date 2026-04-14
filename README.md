@@ -69,6 +69,7 @@ _[Become a sponsor →](https://tabularis.dev/sponsors)_
   - [SQL Notebooks](#sql-notebooks)
   - [Keyboard Shortcuts](#keyboard-shortcuts)
   - [Visual Query Builder](#visual-query-builder)
+  - [Visual EXPLAIN](#visual-explain)
   - [Data Grid](#data-grid)
   - [Logging](#logging)
   - [Plugin System](#plugin-system)
@@ -248,6 +249,15 @@ Join our [Discord server](https://discord.gg/YrZPHAwMSG) to talk with the mainta
 - **Visual JOINs:** Connect tables to create relationships.
 - **Advanced Logic:** WHERE/HAVING filters, aggregates (COUNT, SUM, AVG), sorting, and limits.
 - **Real-time SQL:** Instant code generation.
+
+### Visual EXPLAIN
+
+> [Full reference on tabularis.dev →](https://tabularis.dev/wiki/visual-explain)
+
+- **Interactive Plan Graphs:** Inspect execution plans as navigable node graphs instead of raw text.
+- **Table, Raw, and AI Views:** Switch between exact node metrics, original database output, and optional AI-assisted analysis.
+- **Cross-Database Support:** Works with PostgreSQL, MySQL/MariaDB, and SQLite using the best available `EXPLAIN` format per driver.
+- **Faster Optimization Loops:** Spot expensive scans, estimate gaps, join behavior, and optimizer choices without leaving the editor.
 
 ### Data Grid
 
