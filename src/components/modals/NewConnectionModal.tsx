@@ -42,6 +42,9 @@ interface ConnectionParams {
   password?: string;
   database: string | string[];
   ssl_mode?: string;
+  ssl_ca?: string;
+  ssl_cert?: string;
+  ssl_key?: string;
   // SSH
   ssh_enabled?: boolean;
   ssh_connection_id?: string;
@@ -138,7 +141,7 @@ export const NewConnectionModal = ({
   >(null);
 
   // ── tab ──
-  const [activeTab, setActiveTab] = useState<"general" | "databases" | "ssh">(
+  const [activeTab, setActiveTab] = useState<"general" | "databases" | "ssh" | "ssl">(
     "general",
   );
 
@@ -688,25 +691,6 @@ export const NewConnectionModal = ({
               type="number"
               placeholder={driver === "mysql" ? "3306" : "5432"}
             />
-            {driver === "postgres" && (
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
-                  {t("newConnection.sslMode", { defaultValue: "SSL Mode" })}
-                </label>
-                <Select
-                  value={formData.ssl_mode || "prefer"}
-                  options={["disable", "allow", "prefer", "require"]}
-                  labels={{
-                    disable: t("newConnection.sslModes.disable"),
-                    allow: t("newConnection.sslModes.allow"),
-                    prefer: t("newConnection.sslModes.prefer"),
-                    require: t("newConnection.sslModes.require"),
-                  }}
-                  onChange={(v) => updateField("ssl_mode", v)}
-                  searchable={false}
-                />
-              </div>
-            )}
           </div>
 
           {/* User + Password */}
@@ -946,6 +930,175 @@ export const NewConnectionModal = ({
                 "Click Load Databases to fetch available databases.",
             })}
           </p>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── rendered SSL tab content ──
+  const sslTabContent = (
+    <div className="space-y-4">
+      <p className="text-xs text-muted">
+        {t("newConnection.sslDescription", {
+          defaultValue: "Configure SSL/TLS certificates for secure MySQL connections (optional).",
+        })}
+      </p>
+
+      {/* SSL Mode */}
+      <div className="flex flex-col gap-1">
+        <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+          {t("newConnection.sslMode", { defaultValue: "SSL Mode" })}
+        </label>
+        <Select
+          value={formData.ssl_mode || (driver === "postgres" ? "prefer" : "required")}
+          options={
+            driver === "postgres"
+              ? ["disable", "allow", "prefer", "require"]
+              : ["disabled", "preferred", "required", "verify_ca", "verify_identity"]
+          }
+          labels={
+            driver === "postgres"
+              ? {
+                  disable: t("newConnection.sslModes.disable", { defaultValue: "Disable" }),
+                  allow: t("newConnection.sslModes.allow", { defaultValue: "Allow" }),
+                  prefer: t("newConnection.sslModes.prefer", { defaultValue: "Prefer" }),
+                  require: t("newConnection.sslModes.require", { defaultValue: "Require" }),
+                }
+              : {
+                  disabled: t("newConnection.sslModes.disabled", { defaultValue: "Disabled" }),
+                  preferred: t("newConnection.sslModes.preferred", { defaultValue: "Preferred" }),
+                  required: t("newConnection.sslModes.required", { defaultValue: "Required" }),
+                  verify_ca: t("newConnection.sslModes.verify_ca", { defaultValue: "Verify CA" }),
+                  verify_identity: t("newConnection.sslModes.verify_identity", { defaultValue: "Verify Identity" }),
+                }
+          }
+          onChange={(v) => updateField("ssl_mode", v)}
+          searchable={false}
+        />
+      </div>
+
+      {/* SSL Certificate Files */}
+      {formData.ssl_mode && formData.ssl_mode !== "disable" && formData.ssl_mode !== "disabled" && (
+        <div className="space-y-3 pt-2">
+          <p className="text-xs text-muted">
+            {t("newConnection.sslCertificatesOptional", {
+              defaultValue: "Certificate paths are optional. Leave empty to use system defaults.",
+            })}
+          </p>
+
+          {/* CA Certificate */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+              {t("newConnection.sslCa", { defaultValue: "CA Certificate" })}
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.ssl_ca || ""}
+                onChange={(e) => updateField("ssl_ca", e.target.value)}
+                placeholder="/path/to/ca-cert.pem"
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                spellCheck={false}
+                className="flex-1 px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const selected = await open({
+                    multiple: false,
+                    directory: false,
+                    filters: [
+                      { name: "Certificate Files", extensions: ["pem", "crt", "cer", "der"] },
+                      { name: "All Files", extensions: ["*"] },
+                    ],
+                  });
+                  if (selected) updateField("ssl_ca", selected);
+                }}
+                className="px-3 py-2 bg-base hover:bg-surface-secondary border border-strong rounded-md text-muted hover:text-primary transition-colors"
+                title={t("newConnection.browseFile", { defaultValue: "Browse" })}
+              >
+                <FolderOpen size={15} />
+              </button>
+            </div>
+          </div>
+
+          {/* Client Certificate */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+              {t("newConnection.sslCert", { defaultValue: "Client Certificate" })}
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.ssl_cert || ""}
+                onChange={(e) => updateField("ssl_cert", e.target.value)}
+                placeholder="/path/to/client-cert.pem"
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                spellCheck={false}
+                className="flex-1 px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const selected = await open({
+                    multiple: false,
+                    directory: false,
+                    filters: [
+                      { name: "Certificate Files", extensions: ["pem", "crt", "cer", "der"] },
+                      { name: "All Files", extensions: ["*"] },
+                    ],
+                  });
+                  if (selected) updateField("ssl_cert", selected);
+                }}
+                className="px-3 py-2 bg-base hover:bg-surface-secondary border border-strong rounded-md text-muted hover:text-primary transition-colors"
+                title={t("newConnection.browseFile", { defaultValue: "Browse" })}
+              >
+                <FolderOpen size={15} />
+              </button>
+            </div>
+          </div>
+
+          {/* Client Key */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+              {t("newConnection.sslKey", { defaultValue: "Client Key" })}
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.ssl_key || ""}
+                onChange={(e) => updateField("ssl_key", e.target.value)}
+                placeholder="/path/to/client-key.pem"
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                spellCheck={false}
+                className="flex-1 px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const selected = await open({
+                    multiple: false,
+                    directory: false,
+                    filters: [
+                      { name: "Key Files", extensions: ["pem", "key"] },
+                      { name: "All Files", extensions: ["*"] },
+                    ],
+                  });
+                  if (selected) updateField("ssl_key", selected);
+                }}
+                className="px-3 py-2 bg-base hover:bg-surface-secondary border border-strong rounded-md text-muted hover:text-primary transition-colors"
+                title={t("newConnection.browseFile", { defaultValue: "Browse" })}
+              >
+                <FolderOpen size={15} />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1251,8 +1404,11 @@ export const NewConnectionModal = ({
                         },
                       ]
                     : []),
+                  ...((driver === "mysql" || driver === "postgres") && isNetworkDriver
+                    ? [{ id: "ssl", label: "SSL" }]
+                    : []),
                   ...(isNetworkDriver ? [{ id: "ssh", label: "SSH" }] : []),
-                ] as { id: "general" | "databases" | "ssh"; label: string }[]
+                ] as { id: "general" | "databases" | "ssh" | "ssl"; label: string }[]
               ).map((tab) => (
                 <button
                   key={tab.id}
@@ -1286,7 +1442,9 @@ export const NewConnectionModal = ({
                 ? generalTabContent
                 : activeTab === "databases"
                   ? databasesTabContent
-                  : sshTabContent}
+                  : activeTab === "ssl"
+                    ? sslTabContent
+                    : sshTabContent}
             </div>
           </div>
         </div>
