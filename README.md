@@ -456,12 +456,12 @@ pnpm tauri build
 ## Roadmap
 
 - [x] [[Feat]: Allow loading of multiple Databases per connection](https://github.com/debba/tabularis/issues/47)
+- [x] [Visual Explain Analyze](https://github.com/debba/tabularis/issues/22)
 - [x] [Plugin System](https://github.com/debba/tabularis/issues/19)
 - [ ] [Feature: Remote Control](https://github.com/debba/tabularis/issues/46)
 - [ ] [Command Palette](https://github.com/debba/tabularis/issues/25)
 - [ ] [JSON/JSONB Editor & Viewer](https://github.com/debba/tabularis/issues/24)
 - [ ] [SQL Formatting / Prettier](https://github.com/debba/tabularis/issues/23)
-- [ ] [Visual Explain Analyze](https://github.com/debba/tabularis/issues/22)
 - [ ] [Data Compare / Diff Tool](https://github.com/debba/tabularis/issues/21)
 - [ ] [Team Collaboration](https://github.com/debba/tabularis/issues/20)
 - [ ] [Query History](https://github.com/debba/tabularis/issues/18)

@@ -5,6 +5,11 @@
     "url": "https://github.com/debba/tabularis/issues/47"
   },
   {
+    "label": "Visual Explain Analyze",
+    "done": true,
+    "url": "https://github.com/debba/tabularis/issues/22"
+  },
+  {
     "label": "Plugin System",
     "done": true,
     "url": "https://github.com/debba/tabularis/issues/19"
@@ -28,11 +33,6 @@
     "label": "SQL Formatting / Prettier",
     "done": false,
     "url": "https://github.com/debba/tabularis/issues/23"
-  },
-  {
-    "label": "Visual Explain Analyze",
-    "done": false,
-    "url": "https://github.com/debba/tabularis/issues/22"
   },
   {
     "label": "Data Compare / Diff Tool",
