@@ -49,7 +49,7 @@ export const ContextMenu = ({ x, y, items, onClose, children, boundaryRight }: C
     };
 
     return calculateContextMenuPosition(constraints);
-  }, [x, y, menuSize]);
+  }, [x, y, menuSize, boundaryRight]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

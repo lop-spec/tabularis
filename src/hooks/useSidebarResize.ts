@@ -13,7 +13,10 @@ export const useSidebarResize = (onCollapse?: () => void) => {
   });
   const isDragging = useRef(false);
   const onCollapseRef = useRef(onCollapse);
-  onCollapseRef.current = onCollapse;
+
+  useEffect(() => {
+    onCollapseRef.current = onCollapse;
+  }, [onCollapse]);
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

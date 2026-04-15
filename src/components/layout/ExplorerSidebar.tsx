@@ -1734,7 +1734,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                 icon: Play,
                                 action: () => {
                                   if (contextMenu.data && "sql" in contextMenu.data) {
-                                    runQuery(contextMenu.data.sql, contextMenu.data.name);
+                                    runQuery(contextMenu.data.sql, "name" in contextMenu.data ? contextMenu.data.name : undefined);
                                   }
                                 },
                               },
