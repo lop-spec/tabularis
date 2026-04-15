@@ -14,7 +14,6 @@ import { SlotAnchor } from "../ui/SlotAnchor";
 import { NavItem } from "./sidebar/NavItem";
 import { OpenConnectionItem } from "./sidebar/OpenConnectionItem";
 import { ConnectionGroupItem } from "./sidebar/ConnectionGroupItem";
-import { ConnectionGroupFolder } from "./sidebar/ConnectionGroupFolder";
 import { ExplorerSidebar, type SidebarTab } from "./ExplorerSidebar";
 import { PanelDatabaseProvider } from "./PanelDatabaseProvider";
 
@@ -35,7 +34,6 @@ export const Sidebar = () => {
     activeConnectionId,
     connectionGroups,
     connections,
-    moveConnectionToGroup,
   } = useDatabase();
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,7 +42,6 @@ export const Sidebar = () => {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("structure");
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [showShortcutHints, setShowShortcutHints] = useState(false);
-  const [sidebarCollapsedGroups, setSidebarCollapsedGroups] = useState<Set<string>>(new Set());
   const { isMac } = useKeybindings();
 
   useEffect(() => {
@@ -202,37 +199,35 @@ export const Sidebar = () => {
                 />
               )}
 
-              {/* Show grouped connections by folder */}
-              {activeGroups.map((group) => {
-                const groupConns = groupedConnections[group.id] || [];
-                const nonSplitConns = groupConns.filter(
-                  conn => !isConnectionGrouped(conn.id, splitView)
-                );
-                if (nonSplitConns.length === 0) return null;
-
-                return (
-                  <ConnectionGroupFolder
-                    key={group.id}
-                    group={{ ...group, collapsed: sidebarCollapsedGroups.has(group.id) }}
-                    connections={nonSplitConns}
-                    allDrivers={allDrivers}
-                    selectedConnectionIds={selectedConnectionIds}
-                    onToggleCollapsed={() => setSidebarCollapsedGroups(prev => {
-                      const next = new Set(prev);
-                      if (next.has(group.id)) next.delete(group.id);
-                      else next.add(group.id);
-                      return next;
-                    })}
-                    onSwitch={handleSwitchOrSetExplorer}
-                    onOpenInEditor={handleOpenInEditor}
-                    onDisconnect={handleDisconnectConnection}
-                    onToggleSelect={toggleSelection}
-                    onActivateSplit={activateSplit}
-                    onDropConnection={(connId) => void moveConnectionToGroup(connId, group.id)}
-                    showShortcutHints={showShortcutHints}
-                  />
-                );
-              })}
+              {/* Show grouped connections flat with labels */}
+              {(() => {
+                let groupedIdx = 0;
+                return activeGroups.flatMap((group) => {
+                  const groupConns = groupedConnections[group.id] || [];
+                  return groupConns
+                    .filter(conn => !isConnectionGrouped(conn.id, splitView))
+                    .map((conn) => {
+                      groupedIdx++;
+                      return (
+                        <OpenConnectionItem
+                          key={conn.id}
+                          connection={conn}
+                          driverManifest={allDrivers.find(d => d.id === conn.driver)}
+                          isSelected={selectedConnectionIds.has(conn.id)}
+                          onSwitch={() => handleSwitchOrSetExplorer(conn.id)}
+                          onOpenInEditor={() => handleOpenInEditor(conn.id)}
+                          onDisconnect={() => handleDisconnectConnection(conn.id)}
+                          onToggleSelect={(isCtrlHeld) => toggleSelection(conn.id, isCtrlHeld)}
+                          selectedConnectionIds={selectedConnectionIds}
+                          onActivateSplit={activateSplit}
+                          shortcutIndex={groupedIdx}
+                          showShortcutHint={showShortcutHints && groupedIdx <= 9}
+                          showLabel
+                        />
+                      );
+                    });
+                });
+              })()}
 
               {/* Show ungrouped connections */}
               {ungroupedConnections

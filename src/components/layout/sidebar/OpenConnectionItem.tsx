@@ -20,6 +20,7 @@ interface Props {
   onActivateSplit: (mode: 'vertical' | 'horizontal') => void;
   shortcutIndex?: number;
   showShortcutHint?: boolean;
+  showLabel?: boolean;
 }
 
 export const OpenConnectionItem = ({
@@ -34,6 +35,7 @@ export const OpenConnectionItem = ({
   onActivateSplit,
   shortcutIndex,
   showShortcutHint = false,
+  showLabel = false,
 }: Props) => {
   const { t } = useTranslation();
   const { isActive, isConnecting, name, database, sshEnabled, error } = connection;
@@ -102,7 +104,7 @@ export const OpenConnectionItem = ({
 
   return (
     <>
-      <div className="relative group w-full flex justify-center mb-1">
+      <div className={`relative group w-full flex flex-col items-center ${showLabel ? 'mb-0.5' : 'mb-1'}`}>
         <button
           onClick={handleClick}
           onContextMenu={handleContextMenu}
@@ -180,6 +182,13 @@ export const OpenConnectionItem = ({
           )}
           {hasError && <div className="text-red-400 text-[10px] mt-0.5 max-w-[180px] truncate">{error}</div>}
         </div>
+
+        {/* Connection name label */}
+        {showLabel && (
+          <span className="text-[9px] text-muted leading-tight max-w-[56px] truncate text-center select-none mt-0.5">
+            {name}
+          </span>
+        )}
       </div>
 
       {contextMenu && (
