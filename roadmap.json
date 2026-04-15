@@ -15,6 +15,11 @@
     "url": "https://github.com/debba/tabularis/issues/19"
   },
   {
+    "label": "Query History",
+    "done": true,
+    "url": "https://github.com/debba/tabularis/issues/18"
+  },
+  {
     "label": "Feature: Remote Control",
     "done": false,
     "url": "https://github.com/debba/tabularis/issues/46"
@@ -43,11 +48,6 @@
     "label": "Team Collaboration",
     "done": false,
     "url": "https://github.com/debba/tabularis/issues/20"
-  },
-  {
-    "label": "Query History",
-    "done": false,
-    "url": "https://github.com/debba/tabularis/issues/18"
   },
   {
     "label": "Better SQLite Support",
