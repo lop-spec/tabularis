@@ -26,10 +26,8 @@ import { parseAuthor, versionGte } from "../../utils/plugins";
 import { findConnectionsForDrivers } from "../../utils/connectionManager";
 import { APP_VERSION } from "../../version";
 import type { PluginManifest } from "../../types/plugins";
-import type { PluginConfig } from "../../contexts/SettingsContext";
 import { PluginInstallErrorModal } from "../modals/PluginInstallErrorModal";
 import { PluginRemoveModal } from "../modals/PluginRemoveModal";
-import { PluginSettingsModal } from "../modals/PluginSettingsModal";
 import { PluginStartErrorModal } from "../modals/PluginStartErrorModal";
 import { SlotAnchor } from "../ui/SlotAnchor";
 
@@ -268,7 +266,11 @@ function VersionDropdown({
 
 /* ── Main tab ── */
 
-export function PluginsTab() {
+interface PluginsTabProps {
+  onOpenPluginSettings?: (pluginId: string) => void;
+}
+
+export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
   const { t } = useTranslation();
   const { settings, updateSetting } = useSettings();
   const {
@@ -291,13 +293,6 @@ export function PluginsTab() {
     pluginId: string;
     error: string;
   } | null>(null);
-  const [pluginSettingsModal, setPluginSettingsModal] = useState<{
-    pluginId: string;
-    pluginName: string;
-  } | null>(null);
-  const [openModalManifest, setOpenModalManifest] = useState<
-    PluginManifest | undefined
-  >(undefined);
   const [pluginStartError, setPluginStartError] = useState<{
     pluginId: string;
     pluginName: string;
@@ -348,63 +343,11 @@ export function PluginsTab() {
       });
   }, []);
 
-  const handleSavePluginConfig = useCallback(
-    async (
-      pluginId: string,
-      pluginName: string,
-      config: PluginConfig,
-    ) => {
-      const current = settings.plugins ?? {};
-      updateSetting("plugins", { ...current, [pluginId]: config });
-      const isRunning = allDrivers.some((d) => d.id === pluginId);
-      if (isRunning) {
-        try {
-          await invoke("disable_plugin", { pluginId });
-          await invoke("enable_plugin", { pluginId });
-          refreshDrivers();
-        } catch (err) {
-          const activeExt = settings.activeExternalDrivers ?? [];
-          updateSetting(
-            "activeExternalDrivers",
-            activeExt.filter((id) => id !== pluginId),
-          );
-          refreshDrivers();
-          setPluginStartError({
-            pluginId,
-            pluginName,
-            error: String(err),
-          });
-        }
-      }
-    },
-    [
-      settings.plugins,
-      settings.activeExternalDrivers,
-      updateSetting,
-      allDrivers,
-      refreshDrivers,
-    ],
-  );
-
   const handleOpenPluginSettings = useCallback(
-    async (pluginId: string, pluginName: string) => {
-      setPluginSettingsModal({ pluginId, pluginName });
-      const runningDriver = allDrivers.find((d) => d.id === pluginId);
-      if (runningDriver) {
-        setOpenModalManifest(runningDriver);
-      } else {
-        try {
-          const manifest = await invoke<PluginManifest>(
-            "get_plugin_manifest",
-            { pluginId },
-          );
-          setOpenModalManifest(manifest);
-        } catch {
-          setOpenModalManifest(undefined);
-        }
-      }
+    (pluginId: string) => {
+      onOpenPluginSettings?.(pluginId);
     },
-    [allDrivers],
+    [onOpenPluginSettings],
   );
 
   const doInstall = useCallback(
@@ -785,7 +728,6 @@ export function PluginsTab() {
                           onClick={() =>
                             handleOpenPluginSettings(
                               driver.id,
-                              driver.name,
                             )
                           }
                           className="p-1.5 text-secondary hover:text-primary transition-colors"
@@ -877,7 +819,6 @@ export function PluginsTab() {
                           onClick={() =>
                             handleOpenPluginSettings(
                               plugin.id,
-                              plugin.name,
                             )
                           }
                           className="p-1.5 text-secondary hover:text-primary transition-colors"
@@ -933,32 +874,16 @@ export function PluginsTab() {
         pluginName={pluginRemoveConfirm?.pluginName ?? ""}
         onConfirm={() => pluginRemoveConfirm?.onConfirm()}
       />
-      <PluginSettingsModal
-        key={pluginSettingsModal?.pluginId}
-        isOpen={pluginSettingsModal !== null}
-        onClose={() => {
-          setPluginSettingsModal(null);
-          setOpenModalManifest(undefined);
-        }}
-        pluginId={pluginSettingsModal?.pluginId ?? ""}
-        pluginName={pluginSettingsModal?.pluginName ?? ""}
-        currentConfig={
-          settings.plugins?.[pluginSettingsModal?.pluginId ?? ""]
-        }
-        manifest={openModalManifest}
-        onSave={(config) =>
-          handleSavePluginConfig(
-            pluginSettingsModal?.pluginId ?? "",
-            pluginSettingsModal?.pluginName ?? "",
-            config,
-          )
-        }
-      />
       <PluginStartErrorModal
         isOpen={pluginStartError !== null}
         onClose={() => setPluginStartError(null)}
         pluginId={pluginStartError?.pluginId ?? ""}
         error={pluginStartError?.error ?? ""}
+        onConfigureInterpreter={
+          pluginStartError !== null
+            ? () => handleOpenPluginSettings(pluginStartError.pluginId)
+            : undefined
+        }
       />
     </>
   );
