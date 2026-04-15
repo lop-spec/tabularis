@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_postgres::{config::SslMode as PgSslMode, Config as PgConfig};
-use urlencoding::encode;
 
 type PoolMap<T> = Arc<RwLock<HashMap<String, Pool<T>>>>;
 type PgPoolMap = Arc<RwLock<HashMap<String, PgPool>>>;
@@ -36,17 +35,45 @@ fn build_connection_key(params: &ConnectionParams, connection_id: Option<&str>) 
     }
 }
 
-fn build_mysql_url(params: &ConnectionParams) -> String {
-    let user = encode(params.username.as_deref().unwrap_or_default());
-    let pass = encode(params.password.as_deref().unwrap_or_default());
-    format!(
-        "mysql://{}:{}@{}:{}/{}?maxAllowedPacket=1073741824&socketTimeout=600000&connectTimeout=60000",
-        user,
-        pass,
-        params.host.as_deref().unwrap_or("localhost"),
-        params.port.unwrap_or(3306),
-        params.database
-    )
+fn build_mysql_options(params: &ConnectionParams, override_db: Option<&str>) -> Result<sqlx::mysql::MySqlConnectOptions, String> {
+    use sqlx::mysql::{MySqlConnectOptions, MySqlSslMode};
+
+    let username = params.username.as_deref().unwrap_or_default();
+    let password = params.password.as_deref().unwrap_or_default();
+    let host = params.host.as_deref().unwrap_or("localhost");
+    let port = params.port.unwrap_or(3306);
+    let database = override_db.unwrap_or_else(|| params.database.primary());
+
+    let mut options = MySqlConnectOptions::new()
+        .host(host)
+        .port(port)
+        .username(username)
+        .password(password)
+        .database(database);
+
+    // Configure SSL mode based on params.ssl_mode
+    let ssl_mode = match params.ssl_mode.as_deref().unwrap_or("required") {
+        "disabled" | "disable" => MySqlSslMode::Disabled,
+        "preferred" | "prefer" => MySqlSslMode::Preferred,
+        "required" | "require" => MySqlSslMode::Required,
+        "verify_ca" => MySqlSslMode::VerifyCa,
+        "verify_identity" => MySqlSslMode::VerifyIdentity,
+        _ => MySqlSslMode::Required,
+    };
+    options = options.ssl_mode(ssl_mode);
+
+    // Apply SSL certificates if provided in params
+    if let Some(ca) = &params.ssl_ca {
+        options = options.ssl_ca(ca);
+    }
+    if let Some(cert) = &params.ssl_cert {
+        options = options.ssl_client_cert(cert);
+    }
+    if let Some(key) = &params.ssl_key {
+        options = options.ssl_client_key(key);
+    }
+
+    Ok(options)
 }
 
 fn build_postgres_configurations(params: &ConnectionParams) -> PgConfig {
@@ -88,7 +115,27 @@ pub async fn get_mysql_pool_with_id(
     params: &ConnectionParams,
     connection_id: Option<&str>,
 ) -> Result<Pool<MySql>, String> {
-    let key = build_connection_key(params, connection_id);
+    get_mysql_pool_for_database_with_id(params, None, connection_id).await
+}
+
+pub async fn get_mysql_pool_for_database(
+    params: &ConnectionParams,
+    override_db: Option<&str>,
+) -> Result<Pool<MySql>, String> {
+    let connection_id = params.connection_id.as_deref();
+    get_mysql_pool_for_database_with_id(params, override_db, connection_id).await
+}
+
+async fn get_mysql_pool_for_database_with_id(
+    params: &ConnectionParams,
+    override_db: Option<&str>,
+    connection_id: Option<&str>,
+) -> Result<Pool<MySql>, String> {
+    let key = if let Some(db) = override_db {
+        format!("{}:{}", build_connection_key(params, connection_id), db)
+    } else {
+        build_connection_key(params, connection_id)
+    };
 
     // Try to get existing pool
     {
@@ -96,7 +143,7 @@ pub async fn get_mysql_pool_with_id(
         if let Some(pool) = pools.get(&key) {
             log::debug!(
                 "Using existing MySQL connection pool for: {} (key: {})",
-                params.database,
+                override_db.unwrap_or_else(|| params.database.primary()),
                 key
             );
             return Ok(pool.clone());
@@ -110,10 +157,10 @@ pub async fn get_mysql_pool_with_id(
         params.host,
         key
     );
-    let url = build_mysql_url(params);
+    let options = build_mysql_options(params, override_db)?;
     let pool = sqlx::mysql::MySqlPoolOptions::new()
         .max_connections(10)
-        .connect(&url)
+        .connect_with(options)
         .await
         .map_err(|e| {
             log::error!("Failed to create MySQL connection pool: {}", e);
@@ -122,7 +169,7 @@ pub async fn get_mysql_pool_with_id(
 
     log::info!(
         "MySQL connection pool created successfully for: {} (key: {})",
-        params.database,
+        override_db.unwrap_or_else(|| params.database.primary()),
         key
     );
 
@@ -254,7 +301,20 @@ pub async fn get_sqlite_pool_with_id(
 
 /// Check whether a connection pool exists for the given params without creating one.
 pub async fn has_pool(params: &ConnectionParams, connection_id: Option<&str>) -> bool {
-    let key = build_connection_key(params, connection_id);
+    has_pool_for_database(params, None, connection_id).await
+}
+
+/// Check whether a connection pool exists for the given params and database without creating one.
+pub async fn has_pool_for_database(
+    params: &ConnectionParams,
+    override_db: Option<&str>,
+    connection_id: Option<&str>,
+) -> bool {
+    let key = if let Some(db) = override_db {
+        format!("{}:{}", build_connection_key(params, connection_id), db)
+    } else {
+        build_connection_key(params, connection_id)
+    };
     match params.driver.as_str() {
         "mysql" => MYSQL_POOLS.read().await.contains_key(&key),
         "postgres" => POSTGRES_POOLS.read().await.contains_key(&key),

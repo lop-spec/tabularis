@@ -98,6 +98,9 @@ pub struct ConnectionParams {
     pub password: Option<String>,
     pub database: DatabaseSelection,
     pub ssl_mode: Option<String>,
+    pub ssl_ca: Option<String>,
+    pub ssl_cert: Option<String>,
+    pub ssl_key: Option<String>,
     // SSH Tunnel
     pub ssh_enabled: Option<bool>,
     pub ssh_connection_id: Option<String>,
