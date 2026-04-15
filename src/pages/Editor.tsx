@@ -1963,8 +1963,13 @@ export const Editor = () => {
 
   const startResize = () => {
     isDragging.current = true;
-    document.body.style.userSelect = "none";
     document.body.style.cursor = "row-resize";
+
+    // Overlay prevents CodeMirror from capturing mouse events during drag
+    const overlay = document.createElement("div");
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:9999;cursor:row-resize";
+    document.body.appendChild(overlay);
 
     const panels = document.querySelectorAll<HTMLElement>("[data-editor-panel]");
 
@@ -1983,8 +1988,8 @@ export const Editor = () => {
     };
     const stopResize = () => {
       isDragging.current = false;
-      document.body.style.userSelect = "";
       document.body.style.cursor = "";
+      overlay.remove();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       setEditorHeight(editorHeightRef.current);
       document.removeEventListener("mousemove", handleResize);
