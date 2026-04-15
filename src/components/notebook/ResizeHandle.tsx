@@ -31,15 +31,20 @@ export function ResizeHandle({
         onResize(newHeight);
       };
 
+      // Overlay prevents editors from capturing mouse events during drag
+      const overlay = document.createElement("div");
+      overlay.style.cssText =
+        "position:fixed;inset:0;z-index:9999;cursor:row-resize";
+      document.body.appendChild(overlay);
+
       const handleMouseUp = () => {
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
         document.body.style.cursor = "";
-        document.body.style.userSelect = "";
+        overlay.remove();
       };
 
       document.body.style.cursor = "row-resize";
-      document.body.style.userSelect = "none";
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
     },

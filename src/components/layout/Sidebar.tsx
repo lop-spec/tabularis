@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plug2, Settings, Cpu, PanelLeft } from "lucide-react";
+import { Plug2, Settings, Cpu, PanelLeft, Layers, Star, Clock } from "lucide-react";
 import { DiscordIcon } from "../icons/DiscordIcon";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { DISCORD_URL } from "../../config/links";
@@ -15,7 +15,7 @@ import { NavItem } from "./sidebar/NavItem";
 import { OpenConnectionItem } from "./sidebar/OpenConnectionItem";
 import { ConnectionGroupItem } from "./sidebar/ConnectionGroupItem";
 import { ConnectionGroupFolder } from "./sidebar/ConnectionGroupFolder";
-import { ExplorerSidebar } from "./ExplorerSidebar";
+import { ExplorerSidebar, type SidebarTab } from "./ExplorerSidebar";
 import { PanelDatabaseProvider } from "./PanelDatabaseProvider";
 
 // Hooks & Utils
@@ -41,6 +41,7 @@ export const Sidebar = () => {
   const location = useLocation();
 
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("structure");
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [showShortcutHints, setShowShortcutHints] = useState(false);
   const [sidebarCollapsedGroups, setSidebarCollapsedGroups] = useState<Set<string>>(new Set());
@@ -86,7 +87,8 @@ export const Sidebar = () => {
     explorerConnectionId
   } = useConnectionLayoutContext();
 
-  const { sidebarWidth, startResize } = useSidebarResize();
+  const collapseExplorer = useCallback(() => setIsExplorerCollapsed(true), []);
+  const { sidebarWidth, startResize } = useSidebarResize(collapseExplorer);
 
   // Organize open connections by group
   const { groupedConnections, ungroupedConnections } = useMemo(() => {
@@ -301,23 +303,50 @@ export const Sidebar = () => {
             sidebarWidth={sidebarWidth}
             startResize={startResize}
             onCollapse={() => setIsExplorerCollapsed(true)}
+            sidebarTab={sidebarTab}
+            onSidebarTabChange={setSidebarTab}
           />
         </PanelDatabaseProvider>
       )}
 
-      {/* Collapsed Explorer (Icon only) */}
+      {/* Collapsed Explorer (Icon strip) */}
       {shouldShowExplorer && isExplorerCollapsed && (
-        <div className="w-12 bg-base border-r border-default flex flex-col items-center py-4">
+        <div className="w-12 bg-base border-r border-default flex flex-col items-center py-2 gap-1">
           <button
             onClick={() => setIsExplorerCollapsed(false)}
             className="text-muted hover:text-secondary hover:bg-surface-secondary rounded-lg p-2 transition-colors group relative"
             title={t("sidebar.expandExplorer")}
           >
-            <PanelLeft size={20} />
+            <PanelLeft size={18} />
             <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-surface-secondary text-primary text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
               {t("sidebar.expandExplorer")}
             </span>
           </button>
+          <div className="w-6 h-px bg-default my-1" />
+          {([
+            { id: "structure" as SidebarTab, icon: Layers, label: t("sidebar.structure") },
+            { id: "favorites" as SidebarTab, icon: Star, label: t("sidebar.favorites") },
+            { id: "history" as SidebarTab, icon: Clock, label: t("sidebar.queryHistory") },
+          ]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setSidebarTab(tab.id);
+                setIsExplorerCollapsed(false);
+              }}
+              className={`rounded-lg p-2 transition-colors group relative ${
+                sidebarTab === tab.id
+                  ? "text-blue-400 bg-blue-500/10"
+                  : "text-muted hover:text-secondary hover:bg-surface-secondary"
+              }`}
+              title={tab.label}
+            >
+              <tab.icon size={16} />
+              <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-surface-secondary text-primary text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
+                {tab.label}
+              </span>
+            </button>
+          ))}
         </div>
       )}
 

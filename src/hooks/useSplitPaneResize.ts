@@ -17,7 +17,13 @@ export const useSplitPaneResize = (
   const startResize = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      document.body.style.cursor = mode === 'vertical' ? 'col-resize' : 'row-resize';
+      const cursorStyle = mode === 'vertical' ? 'col-resize' : 'row-resize';
+      document.body.style.cursor = cursorStyle;
+
+      // Overlay prevents editors from capturing mouse events during drag
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `position:fixed;inset:0;z-index:9999;cursor:${cursorStyle}`;
+      document.body.appendChild(overlay);
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         if (!containerRef.current) return;
@@ -35,6 +41,7 @@ export const useSplitPaneResize = (
 
       const handleMouseUp = () => {
         document.body.style.cursor = 'default';
+        overlay.remove();
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
       };

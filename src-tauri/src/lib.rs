@@ -19,6 +19,7 @@ pub mod persistence;
 pub mod plugins;
 pub mod pool_manager;
 pub mod preferences;
+pub mod query_history;
 pub mod saved_queries;
 pub mod ssh_tunnel;
 pub mod task_manager;
@@ -255,6 +256,10 @@ pub fn run() {
             saved_queries::save_query,
             saved_queries::update_saved_query,
             saved_queries::delete_saved_query,
+            query_history::get_query_history,
+            query_history::add_query_history_entry,
+            query_history::delete_query_history_entry,
+            query_history::clear_query_history,
             // Config
             config::get_schema_preference,
             config::set_schema_preference,

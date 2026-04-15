@@ -28,13 +28,19 @@ import {
   Square,
   Search,
   X,
+  Star,
+  FileInput,
+  Layers,
+  Clock,
 } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { toErrorMessage } from "../../utils/errors";
 import { useAlert } from "../../hooks/useAlert";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useSavedQueries } from "../../hooks/useSavedQueries";
+import { useQueryHistory } from "../../hooks/useQueryHistory";
 import type { SavedQuery } from "../../contexts/SavedQueriesContext";
+import type { QueryHistoryEntry } from "../../types/queryHistory";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { SchemaModal } from "../modals/SchemaModal";
 import { CreateTableModal } from "../modals/CreateTableModal";
@@ -46,12 +52,14 @@ import { GenerateSQLModal } from "../modals/GenerateSQLModal";
 import { DumpDatabaseModal } from "../modals/DumpDatabaseModal";
 import { ImportDatabaseModal } from "../modals/ImportDatabaseModal";
 import { ViewEditorModal } from "../modals/ViewEditorModal";
+import { ConfirmModal } from "../modals/ConfirmModal";
 import { Accordion } from "./sidebar/Accordion";
 import { SidebarTableItem } from "./sidebar/SidebarTableItem";
 import { SidebarViewItem } from "./sidebar/SidebarViewItem";
 import { SidebarRoutineItem } from "./sidebar/SidebarRoutineItem";
 import { SidebarSchemaItem } from "./sidebar/SidebarSchemaItem";
 import { SidebarDatabaseItem } from "./sidebar/SidebarDatabaseItem";
+import { QueryHistorySection } from "./sidebar/QueryHistorySection";
 import { useConnectionLayoutContext } from "../../hooks/useConnectionLayoutContext";
 import type { TableColumn } from "../../types/schema";
 import type { ContextMenuData } from "../../types/sidebar";
@@ -61,13 +69,17 @@ import { formatObjectCount } from "../../utils/schema";
 import { isMultiDatabaseCapable } from "../../utils/database";
 import { supportsManageTables } from "../../utils/driverCapabilities";
 
+export type SidebarTab = "structure" | "favorites" | "history";
+
 interface ExplorerSidebarProps {
   sidebarWidth: number;
   startResize: (e: React.MouseEvent) => void;
   onCollapse: () => void;
+  sidebarTab: SidebarTab;
+  onSidebarTabChange: (tab: SidebarTab) => void;
 }
 
-export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: ExplorerSidebarProps) => {
+export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebarTab, onSidebarTabChange }: ExplorerSidebarProps) => {
   const { t } = useTranslation();
   const {
     activeConnectionId,
@@ -100,7 +112,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
     refreshDatabaseData,
     connectionDataMap,
   } = useDatabase();
-  const { queries, deleteQuery, updateQuery } = useSavedQueries();
+  const { queries, deleteQuery, updateQuery, saveQuery } = useSavedQueries();
+  const { entries: historyEntries, isLoading: isHistoryLoading, deleteEntry: deleteHistoryEntry, clearHistory } = useQueryHistory();
   const { showAlert } = useAlert();
   const navigate = useNavigate();
   const [schemaVersion, setSchemaVersion] = useState(0);
@@ -131,8 +144,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
     tableName: string;
   }>({ isOpen: false, tableName: "" });
   const [generateSQLModal, setGenerateSQLModal] = useState<string | null>(null);
-  const [queriesOpen, setQueriesOpen] = useState(false);
+  const setSidebarTab = onSidebarTabChange;
+  const [historyToFavoriteSQL, setHistoryToFavoriteSQL] = useState<string | null>(null);
+  const [historyDeleteConfirm, setHistoryDeleteConfirm] = useState<string | null>(null);
+  const [historyClearConfirm, setHistoryClearConfirm] = useState(false);
   const [tableFilter, setTableFilter] = useState("");
+  const [favoritesFilter, setFavoritesFilter] = useState("");
   const [tablesOpen, setTablesOpen] = useState(true);
   const [viewsOpen, setViewsOpen] = useState(true);
   const [routinesOpen, setRoutinesOpen] = useState(false);
@@ -428,44 +445,121 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
           </div>
         </div>
 
+        {/* Tab bar */}
+        <div className="flex items-center border-b border-default bg-base">
+          {([
+            { id: "structure" as const, icon: Layers, label: t("sidebar.structure") },
+            { id: "favorites" as const, icon: Star, label: t("sidebar.favorites"), count: queries.length },
+            { id: "history" as const, icon: Clock, label: t("sidebar.queryHistory"), count: historyEntries.length },
+          ]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSidebarTab(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-1 py-2 text-xs font-medium transition-colors relative min-w-0 ${
+                sidebarTab === tab.id
+                  ? "text-primary"
+                  : "text-muted hover:text-secondary"
+              }`}
+              title={`${tab.label}${tab.count !== undefined && tab.count > 0 ? ` (${tab.count})` : ""}`}
+            >
+              <tab.icon size={15} className="shrink-0" />
+              {sidebarWidth >= 200 && (
+                <span className="truncate">{tab.label}</span>
+              )}
+              {sidebarWidth >= 200 && tab.count !== undefined && tab.count > 0 && (
+                <span className="text-[10px] text-muted shrink-0">({tab.count})</span>
+              )}
+              {sidebarWidth < 200 && tab.count !== undefined && tab.count > 0 && (
+                <span className="text-[10px] text-muted shrink-0">{tab.count}</span>
+              )}
+              {sidebarTab === tab.id && (
+                <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-blue-500 rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1 overflow-y-auto py-2">
-          {(isLoadingTables || isLoadingSchemas) ? (
-            <div className="flex items-center justify-center h-20 text-muted gap-2">
-              <Loader2 size={16} className="animate-spin" />
-              <span className="text-sm">{t("sidebar.loadingSchema")}</span>
-            </div>
-          ) : (
-            <>
-              {/* Saved Queries */}
-              <Accordion
-                title={`${t("sidebar.savedQueries")} (${queries.length})`}
-                isOpen={queriesOpen}
-                onToggle={() => setQueriesOpen(!queriesOpen)}
-              >
-                {queries.length === 0 ? (
-                  <div className="text-center p-2 text-xs text-muted italic">
-                    {t("sidebar.noSavedQueries")}
+          {/* Favorites tab */}
+          {sidebarTab === "favorites" && (<div className="animate-fade-in">{(() => {
+            const filteredQueries = favoritesFilter.trim()
+              ? queries.filter((q) => q.name.toLowerCase().includes(favoritesFilter.toLowerCase()) || q.sql.toLowerCase().includes(favoritesFilter.toLowerCase()))
+              : queries;
+
+            return queries.length === 0 ? (
+              <div className="text-center p-4 text-xs text-muted italic">
+                {t("sidebar.noSavedQueries")}
+              </div>
+            ) : (
+              <div>
+                <div className="px-2 pb-1.5">
+                  <div className="relative">
+                    <Search
+                      size={12}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-muted"
+                    />
+                    <input
+                      type="text"
+                      value={favoritesFilter}
+                      onChange={(e) => setFavoritesFilter(e.target.value)}
+                      placeholder={t("sidebar.searchFavorites")}
+                      className="w-full pl-6 pr-2 py-1 text-xs bg-surface-secondary border border-default rounded text-primary placeholder:text-muted focus:outline-none focus:border-blue-500/50"
+                    />
                   </div>
-                ) : (
-                  <div>
-                    {queries.map((q) => (
-                      <div
-                        key={q.id}
-                        onClick={() => runQuery(q.sql, q.name)}
-                        onContextMenu={(e) =>
-                          handleContextMenu(e, "query", q.id, q.name, q)
-                        }
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group transition-colors"
-                        title={q.name}
-                      >
-                        <FileCode size={14} className="text-green-500 shrink-0" />
-                        <span className="truncate">{q.name}</span>
-                      </div>
-                    ))}
+                </div>
+                {favoritesFilter.trim() && (
+                  <div className="px-3 pb-1 text-[10px] text-muted">
+                    {filteredQueries.length} / {queries.length}
                   </div>
                 )}
-              </Accordion>
+                {filteredQueries.length === 0 ? (
+                  <div className="text-center p-2 text-xs text-muted italic">
+                    {t("sidebar.noFavoritesSearchResults")}
+                  </div>
+                ) : (
+                  filteredQueries.map((q) => (
+                    <div
+                      key={q.id}
+                      onClick={() => runQuery(q.sql, q.name)}
+                      onContextMenu={(e) =>
+                        handleContextMenu(e, "query", q.id, q.name, q)
+                      }
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group transition-colors"
+                      title={q.name}
+                    >
+                      <FileCode size={14} className="text-green-500 shrink-0" />
+                      <span className="truncate">{q.name}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            );
+          })()}</div>)}
 
+          {/* History tab */}
+          {sidebarTab === "history" && (
+            <div className="animate-fade-in"><QueryHistorySection
+              entries={historyEntries}
+              isLoading={isHistoryLoading}
+              onDoubleClick={(entry) => {
+                runQuery(entry.sql, undefined, undefined, true);
+              }}
+              onContextMenu={(e, entry) => {
+                handleContextMenu(e, "history", entry.id, entry.sql, entry as unknown as ContextMenuData);
+              }}
+              onClearAll={() => setHistoryClearConfirm(true)}
+            /></div>
+          )}
+
+          {/* Structure tab */}
+          {sidebarTab === "structure" && (
+            (isLoadingTables || isLoadingSchemas) ? (
+              <div className="flex items-center justify-center h-20 text-muted gap-2">
+                <Loader2 size={16} className="animate-spin" />
+                <span className="text-sm">{t("sidebar.loadingSchema")}</span>
+              </div>
+            ) : (
+              <>
               {/* Schema-capable driver: Schema tree layout */}
               {activeCapabilities?.schemas === true && schemas.length > 0 ? (
                 /* Postgres schema layout (unchanged) */
@@ -1255,6 +1349,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                 </>
               )}
             </>
+            )
           )}
         </div>
       </aside>
@@ -1264,6 +1359,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          boundaryRight={64 + sidebarWidth}
           onClose={() => setContextMenu(null)}
           items={
             contextMenu.type === "table"
@@ -1582,6 +1678,55 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                   action: () => refreshDatabaseData(contextMenu.id),
                                 },
                               ]
+                          : contextMenu.type === "history"
+                            ? (() => {
+                                const historyEntry = contextMenu.data as unknown as QueryHistoryEntry;
+                                return [
+                                  {
+                                    label: t("sidebar.copyQuery"),
+                                    icon: Copy,
+                                    action: () => navigator.clipboard.writeText(historyEntry.sql),
+                                  },
+                                  {
+                                    label: t("sidebar.insertToEditor"),
+                                    icon: FileInput,
+                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true),
+                                  },
+                                  {
+                                    label: t("sidebar.runQuery"),
+                                    icon: Play,
+                                    action: () => runQuery(historyEntry.sql),
+                                  },
+                                  {
+                                    label: t("sidebar.openInNewTab"),
+                                    icon: Plus,
+                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true),
+                                  },
+                                  {
+                                    label: t("sidebar.addToFavorites"),
+                                    icon: Star,
+                                    action: () => {
+                                      setQueryModal({ isOpen: true });
+                                      // Pre-fill the modal with history SQL via a small timeout
+                                      // so the modal mounts first, then we set the initial values
+                                      setHistoryToFavoriteSQL(historyEntry.sql);
+                                    },
+                                  },
+                                  { separator: true },
+                                  {
+                                    label: t("sidebar.delete"),
+                                    icon: Trash2,
+                                    danger: true,
+                                    action: () => setHistoryDeleteConfirm(historyEntry.id),
+                                  },
+                                  {
+                                    label: t("sidebar.clearAllHistory"),
+                                    icon: Trash2,
+                                    danger: true,
+                                    action: () => setHistoryClearConfirm(true),
+                                  },
+                                ] as ContextMenuItem[];
+                              })()
                           : [
                               // Saved Query Actions (Default fallback)
                               {
@@ -1589,7 +1734,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
                                 icon: Play,
                                 action: () => {
                                   if (contextMenu.data && "sql" in contextMenu.data) {
-                                    runQuery(contextMenu.data.sql, contextMenu.data.name);
+                                    runQuery(contextMenu.data.sql, "name" in contextMenu.data ? contextMenu.data.name : undefined);
                                   }
                                 },
                               },
@@ -1643,14 +1788,20 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
       {queryModal.isOpen && (
         <QueryModal
           isOpen={queryModal.isOpen}
-          onClose={() => setQueryModal({ isOpen: false })}
+          onClose={() => {
+            setQueryModal({ isOpen: false });
+            setHistoryToFavoriteSQL(null);
+          }}
           title={queryModal.query ? "Edit Query" : "Save Query"}
-          initialName={queryModal.query?.name}
-          initialSql={queryModal.query?.sql}
+          initialName={queryModal.query?.name ?? ""}
+          initialSql={queryModal.query?.sql ?? historyToFavoriteSQL ?? ""}
           onSave={async (name: string, sql: string) => {
             if (queryModal.query) {
               await updateQuery(queryModal.query.id, name, sql);
+            } else if (historyToFavoriteSQL) {
+              await saveQuery(name, sql);
             }
+            setHistoryToFavoriteSQL(null);
           }}
         />
       )}
@@ -1736,6 +1887,32 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse }: Explo
           }}
         />
       )}
+
+      {/* Delete single history entry confirmation */}
+      <ConfirmModal
+        isOpen={historyDeleteConfirm !== null}
+        onClose={() => setHistoryDeleteConfirm(null)}
+        title={t("sidebar.confirmDeleteTitle")}
+        message={t("sidebar.confirmDeleteHistoryEntry")}
+        onConfirm={() => {
+          if (historyDeleteConfirm) {
+            deleteHistoryEntry(historyDeleteConfirm);
+          }
+          setHistoryDeleteConfirm(null);
+        }}
+      />
+
+      {/* Clear all history confirmation */}
+      <ConfirmModal
+        isOpen={historyClearConfirm}
+        onClose={() => setHistoryClearConfirm(false)}
+        title={t("sidebar.confirmClearHistoryTitle")}
+        message={t("sidebar.confirmClearHistory")}
+        onConfirm={() => {
+          clearHistory();
+          setHistoryClearConfirm(false);
+        }}
+      />
     </>
   );
 };

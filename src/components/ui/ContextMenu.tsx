@@ -17,9 +17,11 @@ interface ContextMenuProps {
   onClose: () => void;
   /** Optional additional content rendered after the menu items (e.g. plugin slot anchors) */
   children?: React.ReactNode;
+  /** Optional right boundary in px. Menu won't extend past this x coordinate. */
+  boundaryRight?: number;
 }
 
-export const ContextMenu = ({ x, y, items, onClose, children }: ContextMenuProps) => {
+export const ContextMenu = ({ x, y, items, onClose, children, boundaryRight }: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuSize, setMenuSize] = useState<{ width: number; height: number } | null>(null);
 
@@ -43,10 +45,11 @@ export const ContextMenu = ({ x, y, items, onClose, children }: ContextMenuProps
       clickX: x,
       clickY: y,
       margin: 10,
+      boundaryRight,
     };
 
     return calculateContextMenuPosition(constraints);
-  }, [x, y, menuSize]);
+  }, [x, y, menuSize, boundaryRight]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
