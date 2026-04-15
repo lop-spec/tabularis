@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { History, Search, CircleCheck, CircleX, Trash2 } from "lucide-react";
+import { History, Search, Trash2, Loader2 } from "lucide-react";
 import { groupByDate, formatHistoryTime } from "../../../utils/dateGroups";
 import type { QueryHistoryEntry } from "../../../types/queryHistory";
 
 interface QueryHistorySectionProps {
   entries: QueryHistoryEntry[];
+  isLoading: boolean;
   onDoubleClick: (entry: QueryHistoryEntry) => void;
   onContextMenu: (
     e: React.MouseEvent,
@@ -16,6 +17,7 @@ interface QueryHistorySectionProps {
 
 export function QueryHistorySection({
   entries,
+  isLoading,
   onDoubleClick,
   onContextMenu,
   onClearAll,
@@ -45,6 +47,15 @@ export function QueryHistorySection({
     if (ms < 1000) return `${Math.round(ms)}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-20 text-muted gap-2">
+        <Loader2 size={16} className="animate-spin" />
+        <span className="text-sm">{t("sidebar.loadingSchema")}</span>
+      </div>
+    );
+  }
 
   if (entries.length === 0) {
     return (
@@ -80,10 +91,17 @@ export function QueryHistorySection({
         </button>
       </div>
 
+      {/* Search result count */}
+      {search.trim() && (
+        <div className="px-3 pb-1 text-[10px] text-muted">
+          {filteredEntries.length} / {entries.length}
+        </div>
+      )}
+
       {/* Grouped entries */}
       {groupedEntries.length === 0 ? (
         <div className="text-center p-2 text-xs text-muted italic">
-          {t("sidebar.noQueryHistory")}
+          {t("sidebar.noHistorySearchResults")}
         </div>
       ) : (
         groupedEntries.map(([groupKey, items]) => (
@@ -96,23 +114,14 @@ export function QueryHistorySection({
                 key={entry.id}
                 onDoubleClick={() => onDoubleClick(entry)}
                 onContextMenu={(e) => onContextMenu(e, entry)}
-                className="flex items-center gap-2 pl-3 pr-4 py-1.5 text-sm text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group transition-colors"
+                className={`flex items-center gap-2 pl-3 pr-4 py-1.5 text-sm cursor-pointer group transition-colors ${
+                  entry.status === "error"
+                    ? "text-red-400/70 hover:bg-red-500/10 hover:text-red-300"
+                    : "text-secondary hover:bg-surface-secondary hover:text-primary"
+                }`}
                 title={entry.sql}
               >
-                <div className="relative shrink-0">
-                  <History size={14} className="text-muted" />
-                  {entry.status === "success" ? (
-                    <CircleCheck
-                      size={8}
-                      className="absolute -bottom-0.5 -right-0.5 text-green-500"
-                    />
-                  ) : (
-                    <CircleX
-                      size={8}
-                      className="absolute -bottom-0.5 -right-0.5 text-red-500"
-                    />
-                  )}
-                </div>
+                <History size={14} className={entry.status === "error" ? "text-red-400/50 shrink-0" : "text-muted shrink-0"} />
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-xs">
                     {truncateSql(entry.sql)}

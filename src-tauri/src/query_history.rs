@@ -84,6 +84,20 @@ pub async fn add_query_history_entry<R: Runtime>(
         .query_history_max_entries
         .unwrap_or(DEFAULT_MAX_HISTORY_ENTRIES) as usize;
 
+    // Deduplicate: if the most recent entry has the same SQL, update it instead
+    if let Some(first) = entries.first_mut() {
+        if first.sql == sql {
+            first.executed_at = executed_at.clone();
+            first.execution_time_ms = execution_time_ms;
+            first.status = status.clone();
+            first.rows_affected = rows_affected;
+            first.error = error.clone();
+            let updated = first.clone();
+            write_history(&app, &connection_id, &entries)?;
+            return Ok(updated);
+        }
+    }
+
     let entry = QueryHistoryEntry {
         id: Uuid::new_v4().to_string(),
         sql,

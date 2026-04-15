@@ -113,7 +113,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     connectionDataMap,
   } = useDatabase();
   const { queries, deleteQuery, updateQuery, saveQuery } = useSavedQueries();
-  const { entries: historyEntries, deleteEntry: deleteHistoryEntry, clearHistory } = useQueryHistory();
+  const { entries: historyEntries, isLoading: isHistoryLoading, deleteEntry: deleteHistoryEntry, clearHistory } = useQueryHistory();
   const { showAlert } = useAlert();
   const navigate = useNavigate();
   const [schemaVersion, setSchemaVersion] = useState(0);
@@ -149,6 +149,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const [historyDeleteConfirm, setHistoryDeleteConfirm] = useState<string | null>(null);
   const [historyClearConfirm, setHistoryClearConfirm] = useState(false);
   const [tableFilter, setTableFilter] = useState("");
+  const [favoritesFilter, setFavoritesFilter] = useState("");
   const [tablesOpen, setTablesOpen] = useState(true);
   const [viewsOpen, setViewsOpen] = useState(true);
   const [routinesOpen, setRoutinesOpen] = useState(false);
@@ -461,7 +462,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
               }`}
               title={`${tab.label}${tab.count !== undefined && tab.count > 0 ? ` (${tab.count})` : ""}`}
             >
-              <tab.icon size={14} className="shrink-0" />
+              <tab.icon size={15} className="shrink-0" />
               {sidebarWidth >= 200 && (
                 <span className="truncate">{tab.label}</span>
               )}
@@ -480,35 +481,66 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
 
         <div className="flex-1 overflow-y-auto py-2">
           {/* Favorites tab */}
-          {sidebarTab === "favorites" && (
-            queries.length === 0 ? (
+          {sidebarTab === "favorites" && (<div className="animate-fade-in">{(() => {
+            const filteredQueries = favoritesFilter.trim()
+              ? queries.filter((q) => q.name.toLowerCase().includes(favoritesFilter.toLowerCase()) || q.sql.toLowerCase().includes(favoritesFilter.toLowerCase()))
+              : queries;
+
+            return queries.length === 0 ? (
               <div className="text-center p-4 text-xs text-muted italic">
                 {t("sidebar.noSavedQueries")}
               </div>
             ) : (
               <div>
-                {queries.map((q) => (
-                  <div
-                    key={q.id}
-                    onClick={() => runQuery(q.sql, q.name)}
-                    onContextMenu={(e) =>
-                      handleContextMenu(e, "query", q.id, q.name, q)
-                    }
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group transition-colors"
-                    title={q.name}
-                  >
-                    <FileCode size={14} className="text-green-500 shrink-0" />
-                    <span className="truncate">{q.name}</span>
+                <div className="px-2 pb-1.5">
+                  <div className="relative">
+                    <Search
+                      size={12}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-muted"
+                    />
+                    <input
+                      type="text"
+                      value={favoritesFilter}
+                      onChange={(e) => setFavoritesFilter(e.target.value)}
+                      placeholder={t("sidebar.searchFavorites")}
+                      className="w-full pl-6 pr-2 py-1 text-xs bg-surface-secondary border border-default rounded text-primary placeholder:text-muted focus:outline-none focus:border-blue-500/50"
+                    />
                   </div>
-                ))}
+                </div>
+                {favoritesFilter.trim() && (
+                  <div className="px-3 pb-1 text-[10px] text-muted">
+                    {filteredQueries.length} / {queries.length}
+                  </div>
+                )}
+                {filteredQueries.length === 0 ? (
+                  <div className="text-center p-2 text-xs text-muted italic">
+                    {t("sidebar.noFavoritesSearchResults")}
+                  </div>
+                ) : (
+                  filteredQueries.map((q) => (
+                    <div
+                      key={q.id}
+                      onClick={() => runQuery(q.sql, q.name)}
+                      onContextMenu={(e) =>
+                        handleContextMenu(e, "query", q.id, q.name, q)
+                      }
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group transition-colors"
+                      title={q.name}
+                    >
+                      <FileCode size={14} className="text-green-500 shrink-0" />
+                      <span className="truncate">{q.name}</span>
+                    </div>
+                  ))
+                )}
               </div>
-            )
-          )}
+            );
+          })()}</div>)}
 
           {/* History tab */}
           {sidebarTab === "history" && (
-            <QueryHistorySection
+            <div className="animate-fade-in"><QueryHistorySection
               entries={historyEntries}
+              isLoading={isHistoryLoading}
               onDoubleClick={(entry) => {
                 runQuery(entry.sql, undefined, undefined, true);
               }}
@@ -516,7 +548,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                 handleContextMenu(e, "history", entry.id, entry.sql, entry as unknown as ContextMenuData);
               }}
               onClearAll={() => setHistoryClearConfirm(true)}
-            />
+            /></div>
           )}
 
           {/* Structure tab */}

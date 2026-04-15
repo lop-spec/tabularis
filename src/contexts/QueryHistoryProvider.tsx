@@ -59,8 +59,13 @@ export const QueryHistoryProvider = ({
           error,
         },
       );
-      // Prepend the new entry to the list (newest first)
-      setEntries((prev) => [entry, ...prev]);
+      // Update state: if deduped (same id as first entry), replace it; otherwise prepend
+      setEntries((prev) => {
+        if (prev.length > 0 && prev[0].id === entry.id) {
+          return [entry, ...prev.slice(1)];
+        }
+        return [entry, ...prev];
+      });
     } catch (e) {
       console.error("Failed to add query history entry:", e);
     }
