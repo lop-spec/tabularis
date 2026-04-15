@@ -51,6 +51,8 @@ pub struct AppConfig {
     pub editor_show_line_numbers: Option<bool>,
     /// Connection health check interval in seconds. 0 = disabled. Default: 30.
     pub ping_interval: Option<u32>,
+    /// Maximum number of query history entries per connection. Default: 500.
+    pub query_history_max_entries: Option<u32>,
 }
 
 pub fn get_config_dir<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
@@ -192,6 +194,9 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
                     interval as u64,
                 ));
             }
+        }
+        if config.query_history_max_entries.is_some() {
+            existing_config.query_history_max_entries = config.query_history_max_entries;
         }
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;

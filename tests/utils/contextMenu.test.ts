@@ -179,11 +179,64 @@ describe('contextMenu utils', () => {
         clickY: 350,
         margin: 10,
       };
-      
+
       const result = calculateContextMenuPosition(constraints);
       // Both axes should be adjusted
       expect(result.left).toBe(400 - 200 - 10); // 190
       expect(result.top).toBe(400 - 200 - 10); // 190
+    });
+
+    it('should respect boundaryRight when menu overflows it', () => {
+      const constraints: ViewportConstraints = {
+        viewportWidth: 1920,
+        viewportHeight: 1080,
+        menuWidth: 200,
+        menuHeight: 300,
+        clickX: 250,
+        clickY: 100,
+        margin: 10,
+        boundaryRight: 314, // sidebar right edge (64 + 250)
+      };
+
+      const result = calculateContextMenuPosition(constraints);
+      // 250 + 200 = 450 > 314 - 10 = 304, so must adjust
+      expect(result.left).toBe(314 - 200 - 10); // 104
+      expect(result.top).toBe(100);
+    });
+
+    it('should not adjust when menu fits within boundaryRight', () => {
+      const constraints: ViewportConstraints = {
+        viewportWidth: 1920,
+        viewportHeight: 1080,
+        menuWidth: 200,
+        menuHeight: 300,
+        clickX: 50,
+        clickY: 100,
+        margin: 10,
+        boundaryRight: 314,
+      };
+
+      const result = calculateContextMenuPosition(constraints);
+      // 50 + 200 = 250 < 314 - 10 = 304, fits fine
+      expect(result.left).toBe(50);
+      expect(result.top).toBe(100);
+    });
+
+    it('should use viewport width when boundaryRight exceeds it', () => {
+      const constraints: ViewportConstraints = {
+        viewportWidth: 800,
+        viewportHeight: 600,
+        menuWidth: 200,
+        menuHeight: 200,
+        clickX: 700,
+        clickY: 100,
+        margin: 10,
+        boundaryRight: 2000, // larger than viewport
+      };
+
+      const result = calculateContextMenuPosition(constraints);
+      // should use viewport (800) since it's the tighter limit
+      expect(result.left).toBe(800 - 200 - 10); // 590
     });
   });
 

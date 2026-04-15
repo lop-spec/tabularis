@@ -85,6 +85,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { useAlert } from "../hooks/useAlert";
 import { useDatabase } from "../hooks/useDatabase";
 import { useSavedQueries } from "../hooks/useSavedQueries";
+import { useQueryHistory } from "../hooks/useQueryHistory";
 import { useSettings } from "../hooks/useSettings";
 import { useEditor } from "../hooks/useEditor";
 import { useConnectionLayoutContext } from "../hooks/useConnectionLayoutContext";
@@ -141,6 +142,7 @@ export const Editor = () => {
   const { explorerConnectionId } = useConnectionLayoutContext();
   const { settings } = useSettings();
   const { saveQuery } = useSavedQueries();
+  const { addEntry: addHistoryEntry } = useQueryHistory();
   const {
     tabs,
     activeTab,
@@ -625,6 +627,9 @@ export const Editor = () => {
         selectedRows: [],
       });
 
+      const shouldRecordHistory =
+        targetTab?.type === "console" || targetTab?.type === "query_builder";
+
       try {
         const start = performance.now();
         // Use settings.resultPageSize for Page Size (pagination), ignoring the "Total Limit" input which is handled in SQL
@@ -684,11 +689,31 @@ export const Editor = () => {
           isLoading: false,
           activeTable: tableName || null,
         });
+
+        if (shouldRecordHistory) {
+          addHistoryEntry(
+            textToRun,
+            end - start,
+            "success",
+            res.pagination?.total_rows ?? null,
+            null,
+          );
+        }
       } catch (err) {
         updateTab(targetTabId, {
           error: typeof err === "string" ? err : t("editor.queryFailed"),
           isLoading: false,
         });
+
+        if (shouldRecordHistory) {
+          addHistoryEntry(
+            textToRun,
+            null,
+            "error",
+            null,
+            typeof err === "string" ? err : t("editor.queryFailed"),
+          );
+        }
       }
     },
     [
@@ -761,6 +786,9 @@ export const Editor = () => {
         executionTime: null,
       });
 
+      const shouldRecordHistory =
+        targetTab?.type === "console" || targetTab?.type === "query_builder";
+
       // Execute all queries concurrently
       await Promise.allSettled(
         entries.map(async (entry, idx) => {
@@ -784,6 +812,16 @@ export const Editor = () => {
               activeTable: tableName,
             };
             updateTab(targetTabId, { results: [...liveResults] });
+
+            if (shouldRecordHistory) {
+              addHistoryEntry(
+                entry.query,
+                end - start,
+                "success",
+                res.pagination?.total_rows ?? null,
+                null,
+              );
+            }
           } catch (err) {
             const end = performance.now();
             liveResults[idx] = {
@@ -794,6 +832,16 @@ export const Editor = () => {
               isLoading: false,
             };
             updateTab(targetTabId, { results: [...liveResults] });
+
+            if (shouldRecordHistory) {
+              addHistoryEntry(
+                entry.query,
+                end - start,
+                "error",
+                null,
+                typeof err === "string" ? err : t("editor.queryFailed"),
+              );
+            }
           }
         }),
       );

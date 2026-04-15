@@ -79,6 +79,24 @@ export function GeneralTab() {
         </SettingRow>
       </SettingSection>
 
+      <SettingSection title={t("settings.queryHistory")}>
+        <SettingRow
+          label={t("settings.queryHistoryMaxEntries")}
+          description={t("settings.queryHistoryMaxEntriesDesc")}
+        >
+          <SettingNumberInput
+            value={settings.queryHistoryMaxEntries ?? DEFAULT_SETTINGS.queryHistoryMaxEntries ?? 500}
+            onChange={(v) =>
+              updateSetting("queryHistoryMaxEntries", v ?? DEFAULT_SETTINGS.queryHistoryMaxEntries ?? 500)
+            }
+            min={50}
+            max={5000}
+            suffix={t("settings.entries")}
+            fallback={DEFAULT_SETTINGS.queryHistoryMaxEntries ?? 500}
+          />
+        </SettingRow>
+      </SettingSection>
+
       <SettingSection title={t("settings.erDiagram")}>
         <SettingRow
           label={t("settings.erDiagramDefaultLayout")}

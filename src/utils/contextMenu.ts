@@ -15,6 +15,8 @@ export interface ViewportConstraints {
   clickX: number;
   clickY: number;
   margin?: number;
+  /** Optional right boundary (e.g. sidebar right edge). Menu won't extend past this. */
+  boundaryRight?: number;
 }
 
 /**
@@ -33,14 +35,20 @@ export function calculateContextMenuPosition(
     clickX,
     clickY,
     margin = 10,
+    boundaryRight,
   } = constraints;
+
+  // Use the tighter of viewport or explicit boundary
+  const effectiveRight = boundaryRight
+    ? Math.min(viewportWidth, boundaryRight)
+    : viewportWidth;
 
   let adjustedX = clickX;
   let adjustedY = clickY;
 
   // Adjust horizontal position if menu overflows right edge
-  if (clickX + menuWidth > viewportWidth - margin) {
-    adjustedX = viewportWidth - menuWidth - margin;
+  if (clickX + menuWidth > effectiveRight - margin) {
+    adjustedX = effectiveRight - menuWidth - margin;
   }
 
   // Adjust vertical position if menu overflows bottom edge

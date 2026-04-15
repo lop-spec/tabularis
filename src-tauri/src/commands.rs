@@ -497,6 +497,11 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
 
     persistence::save_connections_file(&path, &conn_file)?;
 
+    // Clean up query history for this connection
+    if let Err(e) = crate::query_history::remove_history_for_connection(&app, &id) {
+        log::warn!("Failed to remove query history for connection {}: {}", id, e);
+    }
+
     if deleted {
         log::info!("Connection deleted successfully: {}", id);
     } else {

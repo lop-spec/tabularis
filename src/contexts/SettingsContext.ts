@@ -45,6 +45,7 @@ export interface Settings {
   editorWordWrap?: boolean;
   editorShowLineNumbers?: boolean;
   pingInterval?: number;
+  queryHistoryMaxEntries?: number;
 }
 
 export interface SettingsContextType {
@@ -81,4 +82,5 @@ export const DEFAULT_SETTINGS: Settings = {
   editorWordWrap: true,
   editorShowLineNumbers: true,
   pingInterval: 30,
+  queryHistoryMaxEntries: 500,
 };
