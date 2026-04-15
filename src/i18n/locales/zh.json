@@ -387,7 +387,29 @@
         "interpreterDesc": "可选。指定用于运行此插件的可执行文件（例如 macOS/Linux 上的 python3，Windows 上的 python 或完整路径）。留空使用默认值。",
         "interpreterPlaceholder": "例如：python3",
         "browse": "浏览...",
-        "fieldRequired": "{{label}} 是必需的"
+        "fieldRequired": "{{label}} 是必需的",
+        "saved": "已保存",
+        "resetToDefault": "重置为默认",
+        "builtin": {
+          "mysql": {
+            "maxAllowedPacket": {
+              "label": "最大允许数据包",
+              "description": "MySQL 连接器使用的最大数据包大小。"
+            },
+            "socketTimeout": {
+              "label": "Socket 超时",
+              "description": "Socket 超时时间，单位为毫秒。"
+            },
+            "connectTimeout": {
+              "label": "连接超时",
+              "description": "连接超时时间，单位为毫秒。"
+            },
+            "timezone": {
+              "label": "时区",
+              "description": "连接建立后发送给 MySQL 的会话时区。"
+            }
+          }
+        }
       }
     },
     "shortcuts": {

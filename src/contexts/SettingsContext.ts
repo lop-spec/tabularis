@@ -50,7 +50,10 @@ export interface Settings {
 
 export interface SettingsContextType {
   settings: Settings;
-  updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
+  updateSetting: <K extends keyof Settings>(
+    key: K,
+    value: Settings[K],
+  ) => Promise<void>;
   isLoading: boolean;
 }
 

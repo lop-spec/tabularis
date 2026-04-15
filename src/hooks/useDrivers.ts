@@ -42,6 +42,36 @@ const FALLBACK_DRIVERS: PluginManifest[] = [
     default_username: "root",
     color: "#f97316",
     icon: "mysql",
+    settings: [
+      {
+        key: "maxAllowedPacket",
+        label: "Max Allowed Packet",
+        type: "number",
+        default: 1073741824,
+        description: "Maximum packet size used by the MySQL connector.",
+      },
+      {
+        key: "socketTimeout",
+        label: "Socket Timeout",
+        type: "number",
+        default: 600000,
+        description: "Socket timeout in milliseconds.",
+      },
+      {
+        key: "connectTimeout",
+        label: "Connect Timeout",
+        type: "number",
+        default: 60000,
+        description: "Connection timeout in milliseconds.",
+      },
+      {
+        key: "timezone",
+        label: "Timezone",
+        type: "string",
+        default: "SYSTEM",
+        description: "Session timezone sent to MySQL after connect.",
+      },
+    ],
     capabilities: {
       schemas: false,
       views: true,

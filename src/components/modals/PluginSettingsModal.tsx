@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Settings, X, FolderOpen } from "lucide-react";
+import { Settings, X, FolderOpen, RotateCcw } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Modal } from "../ui/Modal";
 import { Select } from "../ui/Select";
@@ -37,6 +37,26 @@ export const PluginSettingsModal = ({
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const getSettingLabel = useCallback(
+    (def: PluginSettingDefinition) =>
+      t(
+        `settings.plugins.pluginSettings.builtin.${pluginId}.${def.key}.label`,
+        { defaultValue: def.label },
+      ),
+    [pluginId, t],
+  );
+
+  const getSettingDescription = useCallback(
+    (def: PluginSettingDefinition) =>
+      def.description
+        ? t(
+            `settings.plugins.pluginSettings.builtin.${pluginId}.${def.key}.description`,
+            { defaultValue: def.description },
+          )
+        : undefined,
+    [pluginId, t],
+  );
+
   const handleBrowse = async () => {
     const selected = await open({ multiple: false, directory: false });
     if (selected) setInterpreter(selected);
@@ -51,6 +71,14 @@ export const PluginSettingsModal = ({
       return next;
     });
   }, []);
+
+  const handleResetField = useCallback(
+    (def: PluginSettingDefinition) => {
+      if (def.default === undefined) return;
+      handleDynamicChange(def.key, def.default);
+    },
+    [handleDynamicChange],
+  );
 
   const handleSave = () => {
     const validationErrors = validateSettings(definitions, dynamicValues);
@@ -77,47 +105,76 @@ export const PluginSettingsModal = ({
     const value = dynamicValues[def.key];
     const inputClass =
       "bg-base border-default text-primary placeholder:text-muted focus:border-blue-500/50 focus:outline-none";
+    const canReset = def.default !== undefined;
+    const isDefaultValue = canReset && Object.is(value, def.default);
+
+    const resetButton = canReset ? (
+      <button
+        type="button"
+        onClick={() => handleResetField(def)}
+        disabled={isDefaultValue}
+        className="inline-flex items-center justify-center w-8 h-8 border border-default rounded-md text-muted hover:text-primary hover:border-strong disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+        title={t("settings.plugins.pluginSettings.resetToDefault")}
+        aria-label={t("settings.plugins.pluginSettings.resetToDefault")}
+      >
+        <RotateCcw size={12} />
+      </button>
+    ) : null;
 
     if (def.type === "boolean") {
       return (
-        <input
-          type="checkbox"
-          checked={typeof value === "boolean" ? value : false}
-          onChange={(e) => handleDynamicChange(def.key, e.target.checked)}
-          className="w-4 h-4 accent-blue-500"
-        />
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={typeof value === "boolean" ? value : false}
+            onChange={(e) => handleDynamicChange(def.key, e.target.checked)}
+            className="w-4 h-4 accent-blue-500"
+          />
+          {resetButton}
+        </div>
       );
     }
 
     if (def.type === "select" && def.options && def.options.length > 0) {
       return (
-        <Select
-          value={typeof value === "string" ? value : null}
-          options={def.options}
-          onChange={(v) => handleDynamicChange(def.key, v)}
-          hasError={!!errors[def.key]}
-        />
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <Select
+              value={typeof value === "string" ? value : null}
+              options={def.options}
+              onChange={(v) => handleDynamicChange(def.key, v)}
+              hasError={!!errors[def.key]}
+            />
+          </div>
+          {resetButton}
+        </div>
       );
     }
 
     if (def.type === "number") {
       return (
-        <input
-          type="number"
-          value={typeof value === "number" ? value : ""}
-          onChange={(e) => handleDynamicChange(def.key, e.target.value === "" ? undefined : Number(e.target.value))}
-          className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
-        />
+        <div className="flex items-start gap-2">
+          <input
+            type="number"
+            value={typeof value === "number" ? value : ""}
+            onChange={(e) => handleDynamicChange(def.key, e.target.value === "" ? undefined : Number(e.target.value))}
+            className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
+          />
+          {resetButton}
+        </div>
       );
     }
 
     return (
-      <input
-        type="text"
-        value={typeof value === "string" ? value : ""}
-        onChange={(e) => handleDynamicChange(def.key, e.target.value)}
-        className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
-      />
+      <div className="flex items-start gap-2">
+        <input
+          type="text"
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => handleDynamicChange(def.key, e.target.value)}
+          className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
+        />
+        {resetButton}
+      </div>
     );
   };
 
@@ -182,11 +239,11 @@ export const PluginSettingsModal = ({
           {definitions.map((def) => (
             <div key={def.key} className="space-y-1.5">
               <label className="text-sm font-medium text-primary flex items-center gap-1">
-                {def.label}
+                {getSettingLabel(def)}
                 {def.required && <span className="text-red-400">*</span>}
               </label>
-              {def.description && (
-                <p className="text-xs text-secondary">{def.description}</p>
+              {getSettingDescription(def) && (
+                <p className="text-xs text-secondary">{getSettingDescription(def)}</p>
               )}
               {renderField(def)}
               {errors[def.key] && (

@@ -669,6 +669,7 @@ export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
           <div className="space-y-3 pt-3">
             {allDrivers.map((driver: PluginManifest) => {
               const isBuiltin = driver.is_builtin === true;
+              const hasSettings = (driver.settings?.length ?? 0) > 0;
               const registryPlugin = registryPlugins.find(
                 (p) => p.id === driver.id,
               );
@@ -723,7 +724,7 @@ export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
                           className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition duration-200 ease-in-out ${isEnabled ? "translate-x-4" : "translate-x-0"}`}
                         />
                       </button>
-                      {!isBuiltin && (
+                      {hasSettings && (
                         <button
                           onClick={() =>
                             handleOpenPluginSettings(

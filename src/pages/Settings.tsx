@@ -70,7 +70,8 @@ export const Settings = () => {
   const pluginSettingItems = new Map<string, { id: string; name: string }>();
 
   for (const driver of allDrivers) {
-    if (driver.is_builtin) continue;
+    const hasSettings = (driver.settings?.length ?? 0) > 0;
+    if (driver.is_builtin && !hasSettings) continue;
     pluginSettingItems.set(driver.id, {
       id: driver.id,
       name: driver.name,
@@ -166,7 +167,10 @@ export const Settings = () => {
       <div className="flex-1 overflow-auto">
         <div className="max-w-5xl mx-auto p-8">
           {activePluginId ? (
-            <PluginSettingsPage pluginId={activePluginId} />
+            <PluginSettingsPage
+              key={activePluginId}
+              pluginId={activePluginId}
+            />
           ) : activeTab === "plugins" ? (
             <PluginsTab
               onOpenPluginSettings={(pluginId) =>

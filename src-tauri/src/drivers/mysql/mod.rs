@@ -950,9 +950,41 @@ pub async fn execute_query(
 // Plugin wrapper
 // ============================================================
 
-use crate::drivers::driver_trait::{DatabaseDriver, DriverCapabilities, PluginManifest};
+use crate::drivers::driver_trait::{
+    DatabaseDriver, DriverCapabilities, PluginManifest, PluginSettingDefinition,
+};
 use async_trait::async_trait;
 use std::collections::HashMap;
+
+const DEFAULT_MYSQL_MAX_ALLOWED_PACKET: u64 = 1_073_741_824;
+const DEFAULT_MYSQL_SOCKET_TIMEOUT_MS: u64 = 600_000;
+const DEFAULT_MYSQL_CONNECT_TIMEOUT_MS: u64 = 60_000;
+const DEFAULT_MYSQL_TIMEZONE: &str = "SYSTEM";
+
+fn mysql_setting_value(key: &str) -> Option<serde_json::Value> {
+    crate::config::get_cached_config()
+        .plugins
+        .and_then(|plugins| plugins.get("mysql").cloned())
+        .and_then(|plugin| plugin.settings.get(key).cloned())
+}
+
+fn mysql_string_setting(key: &str, default: &str) -> String {
+    mysql_setting_value(key)
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
+fn mysql_numeric_setting(key: &str, default: u64) -> u64 {
+    mysql_setting_value(key)
+        .and_then(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_i64().and_then(|item| u64::try_from(item).ok()))
+                .or_else(|| value.as_str().and_then(|item| item.parse::<u64>().ok()))
+        })
+        .unwrap_or(default)
+}
 
 pub struct MysqlDriver {
     manifest: PluginManifest,
@@ -990,7 +1022,48 @@ impl MysqlDriver {
                 default_username: "root".to_string(),
                 color: "#f97316".to_string(),
                 icon: "mysql".to_string(),
-                settings: vec![],
+                settings: vec![
+                    PluginSettingDefinition {
+                        key: "maxAllowedPacket".to_string(),
+                        label: "Max Allowed Packet".to_string(),
+                        setting_type: "number".to_string(),
+                        default: Some(serde_json::json!(DEFAULT_MYSQL_MAX_ALLOWED_PACKET)),
+                        description: Some(
+                            "Maximum packet size used by the MySQL connector.".to_string(),
+                        ),
+                        required: false,
+                        options: vec![],
+                    },
+                    PluginSettingDefinition {
+                        key: "socketTimeout".to_string(),
+                        label: "Socket Timeout".to_string(),
+                        setting_type: "number".to_string(),
+                        default: Some(serde_json::json!(DEFAULT_MYSQL_SOCKET_TIMEOUT_MS)),
+                        description: Some("Socket timeout in milliseconds.".to_string()),
+                        required: false,
+                        options: vec![],
+                    },
+                    PluginSettingDefinition {
+                        key: "connectTimeout".to_string(),
+                        label: "Connect Timeout".to_string(),
+                        setting_type: "number".to_string(),
+                        default: Some(serde_json::json!(DEFAULT_MYSQL_CONNECT_TIMEOUT_MS)),
+                        description: Some("Connection timeout in milliseconds.".to_string()),
+                        required: false,
+                        options: vec![],
+                    },
+                    PluginSettingDefinition {
+                        key: "timezone".to_string(),
+                        label: "Timezone".to_string(),
+                        setting_type: "string".to_string(),
+                        default: Some(serde_json::json!(DEFAULT_MYSQL_TIMEZONE)),
+                        description: Some(
+                            "Session timezone sent to MySQL after connect.".to_string(),
+                        ),
+                        required: false,
+                        options: vec![],
+                    },
+                ],
                 ui_extensions: None,
             },
         }
@@ -1014,13 +1087,26 @@ impl DatabaseDriver for MysqlDriver {
         use urlencoding::encode;
         let user = encode(params.username.as_deref().unwrap_or_default());
         let pass = encode(params.password.as_deref().unwrap_or_default());
+        let max_allowed_packet = mysql_numeric_setting(
+            "maxAllowedPacket",
+            DEFAULT_MYSQL_MAX_ALLOWED_PACKET,
+        );
+        let socket_timeout =
+            mysql_numeric_setting("socketTimeout", DEFAULT_MYSQL_SOCKET_TIMEOUT_MS);
+        let connect_timeout =
+            mysql_numeric_setting("connectTimeout", DEFAULT_MYSQL_CONNECT_TIMEOUT_MS);
+        let timezone = mysql_string_setting("timezone", DEFAULT_MYSQL_TIMEZONE);
         Ok(format!(
-            "mysql://{}:{}@{}:{}/{}",
+            "mysql://{}:{}@{}:{}/{}?maxAllowedPacket={}&socketTimeout={}&connectTimeout={}&timezone={}",
             user,
             pass,
             params.host.as_deref().unwrap_or("localhost"),
             params.port.unwrap_or(3306),
-            params.database
+            params.database,
+            max_allowed_packet,
+            socket_timeout,
+            connect_timeout,
+            encode(&timezone),
         ))
     }
 

@@ -416,7 +416,29 @@
         "interpreterDesc": "Opzionale. Specifica l'eseguibile usato per avviare questo plugin (es. python3 su macOS/Linux, python o percorso completo su Windows). Lascia vuoto per usare il valore predefinito.",
         "interpreterPlaceholder": "es. python3",
         "browse": "Sfoglia...",
-        "fieldRequired": "{{label}} è obbligatorio"
+        "fieldRequired": "{{label}} è obbligatorio",
+        "saved": "Salvato",
+        "resetToDefault": "Ripristina predefinito",
+        "builtin": {
+          "mysql": {
+            "maxAllowedPacket": {
+              "label": "Max Allowed Packet",
+              "description": "Dimensione massima del pacchetto usata dal connettore MySQL."
+            },
+            "socketTimeout": {
+              "label": "Timeout Socket",
+              "description": "Timeout del socket in millisecondi."
+            },
+            "connectTimeout": {
+              "label": "Timeout Connessione",
+              "description": "Timeout di connessione in millisecondi."
+            },
+            "timezone": {
+              "label": "Fuso Orario",
+              "description": "Fuso orario della sessione inviato a MySQL dopo la connessione."
+            }
+          }
+        }
       }
     },
     "shortcuts": {

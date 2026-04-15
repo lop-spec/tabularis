@@ -6,6 +6,7 @@ use postgres_native_tls::MakeTlsConnector;
 use sqlx::{sqlite::SqliteConnectOptions, MySql, Pool, Sqlite};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio_postgres::{config::SslMode as PgSslMode, Config as PgConfig};
 
@@ -15,6 +16,34 @@ type PgPoolMap = Arc<RwLock<HashMap<String, PgPool>>>;
 static MYSQL_POOLS: Lazy<PoolMap<MySql>> = Lazy::new(|| Arc::new(RwLock::new(HashMap::new())));
 static POSTGRES_POOLS: Lazy<PgPoolMap> = Lazy::new(|| Arc::new(RwLock::new(HashMap::new())));
 static SQLITE_POOLS: Lazy<PoolMap<Sqlite>> = Lazy::new(|| Arc::new(RwLock::new(HashMap::new())));
+
+const DEFAULT_MYSQL_CONNECT_TIMEOUT_MS: u64 = 60_000;
+const DEFAULT_MYSQL_TIMEZONE: &str = "SYSTEM";
+
+fn mysql_setting_value(key: &str) -> Option<serde_json::Value> {
+    crate::config::get_cached_config()
+        .plugins
+        .and_then(|plugins| plugins.get("mysql").cloned())
+        .and_then(|plugin| plugin.settings.get(key).cloned())
+}
+
+fn mysql_string_setting(key: &str, default: &str) -> String {
+    mysql_setting_value(key)
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
+fn mysql_numeric_setting(key: &str, default: u64) -> u64 {
+    mysql_setting_value(key)
+        .and_then(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_i64().and_then(|item| u64::try_from(item).ok()))
+                .or_else(|| value.as_str().and_then(|item| item.parse::<u64>().ok()))
+        })
+        .unwrap_or(default)
+}
 
 /// Build a stable connection key that works with SSH tunnels.
 /// If connection_id is provided (from saved connections), use it for stable pooling.
@@ -46,6 +75,7 @@ fn build_mysql_options(
     let host = params.host.as_deref().unwrap_or("localhost");
     let port = params.port.unwrap_or(3306);
     let database = override_db.unwrap_or_else(|| params.database.primary());
+    let timezone = mysql_string_setting("timezone", DEFAULT_MYSQL_TIMEZONE);
 
     let mut options = MySqlConnectOptions::new()
         .host(host)
@@ -53,7 +83,7 @@ fn build_mysql_options(
         .username(username)
         .password(password)
         .database(database)
-        .timezone("SYSTEM".to_string());
+        .timezone(timezone);
 
     // Configure SSL mode based on params.ssl_mode
     let ssl_mode = match params.ssl_mode.as_deref().unwrap_or("required") {
@@ -162,11 +192,24 @@ async fn get_mysql_pool_for_database_with_id(
         key
     );
     let options = build_mysql_options(params, override_db)?;
-    let pool = sqlx::mysql::MySqlPoolOptions::new()
-        .max_connections(10)
-        .connect_with(options)
-        .await
-        .map_err(|e| {
+    let connect_timeout = Duration::from_millis(mysql_numeric_setting(
+        "connectTimeout",
+        DEFAULT_MYSQL_CONNECT_TIMEOUT_MS,
+    ));
+    let pool = tokio::time::timeout(
+        connect_timeout,
+        sqlx::mysql::MySqlPoolOptions::new()
+            .max_connections(10)
+            .connect_with(options),
+    )
+    .await
+    .map_err(|_| {
+        format!(
+            "Timed out creating MySQL connection pool after {} ms",
+            connect_timeout.as_millis()
+        )
+    })?
+    .map_err(|e| {
             log::error!("Failed to create MySQL connection pool: {}", e);
             e.to_string()
         })?;

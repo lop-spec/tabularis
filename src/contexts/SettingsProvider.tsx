@@ -178,14 +178,16 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const updateSetting = <K extends keyof Settings>(
     key: K,
     value: Settings[K],
-  ) => {
+  ): Promise<void> => {
+    let persistPromise = Promise.resolve();
+
     setSettings((prev) => {
       const newSettings = { ...prev, [key]: value };
 
       // Persist to backend
-      invoke("save_config", { config: newSettings }).catch((err) =>
-        console.error("Failed to save settings:", err),
-      );
+      persistPromise = invoke("save_config", { config: newSettings }).catch((err) => {
+        console.error("Failed to save settings:", err);
+      });
 
       // If font setting changed, update cache immediately
       if (key === "fontFamily" || key === "fontSize") {
@@ -204,6 +206,8 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
       return newSettings;
     });
+
+    return persistPromise;
   };
 
   return (

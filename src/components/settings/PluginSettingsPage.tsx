@@ -2,8 +2,9 @@ import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FolderOpen, Check } from "lucide-react";
+import { FolderOpen, Check, RotateCcw } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
+import { useDatabase } from "../../hooks/useDatabase";
 import { useDrivers } from "../../hooks/useDrivers";
 import { SettingSection, SettingRow } from "./SettingControls";
 import { Select } from "../ui/Select";
@@ -14,6 +15,7 @@ import {
   resolveSettingsWithDefaults,
   validateSettings,
 } from "../../utils/pluginConfig";
+import { findConnectionsForDrivers } from "../../utils/connectionManager";
 import type {
   PluginManifest,
   PluginSettingDefinition,
@@ -55,8 +57,10 @@ interface PluginSettingsFormProps {
 function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
   const { t } = useTranslation();
   const { settings, updateSetting } = useSettings();
+  const { openConnectionIds, connectionDataMap, disconnect } = useDatabase();
   const { allDrivers, refresh: refreshDrivers } = useDrivers();
 
+  const isBuiltin = manifest?.is_builtin === true;
   const currentConfig = settings.plugins?.[pluginId];
   const [interpreter, setInterpreter] = useState(
     getDisplayInterpreter(currentConfig),
@@ -67,6 +71,26 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
   >(() => resolveSettingsWithDefaults(definitions, currentConfig?.settings));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
+
+  const getSettingLabel = useCallback(
+    (def: PluginSettingDefinition) =>
+      t(
+        `settings.plugins.pluginSettings.builtin.${pluginId}.${def.key}.label`,
+        { defaultValue: def.label },
+      ),
+    [pluginId, t],
+  );
+
+  const getSettingDescription = useCallback(
+    (def: PluginSettingDefinition) =>
+      def.description
+        ? t(
+            `settings.plugins.pluginSettings.builtin.${pluginId}.${def.key}.description`,
+            { defaultValue: def.description },
+          )
+        : undefined,
+    [pluginId, t],
+  );
 
   const handleBrowse = async () => {
     const selected = await open({ multiple: false, directory: false });
@@ -85,6 +109,14 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
       setSaved(false);
     },
     [],
+  );
+
+  const handleResetField = useCallback(
+    (def: PluginSettingDefinition) => {
+      if (def.default === undefined) return;
+      handleDynamicChange(def.key, def.default);
+    },
+    [handleDynamicChange],
   );
 
   const handleSave = useCallback(async () => {
@@ -109,10 +141,18 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
 
     const config = { ...baseConfig, settings: mergedSettings };
     const current = settings.plugins ?? {};
-    updateSetting("plugins", { ...current, [pluginId]: config });
+    const nextPlugins = { ...current, [pluginId]: config };
+    await updateSetting("plugins", nextPlugins);
 
     const isRunning = allDrivers.some((d) => d.id === pluginId);
-    if (isRunning) {
+    if (isBuiltin) {
+      const toDisconnect = findConnectionsForDrivers(
+        openConnectionIds,
+        connectionDataMap,
+        [pluginId],
+      );
+      await Promise.all(toDisconnect.map((connectionId) => disconnect(connectionId)));
+    } else if (isRunning) {
       try {
         await invoke("disable_plugin", { pluginId });
         await invoke("enable_plugin", { pluginId });
@@ -134,62 +174,95 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
     allDrivers,
     refreshDrivers,
     t,
+    isBuiltin,
+    openConnectionIds,
+    connectionDataMap,
+    disconnect,
   ]);
 
   const renderField = (def: PluginSettingDefinition) => {
     const value = dynamicValues[def.key];
     const inputClass =
       "bg-base border-default text-primary placeholder:text-muted focus:border-blue-500/50 focus:outline-none";
+    const canReset = def.default !== undefined;
+    const isDefaultValue = canReset && Object.is(value, def.default);
+
+    const resetButton = canReset ? (
+      <button
+        type="button"
+        onClick={() => handleResetField(def)}
+        disabled={isDefaultValue}
+        className="inline-flex items-center justify-center w-8 h-8 border border-default rounded-md text-muted hover:text-primary hover:border-strong disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+        title={t("settings.plugins.pluginSettings.resetToDefault")}
+        aria-label={t("settings.plugins.pluginSettings.resetToDefault")}
+      >
+        <RotateCcw size={12} />
+      </button>
+    ) : null;
 
     if (def.type === "boolean") {
       return (
-        <input
-          type="checkbox"
-          checked={typeof value === "boolean" ? value : false}
-          onChange={(e) =>
-            handleDynamicChange(def.key, e.target.checked)
-          }
-          className="w-4 h-4 accent-blue-500"
-        />
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={typeof value === "boolean" ? value : false}
+            onChange={(e) =>
+              handleDynamicChange(def.key, e.target.checked)
+            }
+            className="w-4 h-4 accent-blue-500"
+          />
+          {resetButton}
+        </div>
       );
     }
 
     if (def.type === "select" && def.options && def.options.length > 0) {
       return (
-        <Select
-          value={typeof value === "string" ? value : null}
-          options={def.options}
-          onChange={(v) => handleDynamicChange(def.key, v)}
-          hasError={!!errors[def.key]}
-        />
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <Select
+              value={typeof value === "string" ? value : null}
+              options={def.options}
+              onChange={(v) => handleDynamicChange(def.key, v)}
+              hasError={!!errors[def.key]}
+            />
+          </div>
+          {resetButton}
+        </div>
       );
     }
 
     if (def.type === "number") {
       return (
-        <input
-          type="number"
-          value={typeof value === "number" ? value : ""}
-          onChange={(e) =>
-            handleDynamicChange(
-              def.key,
-              e.target.value === ""
-                ? undefined
-                : Number(e.target.value),
-            )
-          }
-          className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
-        />
+        <div className="flex items-start gap-2">
+          <input
+            type="number"
+            value={typeof value === "number" ? value : ""}
+            onChange={(e) =>
+              handleDynamicChange(
+                def.key,
+                e.target.value === ""
+                  ? undefined
+                  : Number(e.target.value),
+              )
+            }
+            className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
+          />
+          {resetButton}
+        </div>
       );
     }
 
     return (
-      <input
-        type="text"
-        value={typeof value === "string" ? value : ""}
-        onChange={(e) => handleDynamicChange(def.key, e.target.value)}
-        className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
-      />
+      <div className="flex items-start gap-2">
+        <input
+          type="text"
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => handleDynamicChange(def.key, e.target.value)}
+          className={`w-full border rounded-lg px-3 py-2 text-sm ${inputClass}`}
+        />
+        {resetButton}
+      </div>
     );
   };
 
@@ -203,37 +276,38 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
         <p className="text-xs text-muted font-mono mt-0.5">{pluginId}</p>
       </div>
 
-      {/* Interpreter */}
-      <SettingSection
-        title={t("settings.plugins.pluginSettings.interpreter")}
-        description={t(
-          "settings.plugins.pluginSettings.interpreterDesc",
-        )}
-      >
-        <div className="py-3">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={interpreter}
-              placeholder={t(
-                "settings.plugins.pluginSettings.interpreterPlaceholder",
-              )}
-              onChange={(e) => {
-                setInterpreter(e.target.value);
-                setSaved(false);
-              }}
-              className="flex-1 bg-base border border-default rounded-lg px-3 py-2 text-sm text-primary placeholder:text-muted focus:outline-none focus:border-blue-500/50"
-            />
-            <button
-              onClick={handleBrowse}
-              className="flex items-center gap-1.5 px-3 py-2 bg-surface-secondary hover:bg-surface-tertiary border border-default rounded-lg text-sm text-secondary hover:text-primary transition-colors"
-            >
-              <FolderOpen size={15} />
-              {t("settings.plugins.pluginSettings.browse")}
-            </button>
+      {!isBuiltin && (
+        <SettingSection
+          title={t("settings.plugins.pluginSettings.interpreter")}
+          description={t(
+            "settings.plugins.pluginSettings.interpreterDesc",
+          )}
+        >
+          <div className="py-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={interpreter}
+                placeholder={t(
+                  "settings.plugins.pluginSettings.interpreterPlaceholder",
+                )}
+                onChange={(e) => {
+                  setInterpreter(e.target.value);
+                  setSaved(false);
+                }}
+                className="flex-1 bg-base border border-default rounded-lg px-3 py-2 text-sm text-primary placeholder:text-muted focus:outline-none focus:border-blue-500/50"
+              />
+              <button
+                onClick={handleBrowse}
+                className="flex items-center gap-1.5 px-3 py-2 bg-surface-secondary hover:bg-surface-tertiary border border-default rounded-lg text-sm text-secondary hover:text-primary transition-colors"
+              >
+                <FolderOpen size={15} />
+                {t("settings.plugins.pluginSettings.browse")}
+              </button>
+            </div>
           </div>
-        </div>
-      </SettingSection>
+        </SettingSection>
+      )}
 
       {/* Plugin UI extension slot */}
       <SlotAnchor
@@ -250,8 +324,8 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
           {definitions.map((def) => (
             <div key={def.key}>
               <SettingRow
-                label={`${def.label}${def.required ? " *" : ""}`}
-                description={def.description}
+                label={`${getSettingLabel(def)}${def.required ? " *" : ""}`}
+                description={getSettingDescription(def)}
                 vertical={def.type !== "boolean"}
               >
                 {renderField(def)}

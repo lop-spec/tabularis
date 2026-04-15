@@ -1,9 +1,11 @@
 use crate::keychain_utils;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri::Manager;
+use std::sync::RwLock;
 
 use std::collections::HashMap;
 
@@ -55,8 +57,23 @@ pub struct AppConfig {
     pub query_history_max_entries: Option<u32>,
 }
 
+static CONFIG_CACHE: Lazy<RwLock<AppConfig>> = Lazy::new(|| RwLock::new(AppConfig::default()));
+
 pub fn get_config_dir<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
     app.path().app_config_dir().ok()
+}
+
+fn cache_config(config: &AppConfig) {
+    if let Ok(mut cached) = CONFIG_CACHE.write() {
+        *cached = config.clone();
+    }
+}
+
+pub fn get_cached_config() -> AppConfig {
+    CONFIG_CACHE
+        .read()
+        .map(|cached| cached.clone())
+        .unwrap_or_default()
 }
 
 // Internal load
@@ -66,12 +83,15 @@ pub fn load_config_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> AppConfig 
         if config_path.exists() {
             if let Ok(content) = fs::read_to_string(config_path) {
                 if let Ok(config) = serde_json::from_str(&content) {
+                    cache_config(&config);
                     return config;
                 }
             }
         }
     }
-    AppConfig::default()
+    let default_config = AppConfig::default();
+    cache_config(&default_config);
+    default_config
 }
 
 #[tauri::command]
@@ -201,6 +221,7 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;
         fs::write(config_path, content).map_err(|e| e.to_string())?;
+        cache_config(&existing_config);
         Ok(())
     } else {
         Err("Could not resolve config directory".to_string())
