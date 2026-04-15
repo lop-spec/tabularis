@@ -185,7 +185,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
       const newSettings = { ...prev, [key]: value };
 
       // Persist to backend
-      persistPromise = invoke("save_config", { config: newSettings }).catch((err) => {
+      persistPromise = invoke<void>("save_config", { config: newSettings }).catch((err) => {
         console.error("Failed to save settings:", err);
       });
 
