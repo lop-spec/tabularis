@@ -59,6 +59,19 @@ export function App() {
     setIsWhatsNewOpen(false);
   }, []);
 
+  // Seed WHATS_NEW_VERSION_KEY for users who completed the welcome flow
+  // before the WhatsNew feature was introduced. Without this, lastSeenVersion
+  // stays null and WhatsNew never triggers.
+  useEffect(() => {
+    if (
+      !isSettingsLoading &&
+      settings.showWelcome === false &&
+      !localStorage.getItem(WHATS_NEW_VERSION_KEY)
+    ) {
+      localStorage.setItem(WHATS_NEW_VERSION_KEY, APP_VERSION);
+    }
+  }, [isSettingsLoading, settings.showWelcome]);
+
   useEffect(() => {
     invoke<boolean>("is_debug_mode").then((debugMode) => {
       setIsDebugMode(debugMode);
