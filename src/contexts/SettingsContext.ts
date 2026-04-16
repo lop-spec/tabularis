@@ -46,6 +46,7 @@ export interface Settings {
   editorShowLineNumbers?: boolean;
   pingInterval?: number;
   queryHistoryMaxEntries?: number;
+  showWelcome?: boolean;
 }
 
 export interface SettingsContextType {

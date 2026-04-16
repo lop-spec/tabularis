@@ -18,9 +18,9 @@ import { CommunityModal } from "./components/modals/CommunityModal";
 import { WhatsNewModal } from "./components/modals/WhatsNewModal";
 import { useUpdate } from "./hooks/useUpdate";
 import { useChangelog } from "./hooks/useChangelog";
+import { useSettings } from "./hooks/useSettings";
 import { APP_VERSION } from "./version";
 
-const COMMUNITY_MODAL_KEY = "tabularis_community_modal_dismissed";
 const WHATS_NEW_VERSION_KEY = "tabularis_last_seen_version";
 
 export function App() {
@@ -32,10 +32,9 @@ export function App() {
     dismissUpdate,
     error: updateError,
   } = useUpdate();
+  const { settings, updateSetting, isLoading: isSettingsLoading } = useSettings();
   const [isDebugMode, setIsDebugMode] = useState(false);
-  const [isCommunityModalOpen, setIsCommunityModalOpen] = useState(
-    () => !localStorage.getItem(COMMUNITY_MODAL_KEY),
-  );
+  const [isCommunityModalDismissed, setIsCommunityModalDismissed] = useState(false);
 
   const lastSeenVersion = localStorage.getItem(WHATS_NEW_VERSION_KEY);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(
@@ -50,10 +49,10 @@ export function App() {
   }, [lastSeenVersion, allEntries]);
 
   const dismissCommunityModal = useCallback(() => {
-    localStorage.setItem(COMMUNITY_MODAL_KEY, "1");
+    updateSetting("showWelcome", false);
     localStorage.setItem(WHATS_NEW_VERSION_KEY, APP_VERSION);
-    setIsCommunityModalOpen(false);
-  }, []);
+    setIsCommunityModalDismissed(true);
+  }, [updateSetting]);
 
   const dismissWhatsNew = useCallback(() => {
     localStorage.setItem(WHATS_NEW_VERSION_KEY, APP_VERSION);
@@ -123,12 +122,12 @@ export function App() {
       />
 
       <CommunityModal
-        isOpen={isCommunityModalOpen}
+        isOpen={!isSettingsLoading && settings.showWelcome !== false && !isCommunityModalDismissed}
         onClose={dismissCommunityModal}
       />
 
       <WhatsNewModal
-        isOpen={isWhatsNewOpen && !isCommunityModalOpen}
+        isOpen={isWhatsNewOpen && !isSettingsLoading && (settings.showWelcome === false || isCommunityModalDismissed)}
         onClose={dismissWhatsNew}
         entries={whatsNewEntries}
         isLoading={isChangelogLoading}

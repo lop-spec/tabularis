@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, type CopyFormat, type ERDiagramLayout } from "../../c
 import {
   SettingSection,
   SettingRow,
+  SettingToggle,
   SettingButtonGroup,
   SettingNumberInput,
 } from "./SettingControls";
@@ -14,6 +15,18 @@ export function GeneralTab() {
 
   return (
     <div>
+      <SettingSection title={t("settings.startup")}>
+        <SettingRow
+          label={t("settings.showWelcome")}
+          description={t("settings.showWelcomeDesc")}
+        >
+          <SettingToggle
+            checked={settings.showWelcome !== false}
+            onChange={(v) => updateSetting("showWelcome", v)}
+          />
+        </SettingRow>
+      </SettingSection>
+
       <SettingSection title={t("settings.dataEditor")}>
         <SettingRow
           label={t("settings.pageSize")}

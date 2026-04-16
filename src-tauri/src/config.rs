@@ -55,6 +55,8 @@ pub struct AppConfig {
     pub ping_interval: Option<u32>,
     /// Maximum number of query history entries per connection. Default: 500.
     pub query_history_max_entries: Option<u32>,
+    /// Whether to show the welcome screen on startup. Default: true (first launch).
+    pub show_welcome: Option<bool>,
 }
 
 static CONFIG_CACHE: Lazy<RwLock<AppConfig>> = Lazy::new(|| RwLock::new(AppConfig::default()));
@@ -217,6 +219,9 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.query_history_max_entries.is_some() {
             existing_config.query_history_max_entries = config.query_history_max_entries;
+        }
+        if config.show_welcome.is_some() {
+            existing_config.show_welcome = config.show_welcome;
         }
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;
