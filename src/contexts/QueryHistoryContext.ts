@@ -12,6 +12,7 @@ export interface QueryHistoryContextType {
     status: "success" | "error",
     rowsAffected: number | null,
     error: string | null,
+    database?: string | null,
   ) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
   clearHistory: () => Promise<void>;

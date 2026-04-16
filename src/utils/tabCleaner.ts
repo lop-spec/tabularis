@@ -19,6 +19,7 @@ export interface CleanedTab {
   limitClause?: number;
   queryParams?: Record<string, string>;
   notebookId?: string;
+  schema?: string;
 }
 
 /**
@@ -46,6 +47,7 @@ export function cleanTabForStorage(tab: Tab): CleanedTab {
     limitClause: tab.limitClause,
     queryParams: tab.queryParams,
     notebookId: tab.notebookId,
+    schema: tab.schema,
   };
 }
 

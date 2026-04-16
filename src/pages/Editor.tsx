@@ -654,6 +654,11 @@ export const Editor = () => {
             : 100;
 
         const schema = targetTab?.schema ?? activeSchema;
+        // For history: fall back to activeDatabaseName for multi-db connections
+        // where schema may not be set on the tab
+        const historyDb = schema
+          || (isMultiDb ? activeDatabaseName : undefined)
+          || undefined;
         const res = await invoke<QueryResult>("execute_query", {
           connectionId: activeConnectionId,
           query: textToRun,
@@ -711,6 +716,7 @@ export const Editor = () => {
             "success",
             res.pagination?.total_rows ?? null,
             null,
+            historyDb,
           );
         }
       } catch (err) {
@@ -726,6 +732,7 @@ export const Editor = () => {
             "error",
             null,
             typeof err === "string" ? err : t("editor.queryFailed"),
+            historyDb,
           );
         }
       }
@@ -740,6 +747,8 @@ export const Editor = () => {
       activeSchema,
       activeCapabilities?.schemas,
       views,
+      isMultiDb,
+      activeDatabaseName,
     ],
   );
 
@@ -783,6 +792,9 @@ export const Editor = () => {
           ? settings.resultPageSize
           : 100;
       const schema = targetTab?.schema ?? activeSchema;
+      const historyDb = schema
+        || (isMultiDb ? activeDatabaseName : undefined)
+        || undefined;
 
       const entries = createResultEntries(targetTabId, queries);
       // Local mutable array shared across concurrent promises.
@@ -834,6 +846,7 @@ export const Editor = () => {
                 "success",
                 res.pagination?.total_rows ?? null,
                 null,
+                historyDb,
               );
             }
           } catch (err) {
@@ -854,6 +867,7 @@ export const Editor = () => {
                 "error",
                 null,
                 typeof err === "string" ? err : t("editor.queryFailed"),
+                historyDb,
               );
             }
           }
@@ -862,7 +876,7 @@ export const Editor = () => {
 
       updateTab(targetTabId, { isLoading: false });
     },
-    [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t],
+    [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t, isMultiDb, activeDatabaseName],
   );
 
   const runResultEntryPage = useCallback(

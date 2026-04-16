@@ -44,6 +44,7 @@ export const QueryHistoryProvider = ({
     status: "success" | "error",
     rowsAffected: number | null,
     error: string | null,
+    database?: string | null,
   ) => {
     if (!activeConnectionId) return;
     try {
@@ -57,6 +58,7 @@ export const QueryHistoryProvider = ({
           status,
           rowsAffected,
           error,
+          database: database ?? null,
         },
       );
       // Update state: if deduped (same id as first entry), replace it; otherwise prepend

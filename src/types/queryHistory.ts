@@ -6,4 +6,5 @@ export interface QueryHistoryEntry {
   status: "success" | "error";
   rowsAffected: number | null;
   error: string | null;
+  database: string | null;
 }

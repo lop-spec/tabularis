@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { History, Search, Trash2, Loader2 } from "lucide-react";
+import { History, Search, Trash2, Loader2, Database } from "lucide-react";
 import { groupByDate, formatHistoryTime } from "../../../utils/dateGroups";
 import type { QueryHistoryEntry } from "../../../types/queryHistory";
 
@@ -119,13 +119,19 @@ export function QueryHistorySection({
                     ? "text-red-400/70 hover:bg-red-500/10 hover:text-red-300"
                     : "text-secondary hover:bg-surface-secondary hover:text-primary"
                 }`}
-                title={entry.sql}
+                title={entry.database ? `[${entry.database}] ${entry.sql}` : entry.sql}
               >
                 <History size={14} className={entry.status === "error" ? "text-red-400/50 shrink-0" : "text-muted shrink-0"} />
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-xs">
                     {truncateSql(entry.sql)}
                   </div>
+                  {entry.database && (
+                    <div className="flex items-center gap-0.5 text-[10px] text-muted mt-0.5">
+                      <Database size={9} className="shrink-0" />
+                      <span className="truncate">{entry.database}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="shrink-0 text-[10px] text-muted flex items-center gap-1">
                   {entry.executionTimeMs !== null && (

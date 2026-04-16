@@ -542,7 +542,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
               entries={historyEntries}
               isLoading={isHistoryLoading}
               onDoubleClick={(entry) => {
-                runQuery(entry.sql, undefined, undefined, true);
+                runQuery(entry.sql, undefined, undefined, true, entry.database ?? undefined);
               }}
               onContextMenu={(e, entry) => {
                 handleContextMenu(e, "history", entry.id, entry.sql, entry as unknown as ContextMenuData);
@@ -1690,17 +1690,17 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   {
                                     label: t("sidebar.insertToEditor"),
                                     icon: FileInput,
-                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true),
+                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.runQuery"),
                                     icon: Play,
-                                    action: () => runQuery(historyEntry.sql),
+                                    action: () => runQuery(historyEntry.sql, undefined, undefined, false, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.openInNewTab"),
                                     icon: Plus,
-                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true),
+                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.addToFavorites"),

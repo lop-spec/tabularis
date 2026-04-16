@@ -17,6 +17,8 @@ pub struct QueryHistoryEntry {
     pub status: String,
     pub rows_affected: Option<i64>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub database: Option<String>,
 }
 
 fn get_history_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -76,6 +78,7 @@ pub async fn add_query_history_entry<R: Runtime>(
     status: String,
     rows_affected: Option<i64>,
     error: Option<String>,
+    database: Option<String>,
 ) -> Result<QueryHistoryEntry, String> {
     let mut entries = read_history(&app, &connection_id)?;
 
@@ -84,9 +87,9 @@ pub async fn add_query_history_entry<R: Runtime>(
         .query_history_max_entries
         .unwrap_or(DEFAULT_MAX_HISTORY_ENTRIES) as usize;
 
-    // Deduplicate: if the most recent entry has the same SQL, update it instead
+    // Deduplicate: if the most recent entry has the same SQL and database, update it instead
     if let Some(first) = entries.first_mut() {
-        if first.sql == sql {
+        if first.sql == sql && first.database == database {
             first.executed_at = executed_at.clone();
             first.execution_time_ms = execution_time_ms;
             first.status = status.clone();
@@ -106,6 +109,7 @@ pub async fn add_query_history_entry<R: Runtime>(
         status,
         rows_affected,
         error,
+        database,
     };
 
     // Insert at the beginning (newest first)
