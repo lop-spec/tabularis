@@ -1171,5 +1171,9 @@
     "groupName": "Group name",
     "dragHint": "Drag connections here",
     "createError": "Failed to create group"
+  },
+  "queryModal": {
+    "database": "Database",
+    "noDatabase": "No database"
   }
 }

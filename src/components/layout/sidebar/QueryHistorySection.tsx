@@ -24,6 +24,7 @@ export function QueryHistorySection({
 }: QueryHistorySectionProps) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const filteredEntries = useMemo(() => {
     if (!search.trim()) return entries;
@@ -112,12 +113,17 @@ export function QueryHistorySection({
             {items.map((entry) => (
               <div
                 key={entry.id}
+                onClick={() => setSelectedId(entry.id)}
                 onDoubleClick={() => onDoubleClick(entry)}
                 onContextMenu={(e) => onContextMenu(e, entry)}
                 className={`flex items-center gap-2 pl-3 pr-4 py-1.5 text-sm cursor-pointer group transition-colors ${
-                  entry.status === "error"
-                    ? "text-red-400/70 hover:bg-red-500/10 hover:text-red-300"
-                    : "text-secondary hover:bg-surface-secondary hover:text-primary"
+                  selectedId === entry.id
+                    ? entry.status === "error"
+                      ? "bg-red-500/15 text-red-300"
+                      : "bg-surface-secondary text-primary"
+                    : entry.status === "error"
+                      ? "text-red-400/70 hover:bg-red-500/10 hover:text-red-300"
+                      : "text-secondary hover:bg-surface-secondary hover:text-primary"
                 }`}
                 title={entry.database ? `[${entry.database}] ${entry.sql}` : entry.sql}
               >

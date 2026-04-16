@@ -6,6 +6,8 @@ export interface SavedQuery {
   sql: string;
   connection_id: string;
   database: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface SavedQueriesContextType {

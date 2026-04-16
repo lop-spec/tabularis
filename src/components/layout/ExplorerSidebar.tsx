@@ -66,6 +66,7 @@ import type { ContextMenuData } from "../../types/sidebar";
 import type { RoutineInfo } from "../../contexts/DatabaseContext";
 import { groupRoutinesByType } from "../../utils/routines";
 import { formatObjectCount } from "../../utils/schema";
+import { formatHistoryTime } from "../../utils/dateGroups";
 import { isMultiDatabaseCapable } from "../../utils/database";
 import { supportsManageTables } from "../../utils/driverCapabilities";
 
@@ -151,6 +152,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const [historyClearConfirm, setHistoryClearConfirm] = useState(false);
   const [tableFilter, setTableFilter] = useState("");
   const [favoritesFilter, setFavoritesFilter] = useState("");
+  const [selectedFavoriteId, setSelectedFavoriteId] = useState<string | null>(null);
   const [tablesOpen, setTablesOpen] = useState(true);
   const [viewsOpen, setViewsOpen] = useState(true);
   const [routinesOpen, setRoutinesOpen] = useState(false);
@@ -521,20 +523,35 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                   filteredQueries.map((q) => (
                     <div
                       key={q.id}
-                      onClick={() => runQuery(q.sql, q.name, undefined, false, q.database ?? undefined)}
+                      onClick={() => setSelectedFavoriteId(q.id)}
+                      onDoubleClick={() => runQuery(q.sql, q.name, undefined, false, q.database ?? undefined)}
                       onContextMenu={(e) =>
                         handleContextMenu(e, "query", q.id, q.name, q)
                       }
-                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group transition-colors"
+                      className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer group transition-colors ${
+                        selectedFavoriteId === q.id
+                          ? "bg-surface-secondary text-primary"
+                          : "text-secondary hover:bg-surface-secondary hover:text-primary"
+                      }`}
                       title={q.database ? `[${q.database}] ${q.name}` : q.name}
                     >
                       <FileCode size={14} className="text-green-500 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <span className="truncate block">{q.name}</span>
-                        {q.database && (
-                          <div className="flex items-center gap-0.5 text-[10px] text-muted mt-0.5">
-                            <Database size={9} className="shrink-0" />
-                            <span className="truncate">{q.database}</span>
+                        {(q.database || q.updated_at) && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted mt-0.5">
+                            {q.database && (
+                              <span className="flex items-center gap-0.5 min-w-0">
+                                <Database size={9} className="shrink-0" />
+                                <span className="truncate">{q.database}</span>
+                              </span>
+                            )}
+                            {q.updated_at && (
+                              <span className="flex items-center gap-0.5 shrink-0">
+                                <Clock size={9} className="shrink-0" />
+                                <span>{formatHistoryTime(q.updated_at)}</span>
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -551,7 +568,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
               entries={historyEntries}
               isLoading={isHistoryLoading}
               onDoubleClick={(entry) => {
-                runQuery(entry.sql, undefined, undefined, true, entry.database ?? undefined);
+                runQuery(entry.sql, undefined, undefined, false, entry.database ?? undefined);
               }}
               onContextMenu={(e, entry) => {
                 handleContextMenu(e, "history", entry.id, entry.sql, entry as unknown as ContextMenuData);
@@ -1761,6 +1778,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               {
                                 label: t("sidebar.delete"),
                                 icon: Trash2,
+                                danger: true,
                                 action: async () => {
                                   const confirmed = await ask(
                                     t("sidebar.confirmDeleteQuery", { name: contextMenu.label }),
@@ -1807,11 +1825,13 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           title={queryModal.query ? "Edit Query" : "Save Query"}
           initialName={queryModal.query?.name ?? ""}
           initialSql={queryModal.query?.sql ?? historyToFavoriteSQL ?? ""}
-          onSave={async (name: string, sql: string) => {
+          initialDatabase={queryModal.query?.database ?? historyToFavoriteDB}
+          databases={isMultiDb ? selectedDatabases : undefined}
+          onSave={async (name: string, sql: string, database?: string | null) => {
             if (queryModal.query) {
-              await updateQuery(queryModal.query.id, name, sql, queryModal.query.database);
+              await updateQuery(queryModal.query.id, name, sql, database);
             } else if (historyToFavoriteSQL) {
-              await saveQuery(name, sql, historyToFavoriteDB);
+              await saveQuery(name, sql, database ?? historyToFavoriteDB);
             }
             setHistoryToFavoriteSQL(null);
             setHistoryToFavoriteDB(null);

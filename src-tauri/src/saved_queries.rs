@@ -1,3 +1,4 @@
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -12,6 +13,10 @@ pub struct SavedQueryMeta {
     pub connection_id: String,
     #[serde(default)]
     pub database: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,6 +27,10 @@ pub struct SavedQuery {
     pub connection_id: String,
     #[serde(default)]
     pub database: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 fn get_queries_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -78,6 +87,8 @@ pub async fn get_saved_queries<R: Runtime>(
                 sql,
                 connection_id: meta.connection_id,
                 database: meta.database,
+                created_at: meta.created_at,
+                updated_at: meta.updated_at,
             });
         }
     }
@@ -102,12 +113,16 @@ pub async fn save_query<R: Runtime>(
 
     fs::write(file_path, &sql).map_err(|e| e.to_string())?;
 
+    let now = Utc::now().to_rfc3339();
+
     let new_meta = SavedQueryMeta {
         id: id.clone(),
         name: name.clone(),
         filename,
         connection_id: connection_id.clone(),
         database: database.clone(),
+        created_at: Some(now.clone()),
+        updated_at: Some(now.clone()),
     };
 
     meta_list.push(new_meta);
@@ -119,6 +134,8 @@ pub async fn save_query<R: Runtime>(
         sql,
         connection_id,
         database,
+        created_at: Some(now.clone()),
+        updated_at: Some(now),
     })
 }
 
@@ -138,9 +155,12 @@ pub async fn update_saved_query<R: Runtime>(
         .position(|m| m.id == id)
         .ok_or("Query not found")?;
 
+    let now = Utc::now().to_rfc3339();
+
     // Update metadata
     meta_list[idx].name = name.clone();
     meta_list[idx].database = database.clone();
+    meta_list[idx].updated_at = Some(now.clone());
     write_meta(&app, &meta_list)?;
 
     // Update SQL file
@@ -153,6 +173,8 @@ pub async fn update_saved_query<R: Runtime>(
         sql,
         connection_id: meta_list[idx].connection_id.clone(),
         database,
+        created_at: meta_list[idx].created_at.clone(),
+        updated_at: Some(now),
     })
 }
 

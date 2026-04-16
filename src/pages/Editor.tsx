@@ -3130,8 +3130,10 @@ export const Editor = () => {
           onClose={() =>
             setSaveQueryModal({ ...saveQueryModal, isOpen: false })
           }
-          onSave={async (name, sql) => await saveQuery(name, sql, activeTab?.schema ?? activeSchema ?? activeDatabaseName)}
           initialSql={saveQueryModal.sql}
+          initialDatabase={activeTab?.schema ?? activeSchema ?? activeDatabaseName}
+          databases={isMultiDb ? selectedDatabases : undefined}
+          onSave={async (name, sql, database) => await saveQuery(name, sql, database ?? activeTab?.schema ?? activeSchema ?? activeDatabaseName)}
           title={t("editor.saveQuery")}
         />
       )}

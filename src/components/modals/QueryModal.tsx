@@ -1,21 +1,27 @@
 import { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import MonacoEditor from '@monaco-editor/react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../hooks/useTheme';
 import { Modal } from '../ui/Modal';
+import { Select } from '../ui/Select';
 
 interface QueryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (name: string, sql: string) => Promise<void>;
+  onSave: (name: string, sql: string, database?: string | null) => Promise<void>;
   initialName?: string;
   initialSql?: string;
+  initialDatabase?: string | null;
+  databases?: string[];
   title?: string;
 }
 
-export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialSql = '', title = 'Save Query' }: QueryModalProps) => {
+export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialSql = '', initialDatabase, databases, title = 'Save Query' }: QueryModalProps) => {
+  const { t } = useTranslation();
   const [name, setName] = useState(initialName);
   const [sql, setSql] = useState(initialSql);
+  const [database, setDatabase] = useState<string | null>(initialDatabase ?? null);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const { currentTheme } = useTheme();
@@ -24,9 +30,10 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
     if (isOpen) {
         setName(initialName);
         setSql(initialSql);
+        setDatabase(initialDatabase ?? null);
         setError('');
     }
-  }, [isOpen, initialName, initialSql]);
+  }, [isOpen, initialName, initialSql, initialDatabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +48,7 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
 
     setIsSaving(true);
     try {
-        await onSave(name, sql);
+        await onSave(name, sql, database);
         onClose();
     } catch (err) {
         setError(String(err));
@@ -72,6 +79,19 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
               autoFocus
             />
           </div>
+
+          {databases && databases.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">{t("queryModal.database")}</label>
+              <Select
+                value={database}
+                options={databases}
+                onChange={(val) => setDatabase(val)}
+                placeholder={t("queryModal.noDatabase")}
+                searchable={databases.length > 5}
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-secondary mb-1">SQL</label>

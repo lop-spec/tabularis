@@ -145,6 +145,7 @@ describe("QueryModal", () => {
       expect(mockOnSave).toHaveBeenCalledWith(
         "Test Query",
         "SELECT * FROM users",
+        null,
       );
     });
 

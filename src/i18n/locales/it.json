@@ -1152,5 +1152,9 @@
         "unknown": "sconosciuto"
       }
     }
+  },
+  "queryModal": {
+    "database": "Database",
+    "noDatabase": "Nessun database"
   }
 }
