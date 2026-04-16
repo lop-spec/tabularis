@@ -383,6 +383,15 @@ export const Editor = () => {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
+  useEffect(() => {
+    const el = tabScrollRef.current;
+    if (!el || !activeTabId) return;
+    const idx = tabs.findIndex((t) => t.id === activeTabId);
+    if (idx === -1) return;
+    const tabEl = el.children[idx] as HTMLElement | undefined;
+    tabEl?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [activeTabId, tabs]);
+
   const updateScrollArrows = useCallback(() => {
     const el = tabScrollRef.current;
     if (!el) return;
