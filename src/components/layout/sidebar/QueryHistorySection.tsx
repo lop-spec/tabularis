@@ -138,7 +138,14 @@ export function QueryHistorySection({
                   )}
                 </div>
                 {entry.status === "error" ? (
-                  <pre className="text-[11px] leading-[1.4] font-mono whitespace-pre-wrap break-all text-red-400/70">
+                  <pre
+                    className="text-[11px] leading-[1.4] font-mono whitespace-pre-wrap break-all text-red-400/70 overflow-hidden"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                    }}
+                  >
                     {formatSqlPreview(entry.sql)}
                   </pre>
                 ) : (

@@ -565,6 +565,7 @@ pub async fn update_connection<R: Runtime>(
     // Preserve existing group_id and sort_order from the original connection
     let original_group_id = conn_file.connections[conn_idx].group_id.clone();
     let original_sort_order = conn_file.connections[conn_idx].sort_order;
+    let original_db_selection = conn_file.connections[conn_idx].params.database.clone();
 
     let updated = SavedConnection {
         id: id.clone(),
@@ -577,6 +578,36 @@ pub async fn update_connection<R: Runtime>(
     conn_file.connections[conn_idx] = updated.clone();
 
     persistence::save_connections_file(&path, &conn_file)?;
+
+    // On single→multi transition, associate existing favorites/history (with no
+    // database set) to the original single database name.
+    if let Some(previous_db) = crate::models::single_db_before_multi_transition(
+        &original_db_selection,
+        &params.database,
+    ) {
+        if let Err(e) = crate::saved_queries::backfill_missing_database_for_connection(
+            &app,
+            &id,
+            &previous_db,
+        ) {
+            log::warn!(
+                "Failed to backfill saved query database for {}: {}",
+                id,
+                e
+            );
+        }
+        if let Err(e) = crate::query_history::backfill_missing_database_for_connection(
+            &app,
+            &id,
+            &previous_db,
+        ) {
+            log::warn!(
+                "Failed to backfill query history database for {}: {}",
+                id,
+                e
+            );
+        }
+    }
 
     let mut returned_conn = updated;
     returned_conn.params = params;

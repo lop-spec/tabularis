@@ -153,6 +153,35 @@ pub async fn clear_query_history<R: Runtime>(
     Ok(())
 }
 
+/// Set `database = Some(database)` on any history entry whose `database` is currently
+/// `None`. Returns the count of entries updated.
+pub fn backfill_missing_database(entries: &mut [QueryHistoryEntry], database: &str) -> usize {
+    let mut updated = 0usize;
+    for entry in entries.iter_mut() {
+        if entry.database.is_none() {
+            entry.database = Some(database.to_string());
+            updated += 1;
+        }
+    }
+    updated
+}
+
+/// Backfill `database` on history entries for a connection where it is currently `None`.
+/// Used when a connection transitions from single-db to multi-db: existing entries
+/// without an explicit database get associated with the original single database.
+pub fn backfill_missing_database_for_connection<R: Runtime>(
+    app: &AppHandle<R>,
+    connection_id: &str,
+    database: &str,
+) -> Result<usize, String> {
+    let mut entries = read_history(app, connection_id)?;
+    let updated = backfill_missing_database(&mut entries, database);
+    if updated > 0 {
+        write_history(app, connection_id, &entries)?;
+    }
+    Ok(updated)
+}
+
 /// Remove history file for a connection (called during connection deletion).
 pub fn remove_history_for_connection<R: Runtime>(
     app: &AppHandle<R>,

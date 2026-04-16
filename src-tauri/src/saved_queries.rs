@@ -178,6 +178,39 @@ pub async fn update_saved_query<R: Runtime>(
     })
 }
 
+/// Set `database = Some(database)` on entries matching `connection_id` whose
+/// `database` is currently `None`. Returns the count of entries updated.
+pub fn backfill_missing_database(
+    meta_list: &mut [SavedQueryMeta],
+    connection_id: &str,
+    database: &str,
+) -> usize {
+    let mut updated = 0usize;
+    for meta in meta_list.iter_mut() {
+        if meta.connection_id == connection_id && meta.database.is_none() {
+            meta.database = Some(database.to_string());
+            updated += 1;
+        }
+    }
+    updated
+}
+
+/// Backfill `database` on saved queries for a connection where it is currently `None`.
+/// Used when a connection transitions from single-db to multi-db: existing favorites
+/// without an explicit database get associated with the original single database.
+pub fn backfill_missing_database_for_connection<R: Runtime>(
+    app: &AppHandle<R>,
+    connection_id: &str,
+    database: &str,
+) -> Result<usize, String> {
+    let mut meta_list = read_meta(app)?;
+    let updated = backfill_missing_database(&mut meta_list, connection_id, database);
+    if updated > 0 {
+        write_meta(app, &meta_list)?;
+    }
+    Ok(updated)
+}
+
 #[tauri::command]
 pub async fn delete_saved_query<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
     let mut meta_list = read_meta(&app)?;

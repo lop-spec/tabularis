@@ -548,8 +548,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           }`}
                           title={q.database ? `[${q.database}] ${q.sql}` : q.sql}
                         >
-                          <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <span className="text-[11px] font-medium text-primary truncate">{q.name}</span>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-[13px] font-semibold text-primary truncate tracking-tight">{q.name}</span>
                             <div className="flex items-center gap-1.5 text-[10px] text-muted shrink-0">
                               {q.database && (
                                 <span className="flex items-center gap-0.5">
@@ -1110,6 +1110,19 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
               ) : (
                 <>
                   {/* MySQL/SQLite: Flat layout */}
+                  {(() => {
+                    const dbLabel = isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length === 1
+                      ? selectedDatabases[0]
+                      : activeDatabaseName;
+                    return dbLabel ? (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-default">
+                        <Database size={14} className="text-blue-400 shrink-0" />
+                        <span className="text-sm font-medium text-secondary truncate">
+                          {dbLabel}
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="flex items-center justify-between px-3 py-1">
                     <span className="text-[10px] text-muted opacity-80 uppercase tracking-wider">
                       {t("sidebar.objectSummary")}

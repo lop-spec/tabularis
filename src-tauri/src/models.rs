@@ -35,6 +35,24 @@ impl DatabaseSelection {
     }
 }
 
+/// If `previous` was single-db (zero/one effective database) and `new` is multi-db
+/// (two or more), return the previous single database name so callers can backfill
+/// existing per-connection records (favorites, query history) that had no explicit
+/// database set. Returns `None` when this is not a single→multi transition or when
+/// the previous selection had no usable name.
+pub fn single_db_before_multi_transition(
+    previous: &DatabaseSelection,
+    new: &DatabaseSelection,
+) -> Option<String> {
+    if previous.is_multi() || !new.is_multi() {
+        return None;
+    }
+    previous
+        .as_vec()
+        .into_iter()
+        .find(|s| !s.trim().is_empty())
+}
+
 impl std::fmt::Display for DatabaseSelection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.primary())

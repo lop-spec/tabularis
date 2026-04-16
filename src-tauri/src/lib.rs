@@ -13,6 +13,8 @@ pub mod log_commands;
 pub mod logger;
 pub mod mcp;
 pub mod models;
+#[cfg(test)]
+pub mod models_tests;
 pub mod notebooks;
 pub mod paths; // Added
 pub mod persistence;
@@ -20,7 +22,11 @@ pub mod plugins;
 pub mod pool_manager;
 pub mod preferences;
 pub mod query_history;
+#[cfg(test)]
+pub mod query_history_tests;
 pub mod saved_queries;
+#[cfg(test)]
+pub mod saved_queries_tests;
 pub mod ssh_tunnel;
 pub mod task_manager;
 pub mod theme_commands;
