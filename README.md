@@ -5,6 +5,16 @@
 # tabularis
 
 <p align="center">
+  <strong>README:</strong>
+  <a href="./README.md">English</a> |
+  <a href="./README.it.md">Italiano</a> |
+  <a href="./README.es.md">Español</a> |
+  <a href="./README.zh-CN.md">中文</a> |
+  <a href="./README.fr.md">Français</a> |
+  <a href="./README.de.md">Deutsch</a>
+</p>
+
+<p align="center">
   
 ![](https://img.shields.io/github/release/debba/tabularis.svg?style=flat)
 ![](https://img.shields.io/github/downloads/debba/tabularis/total.svg?style=flat)
@@ -23,7 +33,7 @@
 
 An open-source desktop client for modern databases. Supports PostgreSQL, MySQL/MariaDB and SQLite and is hackable with plugins, with notebooks, AI, and MCP built in.
 
-**Available in:** English, Italian, Spanish, Chinese (Simplified)
+**Available in:** English, Italian, Spanish, Chinese (Simplified), French, German
 
 **Discord** - [Join our Discord server](https://discord.gg/YrZPHAwMSG) to talk with the maintainers, share feedback, and get help from the community.
 
@@ -332,7 +342,7 @@ This approach ensures fast startup times while preserving your workspace layout 
 - `theme`: Theme ID (e.g., `"tabularis-dark"`, `"monokai"`).
 - `fontFamily`: Editor font family.
 - `fontSize`: Editor font size (px).
-- `language`: `"auto"`, `"en"` (English), `"it"` (Italian), `"es"` (Spanish), `"zh"` (Chinese Simplified).
+- `language`: `"auto"`, `"en"` (English), `"it"` (Italian), `"es"` (Spanish), `"zh"` (Chinese Simplified), `"fr"` (French), `"de"` (German).
 - `resultPageSize`: Default rows per page.
 - `aiEnabled`: Enable/Disable AI features.
 - `customRegistryUrl`: Custom URL for the plugin registry (overrides the default official registry).

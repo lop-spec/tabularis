@@ -3,6 +3,7 @@ import { X, Loader2, BookOpen } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
+import { getAiExplanationLanguage } from "../../i18n/language";
 import { Modal } from "../ui/Modal";
 import MonacoEditor from "@monaco-editor/react";
 
@@ -42,7 +43,7 @@ export const AiExplainModal = ({ isOpen, onClose, query }: AiExplainModalProps) 
           provider: settings.aiProvider,
           model: settings.aiModel || "",
           query,
-          language: settings.language === "it" ? "Italian" : "English"
+          language: getAiExplanationLanguage(settings.language),
         }
       });
       setExplanation(result);

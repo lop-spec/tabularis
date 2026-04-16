@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Loader2, Sparkles } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../../../hooks/useSettings";
+import { getAiExplanationLanguage } from "../../../i18n/language";
 import type { ExplainPlan } from "../../../types/explain";
 
 interface ExplainAiAnalysisProps {
@@ -40,7 +41,7 @@ export function ExplainAiAnalysis({ plan }: ExplainAiAnalysisProps) {
           provider: settings.aiProvider,
           model: settings.aiModel || "",
           query: queryWithPlan,
-          language: settings.language === "it" ? "Italian" : settings.language === "es" ? "Spanish" : settings.language === "zh" ? "Chinese" : "English",
+          language: getAiExplanationLanguage(settings.language),
         },
       });
       setAnalysis(result);
