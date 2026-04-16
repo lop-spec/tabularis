@@ -146,6 +146,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const [generateSQLModal, setGenerateSQLModal] = useState<string | null>(null);
   const setSidebarTab = onSidebarTabChange;
   const [historyToFavoriteSQL, setHistoryToFavoriteSQL] = useState<string | null>(null);
+  const [historyToFavoriteDB, setHistoryToFavoriteDB] = useState<string | null>(null);
   const [historyDeleteConfirm, setHistoryDeleteConfirm] = useState<string | null>(null);
   const [historyClearConfirm, setHistoryClearConfirm] = useState(false);
   const [tableFilter, setTableFilter] = useState("");
@@ -520,15 +521,23 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                   filteredQueries.map((q) => (
                     <div
                       key={q.id}
-                      onClick={() => runQuery(q.sql, q.name)}
+                      onClick={() => runQuery(q.sql, q.name, undefined, false, q.database ?? undefined)}
                       onContextMenu={(e) =>
                         handleContextMenu(e, "query", q.id, q.name, q)
                       }
                       className="flex items-center gap-2 px-3 py-1.5 text-sm text-secondary hover:bg-surface-secondary hover:text-primary cursor-pointer group transition-colors"
-                      title={q.name}
+                      title={q.database ? `[${q.database}] ${q.name}` : q.name}
                     >
                       <FileCode size={14} className="text-green-500 shrink-0" />
-                      <span className="truncate">{q.name}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="truncate block">{q.name}</span>
+                        {q.database && (
+                          <div className="flex items-center gap-0.5 text-[10px] text-muted mt-0.5">
+                            <Database size={9} className="shrink-0" />
+                            <span className="truncate">{q.database}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
@@ -1710,6 +1719,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                       // Pre-fill the modal with history SQL via a small timeout
                                       // so the modal mounts first, then we set the initial values
                                       setHistoryToFavoriteSQL(historyEntry.sql);
+                                      setHistoryToFavoriteDB(historyEntry.database ?? null);
                                     },
                                   },
                                   { separator: true },
@@ -1734,7 +1744,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                 icon: Play,
                                 action: () => {
                                   if (contextMenu.data && "sql" in contextMenu.data) {
-                                    runQuery(contextMenu.data.sql, "name" in contextMenu.data ? contextMenu.data.name : undefined);
+                                    const sq = contextMenu.data as SavedQuery;
+                                    runQuery(sq.sql, sq.name, undefined, false, sq.database ?? undefined);
                                   }
                                 },
                               },
@@ -1791,17 +1802,19 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           onClose={() => {
             setQueryModal({ isOpen: false });
             setHistoryToFavoriteSQL(null);
+            setHistoryToFavoriteDB(null);
           }}
           title={queryModal.query ? "Edit Query" : "Save Query"}
           initialName={queryModal.query?.name ?? ""}
           initialSql={queryModal.query?.sql ?? historyToFavoriteSQL ?? ""}
           onSave={async (name: string, sql: string) => {
             if (queryModal.query) {
-              await updateQuery(queryModal.query.id, name, sql);
+              await updateQuery(queryModal.query.id, name, sql, queryModal.query.database);
             } else if (historyToFavoriteSQL) {
-              await saveQuery(name, sql);
+              await saveQuery(name, sql, historyToFavoriteDB);
             }
             setHistoryToFavoriteSQL(null);
+            setHistoryToFavoriteDB(null);
           }}
         />
       )}

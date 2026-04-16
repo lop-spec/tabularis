@@ -29,10 +29,10 @@ export const SavedQueriesProvider = ({ children }: { children: ReactNode }) => {
     refreshQueries();
   }, [refreshQueries]);
 
-  const saveQuery = async (name: string, sql: string) => {
+  const saveQuery = async (name: string, sql: string, database?: string | null) => {
     if (!activeConnectionId) return;
     try {
-      await invoke('save_query', { connectionId: activeConnectionId, name, sql });
+      await invoke('save_query', { connectionId: activeConnectionId, name, sql, database: database ?? null });
       await refreshQueries();
     } catch (e) {
       console.error("Failed to save query:", e);
@@ -40,9 +40,9 @@ export const SavedQueriesProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const updateQuery = async (id: string, name: string, sql: string) => {
+  const updateQuery = async (id: string, name: string, sql: string, database?: string | null) => {
     try {
-      await invoke('update_saved_query', { id, name, sql });
+      await invoke('update_saved_query', { id, name, sql, database: database ?? null });
       await refreshQueries();
     } catch (e) {
       console.error("Failed to update query:", e);

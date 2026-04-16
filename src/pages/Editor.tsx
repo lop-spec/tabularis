@@ -644,6 +644,13 @@ export const Editor = () => {
       const shouldRecordHistory =
         targetTab?.type === "console" || targetTab?.type === "query_builder";
 
+      const schema = targetTab?.schema ?? activeSchema;
+      // For history: fall back to activeDatabaseName for multi-db connections
+      // where schema may not be set on the tab
+      const historyDb = schema
+        || (isMultiDb ? activeDatabaseName : undefined)
+        || undefined;
+
       try {
         const start = performance.now();
         // Use settings.resultPageSize for Page Size (pagination), ignoring the "Total Limit" input which is handled in SQL
@@ -652,13 +659,6 @@ export const Editor = () => {
           settings.resultPageSize && settings.resultPageSize > 0
             ? settings.resultPageSize
             : 100;
-
-        const schema = targetTab?.schema ?? activeSchema;
-        // For history: fall back to activeDatabaseName for multi-db connections
-        // where schema may not be set on the tab
-        const historyDb = schema
-          || (isMultiDb ? activeDatabaseName : undefined)
-          || undefined;
         const res = await invoke<QueryResult>("execute_query", {
           connectionId: activeConnectionId,
           query: textToRun,
@@ -3130,7 +3130,7 @@ export const Editor = () => {
           onClose={() =>
             setSaveQueryModal({ ...saveQueryModal, isOpen: false })
           }
-          onSave={async (name, sql) => await saveQuery(name, sql)}
+          onSave={async (name, sql) => await saveQuery(name, sql, activeTab?.schema ?? activeSchema ?? activeDatabaseName)}
           initialSql={saveQueryModal.sql}
           title={t("editor.saveQuery")}
         />

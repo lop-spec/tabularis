@@ -10,6 +10,8 @@ pub struct SavedQueryMeta {
     pub name: String,
     pub filename: String,
     pub connection_id: String,
+    #[serde(default)]
+    pub database: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,6 +20,8 @@ pub struct SavedQuery {
     pub name: String,
     pub sql: String,
     pub connection_id: String,
+    #[serde(default)]
+    pub database: Option<String>,
 }
 
 fn get_queries_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -73,6 +77,7 @@ pub async fn get_saved_queries<R: Runtime>(
                 name: meta.name,
                 sql,
                 connection_id: meta.connection_id,
+                database: meta.database,
             });
         }
     }
@@ -86,6 +91,7 @@ pub async fn save_query<R: Runtime>(
     connection_id: String,
     name: String,
     sql: String,
+    database: Option<String>,
 ) -> Result<SavedQuery, String> {
     let mut meta_list = read_meta(&app)?;
     let dir = get_queries_dir(&app)?;
@@ -101,6 +107,7 @@ pub async fn save_query<R: Runtime>(
         name: name.clone(),
         filename,
         connection_id: connection_id.clone(),
+        database: database.clone(),
     };
 
     meta_list.push(new_meta);
@@ -111,6 +118,7 @@ pub async fn save_query<R: Runtime>(
         name,
         sql,
         connection_id,
+        database,
     })
 }
 
@@ -120,6 +128,7 @@ pub async fn update_saved_query<R: Runtime>(
     id: String,
     name: String,
     sql: String,
+    database: Option<String>,
 ) -> Result<SavedQuery, String> {
     let mut meta_list = read_meta(&app)?;
     let dir = get_queries_dir(&app)?;
@@ -129,8 +138,9 @@ pub async fn update_saved_query<R: Runtime>(
         .position(|m| m.id == id)
         .ok_or("Query not found")?;
 
-    // Update metadata name
+    // Update metadata
     meta_list[idx].name = name.clone();
+    meta_list[idx].database = database.clone();
     write_meta(&app, &meta_list)?;
 
     // Update SQL file
@@ -142,6 +152,7 @@ pub async fn update_saved_query<R: Runtime>(
         name,
         sql,
         connection_id: meta_list[idx].connection_id.clone(),
+        database,
     })
 }
 

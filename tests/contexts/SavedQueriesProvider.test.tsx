@@ -94,6 +94,7 @@ describe('SavedQueriesProvider', () => {
       connectionId: 'conn-123',
       name: 'New Query',
       sql: 'SELECT 1',
+      database: null,
     });
 
     await waitFor(() => {
@@ -138,6 +139,7 @@ describe('SavedQueriesProvider', () => {
       id: 'query-1',
       name: 'Updated Users',
       sql: 'SELECT id, name FROM users',
+      database: null,
     });
 
     await waitFor(() => {
