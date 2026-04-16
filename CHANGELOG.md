@@ -1,3 +1,33 @@
+## [0.9.18](https://github.com/debba/tabularis/compare/v0.9.17...v0.9.18) (2026-04-16)
+
+
+### Bug Fixes
+
+* **app:** seed whats-new version for users who completed welcome ([1ab42e6](https://github.com/debba/tabularis/commit/1ab42e6827d59702bbbd64259a3d86135f0f26db))
+* custom OpenAI provider URL path duplication and hardcoded /v1 prefix ([ba0dd6e](https://github.com/debba/tabularis/commit/ba0dd6e101dcb88e99d4748bcc0884fd675370e9)), closes [#XXX](https://github.com/debba/tabularis/issues/XXX)
+* **resize:** add overlay during pane drag to block editor mouse events ([682de0c](https://github.com/debba/tabularis/commit/682de0c39fc284d9a41dcc8a2f677712429c3199))
+* **ui:** fix runQuery arg, context menu deps, and sidebar resize ref ([3e8a5a3](https://github.com/debba/tabularis/commit/3e8a5a383abc041f0d6423a5157f75af9a8afd6e))
+
+
+### Features
+
+* add table search filter for PostgreSQL schema mode ([fa21e6b](https://github.com/debba/tabularis/commit/fa21e6b3db0c02203d6554dfe7a622ecc9277698))
+* **drivers:** add explain parsers and split mysql/postgres/sqlite logic ([5b6052b](https://github.com/debba/tabularis/commit/5b6052bd7645cb7dc4f3d4295ce27ecb1f33b913))
+* **editor:** add explain selection modal and explainable query util ([191e993](https://github.com/debba/tabularis/commit/191e993ad50e8f3f07e09775a0c4fe11922b34ab))
+* **editor:** scroll active tab into view when activated ([3ff7f25](https://github.com/debba/tabularis/commit/3ff7f25476339c4c2865f846840ad3ac3fe15021))
+* **mysql:** add SSL configuration options to ConnectionParams and update MySQL connection handling ([78af860](https://github.com/debba/tabularis/commit/78af8606fa935b621e58fa570829b13060c54605))
+* **mysql:** add SSL configuration options to ConnectionParams and update MySQL connection handling ([d5fe36d](https://github.com/debba/tabularis/commit/d5fe36d891b21cb6c088bca78989c9f4f687fbe2))
+* **plugins:** add IBM Db2 driver plugin to registry ([4c507ec](https://github.com/debba/tabularis/commit/4c507ec32f56d9da3a00ae3623136470cc1abb1b))
+* **plugins:** add MySQL plugin settings and config caching ([d469333](https://github.com/debba/tabularis/commit/d469333a7e9a11b3cf2d649472ceacf022004d5d))
+* **query-history:** add per-connection query history storage and UI ([679d1d8](https://github.com/debba/tabularis/commit/679d1d8fd4046ea3260e969b1ab9d2e74155e954))
+* **query-history:** UX polish — dedup, error styling, search, animations ([76013aa](https://github.com/debba/tabularis/commit/76013aacc3d3faa0b4ca4e437c963c2e3345c48d))
+* **settings:** add open source libraries modal and utilities ([94ab987](https://github.com/debba/tabularis/commit/94ab987e735d58b2a2cfd8a2d038358f9fef48ee))
+* **settings:** add plugin settings page and integrate into settings UI ([7f79fa3](https://github.com/debba/tabularis/commit/7f79fa3ee34e8749d585fcdbda7ef6992091a337))
+* **settings:** add showWelcome setting and welcome screen toggle ([02e9380](https://github.com/debba/tabularis/commit/02e93804a564eafafc9daca53d4c1f57eaf459a3))
+* **sidebar:** show grouped connections flat with labels ([72cb694](https://github.com/debba/tabularis/commit/72cb694a642d34a13481a20519c7509224f626c3))
+* **sql-editor:** support paste into multiple cursors and update docs ([1d8db06](https://github.com/debba/tabularis/commit/1d8db065c81618fea431af7013dba3ebded671ea))
+* **visual-explain:** add Visual EXPLAIN docs and homepage feature card ([9072a2c](https://github.com/debba/tabularis/commit/9072a2c47ce842ff78a282686ff116873633ee9d))
+
 ## [0.9.17](https://github.com/debba/tabularis/compare/v0.9.16...v0.9.17) (2026-04-14)
 
 
