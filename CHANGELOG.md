@@ -1,3 +1,15 @@
+## [0.9.19](https://github.com/debba/tabularis/compare/v0.9.18...v0.9.19) (2026-04-16)
+
+
+### Features
+
+* **connections:** backfill database on single to multi-db transition ([bbaf3d9](https://github.com/debba/tabularis/commit/bbaf3d98b054467fa0a69b1e68585cca93a28d0c))
+* **explorer-sidebar:** add single-click selection highlighting for ([4502e04](https://github.com/debba/tabularis/commit/4502e045c21eb4d43977fb945a9a448e0807b03f))
+* **i18n:** add fr and de locales, language helper and READMEs ([c5fab4a](https://github.com/debba/tabularis/commit/c5fab4aa9b04beeb4c540a445443086e9ac9f5b9))
+* **query-history:** include database in query history and re-run ([7144184](https://github.com/debba/tabularis/commit/7144184a6bf32c18f1331a5ed9619d7880337b0a))
+* **saved-queries:** persist and show database for saved queries ([36eb69c](https://github.com/debba/tabularis/commit/36eb69c536c2f1ffb08be6dffaf4e328b3079a9e))
+* **sidebar:** add SQL preview highlighting and grouped favorites in ([90ae3aa](https://github.com/debba/tabularis/commit/90ae3aa26a8f2e7afc45bab289e0d745b0ab90e2))
+
 ## [0.9.18](https://github.com/debba/tabularis/compare/v0.9.17...v0.9.18) (2026-04-16)
 
 
