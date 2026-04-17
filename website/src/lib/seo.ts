@@ -1,3 +1,5 @@
+import { APP_VERSION } from "./version";
+
 const BASE_URL = "https://tabularis.dev";
 
 export interface BreadcrumbItem {
@@ -45,7 +47,7 @@ export function buildSoftwareApplicationJsonLd() {
     applicationCategory: "DeveloperApplication",
     applicationSubCategory: "Database client",
     operatingSystem: "Windows, macOS, Linux",
-    softwareVersion: "0.9.15",
+    softwareVersion: APP_VERSION,
     downloadUrl: toAbsoluteUrl("/download"),
     url: BASE_URL,
     image: toAbsoluteUrl("/img/og.png"),
