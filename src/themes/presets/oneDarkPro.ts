@@ -25,7 +25,7 @@ export const oneDarkPro: Theme = {
     text: {
       primary: '#abb2bf',
       secondary: '#828997',
-      muted: '#5c6370',
+      muted: '#717d8c',
       disabled: '#4b5263',
       accent: '#61afef',
       inverse: '#282c34',

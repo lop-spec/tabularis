@@ -24,8 +24,8 @@ export const solarizedLight: Theme = {
     },
     text: {
       primary: '#657b83',
-      secondary: '#586e75',
-      muted: '#93a1a1',
+      secondary: '#3a5058',
+      muted: '#485e65',
       disabled: '#839496',
       accent: '#268bd2',
       inverse: '#fdf6e3',
