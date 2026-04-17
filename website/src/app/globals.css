@@ -1381,51 +1381,65 @@ pre {
 
 .seo-compare-stack {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.14rem;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex: 1;
 }
 
 .seo-compare-wordmark {
-  font-size: 1rem;
-  line-height: 0.95;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.94);
-  letter-spacing: -0.025em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
 }
 
 .seo-compare-wordmark--tabularis {
-  color: #dbeafe;
+  filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.35));
+}
+
+.seo-compare-logo {
+  height: 26px !important;
+  width: auto !important;
+  max-width: 90px;
+  object-fit: contain;
 }
 
 .seo-compare-vs {
-  font-size: 0.5rem;
+  font-size: 0.56rem;
   line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   color: rgba(96, 165, 250, 0.78);
-  margin: 0.12rem 0;
+  font-weight: 600;
 }
 
 .seo-compare-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.45rem;
-  margin-top: 0.25rem;
+  gap: 0.4rem;
+  flex: 1;
+  align-items: center;
 }
 
 .seo-compare-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
-  padding: 0.42rem 0.32rem;
-  font-size: 0.56rem;
-  line-height: 1.1;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.78);
-  text-align: center;
-  letter-spacing: -0.01em;
+  padding: 0.45rem 0.3rem;
+  min-height: 42px;
+}
+
+.seo-compare-panel-logo {
+  height: 22px !important;
+  width: auto !important;
+  max-width: 80%;
+  object-fit: contain;
 }
 
 .seo-compare-panel--tabularis {
@@ -1454,16 +1468,27 @@ pre {
   font-size: 0.8rem;
 }
 
-.seo-compare-hero .seo-compare-wordmark {
-  font-size: 1.36rem;
+.seo-compare-hero .seo-compare-logo {
+  height: 40px !important;
+  max-width: 130px;
 }
 
 .seo-compare-hero .seo-compare-vs {
-  font-size: 0.62rem;
+  font-size: 0.68rem;
 }
 
 .seo-compare-hero .seo-compare-panel {
-  font-size: 0.72rem;
+  min-height: 56px;
+  padding: 0.55rem 0.45rem;
+}
+
+.seo-compare-hero .seo-compare-panel-logo {
+  height: 32px !important;
+  max-width: 85%;
+}
+
+.seo-compare-hero .seo-compare-wordmark {
+  min-height: 42px;
 }
 
 @media (max-width: 768px) {
@@ -1509,12 +1534,14 @@ pre {
     font-size: 0.82rem;
   }
 
-  .seo-compare-wordmark {
-    font-size: 1.18rem;
+  .seo-compare-logo {
+    height: 34px !important;
+    max-width: 120px;
   }
 
-  .seo-compare-panel {
-    font-size: 0.72rem;
+  .seo-compare-panel-logo {
+    height: 28px !important;
+    max-width: 85%;
   }
 
   .seo-compare-vs {

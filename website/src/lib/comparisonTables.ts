@@ -25,34 +25,34 @@ const TABULARIS: ComparisonProduct = {
 const DBEAVER: ComparisonProduct = {
   name: "DBeaver",
   logo: "/img/logos/dbeaver.png",
-  width: 128,
-  height: 128,
+  width: 100,
+  height: 100,
 };
 
 const TABLEPLUS: ComparisonProduct = {
   name: "TablePlus",
   logo: "/img/logos/tableplus.png",
-  width: 192,
-  height: 192,
+  width: 100,
+  height: 100,
 };
 
 const DATAGRIP: ComparisonProduct = {
   name: "DataGrip",
-  logo: "/img/logos/datagrip.svg",
+  logo: "/img/logos/datagrip.png",
   width: 100,
   height: 100,
 };
 
 const BEEKEEPER: ComparisonProduct = {
   name: "Beekeeper Studio",
-  logo: "/img/logos/beekeeper.svg",
+  logo: "/img/logos/beekeeper.png",
   width: 100,
-  height: 100,
+  height: 110,
 };
 
 const DBGATE: ComparisonProduct = {
   name: "DbGate",
-  logo: "/img/logos/dbgate.svg",
+  logo: "/img/logos/dbgate.png",
   width: 100,
   height: 100,
 };
@@ -67,22 +67,22 @@ const NAVICAT: ComparisonProduct = {
 const PGADMIN: ComparisonProduct = {
   name: "pgAdmin",
   logo: "/img/logos/pgadmin.png",
-  width: 920,
-  height: 920,
+  width: 100,
+  height: 100,
 };
 
 const PHPMYADMIN: ComparisonProduct = {
   name: "phpMyAdmin",
   logo: "/img/logos/phpmyadmin.png",
-  width: 172,
-  height: 101,
+  width: 170,
+  height: 100,
 };
 
 const HEIDISQL: ComparisonProduct = {
   name: "HeidiSQL",
   logo: "/img/logos/heidisql.png",
-  width: 780,
-  height: 198,
+  width: 100,
+  height: 100,
 };
 
 const TABULARIS_CORE_ROWS = {

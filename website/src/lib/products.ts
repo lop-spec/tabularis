@@ -44,8 +44,8 @@ export const products: Product[] = [
     id: "dbeaver",
     name: "DBeaver",
     logo: "/img/logos/dbeaver.png",
-    width: 128,
-    height: 128,
+    width: 100,
+    height: 100,
     tagline: "Mature Eclipse-based database tool with broad JDBC coverage.",
     features: {
       license: "Open-source (Apache 2.0) / Paid PRO",
@@ -63,8 +63,8 @@ export const products: Product[] = [
     id: "tableplus",
     name: "TablePlus",
     logo: "/img/logos/tableplus.png",
-    width: 192,
-    height: 192,
+    width: 100,
+    height: 100,
     tagline: "Polished proprietary desktop client with native feel.",
     features: {
       license: "Proprietary",
@@ -81,7 +81,7 @@ export const products: Product[] = [
   {
     id: "datagrip",
     name: "DataGrip",
-    logo: "/img/logos/datagrip.svg",
+    logo: "/img/logos/datagrip.png",
     width: 100,
     height: 100,
     tagline: "JetBrains IDE-style database tool with marketplace plugins.",
@@ -100,9 +100,9 @@ export const products: Product[] = [
   {
     id: "beekeeper",
     name: "Beekeeper Studio",
-    logo: "/img/logos/beekeeper.svg",
+    logo: "/img/logos/beekeeper.png",
     width: 100,
-    height: 100,
+    height: 110,
     tagline: "Open-core Electron client with a clean SQL editor.",
     features: {
       license: "Open-source (GPLv3) / Paid Ultimate",
@@ -119,7 +119,7 @@ export const products: Product[] = [
   {
     id: "dbgate",
     name: "DbGate",
-    logo: "/img/logos/dbgate.svg",
+    logo: "/img/logos/dbgate.png",
     width: 100,
     height: 100,
     tagline: "Cross-platform tool with SQL and NoSQL support.",
@@ -158,8 +158,8 @@ export const products: Product[] = [
     id: "pgadmin",
     name: "pgAdmin",
     logo: "/img/logos/pgadmin.png",
-    width: 920,
-    height: 920,
+    width: 100,
+    height: 100,
     tagline: "Official PostgreSQL admin UI, web-based.",
     features: {
       license: "Open-source (PostgreSQL License)",
@@ -177,8 +177,8 @@ export const products: Product[] = [
     id: "phpmyadmin",
     name: "phpMyAdmin",
     logo: "/img/logos/phpmyadmin.png",
-    width: 172,
-    height: 101,
+    width: 170,
+    height: 100,
     tagline: "Classic web-based MySQL/MariaDB admin panel.",
     features: {
       license: "Open-source (GPLv2)",
@@ -196,8 +196,8 @@ export const products: Product[] = [
     id: "heidisql",
     name: "HeidiSQL",
     logo: "/img/logos/heidisql.png",
-    width: 780,
-    height: 198,
+    width: 100,
+    height: 100,
     tagline: "Lightweight free Windows-native MySQL/MariaDB tool.",
     features: {
       license: "Open-source (GPLv2)",
