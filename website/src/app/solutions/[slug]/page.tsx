@@ -94,9 +94,7 @@ export default async function SolutionDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <div className="plugin-cta seo-content-box">
-          <WikiContent html={page.html} />
-        </div>
+        <WikiContent html={page.html} />
 
         <div className="post-footer-cta">
           <p>Try the workflow locally or dig into the product docs.</p>

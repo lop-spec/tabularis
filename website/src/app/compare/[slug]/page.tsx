@@ -5,6 +5,7 @@ import { JsonLd } from "@/components/JsonLd";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { WikiContent } from "@/components/WikiContent";
+import { ComparisonTable } from "@/components/ComparisonTable";
 import { SeoPageHeroVisual } from "@/components/SeoPagePreview";
 import {
   getAdjacentSeoPages,
@@ -91,9 +92,9 @@ export default async function CompareDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <div className="plugin-cta seo-content-box">
-          <WikiContent html={page.html} />
-        </div>
+        <ComparisonTable slug={slug} />
+
+        <WikiContent html={page.html} />
 
         <div className="post-footer-cta">
           <p>Compare on your own workflow with the desktop app and docs.</p>

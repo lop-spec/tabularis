@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Footer } from "@/components/Footer";
 import { getSeoPagesBySection, getSeoPagePath } from "@/lib/seoPages";
 import { SeoPageThumb } from "@/components/SeoPagePreview";
+import { ComparisonBuilder } from "@/components/ComparisonBuilder";
 import { buildBreadcrumbJsonLd } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -42,6 +43,8 @@ export default function ComparePage() {
             </p>
           </div>
         </div>
+
+        <ComparisonBuilder />
 
         <div className="plugin-list">
           {pages.map((page) => (
