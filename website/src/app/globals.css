@@ -4699,7 +4699,7 @@ footer {
 .newsletter-compact-text h3 {
   color: var(--text-bright);
   font-size: 0.95rem;
-  margin-bottom: 0.25rem;
+  margin: 0 0 0.25rem;
 }
 
 .newsletter-compact-text p {
