@@ -24,8 +24,8 @@ export const dracula: Theme = {
     },
     text: {
       primary: '#f8f8f2',
-      secondary: '#b8c2e0',
-      muted: '#7d88ae',
+      secondary: '#cdd4ee',
+      muted: '#b8c0d8',
       disabled: '#6c7290',
       accent: '#bd93f9',
       inverse: '#282a36',

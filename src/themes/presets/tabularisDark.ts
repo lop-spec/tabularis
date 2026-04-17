@@ -24,7 +24,7 @@ export const tabularisDark: Theme = {
     text: {
       primary: "#f8fafc",
       secondary: "#94a3b8",
-      muted: "#64748b",
+      muted: "#7583a0",
       disabled: "#475569",
       accent: "#3b82f6",
       inverse: "#020617",

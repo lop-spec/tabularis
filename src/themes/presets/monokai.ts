@@ -25,7 +25,7 @@ export const monokai: Theme = {
     text: {
       primary: '#f8f8f2',
       secondary: '#a59f85',
-      muted: '#75715e',
+      muted: '#908c78',
       disabled: '#49483e',
       accent: '#66d9ef',
       inverse: '#272822',

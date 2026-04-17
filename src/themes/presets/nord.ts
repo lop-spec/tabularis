@@ -25,7 +25,7 @@ export const nord: Theme = {
     text: {
       primary: '#d8dee9',
       secondary: '#81a1c1',
-      muted: '#5e81ac',
+      muted: '#6e94be',
       disabled: '#4c566a',
       accent: '#88c0d0',
       inverse: '#2e3440',
