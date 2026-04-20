@@ -352,6 +352,7 @@ export const NewConnectionModal = ({
       await loadSshConnectionsList();
     };
     void init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialConnection]);
 
   const handleDriverChange = (newDriver: string) => {

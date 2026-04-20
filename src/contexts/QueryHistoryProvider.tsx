@@ -38,7 +38,7 @@ export const QueryHistoryProvider = ({
     refreshHistory();
   }, [refreshHistory]);
 
-  const addEntry = async (
+  const addEntry = useCallback(async (
     sql: string,
     executionTimeMs: number | null,
     status: "success" | "error",
@@ -61,7 +61,6 @@ export const QueryHistoryProvider = ({
           database: database ?? null,
         },
       );
-      // Update state: if deduped (same id as first entry), replace it; otherwise prepend
       setEntries((prev) => {
         if (prev.length > 0 && prev[0].id === entry.id) {
           return [entry, ...prev.slice(1)];
@@ -71,7 +70,7 @@ export const QueryHistoryProvider = ({
     } catch (e) {
       console.error("Failed to add query history entry:", e);
     }
-  };
+  }, [activeConnectionId]);
 
   const deleteEntry = async (id: string) => {
     if (!activeConnectionId) return;

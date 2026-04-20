@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -65,7 +65,7 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
   const [interpreter, setInterpreter] = useState(
     getDisplayInterpreter(currentConfig),
   );
-  const definitions = manifest?.settings ?? [];
+  const definitions = useMemo(() => manifest?.settings ?? [], [manifest]);
   const [dynamicValues, setDynamicValues] = useState<
     Record<string, unknown>
   >(() => resolveSettingsWithDefaults(definitions, currentConfig?.settings));

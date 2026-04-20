@@ -749,6 +749,7 @@ export const Editor = () => {
       views,
       isMultiDb,
       activeDatabaseName,
+      addHistoryEntry,
     ],
   );
 
@@ -876,7 +877,7 @@ export const Editor = () => {
 
       updateTab(targetTabId, { isLoading: false });
     },
-    [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t, isMultiDb, activeDatabaseName],
+    [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t, isMultiDb, activeDatabaseName, addHistoryEntry],
   );
 
   const runResultEntryPage = useCallback(

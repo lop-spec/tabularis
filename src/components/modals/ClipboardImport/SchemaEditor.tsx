@@ -235,7 +235,9 @@ export function SchemaEditor({
                         />
                       )}
                       {col.confidence === 'low' && (
-                        <AlertTriangle size={12} className="text-yellow-400 shrink-0" title={t('clipboardImport.lowConfidence')} />
+                        <span title={t('clipboardImport.lowConfidence')} className="shrink-0 flex">
+                          <AlertTriangle size={12} className="text-yellow-400" />
+                        </span>
                       )}
                     </div>
                   </td>
