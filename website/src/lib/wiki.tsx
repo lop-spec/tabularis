@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 import { marked } from "@/lib/markdown";
+import { wrapVideosInHtml } from "@/lib/markdownVideos";
 
 export type WikiCategory =
   | "Getting Started"
@@ -76,7 +77,8 @@ export function getWikiPageBySlug(
   const { data, content } = matter(raw);
 
   const meta = parseWikiMeta(slug, data);
-  const html = marked.parse(content) as string;
+  const rawHtml = marked.parse(content) as string;
+  const html = wrapVideosInHtml(rawHtml);
   return { meta, html };
 }
 
