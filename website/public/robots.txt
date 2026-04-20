@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /sponsors/confirm
-
-Sitemap: https://tabularis.dev/sitemap.xml

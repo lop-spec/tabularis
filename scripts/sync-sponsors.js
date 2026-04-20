@@ -1,28 +1,24 @@
 import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
+const SPONSORS_URL = "https://tabularis.dev/sponsors.json";
+const ASSETS_BASE = "https://tabularis.dev";
+
 const paths = {
-  sponsorsTs: resolve("website/src/lib/sponsors.ts"),
   sponsorsMd: resolve("SPONSORS.md"),
   readme: resolve("README.md"),
 };
 
-// --- Parse sponsors.ts ---
-const tsSource = readFileSync(paths.sponsorsTs, "utf-8");
+// --- Fetch sponsors from tabularis.dev ---
+console.log(`🌐 Fetching sponsors from ${SPONSORS_URL}...`);
 
-// Strip TypeScript-specific syntax so the file can be eval'd as JS
-const jsSource = tsSource
-  .replace(/export interface \w+\s*\{[\s\S]*?\n\}/g, "")
-  .replace(/export const SPONSORS:\s*\w+\[\]\s*=/, "const SPONSORS =");
-
-let sponsors;
-try {
-  sponsors = new Function(`${jsSource}; return SPONSORS;`)();
-} catch (e) {
-  console.error("❌ Failed to parse sponsors.ts:", e.message);
+const res = await fetch(SPONSORS_URL);
+if (!res.ok) {
+  console.error(`❌ Failed to fetch sponsors: ${res.status} ${res.statusText}`);
   process.exit(1);
 }
 
+const sponsors = await res.json();
 console.log(`🔄 Syncing ${sponsors.length} sponsors...`);
 
 function withUtm(url) {
@@ -31,6 +27,10 @@ function withUtm(url) {
   u.searchParams.set("utm_medium", "referral");
   u.searchParams.set("utm_campaign", "sponsor");
   return u.toString();
+}
+
+function assetUrl(path) {
+  return `${ASSETS_BASE}${path}`;
 }
 
 // --- Generate SPONSORS.md ---
@@ -49,7 +49,7 @@ for (const s of sponsors) {
   lines.push("");
 
   if (s.logoImg) {
-    const logoPath = `website/public${s.logoImg}`;
+    const logoPath = assetUrl(s.logoImg);
     const bg = s.logoImgBg ? ` style="background:${s.logoImgBg};padding:6px;"` : "";
     lines.push(
       `<a href="${withUtm(s.url)}" target="_blank"><img src="${logoPath}" height="40" alt="${s.name}"${bg} /></a>`,
@@ -98,7 +98,7 @@ const readmeBlock = [
   ...sponsors.map((s) => {
     const logo = s.logoImgCompact ?? s.logoImg;
     const imgTag = logo
-      ? `<a href="${withUtm(s.url)}" target="_blank"><img src="website/public${logo}" height="28" alt="${s.name}" /></a> `
+      ? `<a href="${withUtm(s.url)}" target="_blank"><img src="${assetUrl(logo)}" height="28" alt="${s.name}" /></a> `
       : "";
     return `- ${imgTag}**[${s.name}](${withUtm(s.url)})** — ${s.tagline}`;
   }),

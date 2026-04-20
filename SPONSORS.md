@@ -7,7 +7,7 @@ Interested in sponsoring? [Get in touch →](https://tabularis.dev/sponsors)
 
 ## turboSMTP
 
-<a href="https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/turbosmtp.png" height="40" alt="turboSMTP" style="background:#ffffff;padding:6px;" /></a>
+<a href="https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/turbosmtp.png" height="40" alt="turboSMTP" style="background:#ffffff;padding:6px;" /></a>
 
 **Professional SMTP relay — your emails delivered straight to the inbox, never to spam**
 
@@ -26,7 +26,7 @@ Interested in sponsoring? [Get in touch →](https://tabularis.dev/sponsors)
 
 ## Kilo Code
 
-<a href="https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/kilocode.png" height="40" alt="Kilo Code" /></a>
+<a href="https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/kilocode.png" height="40" alt="Kilo Code" /></a>
 
 **Open source AI coding agent — build, ship, and iterate faster with 500+ models**
 
@@ -45,7 +45,7 @@ Interested in sponsoring? [Get in touch →](https://tabularis.dev/sponsors)
 
 ## Usero
 
-<a href="https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/usero.png" height="40" alt="Usero" /></a>
+<a href="https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/usero.png" height="40" alt="Usero" /></a>
 
 **Feedback becomes code. Automatically.**
 
@@ -64,7 +64,7 @@ Interested in sponsoring? [Get in touch →](https://tabularis.dev/sponsors)
 
 ## DevGlobe
 
-<a href="https://devglobe.xyz/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="website/public/img/sponsors/devglobe.png" height="40" alt="DevGlobe" /></a>
+<a href="https://devglobe.xyz/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/devglobe.png" height="40" alt="DevGlobe" /></a>
 
 **Connect your IDE, show up on the globe, and showcase your projects to a community of builders.**
 

@@ -136,7 +136,7 @@ Starting with v0.9.15, plugins can also inject custom UI components into the Tab
 This is entirely optional — plugins without `ui_extensions` continue to work identically.
 
 For details, see:
-- [Plugin UI Extensions Spec](../website/public/docs/plugin-ui-extensions-spec.md) — Full specification
+- [Plugin UI Extensions Spec](https://tabularis.dev/docs/plugin-ui-extensions-spec.md) — Full specification
 - [PLUGIN_GUIDE.md](./PLUGIN_GUIDE.md) § 3b — Quick-start guide for UI extensions
 
 ---
@@ -144,6 +144,6 @@ For details, see:
 ## Development Resources
 
 - [PLUGIN_GUIDE.md](./PLUGIN_GUIDE.md) — Complete guide for implementing a plugin executable
-- [Plugin UI Extensions Spec](../website/public/docs/plugin-ui-extensions-spec.md) — UI extension system specification
+- [Plugin UI Extensions Spec](https://tabularis.dev/docs/plugin-ui-extensions-spec.md) — UI extension system specification
 - [Driver Trait](../src-tauri/src/drivers/driver_trait.rs) — Rust trait all drivers implement
 - [RPC Protocol](../src-tauri/src/plugins/rpc.rs) — JSON-RPC types used for communication

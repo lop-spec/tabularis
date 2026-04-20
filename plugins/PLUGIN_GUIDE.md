@@ -458,7 +458,7 @@ All host interaction goes through `@tabularis/plugin-api`.
 
 Each contribution is wrapped in a `SlotErrorBoundary`. If your component throws, a small error badge is shown instead — other plugins and the host continue working normally.
 
-For the full specification, see [`plugin-ui-extensions-spec.md`](../website/public/docs/plugin-ui-extensions-spec.md).
+For the full specification, see [`plugin-ui-extensions-spec.md`](https://tabularis.dev/docs/plugin-ui-extensions-spec.md).
 
 ---
 
