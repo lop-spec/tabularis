@@ -5,7 +5,7 @@
   "type": "module",
   "links": {
     "discord": "https://discord.gg/YrZPHAwMSG",
-    "github": "https://github.com/debba/tabularis"
+    "github": "https://github.com/TabularisDB/tabularis"
   },
   "scripts": {
     "dev": "vite",

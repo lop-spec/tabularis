@@ -22,7 +22,7 @@ import {
 } from "@/lib/seo";
 
 const GITHUB_EDIT_HOME_URL =
-  "https://github.com/debba/tabularis/edit/main/website/content/home.md";
+  "https://github.com/TabularisDB/tabularis/edit/main/website/content/home.md";
 
 const SEO_ENTRY_POINTS = [
   {

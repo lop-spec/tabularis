@@ -19,7 +19,7 @@ After the much bigger notebook release, **v0.9.16** is a smaller one. The focus 
 
 ## Drag and Drop for Connection Groups
 
-This is [@thomaswasle](https://github.com/thomaswasle)'s contribution in PR [#126](https://github.com/debba/tabularis/pull/126).
+This is [@thomaswasle](https://github.com/thomaswasle)'s contribution in PR [#126](https://github.com/TabularisDB/tabularis/pull/126).
 
 Connection groups on the **Connections** page are now draggable.
 
@@ -63,4 +63,4 @@ One of the next updates will be **Visual Explain** — the new query plan analys
 
 ---
 
-_v0.9.16 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.16)._
+_v0.9.16 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.16)._

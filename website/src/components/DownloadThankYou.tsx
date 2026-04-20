@@ -76,7 +76,7 @@ export function DownloadThankYou() {
         </a>
 
         <a
-          href="https://github.com/debba/tabularis"
+          href="https://github.com/TabularisDB/tabularis"
           target="_blank"
           rel="noopener noreferrer"
           className="dl-thankyou-card"

@@ -3,8 +3,8 @@ base: core24
 version: "0.0.0"
 summary: Open-source database client with AI, notebooks, and plugins
 website: https://tabularis.dev
-issues: https://github.com/debba/tabularis/issues
-source-code: https://github.com/debba/tabularis
+issues: https://github.com/TabularisDB/tabularis/issues
+source-code: https://github.com/TabularisDB/tabularis
 title: Tabularis
 contact: andrea@debbaweb.it
 description: |
@@ -35,7 +35,7 @@ description: |
   (EN, IT, ES, ZH, FR, DE).
 
   Website: https://tabularis.dev
-  Source: https://github.com/debba/tabularis
+  Source: https://github.com/TabularisDB/tabularis
 
 grade: stable
 confinement: strict

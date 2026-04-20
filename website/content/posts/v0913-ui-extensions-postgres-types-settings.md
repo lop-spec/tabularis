@@ -25,7 +25,7 @@ v0.9.13 ships the full implementation.
 
 ### What's in the box
 
-**Ten slots** across the application — from individual field annotations in the row editor, to toolbar buttons, context menu items, sidebar actions, settings panels, and connection form extensions. Each slot passes a typed context object to the plugin component: connection metadata, table name, row data, column info, whatever makes sense for that location. The full list and context shapes are documented in the [plugin wiki](/wiki/plugins#ui-extensions-phase-2) and the [PLUGIN_GUIDE](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md).
+**Ten slots** across the application — from individual field annotations in the row editor, to toolbar buttons, context menu items, sidebar actions, settings panels, and connection form extensions. Each slot passes a typed context object to the plugin component: connection metadata, table name, row data, column info, whatever makes sense for that location. The full list and context shapes are documented in the [plugin wiki](/wiki/plugins#ui-extensions-phase-2) and the [PLUGIN_GUIDE](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md).
 
 **A set of host-provided hooks** that give slot components access to host capabilities: running read-only queries, showing toasts, opening modals, reading and writing plugin settings, detecting the current theme, accessing plugin-specific translations, and opening external URLs. Right now these hooks are exposed by the host as a runtime global (`__TABULARIS_API__`) — plugin bundles declare it as an external and reference it at build time. The plan is to publish a proper `@tabularis/plugin-api` package on npm so that plugin authors get type definitions, autocompletion, and a cleaner import experience out of the box.
 
@@ -35,7 +35,7 @@ v0.9.13 ships the full implementation.
 
 **Conditional rendering** through two mechanisms: a `driver` field in the manifest that restricts a contribution to connections using a specific driver, and component-level filtering where the component itself returns `null` based on context values.
 
-For the full developer reference, see the [Plugin Guide](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md). The [wiki page on the plugin system](/wiki/plugins) has also been updated with the complete slot list, available hooks, and build instructions.
+For the full developer reference, see the [Plugin Guide](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md). The [wiki page on the plugin system](/wiki/plugins) has also been updated with the complete slot list, available hooks, and build instructions.
 
 ### UI-only plugins and plugin modals
 
@@ -51,7 +51,7 @@ I'm working on a set of demo plugins that showcase these capabilities in practic
 
 ## PostgreSQL: Range, Multirange, and Enum Types
 
-This is [@dev-void-7](https://github.com/dev-void-7)'s work in PR [#111](https://github.com/debba/tabularis/pull/111) — 20 commits touching the Rust extraction layer, all focused on closing gaps in PostgreSQL type support. The same contributor who rewrote the PostgreSQL driver on top of `tokio-postgres` in v0.9.12 is back, this time expanding type coverage.
+This is [@dev-void-7](https://github.com/dev-void-7)'s work in PR [#111](https://github.com/TabularisDB/tabularis/pull/111) — 20 commits touching the Rust extraction layer, all focused on closing gaps in PostgreSQL type support. The same contributor who rewrote the PostgreSQL driver on top of `tokio-postgres` in v0.9.12 is back, this time expanding type coverage.
 
 **Enum types** are now extracted properly. Previously they were passed through as raw bytes; now they resolve to their string label.
 
@@ -130,4 +130,4 @@ A few annoyances that accumulated over the last couple of releases:
 
 ---
 
-_v0.9.13 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.13)._
+_v0.9.13 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.13)._

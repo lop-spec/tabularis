@@ -16,11 +16,11 @@
 
 <p align="center">
   
-![](https://img.shields.io/github/release/debba/tabularis.svg?style=flat)
-![](https://img.shields.io/github/downloads/debba/tabularis/total.svg?style=flat)
-![Build & Release](https://github.com/debba/tabularis/workflows/Release/badge.svg)
+![](https://img.shields.io/github/release/TabularisDB/tabularis.svg?style=flat)
+![](https://img.shields.io/github/downloads/TabularisDB/tabularis/total.svg?style=flat)
+![Build & Release](https://github.com/TabularisDB/tabularis/workflows/Release/badge.svg)
 [![Discord](https://img.shields.io/discord/1470772941296894128?color=5865F2&logo=discord&logoColor=white)](https://discord.gg/YrZPHAwMSG)
-[![Gitster](https://gitster.dev/api/repositories/badge/cmlko1jr60005ne4yh7i7oy3e)](https://gitster.dev/repo/debba/tabularis)
+[![Gitster](https://gitster.dev/api/repositories/badge/cmlko1jr60005ne4yh7i7oy3e)](https://gitster.dev/repo/TabularisDB/tabularis)
 
 </p>
 
@@ -44,7 +44,7 @@ An open-source desktop client for modern databases. Supports PostgreSQL, MySQL/M
 
 ## Release Download:
 
-[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.9.19/tabularis_0.9.19_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.9.19/tabularis_0.9.19_x64.dmg) [![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.9.19/tabularis_0.9.19_amd64.AppImage) [![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/debba/tabularis/releases/download/v0.9.19/tabularis_0.9.19_amd64.deb) [![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/debba/tabularis/releases/download/v0.9.19/tabularis-0.9.7-1.x86_64.rpm)
+[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.19/tabularis_0.9.19_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.19/tabularis_0.9.19_x64.dmg) [![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.19/tabularis_0.9.19_amd64.AppImage) [![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.19/tabularis_0.9.19_amd64.deb) [![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.19/tabularis-0.9.7-1.x86_64.rpm)
 
 <!-- SPONSORS:START -->
 
@@ -103,7 +103,7 @@ winget install Debba.Tabularis
 
 #### Direct Download
 
-Download the installer from the [Releases page](https://github.com/debba/tabularis/releases) and run it:
+Download the installer from the [Releases page](https://github.com/TabularisDB/tabularis/releases) and run it:
 
 ```
 tabularis_x.x.x_x64-setup.exe
@@ -118,7 +118,7 @@ Follow the on-screen instructions to complete the installation.
 To add our tap, run:
 
 ```bash
-brew tap debba/tabularis
+brew tap TabularisDB/tabularis
 ```
 
 Then install:
@@ -153,7 +153,7 @@ sudo snap install tabularis
 
 ### Linux (AppImage)
 
-Download the `.AppImage` file from the [Releases page](https://github.com/debba/tabularis/releases), make it executable and run it:
+Download the `.AppImage` file from the [Releases page](https://github.com/TabularisDB/tabularis/releases), make it executable and run it:
 
 ```bash
 chmod +x tabularis_x.x.x_amd64.AppImage
@@ -174,7 +174,7 @@ Tabularis checks for updates automatically on startup. When a new version is ava
 
 ### Manual Updates
 
-You can also manually check for updates or download the latest version directly from the [Releases page](https://github.com/debba/tabularis/releases).
+You can also manually check for updates or download the latest version directly from the [Releases page](https://github.com/TabularisDB/tabularis/releases).
 
 ## Gallery
 
@@ -475,18 +475,18 @@ pnpm tauri build
 
 ## Roadmap
 
-- [x] [[Feat]: Allow loading of multiple Databases per connection](https://github.com/debba/tabularis/issues/47)
-- [x] [Visual Explain Analyze](https://github.com/debba/tabularis/issues/22)
-- [x] [Plugin System](https://github.com/debba/tabularis/issues/19)
-- [x] [Query History](https://github.com/debba/tabularis/issues/18)
-- [ ] [Feature: Remote Control](https://github.com/debba/tabularis/issues/46)
-- [ ] [Command Palette](https://github.com/debba/tabularis/issues/25)
-- [ ] [JSON/JSONB Editor & Viewer](https://github.com/debba/tabularis/issues/24)
-- [ ] [SQL Formatting / Prettier](https://github.com/debba/tabularis/issues/23)
-- [ ] [Data Compare / Diff Tool](https://github.com/debba/tabularis/issues/21)
-- [ ] [Team Collaboration](https://github.com/debba/tabularis/issues/20)
-- [ ] [Better SQLite Support](https://github.com/debba/tabularis/issues/17)
-- [ ] [Better PostgreSQL Support](https://github.com/debba/tabularis/issues/16)
+- [x] [[Feat]: Allow loading of multiple Databases per connection](https://github.com/TabularisDB/tabularis/issues/47)
+- [x] [Visual Explain Analyze](https://github.com/TabularisDB/tabularis/issues/22)
+- [x] [Plugin System](https://github.com/TabularisDB/tabularis/issues/19)
+- [x] [Query History](https://github.com/TabularisDB/tabularis/issues/18)
+- [ ] [Feature: Remote Control](https://github.com/TabularisDB/tabularis/issues/46)
+- [ ] [Command Palette](https://github.com/TabularisDB/tabularis/issues/25)
+- [ ] [JSON/JSONB Editor & Viewer](https://github.com/TabularisDB/tabularis/issues/24)
+- [ ] [SQL Formatting / Prettier](https://github.com/TabularisDB/tabularis/issues/23)
+- [ ] [Data Compare / Diff Tool](https://github.com/TabularisDB/tabularis/issues/21)
+- [ ] [Team Collaboration](https://github.com/TabularisDB/tabularis/issues/20)
+- [ ] [Better SQLite Support](https://github.com/TabularisDB/tabularis/issues/17)
+- [ ] [Better PostgreSQL Support](https://github.com/TabularisDB/tabularis/issues/16)
 ## License
 
 Apache License 2.0

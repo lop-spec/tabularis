@@ -120,15 +120,15 @@ This makes column-wise edits, repeated line transformations, and bulk query rewr
 
 The release is centered on History, but there are several other useful additions and fixes around it.
 
-This is [@midasism](https://github.com/midasism)'s contribution in PR [#132](https://github.com/debba/tabularis/pull/132): **PostgreSQL schema mode** now gets a proper **table search filter**, bringing it closer to the multi-database browsing experience already available elsewhere in the app.
+This is [@midasism](https://github.com/midasism)'s contribution in PR [#132](https://github.com/TabularisDB/tabularis/pull/132): **PostgreSQL schema mode** now gets a proper **table search filter**, bringing it closer to the multi-database browsing experience already available elsewhere in the app.
 
-This is [@traustitj](https://github.com/traustitj)'s contribution in PR [#133](https://github.com/debba/tabularis/pull/133): **MySQL connections** now expose **SSL configuration options** directly in the connection flow, which is an important upgrade for real deployments where plaintext local-style settings are not enough.
+This is [@traustitj](https://github.com/traustitj)'s contribution in PR [#133](https://github.com/TabularisDB/tabularis/pull/133): **MySQL connections** now expose **SSL configuration options** directly in the connection flow, which is an important upgrade for real deployments where plaintext local-style settings are not enough.
 
-This is [@thomaswasle](https://github.com/thomaswasle)'s contribution in PR [#134](https://github.com/debba/tabularis/pull/134): **MySQL connection URLs** now use the **system timezone** correctly instead of forcing UTC behavior.
+This is [@thomaswasle](https://github.com/thomaswasle)'s contribution in PR [#134](https://github.com/TabularisDB/tabularis/pull/134): **MySQL connection URLs** now use the **system timezone** correctly instead of forcing UTC behavior.
 
-This is [@thomaswasle](https://github.com/thomaswasle)'s contribution in PR [#135](https://github.com/debba/tabularis/pull/135): the **Dracula theme** gets a readability pass, improving contrast in places that previously felt harder to scan.
+This is [@thomaswasle](https://github.com/thomaswasle)'s contribution in PR [#135](https://github.com/TabularisDB/tabularis/pull/135): the **Dracula theme** gets a readability pass, improving contrast in places that previously felt harder to scan.
 
-This is [@krissss](https://github.com/krissss)'s contribution in PR [#138](https://github.com/debba/tabularis/pull/138): **custom OpenAI provider URLs** no longer duplicate path segments or assume a hardcoded `/v1`, which makes alternative provider setups much more reliable.
+This is [@krissss](https://github.com/krissss)'s contribution in PR [#138](https://github.com/TabularisDB/tabularis/pull/138): **custom OpenAI provider URLs** no longer duplicate path segments or assume a hardcoded `/v1`, which makes alternative provider setups much more reliable.
 
 Alongside the community contributions, the core app also picks up several maintainer-authored improvements in this release: a plugin settings page, better plugin config caching, an explain-selection modal, an open source libraries modal, a welcome screen toggle, and a few sidebar and editor polish fixes.
 
@@ -144,4 +144,4 @@ That makes `v0.9.18` a smaller release than `v0.9.17`, but also a very practical
 
 ---
 
-_v0.9.18 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.18)._
+_v0.9.18 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.18)._

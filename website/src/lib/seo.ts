@@ -33,7 +33,7 @@ export function buildOrganizationJsonLd() {
     url: BASE_URL,
     logo: toAbsoluteUrl("/img/logo.png"),
     sameAs: [
-      "https://github.com/debba/tabularis",
+      "https://github.com/TabularisDB/tabularis",
       "https://discord.gg/YrZPHAwMSG",
     ],
   };

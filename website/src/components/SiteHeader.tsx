@@ -67,7 +67,7 @@ export function SiteHeader({ crumbs = [] }: SiteHeaderProps) {
               <kbd>{isMac ? "⌘K" : "Ctrl+K"}</kbd>
             </button>
             <a
-              href="https://github.com/debba/tabularis"
+              href="https://github.com/TabularisDB/tabularis"
               target="_blank"
               rel="noopener noreferrer"
               className="github-link"
@@ -133,7 +133,7 @@ export function SiteHeader({ crumbs = [] }: SiteHeaderProps) {
           </button>
           <div className="mobile-social-links">
             <a
-              href="https://github.com/debba/tabularis"
+              href="https://github.com/TabularisDB/tabularis"
               target="_blank"
               rel="noopener noreferrer"
               className="mobile-social-link"

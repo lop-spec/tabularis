@@ -127,4 +127,4 @@ An implicit fallback in the tab state logic was causing the wrong tab to appear 
 
 ---
 
-_v0.9.7 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.7)._
+_v0.9.7 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.7)._

@@ -24,7 +24,7 @@ export interface PlatformConfig {
   note?: DownloadNote;
 }
 
-const BASE = `https://github.com/debba/tabularis/releases/download/v${APP_VERSION}`;
+const BASE = `https://github.com/TabularisDB/tabularis/releases/download/v${APP_VERSION}`;
 
 export const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
   windows: {

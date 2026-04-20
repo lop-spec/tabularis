@@ -53,7 +53,7 @@ struct GitHubAsset {
 }
 
 // Constants
-const GITHUB_REPO: &str = "debba/tabularis";
+const GITHUB_REPO: &str = "TabularisDB/tabularis";
 const CACHE_DURATION_SECS: u64 = 43200; // 12 hours
 /// Returns the installation source: "snap", "aur", or None for direct installs.
 /// Only meaningful on Linux; always returns None on other platforms.
@@ -390,7 +390,7 @@ mod tests {
     // GitHub repo constant test
     #[test]
     fn test_github_repo_constant() {
-        assert_eq!(GITHUB_REPO, "debba/tabularis");
+        assert_eq!(GITHUB_REPO, "TabularisDB/tabularis");
     }
 
     // Cache duration test

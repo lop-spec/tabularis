@@ -2,61 +2,61 @@
   {
     "label": "[Feat]: Allow loading of multiple Databases per connection",
     "done": true,
-    "url": "https://github.com/debba/tabularis/issues/47"
+    "url": "https://github.com/TabularisDB/tabularis/issues/47"
   },
   {
     "label": "Visual Explain Analyze",
     "done": true,
-    "url": "https://github.com/debba/tabularis/issues/22"
+    "url": "https://github.com/TabularisDB/tabularis/issues/22"
   },
   {
     "label": "Plugin System",
     "done": true,
-    "url": "https://github.com/debba/tabularis/issues/19"
+    "url": "https://github.com/TabularisDB/tabularis/issues/19"
   },
   {
     "label": "Query History",
     "done": true,
-    "url": "https://github.com/debba/tabularis/issues/18"
+    "url": "https://github.com/TabularisDB/tabularis/issues/18"
   },
   {
     "label": "Feature: Remote Control",
     "done": false,
-    "url": "https://github.com/debba/tabularis/issues/46"
+    "url": "https://github.com/TabularisDB/tabularis/issues/46"
   },
   {
     "label": "Command Palette",
     "done": false,
-    "url": "https://github.com/debba/tabularis/issues/25"
+    "url": "https://github.com/TabularisDB/tabularis/issues/25"
   },
   {
     "label": "JSON/JSONB Editor & Viewer",
     "done": false,
-    "url": "https://github.com/debba/tabularis/issues/24"
+    "url": "https://github.com/TabularisDB/tabularis/issues/24"
   },
   {
     "label": "SQL Formatting / Prettier",
     "done": false,
-    "url": "https://github.com/debba/tabularis/issues/23"
+    "url": "https://github.com/TabularisDB/tabularis/issues/23"
   },
   {
     "label": "Data Compare / Diff Tool",
     "done": false,
-    "url": "https://github.com/debba/tabularis/issues/21"
+    "url": "https://github.com/TabularisDB/tabularis/issues/21"
   },
   {
     "label": "Team Collaboration",
     "done": false,
-    "url": "https://github.com/debba/tabularis/issues/20"
+    "url": "https://github.com/TabularisDB/tabularis/issues/20"
   },
   {
     "label": "Better SQLite Support",
     "done": false,
-    "url": "https://github.com/debba/tabularis/issues/17"
+    "url": "https://github.com/TabularisDB/tabularis/issues/17"
   },
   {
     "label": "Better PostgreSQL Support",
     "done": false,
-    "url": "https://github.com/debba/tabularis/issues/16"
+    "url": "https://github.com/TabularisDB/tabularis/issues/16"
   }
 ]

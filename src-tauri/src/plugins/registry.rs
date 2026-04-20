@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 const REGISTRY_URL: &str =
-    "https://raw.githubusercontent.com/debba/tabularis/main/plugins/registry.json";
+    "https://raw.githubusercontent.com/TabularisDB/tabularis/main/plugins/registry.json";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PluginRegistry {

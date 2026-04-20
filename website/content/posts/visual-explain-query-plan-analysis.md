@@ -44,7 +44,7 @@ The information is there, but the inspection work is still mostly manual. You ha
 
 That is the reason for **Visual EXPLAIN** in Tabularis. The goal is not to replace EXPLAIN, but to make it faster to inspect. Tabularis takes the execution plan, turns it into a graph, highlights the expensive nodes, shows estimated and actual metrics side by side, and keeps the raw output available when you need it. If you want, it can also generate an AI analysis as a second pass over the plan.
 
-It is still in active development on the [`feat/visual-explain-analyze`](https://github.com/debba/tabularis/tree/feat/visual-explain-analyze) branch, but it already works on PostgreSQL, MySQL, MariaDB, and SQLite.
+It is still in active development on the [`feat/visual-explain-analyze`](https://github.com/TabularisDB/tabularis/tree/feat/visual-explain-analyze) branch, but it already works on PostgreSQL, MySQL, MariaDB, and SQLite.
 
 ---
 
@@ -187,7 +187,7 @@ If you know PostgreSQL internals well, the parser can expose more node-specific 
 
 The driver trait defines a standard `explain_query` interface. Any community plugin that implements it gets Visual EXPLAIN automatically.
 
-Development is happening on the [`feat/visual-explain-analyze`](https://github.com/debba/tabularis/tree/feat/visual-explain-analyze) branch. Issues and PRs are welcome on the [GitHub repository](https://github.com/debba/tabularis).
+Development is happening on the [`feat/visual-explain-analyze`](https://github.com/TabularisDB/tabularis/tree/feat/visual-explain-analyze) branch. Issues and PRs are welcome on the [GitHub repository](https://github.com/TabularisDB/tabularis).
 
 ---
 
@@ -201,7 +201,7 @@ The result is predictable: people delay looking at the plan until a query is alr
 
 Visual EXPLAIN is an attempt to make that workflow shorter. Run the query, inspect the plan in the same client, identify the expensive nodes, and iterate without copying JSON into external tools or switching to another application.
 
-It is landing soon. Progress is tracked on [`feat/visual-explain-analyze`](https://github.com/debba/tabularis/tree/feat/visual-explain-analyze).
+It is landing soon. Progress is tracked on [`feat/visual-explain-analyze`](https://github.com/TabularisDB/tabularis/tree/feat/visual-explain-analyze).
 
 ---
 

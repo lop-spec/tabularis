@@ -36,7 +36,7 @@ A month ago, Tabularis could connect to PostgreSQL, MySQL, and SQLite. It had a 
 
 Since then, we've shipped:
 
-- **Plugin System** — the biggest release of the month. A language-agnostic JSON-RPC protocol that lets anyone build a new database driver without touching the core app. The first plugin, [tabularis-duckdb-plugin](https://github.com/debba/tabularis-duckdb-plugin), was ready on day one. This is the feature that changes what Tabularis can become: not a tool that supports three databases, but a platform that can support any database.
+- **Plugin System** — the biggest release of the month. A language-agnostic JSON-RPC protocol that lets anyone build a new database driver without touching the core app. The first plugin, [tabularis-duckdb-plugin](https://github.com/TabularisDB/tabularis-duckdb-plugin), was ready on day one. This is the feature that changes what Tabularis can become: not a tool that supports three databases, but a platform that can support any database.
 
 - **AI Assistant** — generate SQL from natural language, get explanations for complex queries. Integrated with OpenAI, Anthropic, OpenRouter, and Ollama for those who want to keep everything local.
 

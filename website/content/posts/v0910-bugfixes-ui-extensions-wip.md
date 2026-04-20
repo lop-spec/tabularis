@@ -145,4 +145,4 @@ Testing with real plugins is also surfacing cases where the current ten slots ar
 
 ---
 
-_v0.9.10 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.10)._
+_v0.9.10 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.10)._

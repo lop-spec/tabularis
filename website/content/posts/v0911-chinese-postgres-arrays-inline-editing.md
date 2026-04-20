@@ -19,7 +19,7 @@ Another community-driven language lands in Tabularis.
 
 ## Chinese (Simplified)
 
-Back when I built i18n in [v0.6.0](/blog/security-and-i18n), I shipped English and Italian. Spanish came shortly after thanks to [kconfesor](https://github.com/kconfesor)'s contribution in PR [#30](https://github.com/debba/tabularis/pull/30). Now [GTLOLI](https://github.com/GTLOLI) has done the same for Chinese (Simplified) — a full translation, 879 keys, merged in PR [#103](https://github.com/debba/tabularis/pull/103).
+Back when I built i18n in [v0.6.0](/blog/security-and-i18n), I shipped English and Italian. Spanish came shortly after thanks to [kconfesor](https://github.com/kconfesor)'s contribution in PR [#30](https://github.com/TabularisDB/tabularis/pull/30). Now [GTLOLI](https://github.com/GTLOLI) has done the same for Chinese (Simplified) — a full translation, 879 keys, merged in PR [#103](https://github.com/TabularisDB/tabularis/pull/103).
 
 So Tabularis now supports **English**, **Italian**, **Spanish**, and **Chinese (Simplified)**. As before, the app picks your system locale automatically, or you can set `"zh"` in `config.json`.
 
@@ -64,4 +64,4 @@ I expect to ship UI extensions next week. After that, plugins won't be limited t
 
 ---
 
-_v0.9.11 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.11)._
+_v0.9.11 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.11)._

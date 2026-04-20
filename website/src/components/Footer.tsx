@@ -11,7 +11,7 @@ export function Footer() {
       <p className="footer-links">
         <Link href="/subscribe">Subscribe</Link>
         <Link href="/cookie-policy">Cookie Policy</Link>
-        <a href="https://github.com/debba/tabularis" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/TabularisDB/tabularis" target="_blank" rel="noopener noreferrer">GitHub</a>
         <a href="https://discord.gg/YrZPHAwMSG" target="_blank" rel="noopener noreferrer">Discord</a>
         <ManageCookiesButton />
       </p>

@@ -135,4 +135,4 @@ If you want the full walkthrough, there is now a dedicated [Visual EXPLAIN docum
 
 ---
 
-_v0.9.17 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.17)._
+_v0.9.17 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.17)._

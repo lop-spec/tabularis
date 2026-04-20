@@ -104,7 +104,7 @@ export default async function BlogPostPage({ params }: PageProps) {
           community.
         </p>
         <div className="cta-links">
-          <a className="btn-cta" href="https://github.com/debba/tabularis">
+          <a className="btn-cta" href="https://github.com/TabularisDB/tabularis">
             <GitHubIcon size={15} />
             Star on GitHub
           </a>

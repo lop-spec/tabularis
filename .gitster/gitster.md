@@ -119,7 +119,7 @@ Tabularis is a lightweight, developer-focused database management tool built wit
 ## Links
 
 - **Website:** [tabularis.dev](https://tabularis.dev)
-- **Download:** [GitHub Releases](https://github.com/debba/tabularis/releases)
+- **Download:** [GitHub Releases](https://github.com/TabularisDB/tabularis/releases)
 - **Wiki:** [tabularis.dev/wiki](https://tabularis.dev/wiki)
 - **Community:** [Discord Server](https://discord.gg/YrZPHAwMSG)
-- **Source Code:** [GitHub Repository](https://github.com/debba/tabularis)
+- **Source Code:** [GitHub Repository](https://github.com/TabularisDB/tabularis)

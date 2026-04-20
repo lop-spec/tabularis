@@ -32,7 +32,7 @@ export default function SponsorsConfirmPage() {
           </p>
           <div className="sponsor-confirm-actions">
             <a
-              href="https://github.com/debba/tabularis"
+              href="https://github.com/TabularisDB/tabularis"
               target="_blank"
               rel="noopener noreferrer"
               className="btn-download"

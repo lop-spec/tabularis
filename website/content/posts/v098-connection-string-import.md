@@ -96,4 +96,4 @@ The fix switches to `SqliteConnectOptions::new().filename(&path)` instead of par
 
 ---
 
-_v0.9.8 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.8)._
+_v0.9.8 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.8)._

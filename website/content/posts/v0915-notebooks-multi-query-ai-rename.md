@@ -74,7 +74,7 @@ The query selection modal also got a revamp — you can now run a single query f
 
 ## Query Splitting: Done Right
 
-This is [@dev-void-7](https://github.com/dev-void-7)'s contribution in PR [#119](https://github.com/debba/tabularis/pull/119). The old regex-based query splitter had blind spots — string literals containing semicolons, dollar-quoted blocks in PostgreSQL, comments with semicolons — all would trip it up and split queries in the wrong places.
+This is [@dev-void-7](https://github.com/dev-void-7)'s contribution in PR [#119](https://github.com/TabularisDB/tabularis/pull/119). The old regex-based query splitter had blind spots — string literals containing semicolons, dollar-quoted blocks in PostgreSQL, comments with semicolons — all would trip it up and split queries in the wrong places.
 
 The fix replaces the custom splitter with [`dbgate-query-splitter`](https://github.com/nickytonline/dbgate-query-splitter), a proper parser that understands SQL dialects. It correctly handles:
 
@@ -99,4 +99,4 @@ The prompt is customizable in **Settings > AI > Tab Rename Prompt**.
 
 ---
 
-_v0.9.15 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.15)._
+_v0.9.15 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.15)._

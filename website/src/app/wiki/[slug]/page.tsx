@@ -29,7 +29,7 @@ export function generateStaticParams() {
 }
 
 const OG_IMAGE =
-  "https://raw.githubusercontent.com/debba/tabularis/main/website/img/og.png";
+  "https://raw.githubusercontent.com/TabularisDB/tabularis/main/website/img/og.png";
 
 export async function generateMetadata({
   params,
@@ -117,7 +117,7 @@ export default async function WikiPageDetail({ params }: PageProps) {
 
         <div className="wiki-edit-link-container">
           <a
-            href={`https://github.com/debba/tabularis/edit/main/website/content/wiki/${slug}.md`}
+            href={`https://github.com/TabularisDB/tabularis/edit/main/website/content/wiki/${slug}.md`}
             target="_blank"
             rel="noopener noreferrer"
             className="wiki-edit-link"
@@ -130,7 +130,7 @@ export default async function WikiPageDetail({ params }: PageProps) {
         <div className="post-footer-cta">
           <p>Need more help? Join our community or check the source code.</p>
           <div className="cta-links">
-            <a className="btn-cta" href="https://github.com/debba/tabularis">
+            <a className="btn-cta" href="https://github.com/TabularisDB/tabularis">
               <GitHubIcon size={15} />
               Star on GitHub
             </a>

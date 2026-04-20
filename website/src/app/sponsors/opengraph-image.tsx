@@ -41,7 +41,7 @@ export default function Image() {
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 48 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="https://github.com/debba/tabularis/blob/main/website/public/img/logo.png?raw=true"
+            src="https://github.com/TabularisDB/tabularis/blob/main/website/public/img/logo.png?raw=true"
             width={48}
             height={48}
             alt="Tabularis"

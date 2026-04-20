@@ -127,7 +127,7 @@ async function fetchReleaseContributors(tag: string): Promise<string[]> {
   try {
     const headers = { Accept: "application/vnd.github+json" };
     const relRes = await fetch(
-      "https://api.github.com/repos/debba/tabularis/releases?per_page=100",
+      "https://api.github.com/repos/TabularisDB/tabularis/releases?per_page=100",
       { headers },
     );
     const releases: { tag_name: string; published_at: string }[] =
@@ -142,7 +142,7 @@ async function fetchReleaseContributors(tag: string): Promise<string[]> {
     const users = new Set<string>();
 
     const cmpRes = await fetch(
-      `https://api.github.com/repos/debba/tabularis/compare/${prevTag}...${tag}`,
+      `https://api.github.com/repos/TabularisDB/tabularis/compare/${prevTag}...${tag}`,
       { headers },
     );
     const data: {
@@ -163,7 +163,7 @@ async function fetchReleaseContributors(tag: string): Promise<string[]> {
     const curDate = releases[idx].published_at;
     if (prevDate && curDate) {
       const prsRes = await fetch(
-        `https://api.github.com/search/issues?q=repo:debba/tabularis+is:pr+is:merged+merged:${prevDate}..${curDate}&per_page=100`,
+        `https://api.github.com/search/issues?q=repo:TabularisDB/tabularis+is:pr+is:merged+merged:${prevDate}..${curDate}&per_page=100`,
         { headers },
       );
       const prsData: {

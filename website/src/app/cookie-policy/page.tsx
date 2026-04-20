@@ -252,7 +252,7 @@ export default function CookiePolicyPage() {
             If you have any questions about this cookie policy, please open an
             issue on{" "}
             <a
-              href="https://github.com/debba/tabularis"
+              href="https://github.com/TabularisDB/tabularis"
               target="_blank"
               rel="noopener noreferrer"
             >

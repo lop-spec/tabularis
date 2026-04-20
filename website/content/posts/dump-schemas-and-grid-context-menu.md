@@ -71,7 +71,7 @@ Both are fixed. The updater now bypasses the cache when checking for updates, an
 
 Tabularis is growing fast — and with growth comes complexity. The roadmap is full, but so is the bug tracker. Stability and polish will always be a priority alongside new features.
 
-This is an open-source project, and every contribution counts: whether it's a bug report, a fix, a translation, or a feature proposal. If something feels off or missing, the best place to start is the [GitHub repository](https://github.com/debba/tabularis). Open an issue, submit a pull request, or just share how you're using the app. Every bit of feedback shapes what gets built next.
+This is an open-source project, and every contribution counts: whether it's a bug report, a fix, a translation, or a feature proposal. If something feels off or missing, the best place to start is the [GitHub repository](https://github.com/TabularisDB/tabularis). Open an issue, submit a pull request, or just share how you're using the app. Every bit of feedback shapes what gets built next.
 
 ---
 

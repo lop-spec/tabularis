@@ -110,7 +110,7 @@ export function DownloadButtons({ showInstallLink = false }: { showInstallLink?:
           </a>
         )}
         <a
-          href="https://github.com/debba/tabularis/releases"
+          href="https://github.com/TabularisDB/tabularis/releases"
           target="_blank"
           rel="noopener noreferrer"
           style={{ color: "var(--accent)", textDecoration: "none" }}

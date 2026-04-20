@@ -143,7 +143,7 @@ export default function PluginsPage() {
             skeleton to get you started in minutes.
           </p>
           <a
-            href="https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md"
+            href="https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md"
             className="btn-download"
             style={{ display: "inline-flex", width: "auto" }}
           >

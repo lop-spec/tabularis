@@ -72,14 +72,14 @@ export default function DownloadPage() {
 
         <div className="dl-page-footer-links">
           <a
-            href={`https://github.com/debba/tabularis/releases/tag/v${APP_VERSION}`}
+            href={`https://github.com/TabularisDB/tabularis/releases/tag/v${APP_VERSION}`}
             target="_blank"
             rel="noopener noreferrer"
           >
             Release notes on GitHub →
           </a>
           <a
-            href="https://github.com/debba/tabularis/releases"
+            href="https://github.com/TabularisDB/tabularis/releases"
             target="_blank"
             rel="noopener noreferrer"
           >

@@ -27,9 +27,9 @@ Both new locales were produced with AI assistance and then wired into the standa
 
 AI-generated translations are a practical way to unblock users who were locked out by the language barrier, but they are not a replacement for a native speaker's eye. Some phrasings will feel off, some terminology will not match what a French or German developer would actually say in front of a database.
 
-If you speak either language and spot something that should be rewritten, the locale files are plain JSON — no build step, no toolchain, no ceremony. Open a pull request against [`src/i18n/locales/fr.json`](https://github.com/debba/tabularis/blob/main/src/i18n/locales/fr.json) or [`src/i18n/locales/de.json`](https://github.com/debba/tabularis/blob/main/src/i18n/locales/de.json) and it will land in the next release. The same invitation stands for the other locales too.
+If you speak either language and spot something that should be rewritten, the locale files are plain JSON — no build step, no toolchain, no ceremony. Open a pull request against [`src/i18n/locales/fr.json`](https://github.com/TabularisDB/tabularis/blob/main/src/i18n/locales/fr.json) or [`src/i18n/locales/de.json`](https://github.com/TabularisDB/tabularis/blob/main/src/i18n/locales/de.json) and it will land in the next release. The same invitation stands for the other locales too.
 
-The project README is also available in both languages: [README.fr.md](https://github.com/debba/tabularis/blob/main/README.fr.md) and [README.de.md](https://github.com/debba/tabularis/blob/main/README.de.md).
+The project README is also available in both languages: [README.fr.md](https://github.com/TabularisDB/tabularis/blob/main/README.fr.md) and [README.de.md](https://github.com/TabularisDB/tabularis/blob/main/README.de.md).
 
 :::newsletter:::
 
@@ -81,4 +81,4 @@ If you are already on v0.9.18, the upgrade is painless and worth it for the poli
 
 ---
 
-_v0.9.19 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.19)._
+_v0.9.19 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.19)._

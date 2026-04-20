@@ -38,7 +38,7 @@ export default function NotFound() {
         <p>
           &copy; 2026 Tabularis Project &mdash;{" "}
           <Link href="/">tabularis.dev</Link> &middot;{" "}
-          <a href="https://github.com/debba/tabularis">GitHub</a> &middot;{" "}
+          <a href="https://github.com/TabularisDB/tabularis">GitHub</a> &middot;{" "}
           <a href="https://discord.gg/YrZPHAwMSG">Discord</a>
         </p>
       </footer>

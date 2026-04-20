@@ -118,7 +118,7 @@ export default function ChangelogPage() {
           <p className="cl-page-subtitle">
             Every release, documented. Source of truth is{" "}
             <a
-              href="https://github.com/debba/tabularis/blob/main/CHANGELOG.md"
+              href="https://github.com/TabularisDB/tabularis/blob/main/CHANGELOG.md"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -135,7 +135,7 @@ export default function ChangelogPage() {
         </div>
 
         <div className="cta-strip">
-          <a className="btn-cta" href="https://github.com/debba/tabularis">
+          <a className="btn-cta" href="https://github.com/TabularisDB/tabularis">
             <GitHubIcon size={16} />
             Star on GitHub
           </a>

@@ -27,13 +27,13 @@ After **2 consecutive failures**, the connection is closed, any SSH tunnel is to
 
 The interval is configurable from **Settings → General → Connection Health Check** — a slider from 0 to 120 seconds. Setting it to 0 disables pings entirely.
 
-For plugin authors: implementing `ping` is optional but recommended if your driver can do a cheaper liveness check than a full `test_connection`. The [Plugin Guide](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md) and the [wiki](/wiki/plugins#ping-optional) document the protocol and fallback behavior.
+For plugin authors: implementing `ping` is optional but recommended if your driver can do a cheaper liveness check than a full `test_connection`. The [Plugin Guide](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md) and the [wiki](/wiki/plugins#ping-optional) document the protocol and fallback behavior.
 
 ---
 
 ## PostgreSQL: 40+ New Types
 
-This is [@dev-void-7](https://github.com/dev-void-7)'s second major contribution in a row. After range, multirange, and enum support in v0.9.13, PR [#114](https://github.com/debba/tabularis/pull/114) lands with binary-level deserialization for an enormous set of PostgreSQL types that were previously opaque. The implementation lives in a dedicated `advanced_types.rs` module — over 1,500 lines of Rust, each type parsed from its binary wire format and serialized to a human-readable JSON representation.
+This is [@dev-void-7](https://github.com/dev-void-7)'s second major contribution in a row. After range, multirange, and enum support in v0.9.13, PR [#114](https://github.com/TabularisDB/tabularis/pull/114) lands with binary-level deserialization for an enormous set of PostgreSQL types that were previously opaque. The implementation lives in a dedicated `advanced_types.rs` module — over 1,500 lines of Rust, each type parsed from its binary wire format and serialized to a human-readable JSON representation.
 
 ### What's new
 
@@ -103,7 +103,7 @@ The focused item gets a blue border and a numbered badge. Mouse hover syncs with
 
 ## Autocompletion Fix for Multiple Databases
 
-This is [@thomaswasle](https://github.com/thomaswasle)'s contribution in PR [#115](https://github.com/debba/tabularis/pull/115). The Monaco autocomplete provider was always using the top-level table list, ignoring which schema or databases were actually active. If you had a PostgreSQL connection with a non-default schema selected, or a MySQL connection with multiple databases checked, the suggestions were wrong.
+This is [@thomaswasle](https://github.com/thomaswasle)'s contribution in PR [#115](https://github.com/TabularisDB/tabularis/pull/115). The Monaco autocomplete provider was always using the top-level table list, ignoring which schema or databases were actually active. If you had a PostgreSQL connection with a non-default schema selected, or a MySQL connection with multiple databases checked, the suggestions were wrong.
 
 The fix computes the effective table list based on context: schema tables for schema-aware connections, the union of selected database tables for multi-db connections, or the global list as fallback. The `useEffect` dependency array is corrected to re-register autocomplete when context changes.
 
@@ -127,4 +127,4 @@ When you click a column header to sort, Tabularis injects or replaces an `ORDER 
 
 ---
 
-_v0.9.14 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.14)._
+_v0.9.14 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.14)._

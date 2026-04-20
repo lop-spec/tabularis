@@ -22,11 +22,11 @@ Open-Source-Desktop-Client für moderne Datenbanken. Unterstützt PostgreSQL, My
 
 ## Downloads
 
-[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/debba/tabularis/releases/download/v0.9.18/tabularis_0.9.18_x64-setup.exe)
-[![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/debba/tabularis/releases/download/v0.9.18/tabularis_0.9.18_x64.dmg)
-[![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/debba/tabularis/releases/download/v0.9.18/tabularis_0.9.18_amd64.AppImage)
-[![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/debba/tabularis/releases/download/v0.9.18/tabularis_0.9.18_amd64.deb)
-[![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/debba/tabularis/releases/download/v0.9.18/tabularis-0.9.7-1.x86_64.rpm)
+[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.18/tabularis_0.9.18_x64-setup.exe)
+[![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.18/tabularis_0.9.18_x64.dmg)
+[![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.18/tabularis_0.9.18_amd64.AppImage)
+[![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.18/tabularis_0.9.18_amd64.deb)
+[![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/TabularisDB/tabularis/releases/download/v0.9.18/tabularis-0.9.7-1.x86_64.rpm)
 
 ## Installation
 
@@ -36,12 +36,12 @@ Open-Source-Desktop-Client für moderne Datenbanken. Unterstützt PostgreSQL, My
 winget install Debba.Tabularis
 ```
 
-Alternativ den Installer von der [Releases-Seite](https://github.com/debba/tabularis/releases) herunterladen.
+Alternativ den Installer von der [Releases-Seite](https://github.com/TabularisDB/tabularis/releases) herunterladen.
 
 ### macOS
 
 ```bash
-brew tap debba/tabularis
+brew tap TabularisDB/tabularis
 brew install --cask tabularis
 ```
 

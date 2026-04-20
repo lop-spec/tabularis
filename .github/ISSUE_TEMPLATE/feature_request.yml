@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before you submit an issue we recommend you visit [Tabularis Help](https://github.com/debba/tabularis/discussions) if you have any questions regarding using Tabularis.
+        Before you submit an issue we recommend you visit [Tabularis Help](https://github.com/TabularisDB/tabularis/discussions) if you have any questions regarding using Tabularis.
   - type: checkboxes
     id: prerequisites
     attributes:

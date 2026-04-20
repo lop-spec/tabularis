@@ -86,7 +86,7 @@ Tabularis captures application logs internally. Access them from **Settings → 
 | **Export logs** | Click **Export** in the Logs tab to save to a file |
 | **Clear logs** | Click **Clear** to reset the log buffer |
 
-When reporting a bug, export the logs and attach them to your issue on [GitHub](https://github.com/debba/tabularis/issues).
+When reporting a bug, export the logs and attach them to your issue on [GitHub](https://github.com/TabularisDB/tabularis/issues).
 
 ## FAQ
 

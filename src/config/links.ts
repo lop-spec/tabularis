@@ -8,7 +8,7 @@
 
 export const LINKS = {
   DISCORD: "https://discord.gg/YrZPHAwMSG",
-  GITHUB: "https://github.com/debba/tabularis",
+  GITHUB: "https://github.com/TabularisDB/tabularis",
 } as const;
 
 // Named exports for convenience

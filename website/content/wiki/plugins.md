@@ -11,7 +11,7 @@ While Tabularis supports major relational databases natively via Rust, the ecosy
 
 <video src="/videos/wiki/08-plugins.mp4" controls muted playsinline loop autoplay controlsList="nodownload noremoteplayback noplaybackrate" disablePictureInPicture></video>
 
-For the complete protocol reference, see [`plugins/PLUGIN_GUIDE.md`](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md) in the repository.
+For the complete protocol reference, see [`plugins/PLUGIN_GUIDE.md`](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md) in the repository.
 
 ## Architecture: JSON-RPC over STDIO
 
@@ -168,7 +168,7 @@ Returning an error from `initialize` is safe — Tabularis ignores it silently. 
 
 Plugin settings are stored under the top-level `plugins` key in `config.json`, keyed by plugin ID.
 
-For the full developer reference (field schema, code examples in Rust and Python), see the [Plugin Guide](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md).
+For the full developer reference (field schema, code examples in Rust and Python), see the [Plugin Guide](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md).
 
 ## Protocol Specification
 
@@ -330,7 +330,7 @@ Execute a SQL query and return results.
 }
 ```
 
-For the full list of methods (CRUD, DDL, views, routines, batch/ER diagram methods), see the [complete plugin guide](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md).
+For the full list of methods (CRUD, DDL, views, routines, batch/ER diagram methods), see the [complete plugin guide](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md).
 
 ## Minimal Skeleton (Rust)
 
@@ -429,7 +429,7 @@ By default, Tabularis fetches the plugin list from the official registry. You ca
 }
 ```
 
-The custom registry must expose a JSON file that follows the same schema as the [official registry](https://github.com/debba/tabularis/blob/main/plugins/registry.json). When this key is set, both the plugin browser and the install command will use your URL instead of the default one.
+The custom registry must expose a JSON file that follows the same schema as the [official registry](https://github.com/TabularisDB/tabularis/blob/main/plugins/registry.json). When this key is set, both the plugin browser and the install command will use your URL instead of the default one.
 
 ## UI Extensions (Phase 2)
 
@@ -519,7 +519,7 @@ Features:
 - Collapsible objects and arrays with auto-expand for the first 2 depth levels
 - Copy-to-clipboard button for the formatted JSON
 
-Source code: [`src/plugins/examples/json-viewer/`](https://github.com/debba/tabularis/tree/main/src/plugins/examples/json-viewer)
+Source code: [`src/plugins/examples/json-viewer/`](https://github.com/TabularisDB/tabularis/tree/main/src/plugins/examples/json-viewer)
 
 For the full specification, see the [Plugin UI Extensions Spec](/docs/plugin-ui-extensions-spec.md).
 
@@ -530,4 +530,4 @@ To make your plugin available in the official in-app plugin browser:
 1. Build release binaries for all target platforms.
 2. Package each binary with `manifest.json` into a `.zip` file.
 3. Publish a GitHub Release with the ZIP assets.
-4. Open a pull request adding your entry to [`plugins/registry.json`](https://github.com/debba/tabularis/blob/main/plugins/registry.json).
+4. Open a pull request adding your entry to [`plugins/registry.json`](https://github.com/TabularisDB/tabularis/blob/main/plugins/registry.json).

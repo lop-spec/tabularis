@@ -57,7 +57,7 @@ export default async function TagPage({
         </div>
 
         <div className="cta-strip">
-          <a className="btn-cta" href="https://github.com/debba/tabularis">
+          <a className="btn-cta" href="https://github.com/TabularisDB/tabularis">
             <GitHubIcon size={16} />
             Star on GitHub
           </a>

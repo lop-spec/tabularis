@@ -46,7 +46,7 @@ DuckDB is the reference plugin — the first one we ever shipped — but being f
 
 MongoDB is the most-requested NoSQL database on the issue tracker. A driver is in development but has not yet reached a releasable state. The core challenge is the impedance mismatch: MongoDB documents are schema-less and deeply nested, while Tabularis renders data in a tabular grid. Solving this well — flattening documents intelligently, handling arrays, surfacing the right projection controls in the UI — requires someone who has built against the MongoDB wire protocol before.
 
-If you have experience with the MongoDB Rust driver, the Node.js driver, or the Go official driver, and you want to bring full MongoDB support to Tabularis, [open a discussion on GitHub](https://github.com/debba/tabularis) or reach out directly. The JSON-RPC protocol is documented in the [Plugin Guide](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md) and a skeleton implementation is included to get you started quickly.
+If you have experience with the MongoDB Rust driver, the Node.js driver, or the Go official driver, and you want to bring full MongoDB support to Tabularis, [open a discussion on GitHub](https://github.com/TabularisDB/tabularis) or reach out directly. The JSON-RPC protocol is documented in the [Plugin Guide](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md) and a skeleton implementation is included to get you started quickly.
 
 ### ClickHouse
 
@@ -64,9 +64,9 @@ The plugin protocol is language-agnostic. MongoDB contributors have used Go, Rus
 
 Start here:
 
-1. Read the **[Plugin Guide](https://github.com/debba/tabularis/blob/main/plugins/PLUGIN_GUIDE.md)** — covers the full protocol, manifest format, and type system.
-2. Clone an existing plugin as a reference. The [DuckDB plugin](https://github.com/debba/tabularis-duckdb-plugin) (Rust) and the [CSV plugin](https://github.com/debba/tabularis-csv-plugin) (Python) are both intentionally simple and well-commented.
-3. Open an issue or discussion on the [main repo](https://github.com/debba/tabularis) before starting, so we can coordinate and avoid duplicate work.
+1. Read the **[Plugin Guide](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md)** — covers the full protocol, manifest format, and type system.
+2. Clone an existing plugin as a reference. The [DuckDB plugin](https://github.com/TabularisDB/tabularis-duckdb-plugin) (Rust) and the [CSV plugin](https://github.com/TabularisDB/tabularis-csv-plugin) (Python) are both intentionally simple and well-commented.
+3. Open an issue or discussion on the [main repo](https://github.com/TabularisDB/tabularis) before starting, so we can coordinate and avoid duplicate work.
 
 The Redis contributions showed what happens when someone with domain expertise builds for their own use case: two production-quality drivers shipped in a matter of weeks. DuckDB, MongoDB, and ClickHouse deserve the same treatment. If you have the expertise, we have the platform.
 

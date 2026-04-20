@@ -50,7 +50,7 @@ sudo dnf install webkit2gtk4.1-devel libsecret-devel
 
 ### 1. Install
 
-Download the right package from [GitHub Releases](https://github.com/debba/tabularis/releases):
+Download the right package from [GitHub Releases](https://github.com/TabularisDB/tabularis/releases):
 - macOS → `.dmg`
 - Windows → `.msi` or `.exe`
 - Linux → `.AppImage`, `.deb`, or `.rpm`

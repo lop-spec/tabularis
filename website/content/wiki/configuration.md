@@ -136,7 +136,7 @@ Tabularis is built with a strict zero-telemetry policy.
 - **No usage data**: Feature usage, query counts, session duration — none of this is tracked or transmitted.
 - **Network requests made by Tabularis**:
   - Your configured database host(s)
-  - `api.github.com/repos/debba/tabularis/releases/latest` (for update checks, if enabled)
+  - `api.github.com/repos/TabularisDB/tabularis/releases/latest` (for update checks, if enabled)
   - Your chosen AI provider endpoint (only if AI is enabled and you trigger it)
   - Any URLs referenced in plugins you have installed
 

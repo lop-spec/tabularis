@@ -35,7 +35,7 @@ sudo dnf install webkit2gtk4.1-devel libsecret-devel
 ### Homebrew (recommended)
 
 ```bash
-brew tap debba/tabularis
+brew tap TabularisDB/tabularis
 brew install --cask tabularis
 ```
 
@@ -43,7 +43,7 @@ brew install --cask tabularis
 
 ### Direct download
 
-Download the `.dmg` from [GitHub Releases](https://github.com/debba/tabularis/releases), open it, drag **tabularis** to your Applications folder, then launch it.
+Download the `.dmg` from [GitHub Releases](https://github.com/TabularisDB/tabularis/releases), open it, drag **tabularis** to your Applications folder, then launch it.
 
 If macOS blocks the app with a "cannot be opened" warning (Gatekeeper quarantine), run:
 
@@ -55,7 +55,7 @@ xattr -c /Applications/tabularis.app
 
 ## Windows
 
-Download `tabularis_x.x.x_x64-setup.exe` from [GitHub Releases](https://github.com/debba/tabularis/releases) and run it. Follow the on-screen instructions.
+Download `tabularis_x.x.x_x64-setup.exe` from [GitHub Releases](https://github.com/TabularisDB/tabularis/releases) and run it. Follow the on-screen instructions.
 
 WebView2 is required — it ships pre-installed with Microsoft Edge and is present on all up-to-date Windows 10/11 machines.
 
@@ -71,7 +71,7 @@ sudo snap install tabularis
 
 ### AppImage
 
-Download the `.AppImage` from [GitHub Releases](https://github.com/debba/tabularis/releases), make it executable and run it:
+Download the `.AppImage` from [GitHub Releases](https://github.com/TabularisDB/tabularis/releases), make it executable and run it:
 
 ```bash
 chmod +x tabularis_*.AppImage
@@ -114,7 +114,7 @@ You need:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/debba/tabularis.git
+git clone https://github.com/TabularisDB/tabularis.git
 cd tabularis
 
 # 2. Install frontend dependencies

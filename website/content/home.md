@@ -75,7 +75,7 @@ winget install Debba.Tabularis
 ### macOS — Homebrew
 
 ```bash
-brew tap debba/tabularis
+brew tap TabularisDB/tabularis
 brew install --cask tabularis
 ```
 
@@ -102,7 +102,7 @@ yay -S tabularis-bin
 Requires Node.js and Rust installed on your machine.
 
 ```bash
-git clone https://github.com/debba/tabularis.git
+git clone https://github.com/TabularisDB/tabularis.git
 cd tabularis
 pnpm install
 pnpm tauri build

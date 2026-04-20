@@ -104,4 +104,4 @@ Several layout and spacing details on connection cards were refined for better r
 
 ---
 
-_v0.9.9 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/debba/tabularis/releases/tag/v0.9.9)._
+_v0.9.9 is available now. Update via the in-app updater, or download from the [releases page](https://github.com/TabularisDB/tabularis/releases/tag/v0.9.9)._
