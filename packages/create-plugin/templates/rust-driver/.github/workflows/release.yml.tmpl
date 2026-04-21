@@ -51,6 +51,30 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Check for UI extension
+        id: ui
+        shell: bash
+        run: |
+          if [ -f ui/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.ui.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build UI
+        if: steps.ui.outputs.present == 'true'
+        shell: bash
+        working-directory: ui
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
       - name: Install cross (linux-arm64 only)
         if: matrix.cross
         run: cargo install cross --locked
