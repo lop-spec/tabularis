@@ -12,6 +12,7 @@ import { Editor } from "./pages/Editor";
 import { Settings } from "./pages/Settings";
 import { SchemaDiagramPage } from "./pages/SchemaDiagramPage";
 import { TaskManagerPage } from "./pages/TaskManagerPage";
+import { VisualExplainPage } from "./pages/VisualExplainPage";
 import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
 import { CommunityModal } from "./components/modals/CommunityModal";
@@ -116,6 +117,7 @@ export function App() {
                       element={<SchemaDiagramPage />}
                     />
                     <Route path="/task-manager" element={<TaskManagerPage />} />
+                    <Route path="/visual-explain" element={<VisualExplainPage />} />
                   </Routes>
                 </ConnectionLayoutProvider>
               </PluginModalProvider>

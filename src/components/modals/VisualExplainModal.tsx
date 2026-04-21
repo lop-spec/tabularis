@@ -1,34 +1,21 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   X,
-  Loader2,
   Network,
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { useTheme } from "../../hooks/useTheme";
 import { useSettings } from "../../hooks/useSettings";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useDrivers } from "../../hooks/useDrivers";
-import MonacoEditor from "@monaco-editor/react";
 import type { ExplainPlan } from "../../types/explain";
-import {
-  findExplainNode,
-  isDataModifyingQuery,
-} from "../../utils/explainPlan";
+import { isDataModifyingQuery } from "../../utils/explainPlan";
 import { isExplainableQuery } from "../../utils/sql";
 import { getDriverIcon } from "../../utils/driverUI";
-import {
-  ExplainSummaryBar,
-  type ExplainViewMode,
-} from "./visual-explain/ExplainSummaryBar";
-import { ExplainGraph } from "./visual-explain/ExplainGraph";
-import { ExplainTableView } from "./visual-explain/ExplainTableView";
-import { ExplainAiAnalysis } from "./visual-explain/ExplainAiAnalysis";
-import { ExplainNodeDetails } from "./visual-explain/ExplainNodeDetails";
-import { ExplainOverviewBar } from "./visual-explain/ExplainOverviewBar";
+import { VisualExplainView } from "../explain/VisualExplainView";
+import type { ExplainViewMode } from "./visual-explain/ExplainSummaryBar";
 
 interface VisualExplainModalProps {
   isOpen: boolean;
@@ -46,7 +33,6 @@ export const VisualExplainModal = ({
   schema,
 }: VisualExplainModalProps) => {
   const { t } = useTranslation();
-  const { currentTheme } = useTheme();
   const { settings } = useSettings();
   const { getConnectionData } = useDatabase();
   const { allDrivers } = useDrivers();
@@ -71,23 +57,6 @@ export const VisualExplainModal = ({
     schemaLabel && schemaLabel !== databaseLabel
       ? `${databaseLabel} / ${schemaLabel}`
       : databaseLabel;
-
-  const selectedNode = useMemo(
-    () => (plan ? findExplainNode(plan.root, selectedNodeId) : null),
-    [plan, selectedNodeId],
-  );
-  const rawLanguage = useMemo(() => {
-    if (!plan?.raw_output) {
-      return "plaintext";
-    }
-
-    const trimmed = plan.raw_output.trim();
-    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-      return "json";
-    }
-
-    return "plaintext";
-  }, [plan]);
 
   const handleExplain = useCallback(async () => {
     if (!query?.trim() || !connectionId) return;
@@ -129,7 +98,6 @@ export const VisualExplainModal = ({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[90vw] h-[85vh] overflow-hidden flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-default bg-base">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-900/30 rounded-lg">
@@ -166,79 +134,17 @@ export const VisualExplainModal = ({
           </button>
         </div>
 
-        {/* Summary Bar */}
-        <ExplainSummaryBar
+        <VisualExplainView
           plan={plan}
+          isLoading={isLoading}
+          error={error}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
+          selectedNodeId={selectedNodeId}
+          onSelectNode={setSelectedNodeId}
           aiEnabled={!!settings.aiEnabled}
         />
-        {plan && (
-          <ExplainOverviewBar
-            plan={plan}
-            onSelectNode={setSelectedNodeId}
-          />
-        )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-hidden min-h-0">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted">
-              <Loader2 size={24} className="animate-spin" />
-              <span className="text-sm">
-                {t("editor.visualExplain.loading")}
-              </span>
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 px-8">
-              <div className="text-error-text text-sm text-center max-w-lg">
-                {error}
-              </div>
-            </div>
-          ) : plan ? (
-            viewMode === "raw" && plan.raw_output ? (
-              <MonacoEditor
-                height="100%"
-                language={rawLanguage}
-                theme={currentTheme.id}
-                value={plan.raw_output}
-                options={{
-                  readOnly: true,
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  fontSize: 12,
-                  wordWrap: "on",
-                }}
-              />
-            ) : viewMode === "ai" ? (
-              <ExplainAiAnalysis plan={plan} />
-            ) : viewMode === "table" ? (
-              <ExplainTableView
-                plan={plan}
-                selectedId={selectedNodeId}
-                onSelect={setSelectedNodeId}
-              />
-            ) : (
-              <div className="flex h-full">
-                <div className="flex-1 min-w-0 border-r border-default">
-                  <ExplainGraph
-                    plan={plan}
-                    selectedNodeId={selectedNodeId}
-                    onSelectNode={setSelectedNodeId}
-                  />
-                </div>
-                <div className="w-[320px] shrink-0 overflow-y-auto bg-base/50">
-                  <ExplainNodeDetails
-                    node={selectedNode}
-                    hasAnalyzeData={plan.has_analyze_data}
-                  />
-                </div>
-              </div>
-            )
-          ) : null}
-        </div>
-
-        {/* Footer */}
         <div className="p-4 border-t border-default bg-base/50 flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
             <input

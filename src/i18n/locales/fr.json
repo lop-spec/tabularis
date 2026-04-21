@@ -1085,6 +1085,14 @@
     "openSidebar": "Ouvrir dans l’éditeur",
     "imagePreview": "Aperçu de l’image"
   },
+  "visualExplainPage": {
+    "title": "Visual Explain",
+    "noFile": "Aucun fichier chargé",
+    "openFile": "Ouvrir un fichier",
+    "reload": "Recharger",
+    "loading": "Chargement du plan d'exécution…",
+    "emptyHint": "Sélectionnez un fichier contenant un plan EXPLAIN (format JSON ou texte PostgreSQL) pour le visualiser."
+  },
   "taskManager": {
     "header": {
       "title": "Gestionnaire des tâches",

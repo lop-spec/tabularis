@@ -1033,6 +1033,14 @@
     "openSidebar": "在编辑器中打开",
     "imagePreview": "图片预览"
   },
+  "visualExplainPage": {
+    "title": "可视化执行计划",
+    "noFile": "未加载文件",
+    "openFile": "打开文件",
+    "reload": "重新加载",
+    "loading": "正在加载执行计划…",
+    "emptyHint": "选择一个包含 EXPLAIN 计划（PostgreSQL JSON 或文本格式）的文件以进行可视化。"
+  },
   "taskManager": {
     "header": {
       "title": "任务管理器",

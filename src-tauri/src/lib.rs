@@ -7,6 +7,9 @@ pub mod dump_commands; // Added
 #[cfg(test)]
 pub mod dump_commands_tests;
 pub mod dump_utils;
+pub mod explain_import;
+#[cfg(test)]
+pub mod explain_import_tests;
 pub mod export;
 pub mod health_check;
 pub mod keychain_utils;
@@ -86,6 +89,11 @@ struct Args {
     /// Enable debug logging (including sqlx queries)
     #[arg(long)]
     debug: bool,
+
+    /// Open a Visual Explain window for a previously-saved EXPLAIN file
+    /// (Postgres `EXPLAIN (FORMAT JSON)` output).
+    #[arg(long, value_name = "FILE")]
+    explain: Option<String>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -109,6 +117,7 @@ pub fn run() {
     let args = Args::try_parse().unwrap_or_else(|_| Args {
         mcp: false,
         debug: false,
+        explain: None,
     });
 
     if args.mcp {
@@ -157,6 +166,7 @@ pub fn run() {
         .manage(std::sync::Arc::new(
             credential_cache::CredentialCache::default(),
         ))
+        .manage(explain_import::PendingExplainFile::default())
         .setup(move |app| {
             // Read persisted config to know which external plugins are enabled.
             // `None` means no preference has been saved yet → load all installed plugins.
@@ -191,6 +201,25 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     window.open_devtools();
                     log::info!("DevTools opened (debug mode active)");
+                }
+            }
+
+            // If the user launched with `--explain <FILE>`, spawn the Visual
+            // Explain window and hide the main app window: the CLI flag is
+            // meant to be a dedicated plan viewer, not a full app launch.
+            if let Some(path) = args.explain.clone() {
+                log::info!("CLI --explain received: {path}");
+                if let Err(e) =
+                    explain_import::spawn_visual_explain_window(app, Some(path))
+                {
+                    log::error!("Failed to open Visual Explain window: {e}");
+                }
+                // Close the default main window only AFTER visual-explain is
+                // built — closing the last window would terminate the app.
+                if let Some(main) = app.get_webview_window("main") {
+                    if let Err(e) = main.close() {
+                        log::warn!("Failed to close main window: {e}");
+                    }
                 }
             }
             Ok(())
@@ -258,6 +287,9 @@ pub fn run() {
             commands::get_view_columns,
             commands::set_window_title,
             commands::open_er_diagram_window,
+            explain_import::load_explain_from_file,
+            explain_import::get_pending_explain_file,
+            explain_import::open_visual_explain_window,
             export::export_query_to_file,
             export::cancel_export,
             saved_queries::get_saved_queries,

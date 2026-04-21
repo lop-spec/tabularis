@@ -1085,6 +1085,14 @@
     "openSidebar": "Open in editor",
     "imagePreview": "Image preview"
   },
+  "visualExplainPage": {
+    "title": "Visual Explain",
+    "noFile": "No file loaded",
+    "openFile": "Open file",
+    "reload": "Reload",
+    "loading": "Loading explain plan…",
+    "emptyHint": "Select a file containing an EXPLAIN plan (Postgres JSON or text format) to visualize it."
+  },
   "taskManager": {
     "header": {
       "title": "Task Manager",

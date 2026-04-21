@@ -1085,6 +1085,14 @@
     "openSidebar": "Apri nell'editor",
     "imagePreview": "Anteprima immagine"
   },
+  "visualExplainPage": {
+    "title": "Visual Explain",
+    "noFile": "Nessun file caricato",
+    "openFile": "Apri file",
+    "reload": "Ricarica",
+    "loading": "Caricamento del piano di esecuzione…",
+    "emptyHint": "Seleziona un file contenente un piano EXPLAIN (formato JSON o testo PostgreSQL) per visualizzarlo."
+  },
   "taskManager": {
     "header": {
       "title": "Gestione Attività",
