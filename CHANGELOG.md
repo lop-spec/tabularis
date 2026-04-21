@@ -1,3 +1,19 @@
+## [0.9.20](https://github.com/debba/tabularis/compare/v0.9.19...v0.9.20) (2026-04-21)
+
+
+### Bug Fixes
+
+* **react:** correct hook deps and tooltip wrapper for low confidence ([eb26a63](https://github.com/debba/tabularis/commit/eb26a6306a1c6321db1a297991559bbe71e74d6d))
+
+
+### Features
+
+* add demo videos ([8610ead](https://github.com/debba/tabularis/commit/8610eadf2ed520880f057eaedf29701dd2ffeb44))
+* **clipboard-import:** add clipboard data import flow ([f10e332](https://github.com/debba/tabularis/commit/f10e33219eea98e6d51c3ced256f51dff820e306))
+* **compare:** add comparison builder, tables, and assets ([7afffb7](https://github.com/debba/tabularis/commit/7afffb741dfe68de73d1ea4fedcbd8bf1b76e726))
+* **visual-explain:** add Visual Explain page and import support ([b75dc3c](https://github.com/debba/tabularis/commit/b75dc3c9dd273fb3de9c09461adee297927aab59))
+* **website:** switch logos to PNG and update compare styles ([6d6c2ad](https://github.com/debba/tabularis/commit/6d6c2ad68b42a008fbe08238ab6e623a329f1bae))
+
 ## [0.9.19](https://github.com/TabularisDB/tabularis/compare/v0.9.18...v0.9.19) (2026-04-16)
 
 
