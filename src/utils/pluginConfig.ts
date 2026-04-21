@@ -24,6 +24,24 @@ export function getDisplayInterpreter(config: PluginConfig | undefined): string 
 }
 
 /**
+ * Removes a plugin entry from the persisted plugin configuration map.
+ * Returns undefined when the map becomes empty so the config file does not
+ * keep an unnecessary plugins object around.
+ */
+export function removePluginConfig(
+  plugins: Record<string, PluginConfig> | undefined,
+  pluginId: string,
+): Record<string, PluginConfig> | undefined {
+  if (plugins === undefined || !Object.prototype.hasOwnProperty.call(plugins, pluginId)) {
+    return plugins;
+  }
+
+  const next = { ...plugins };
+  delete next[pluginId];
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+/**
  * Merges saved setting values with defaults declared in the manifest.
  * For each definition: uses the saved value if present, otherwise falls back
  * to the declared default. Returns an object keyed by setting key.

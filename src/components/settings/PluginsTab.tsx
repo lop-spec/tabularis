@@ -1,4 +1,11 @@
-import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -15,6 +22,11 @@ import {
   Trash2,
   ChevronDown,
   CheckCircle2,
+  Plug,
+  PackageCheck,
+  Power,
+  Boxes,
+  Search,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../../hooks/useSettings";
@@ -23,6 +35,7 @@ import { usePluginRegistry } from "../../hooks/usePluginRegistry";
 import { useDatabase } from "../../hooks/useDatabase";
 import { SettingSection } from "./SettingControls";
 import { parseAuthor, versionGte } from "../../utils/plugins";
+import { removePluginConfig } from "../../utils/pluginConfig";
 import { findConnectionsForDrivers } from "../../utils/connectionManager";
 import { APP_VERSION } from "../../version";
 import type { PluginManifest } from "../../types/plugins";
@@ -30,6 +43,32 @@ import { PluginInstallErrorModal } from "../modals/PluginInstallErrorModal";
 import { PluginRemoveModal } from "../modals/PluginRemoveModal";
 import { PluginStartErrorModal } from "../modals/PluginStartErrorModal";
 import { SlotAnchor } from "../ui/SlotAnchor";
+
+/* ── Types ── */
+
+type CardAccent = "green" | "amber" | "blue" | null;
+type AvailableFilter = "all" | "installed" | "updates";
+
+/* ── Band palette (deterministic per plugin name) ── */
+
+const BAND_PALETTES = [
+  { bg: "bg-blue-900/30", text: "text-blue-400/40" },
+  { bg: "bg-purple-900/30", text: "text-purple-400/40" },
+  { bg: "bg-emerald-900/30", text: "text-emerald-400/40" },
+  { bg: "bg-rose-900/30", text: "text-rose-400/40" },
+  { bg: "bg-cyan-900/30", text: "text-cyan-400/40" },
+  { bg: "bg-orange-900/30", text: "text-orange-400/40" },
+  { bg: "bg-teal-900/30", text: "text-teal-400/40" },
+  { bg: "bg-indigo-900/30", text: "text-indigo-400/40" },
+] as const;
+
+function nameBandIndex(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  }
+  return h % BAND_PALETTES.length;
+}
 
 /* ── Plugin card ── */
 
@@ -40,8 +79,12 @@ interface PluginCardProps {
   author?: string;
   homepage?: string;
   status?: ReactNode;
+  meta?: ReactNode;
   actions: ReactNode;
   dimmed?: boolean;
+  accent?: CardAccent;
+  pulse?: boolean;
+  showBand?: boolean;
 }
 
 function PluginCard({
@@ -51,62 +94,129 @@ function PluginCard({
   author,
   homepage,
   status,
+  meta,
   actions,
   dimmed,
+  accent,
+  pulse,
+  showBand,
 }: PluginCardProps) {
   const { t } = useTranslation();
   const parsedAuthor = author ? parseAuthor(author) : null;
+  const band = BAND_PALETTES[nameBandIndex(name)];
+
   return (
     <div
-      className={`grid grid-cols-[1fr_auto] gap-x-6 px-5 py-4 rounded-xl border border-surface-tertiary bg-surface-secondary transition-colors hover:border-surface-quaternary${dimmed ? " opacity-50" : ""}`}
+      className={clsx(
+        "group relative flex h-full flex-col rounded-lg bg-elevated overflow-hidden",
+        "transition-all duration-200 ease-out",
+        "hover:-translate-y-px",
+        !accent &&
+          "border border-default hover:border-strong hover:shadow-md",
+        accent === "green" && [
+          "border border-default border-l-[3px] border-l-green-500/80",
+          "hover:border-strong hover:shadow-lg hover:shadow-green-900/20",
+        ],
+        accent === "amber" && [
+          "border border-default border-l-[3px] border-l-amber-500/80",
+          "hover:border-strong hover:shadow-lg hover:shadow-amber-900/20",
+        ],
+        accent === "blue" && [
+          "border border-default border-l-[3px] border-l-blue-600/80",
+          "hover:border-strong hover:shadow-lg hover:shadow-blue-900/20",
+        ],
+        dimmed && "opacity-55",
+      )}
     >
-      <div className="min-w-0">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-sm font-semibold text-primary">
-            {homepage ? (
-              <button
-                type="button"
-                onClick={() => openUrl(homepage)}
-                className="hover:underline inline-flex items-center gap-1 text-primary"
-              >
-                {name}
-                <ExternalLink
-                  size={10}
-                  className="text-muted shrink-0"
-                />
-              </button>
-            ) : (
-              name
-            )}
-          </span>
-          {version && (
-            <span className="text-[10px] font-mono text-muted bg-surface-tertiary px-1.5 py-px rounded">
-              v{version}
-            </span>
+      {/* WordPress-style plugin header band */}
+      {showBand && (
+        <div
+          className={clsx(
+            "flex h-12 shrink-0 items-center justify-center",
+            band.bg,
           )}
-          {status}
+        >
+          <span
+            className={clsx(
+              "select-none text-4xl font-bold leading-none",
+              band.text,
+            )}
+          >
+            {name.trim().charAt(0).toUpperCase()}
+          </span>
         </div>
-        <p className="text-xs text-secondary mt-1 leading-relaxed line-clamp-2">
+      )}
+
+      {/* Pulsing update indicator */}
+      {pulse && (
+        <div
+          className={clsx(
+            "absolute z-10 flex h-2 w-2",
+            showBand ? "top-1.5 right-1.5" : "top-2.5 right-2.5",
+          )}
+        >
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+        </div>
+      )}
+
+      <div className="flex flex-1 flex-col p-4 gap-2.5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              {homepage ? (
+                <button
+                  type="button"
+                  onClick={() => openUrl(homepage)}
+                  className="inline-flex min-w-0 items-center gap-1 text-left text-sm font-semibold text-primary hover:underline underline-offset-2"
+                >
+                  <span className="truncate">{name}</span>
+                  <ExternalLink size={11} className="shrink-0 text-muted" />
+                </button>
+              ) : (
+                <span className="block truncate text-sm font-semibold text-primary">
+                  {name}
+                </span>
+              )}
+              {version && (
+                <span className="shrink-0 rounded border border-default bg-base px-1.5 py-px font-mono text-[10px] text-muted">
+                  v{version}
+                </span>
+              )}
+            </div>
+            {parsedAuthor && (
+              <p className="mt-0.5 text-[10px] text-muted">
+                {t("settings.plugins.by")}{" "}
+                {parsedAuthor.url ?? homepage ? (
+                  <button
+                    type="button"
+                    onClick={() => openUrl((parsedAuthor.url ?? homepage)!)}
+                    className="underline-offset-2 transition-colors hover:text-secondary hover:underline"
+                  >
+                    {parsedAuthor.name}
+                  </button>
+                ) : (
+                  parsedAuthor.name
+                )}
+              </p>
+            )}
+          </div>
+          {status && <div className="shrink-0 mt-0.5">{status}</div>}
+        </div>
+
+        <p className="text-xs leading-relaxed text-secondary line-clamp-2 flex-1">
           {description}
         </p>
-        {parsedAuthor && (
-          <p className="text-[10px] text-muted mt-1.5">
-            {t("settings.plugins.by")}{" "}
-            {parsedAuthor.url ?? homepage ? (
-              <button
-                type="button"
-                onClick={() => openUrl((parsedAuthor.url ?? homepage)!)}
-                className="hover:text-secondary underline-offset-2 hover:underline transition-colors"
-              >
-                {parsedAuthor.name}
-              </button>
-            ) : (
-              parsedAuthor.name
-            )}
-          </p>
+
+        {meta && (
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
+            {meta}
+          </div>
         )}
       </div>
-      <div className="flex flex-col items-end justify-center gap-2 shrink-0 min-w-[160px]">
+
+      <div className="flex min-h-11 items-center justify-end gap-2 border-t border-default bg-base/50 px-4 py-2.5">
         {actions}
       </div>
     </div>
@@ -236,9 +346,7 @@ function VersionDropdown({
                 <span
                   className={clsx(
                     "font-mono",
-                    opt.isInstalled
-                      ? "text-green-300"
-                      : "text-primary",
+                    opt.isInstalled ? "text-green-300" : "text-primary",
                   )}
                 >
                   v{opt.version}
@@ -264,13 +372,105 @@ function VersionDropdown({
   );
 }
 
+/* ── Plugin toggle ── */
+
+function PluginToggle({
+  enabled,
+  disabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-label={enabled ? "Disable plugin" : "Enable plugin"}
+      className={clsx(
+        "relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent",
+        "transition-colors duration-200 ease-in-out",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+        enabled ? "bg-blue-600" : "bg-surface-tertiary",
+        disabled ? "cursor-not-allowed" : "cursor-pointer",
+      )}
+    >
+      <span
+        className={clsx(
+          "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow",
+          "transition duration-200 ease-in-out",
+          enabled ? "translate-x-4" : "translate-x-0",
+        )}
+      />
+    </button>
+  );
+}
+
+/* ── Stats panel ── */
+
+function StatCard({
+  icon,
+  value,
+  label,
+  colorClass,
+  bgClass,
+  valueColorClass,
+  glowClass,
+}: {
+  icon: ReactNode;
+  value: number;
+  label: string;
+  colorClass: string;
+  bgClass: string;
+  valueColorClass?: string;
+  glowClass?: string;
+}) {
+  return (
+    <div
+      className={clsx(
+        "p-4 flex items-center gap-3 transition-colors",
+        glowClass,
+      )}
+    >
+      <div className={clsx("p-2.5 rounded-lg shrink-0", bgClass, colorClass)}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div
+          className={clsx(
+            "text-2xl font-bold leading-none tabular-nums",
+            valueColorClass ?? "text-primary",
+          )}
+        >
+          {value}
+        </div>
+        <div className="text-[10px] text-muted mt-1 leading-tight truncate">
+          {label}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main tab ── */
 
 interface PluginsTabProps {
   onOpenPluginSettings?: (pluginId: string) => void;
+  onPluginsChanged?: (change: PluginSidebarChange) => void;
 }
 
-export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
+interface PluginSidebarChange {
+  type: "install" | "remove";
+  pluginId: string;
+  pluginName?: string;
+}
+
+export function PluginsTab({
+  onOpenPluginSettings,
+  onPluginsChanged,
+}: PluginsTabProps) {
   const { t } = useTranslation();
   const { settings, updateSetting } = useSettings();
   const {
@@ -309,11 +509,51 @@ export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
     pluginName: string;
     onConfirm: () => Promise<void>;
   } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<AvailableFilter>("all");
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const updateSettingRef = useRef(updateSetting);
   updateSettingRef.current = updateSetting;
+  const installedPluginsRef = useRef(installedPlugins);
+  installedPluginsRef.current = installedPlugins;
+
+  const activeExternalDrivers = useMemo(
+    () =>
+      settings.activeExternalDrivers ??
+      installedPlugins.map((plugin) => plugin.id),
+    [settings.activeExternalDrivers, installedPlugins],
+  );
+  const externalDrivers = useMemo(
+    () => allDrivers.filter((driver) => driver.is_builtin !== true),
+    [allDrivers],
+  );
+  const updateCount = useMemo(
+    () => registryPlugins.filter((plugin) => plugin.update_available).length,
+    [registryPlugins],
+  );
+
+  const filteredPlugins = useMemo(() => {
+    let list = registryPlugins;
+    if (activeFilter === "all") {
+      list = list.filter((p) => !p.installed_version);
+    } else if (activeFilter === "installed") {
+      list = list.filter((p) => !!p.installed_version);
+    } else if (activeFilter === "updates") {
+      list = list.filter((p) => p.update_available);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q) ||
+          (p.author?.toLowerCase().includes(q) ?? false),
+      );
+    }
+    return list;
+  }, [registryPlugins, activeFilter, searchQuery]);
 
   useEffect(() => {
     invoke<Array<{ plugin_id: string; error: string }>>(
@@ -323,10 +563,9 @@ export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
         if (errors.length > 0) {
           const failedIds = errors.map((e) => e.plugin_id);
           const activeExt =
-            settingsRef.current.activeExternalDrivers ?? [];
-          const cleaned = activeExt.filter(
-            (id) => !failedIds.includes(id),
-          );
+            settingsRef.current.activeExternalDrivers ??
+            installedPluginsRef.current.map((plugin) => plugin.id);
+          const cleaned = activeExt.filter((id) => !failedIds.includes(id));
           if (cleaned.length !== activeExt.length) {
             updateSettingRef.current("activeExternalDrivers", cleaned);
           }
@@ -357,13 +596,17 @@ export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
         await invoke("install_plugin", { pluginId, version });
         refreshRegistry();
         refreshDrivers();
+        const pluginName =
+          registryPlugins.find((plugin) => plugin.id === pluginId)?.name ??
+          pluginId;
+        onPluginsChanged?.({ type: "install", pluginId, pluginName });
       } catch (err) {
         setPluginInstallError({ pluginId, error: String(err) });
       } finally {
         setInstallingPluginId(null);
       }
     },
-    [refreshRegistry, refreshDrivers],
+    [refreshRegistry, refreshDrivers, onPluginsChanged, registryPlugins],
   );
 
   const doRemove = useCallback(
@@ -382,8 +625,21 @@ export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
             );
             await Promise.all(toDisconnect.map((id) => disconnect(id)));
             await invoke("uninstall_plugin", { pluginId });
+            const currentSettings = settingsRef.current;
+            await updateSettingRef.current(
+              "plugins",
+              removePluginConfig(currentSettings.plugins, pluginId),
+            );
+            await updateSettingRef.current(
+              "activeExternalDrivers",
+              (
+                currentSettings.activeExternalDrivers ??
+                installedPlugins.map((plugin) => plugin.id)
+              ).filter((id) => id !== pluginId),
+            );
             refreshDrivers();
             refreshRegistry();
+            onPluginsChanged?.({ type: "remove", pluginId });
           } catch (err) {
             setPluginInstallError({ pluginId, error: String(err) });
           } finally {
@@ -396,31 +652,28 @@ export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
       openConnectionIds,
       connectionDataMap,
       disconnect,
+      installedPlugins,
       refreshDrivers,
       refreshRegistry,
+      onPluginsChanged,
     ],
   );
 
   const doToggle = useCallback(
-    async (
-      pluginId: string,
-      pluginName: string,
-      isEnabled: boolean,
-    ) => {
-      const activeExt = settings.activeExternalDrivers || [];
+    async (pluginId: string, pluginName: string, isEnabled: boolean) => {
       try {
         if (isEnabled) {
           await invoke("disable_plugin", { pluginId });
-          updateSetting(
+          await updateSetting(
             "activeExternalDrivers",
-            activeExt.filter((id) => id !== pluginId),
+            activeExternalDrivers.filter((id) => id !== pluginId),
           );
         } else {
           await invoke("enable_plugin", { pluginId });
-          updateSetting("activeExternalDrivers", [
-            ...activeExt,
-            pluginId,
-          ]);
+          await updateSetting(
+            "activeExternalDrivers",
+            Array.from(new Set([...activeExternalDrivers, pluginId])),
+          );
         }
         refreshDrivers();
       } catch (err) {
@@ -431,435 +684,598 @@ export function PluginsTab({ onOpenPluginSettings }: PluginsTabProps) {
         });
       }
     },
-    [settings.activeExternalDrivers, updateSetting, refreshDrivers],
+    [activeExternalDrivers, updateSetting, refreshDrivers],
   );
 
   return (
     <>
-      <div>
+      <div className="space-y-8">
+        {/* Overview panel */}
+        <div className="rounded-lg border border-default bg-elevated overflow-hidden">
+          <div className="p-5 border-b border-default bg-surface-secondary/50">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 shrink-0">
+                  <Plug size={18} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-primary">
+                    {t("settings.plugins.overviewTitle")}
+                  </h2>
+                  <p className="text-xs text-muted mt-0.5">
+                    {t("settings.plugins.overviewDesc")}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => refreshRegistry()}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-default bg-base text-xs text-secondary hover:text-primary hover:border-strong transition-colors"
+              >
+                <RefreshCw size={13} />
+                {t("settings.plugins.refresh")}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-default">
+            <StatCard
+              icon={<PackageCheck size={15} />}
+              value={installedPlugins.length}
+              label={t("settings.plugins.installedMetric")}
+              colorClass="text-green-400"
+              bgClass="bg-green-500/10"
+            />
+            <StatCard
+              icon={<Power size={15} />}
+              value={externalDrivers.length}
+              label={t("settings.plugins.enabledMetric")}
+              colorClass="text-blue-400"
+              bgClass="bg-blue-500/10"
+            />
+            <StatCard
+              icon={<Boxes size={15} />}
+              value={registryPlugins.length}
+              label={t("settings.plugins.registryMetric")}
+              colorClass="text-purple-400"
+              bgClass="bg-purple-500/10"
+            />
+            <StatCard
+              icon={<RefreshCw size={15} />}
+              value={updateCount}
+              label={t("settings.plugins.updatesMetric")}
+              colorClass={updateCount > 0 ? "text-amber-400" : "text-muted"}
+              bgClass={
+                updateCount > 0 ? "bg-amber-500/10" : "bg-surface-secondary"
+              }
+              valueColorClass={updateCount > 0 ? "text-amber-400" : undefined}
+              glowClass={
+                updateCount > 0 ? "bg-amber-500/[0.04]" : undefined
+              }
+            />
+          </div>
+        </div>
+
         {/* Available */}
-        <SettingSection
-          title={t("settings.plugins.available")}
-          description={t("settings.plugins.availableDesc")}
-          action={
+        <div className="mb-8">
+          {/* Section header: title + search */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                {t("settings.plugins.available")}
+              </h3>
+              <p className="text-xs text-muted mt-0.5">
+                {t("settings.plugins.availableDesc")}
+              </p>
+            </div>
+            <div className="relative shrink-0">
+              <Search
+                size={12}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+              />
+              <input
+                type="text"
+                placeholder={t("settings.plugins.searchPlaceholder")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-44 rounded-lg border border-default bg-base py-1.5 pl-7 pr-3 text-xs text-primary placeholder:text-muted transition-all focus:w-56 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Filter tabs */}
+          <div className="flex items-center justify-between border-b border-default">
+            <div className="flex items-center gap-0.5">
+              {(
+                [
+                  {
+                    id: "all" as const,
+                    label: t("settings.plugins.filterAll"),
+                    count: registryPlugins.filter((p) => !p.installed_version)
+                      .length,
+                  },
+                  {
+                    id: "installed" as const,
+                    label: t("settings.plugins.filterInstalled"),
+                    count:
+                      allDrivers.length +
+                      installedPlugins.filter(
+                        (p) => !allDrivers.some((d) => d.id === p.id),
+                      ).length,
+                  },
+                  {
+                    id: "updates" as const,
+                    label: t("settings.plugins.filterUpdates"),
+                    count: updateCount,
+                  },
+                ] satisfies Array<{
+                  id: AvailableFilter;
+                  label: string;
+                  count: number;
+                }>
+              ).map(({ id, label, count }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveFilter(id)}
+                  className={clsx(
+                    "flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors -mb-px",
+                    activeFilter === id
+                      ? "border-blue-500 text-primary"
+                      : "border-transparent text-muted hover:text-secondary",
+                  )}
+                >
+                  {label}
+                  {count > 0 && (
+                    <span
+                      className={clsx(
+                        "rounded-full px-1.5 py-px text-[9px] font-semibold",
+                        id === "updates" && count > 0
+                          ? "bg-amber-500/20 text-amber-400"
+                          : "bg-surface-secondary text-muted",
+                      )}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
             <button
+              type="button"
               onClick={() => refreshRegistry()}
-              className="text-xs text-muted hover:text-primary flex items-center gap-1 transition-colors"
+              className="mb-px flex items-center gap-1 text-xs text-muted transition-colors hover:text-primary"
             >
               <RefreshCw size={12} />
               {t("settings.plugins.refresh")}
             </button>
-          }
-        >
-        <div className="pt-3">
-          {registryLoading && (
-            <div className="flex items-center gap-2 text-muted text-sm py-4">
-              <Loader2 size={16} className="animate-spin" />
-              {t("settings.plugins.loadingRegistry")}
-            </div>
-          )}
+          </div>
 
-          {registryError && (
-            <div className="bg-red-900/20 border border-red-900/50 text-red-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-              <AlertTriangle size={16} />
-              {t("settings.plugins.registryError")}: {registryError}
-            </div>
-          )}
-
-          {!registryLoading && !registryError && (
-            <div className="space-y-3">
-              {registryPlugins.map((plugin) => {
-                const platformReleases = plugin.releases.filter(
-                  (r) => r.platform_supported,
-                );
-                const installableReleases = platformReleases.filter(
-                  (r) => r.version !== plugin.installed_version,
-                );
-                const isAtLatest =
-                  !!plugin.installed_version &&
-                  plugin.installed_version === plugin.latest_version;
-                const defaultVer = isAtLatest
-                  ? plugin.latest_version
-                  : (installableReleases.find(
-                      (r) => r.version === plugin.latest_version,
-                    )?.version ??
-                    installableReleases[0]?.version ??
-                    plugin.latest_version);
-                const selectedVer =
-                  selectedVersions[plugin.id] ?? defaultVer;
-                const selectedRelease = plugin.releases.find(
-                  (r) => r.version === selectedVer,
-                );
-                const selectedPlatformSupported =
-                  selectedRelease?.platform_supported ?? false;
-                const isSelectedInstalled =
-                  plugin.installed_version === selectedVer;
-                const minVersion =
-                  selectedRelease?.min_tabularis_version ?? null;
-                const isCompatible =
-                  !minVersion || versionGte(APP_VERSION, minVersion);
-                const isUpdate =
-                  !!plugin.installed_version && !isSelectedInstalled;
-                const isDowngrade =
-                  isUpdate &&
-                  !versionGte(selectedVer, plugin.installed_version!);
-                const showVersionPicker = isAtLatest
-                  ? installableReleases.length >= 1
-                  : installableReleases.length > 1;
-
-                const installedBadge = plugin.installed_version ? (
-                  <span className="text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-px rounded-md">
-                    {t("settings.plugins.installed")} v
-                    {plugin.installed_version}
-                  </span>
-                ) : undefined;
-
+          <div className="pt-4">
+            {activeFilter === "installed" ? (
+              /* ── Installed tab ── */
+              (() => {
+                const sq = searchQuery.toLowerCase().trim();
+                const activeDrivers = sq
+                  ? allDrivers.filter(
+                      (d) =>
+                        d.name.toLowerCase().includes(sq) ||
+                        d.description.toLowerCase().includes(sq),
+                    )
+                  : allDrivers;
+                const disabledPlugins = installedPlugins
+                  .filter((p) => !allDrivers.some((d) => d.id === p.id))
+                  .filter(
+                    (p) =>
+                      !sq ||
+                      p.name.toLowerCase().includes(sq) ||
+                      p.description.toLowerCase().includes(sq),
+                  );
+                const isEmpty = activeDrivers.length === 0 && disabledPlugins.length === 0;
                 return (
-                  <PluginCard
-                    key={plugin.id}
-                    name={plugin.name}
-                    description={plugin.description}
-                    author={plugin.author}
-                    homepage={plugin.homepage}
-                    status={installedBadge}
-                    actions={
-                      !selectedPlatformSupported ? (
-                        <span className="text-xs text-muted italic text-right">
-                          {t("settings.plugins.platformNotSupported")}
+                  <div className="grid gap-4 xl:grid-cols-2 lg:grid-cols-2 sm:grid-cols-1">
+                    {activeDrivers.map((driver: PluginManifest) => {
+                      const isBuiltin = driver.is_builtin === true;
+                      const hasSettings = (driver.settings?.length ?? 0) > 0;
+                      const registryPlugin = registryPlugins.find(
+                        (p) => p.id === driver.id,
+                      );
+                      const isEnabled =
+                        isBuiltin || activeExternalDrivers.includes(driver.id);
+                      const accent: CardAccent = isBuiltin
+                        ? null
+                        : isEnabled
+                          ? "blue"
+                          : null;
+                      const statusNode = isBuiltin ? (
+                        <span className="text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-px rounded-md">
+                          Built-in
                         </span>
                       ) : (
-                        <>
-                          {isSelectedInstalled &&
-                            selectedVer ===
-                              plugin.latest_version && (
-                              <div className="flex items-center justify-center gap-1.5">
-                                <CheckCircle2
-                                  size={12}
-                                  className="text-green-400"
+                        <PluginToggle
+                          enabled={isEnabled}
+                          onToggle={() =>
+                            doToggle(driver.id, driver.name, isEnabled)
+                          }
+                        />
+                      );
+                      return (
+                        <PluginCard
+                          key={driver.id}
+                          name={driver.name}
+                          description={driver.description}
+                          version={driver.version}
+                          author={
+                            !isBuiltin ? registryPlugin?.author : undefined
+                          }
+                          homepage={
+                            !isBuiltin ? registryPlugin?.homepage : undefined
+                          }
+                          accent={accent}
+                          status={statusNode}
+                          actions={
+                            <div className="flex items-center justify-end gap-3 w-full">
+                              {!isBuiltin && (
+                                <SlotAnchor
+                                  name="settings.plugin.actions"
+                                  context={{ targetPluginId: driver.id }}
+                                  className="flex items-center gap-1"
                                 />
-                                <span className="text-xs text-green-400 font-medium">
-                                  {t("settings.plugins.upToDate")}
-                                </span>
-                              </div>
-                            )}
+                              )}
+                              {hasSettings && (
+                                <button
+                                  onClick={() =>
+                                    handleOpenPluginSettings(driver.id)
+                                  }
+                                  className="p-1.5 text-secondary hover:text-primary transition-colors"
+                                  title={t(
+                                    "settings.plugins.pluginSettings.title",
+                                  )}
+                                >
+                                  <SettingsIcon size={15} />
+                                </button>
+                              )}
+                              {!isBuiltin && (
+                                <button
+                                  onClick={() =>
+                                    doRemove(driver.id, driver.name)
+                                  }
+                                  disabled={
+                                    uninstallingPluginId === driver.id
+                                  }
+                                  className="flex items-center gap-1 text-[11px] text-red-500/70 hover:text-red-400 disabled:opacity-50 transition-colors"
+                                >
+                                  {uninstallingPluginId === driver.id ? (
+                                    <Loader2 size={11} className="animate-spin" />
+                                  ) : (
+                                    <Trash2 size={11} />
+                                  )}
+                                  {t("settings.plugins.remove")}
+                                </button>
+                              )}
+                            </div>
+                          }
+                        />
+                      );
+                    })}
 
-                          {!isSelectedInstalled &&
-                            (isCompatible ? (
+                    {disabledPlugins.map((plugin) => {
+                      const registryPlugin = registryPlugins.find(
+                        (r) => r.id === plugin.id,
+                      );
+                      return (
+                        <PluginCard
+                          key={plugin.id}
+                          name={plugin.name}
+                          description={plugin.description}
+                          version={plugin.version}
+                          author={registryPlugin?.author}
+                          homepage={registryPlugin?.homepage}
+                          accent={null}
+                          status={
+                            <PluginToggle
+                              enabled={false}
+                              onToggle={async () => {
+                                try {
+                                  await invoke("enable_plugin", {
+                                    pluginId: plugin.id,
+                                  });
+                                  await updateSetting(
+                                    "activeExternalDrivers",
+                                    Array.from(
+                                      new Set([
+                                        ...activeExternalDrivers,
+                                        plugin.id,
+                                      ]),
+                                    ),
+                                  );
+                                  refreshDrivers();
+                                } catch (err) {
+                                  setPluginStartError({
+                                    pluginId: plugin.id,
+                                    pluginName: plugin.name,
+                                    error: String(err),
+                                  });
+                                }
+                              }}
+                            />
+                          }
+                          actions={
+                            <div className="flex items-center justify-end gap-3 w-full">
+                              <SlotAnchor
+                                name="settings.plugin.actions"
+                                context={{ targetPluginId: plugin.id }}
+                                className="flex items-center gap-1"
+                              />
                               <button
                                 onClick={() =>
-                                  doInstall(plugin.id, selectedVer)
+                                  handleOpenPluginSettings(plugin.id)
                                 }
-                                disabled={
-                                  installingPluginId === plugin.id
-                                }
-                                className={`w-full flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-white transition-colors disabled:opacity-50 ${
-                                  isDowngrade
-                                    ? "bg-amber-600 hover:bg-amber-500"
-                                    : isUpdate
-                                      ? "bg-green-600 hover:bg-green-500"
-                                      : "bg-blue-600 hover:bg-blue-500"
-                                }`}
-                              >
-                                {installingPluginId === plugin.id ? (
-                                  <Loader2
-                                    size={12}
-                                    className="animate-spin"
-                                  />
-                                ) : isDowngrade ? (
-                                  <RotateCcw size={12} />
-                                ) : isUpdate ? (
-                                  <RefreshCw size={12} />
-                                ) : (
-                                  <Download size={12} />
+                                className="p-1.5 text-secondary hover:text-primary transition-colors"
+                                title={t(
+                                  "settings.plugins.pluginSettings.title",
                                 )}
-                                {isDowngrade
-                                  ? `${t("settings.plugins.downgrade")} v${selectedVer}`
-                                  : isUpdate
-                                    ? `${t("settings.plugins.update")} v${selectedVer}`
-                                    : `${t("settings.plugins.install")} v${selectedVer}`}
+                              >
+                                <SettingsIcon size={15} />
                               </button>
-                            ) : (
-                              <div className="w-full flex flex-col items-end gap-1">
+                              <button
+                                onClick={() =>
+                                  doRemove(plugin.id, plugin.name)
+                                }
+                                disabled={uninstallingPluginId === plugin.id}
+                                className="flex items-center gap-1 text-[11px] text-red-500/70 hover:text-red-400 disabled:opacity-50 transition-colors"
+                              >
+                                {uninstallingPluginId === plugin.id ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                ) : (
+                                  <Trash2 size={11} />
+                                )}
+                                {t("settings.plugins.remove")}
+                              </button>
+                            </div>
+                          }
+                        />
+                      );
+                    })}
+
+                    {isEmpty && (
+                      <p className="col-span-full text-sm text-muted py-4">
+                        {sq
+                          ? t("settings.plugins.searchNoResults")
+                          : t("settings.plugins.noPlugins")}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()
+            ) : (
+              /* ── All / Updates tabs (registry data) ── */
+              <>
+                {registryLoading && (
+                  <div className="flex items-center gap-2 text-muted text-sm py-4">
+                    <Loader2 size={16} className="animate-spin" />
+                    {t("settings.plugins.loadingRegistry")}
+                  </div>
+                )}
+
+                {registryError && (
+                  <div className="bg-red-900/20 border border-red-900/50 text-red-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+                    <AlertTriangle size={16} />
+                    {t("settings.plugins.registryError")}: {registryError}
+                  </div>
+                )}
+
+                {!registryLoading && !registryError && (
+                  <div className="grid gap-4 xl:grid-cols-2 lg:grid-cols-2 sm:grid-cols-1">
+                    {filteredPlugins.map((plugin) => {
+                  const platformReleases = plugin.releases.filter(
+                    (r) => r.platform_supported,
+                  );
+                  const installableReleases = platformReleases.filter(
+                    (r) => r.version !== plugin.installed_version,
+                  );
+                  const isAtLatest =
+                    !!plugin.installed_version &&
+                    plugin.installed_version === plugin.latest_version;
+                  const defaultVer = isAtLatest
+                    ? plugin.latest_version
+                    : (installableReleases.find(
+                        (r) => r.version === plugin.latest_version,
+                      )?.version ??
+                      installableReleases[0]?.version ??
+                      plugin.latest_version);
+                  const selectedVer =
+                    selectedVersions[plugin.id] ?? defaultVer;
+                  const selectedRelease = plugin.releases.find(
+                    (r) => r.version === selectedVer,
+                  );
+                  const selectedPlatformSupported =
+                    selectedRelease?.platform_supported ?? false;
+                  const isSelectedInstalled =
+                    plugin.installed_version === selectedVer;
+                  const minVersion =
+                    selectedRelease?.min_tabularis_version ?? null;
+                  const isCompatible =
+                    !minVersion || versionGte(APP_VERSION, minVersion);
+                  const isUpdate =
+                    !!plugin.installed_version && !isSelectedInstalled;
+                  const isDowngrade =
+                    isUpdate &&
+                    !versionGte(selectedVer, plugin.installed_version!);
+                  const showVersionPicker = isAtLatest
+                    ? installableReleases.length >= 1
+                    : installableReleases.length > 1;
+
+                  const accent: CardAccent = plugin.update_available
+                    ? "amber"
+                    : plugin.installed_version
+                      ? "green"
+                      : null;
+
+                  const installedBadge = plugin.installed_version ? (
+                    <span
+                      className={clsx(
+                        "text-[10px] font-medium px-1.5 py-px rounded-md border",
+                        plugin.update_available
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/25"
+                          : "bg-green-500/10 text-green-400 border-green-500/25",
+                      )}
+                    >
+                      {t("settings.plugins.installed")} v
+                      {plugin.installed_version}
+                    </span>
+                  ) : undefined;
+
+                  return (
+                    <PluginCard
+                      key={plugin.id}
+                      name={plugin.name}
+                      description={plugin.description}
+                      author={plugin.author}
+                      homepage={plugin.homepage}
+                      accent={accent}
+                      pulse={plugin.update_available}
+                      showBand
+                      status={installedBadge}
+                      actions={
+                        !selectedPlatformSupported ? (
+                          <span className="text-xs text-muted italic text-right">
+                            {t("settings.plugins.platformNotSupported")}
+                          </span>
+                        ) : (
+                          <>
+                            {isSelectedInstalled &&
+                              selectedVer === plugin.latest_version && (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <CheckCircle2
+                                    size={12}
+                                    className="text-green-400"
+                                  />
+                                  <span className="text-xs text-green-400 font-medium">
+                                    {t("settings.plugins.upToDate")}
+                                  </span>
+                                </div>
+                              )}
+
+                            {!isSelectedInstalled &&
+                              (isCompatible ? (
                                 <button
-                                  disabled
-                                  title={t(
-                                    "settings.plugins.requiresVersion",
-                                    { version: minVersion },
-                                  )}
-                                  className="w-full flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-muted bg-surface-tertiary cursor-not-allowed opacity-50"
+                                  onClick={() =>
+                                    doInstall(plugin.id, selectedVer)
+                                  }
+                                  disabled={
+                                    installingPluginId === plugin.id
+                                  }
+                                  className={`w-full flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-white transition-colors disabled:opacity-50 ${
+                                    isDowngrade
+                                      ? "bg-amber-600 hover:bg-amber-500"
+                                      : isUpdate
+                                        ? "bg-green-600 hover:bg-green-500"
+                                        : "bg-blue-600 hover:bg-blue-500"
+                                  }`}
                                 >
-                                  <Download size={12} />
-                                  {t("settings.plugins.install")} v
-                                  {selectedVer}
-                                </button>
-                                <span className="text-[10px] text-amber-400/80 text-right">
-                                  {t(
-                                    "settings.plugins.requiresVersion",
-                                    { version: minVersion },
+                                  {installingPluginId === plugin.id ? (
+                                    <Loader2
+                                      size={12}
+                                      className="animate-spin"
+                                    />
+                                  ) : isDowngrade ? (
+                                    <RotateCcw size={12} />
+                                  ) : isUpdate ? (
+                                    <RefreshCw size={12} />
+                                  ) : (
+                                    <Download size={12} />
                                   )}
-                                </span>
-                              </div>
-                            ))}
+                                  {isDowngrade
+                                    ? `${t("settings.plugins.downgrade")} v${selectedVer}`
+                                    : isUpdate
+                                      ? `${t("settings.plugins.update")} v${selectedVer}`
+                                      : `${t("settings.plugins.install")} v${selectedVer}`}
+                                </button>
+                              ) : (
+                                <div className="w-full flex flex-col items-end gap-1">
+                                  <button
+                                    disabled
+                                    title={t(
+                                      "settings.plugins.requiresVersion",
+                                      { version: minVersion },
+                                    )}
+                                    className="w-full flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-muted bg-surface-tertiary cursor-not-allowed opacity-50"
+                                  >
+                                    <Download size={12} />
+                                    {t("settings.plugins.install")} v
+                                    {selectedVer}
+                                  </button>
+                                  <span className="text-[10px] text-amber-400/80 text-right">
+                                    {t("settings.plugins.requiresVersion", {
+                                      version: minVersion,
+                                    })}
+                                  </span>
+                                </div>
+                              ))}
 
-                          {showVersionPicker &&
-                            (() => {
-                              const dropdownOptions: VersionOption[] = [
-                                ...(isAtLatest
-                                  ? [
-                                      {
-                                        version:
-                                          plugin.latest_version!,
-                                        isInstalled: true,
-                                        isLatest: true,
-                                      },
-                                    ]
-                                  : []),
-                                ...[...installableReleases]
-                                  .reverse()
-                                  .map((r) => ({
-                                    version: r.version,
-                                    isInstalled: false,
-                                    isLatest:
-                                      r.version ===
-                                      plugin.latest_version,
-                                  })),
-                              ];
-                              return (
-                                <VersionDropdown
-                                  options={dropdownOptions}
-                                  value={selectedVer}
-                                  onChange={(v) =>
-                                    setSelectedVersions((prev) => ({
-                                      ...prev,
-                                      [plugin.id]: v,
-                                    }))
-                                  }
-                                  isDowngrade={isDowngrade}
-                                  label={
-                                    isAtLatest && isSelectedInstalled
-                                      ? t(
-                                          "settings.plugins.olderVersions",
-                                        )
-                                      : `v${selectedVer}`
-                                  }
-                                />
-                              );
-                            })()}
-                        </>
-                      )
-                    }
-                  />
-                );
-              })}
-              {registryPlugins.length === 0 && (
-                <p className="text-sm text-muted py-4">
-                  {t("settings.plugins.noPlugins")}
-                </p>
-              )}
-            </div>
+                            {showVersionPicker &&
+                              (() => {
+                                const dropdownOptions: VersionOption[] = [
+                                  ...(isAtLatest
+                                    ? [
+                                        {
+                                          version: plugin.latest_version!,
+                                          isInstalled: true,
+                                          isLatest: true,
+                                        },
+                                      ]
+                                    : []),
+                                  ...[...installableReleases]
+                                    .reverse()
+                                    .map((r) => ({
+                                      version: r.version,
+                                      isInstalled: false,
+                                      isLatest:
+                                        r.version === plugin.latest_version,
+                                    })),
+                                ];
+                                return (
+                                  <VersionDropdown
+                                    options={dropdownOptions}
+                                    value={selectedVer}
+                                    onChange={(v) =>
+                                      setSelectedVersions((prev) => ({
+                                        ...prev,
+                                        [plugin.id]: v,
+                                      }))
+                                    }
+                                    isDowngrade={isDowngrade}
+                                    label={
+                                      isAtLatest && isSelectedInstalled
+                                        ? t("settings.plugins.olderVersions")
+                                        : `v${selectedVer}`
+                                    }
+                                  />
+                                );
+                              })()}
+                          </>
+                        )
+                      }
+                    />
+                  );
+                })}
+
+                {filteredPlugins.length === 0 && registryPlugins.length > 0 && (
+                  <p className="col-span-full text-sm text-muted py-4">
+                    {t("settings.plugins.searchNoResults")}
+                  </p>
+                )}
+                {registryPlugins.length === 0 && (
+                  <p className="col-span-full text-sm text-muted py-4">
+                    {t("settings.plugins.noPlugins")}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
           )}
-        </div>
-        </SettingSection>
-
-        {/* Installed */}
-        <SettingSection
-          title={t("settings.plugins.installedPlugins")}
-          description={t("settings.plugins.installedDesc")}
-        >
-          <div className="space-y-3 pt-3">
-            {allDrivers.map((driver: PluginManifest) => {
-              const isBuiltin = driver.is_builtin === true;
-              const hasSettings = (driver.settings?.length ?? 0) > 0;
-              const registryPlugin = registryPlugins.find(
-                (p) => p.id === driver.id,
-              );
-              const activeExt = settings.activeExternalDrivers || [];
-              const isEnabled =
-                isBuiltin || activeExt.includes(driver.id);
-
-              const builtinBadge = isBuiltin ? (
-                <span className="text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-px rounded-md">
-                  Built-in
-                </span>
-              ) : undefined;
-
-              return (
-                <PluginCard
-                  key={driver.id}
-                  name={driver.name}
-                  description={driver.description}
-                  version={driver.version}
-                  author={
-                    !isBuiltin ? registryPlugin?.author : undefined
-                  }
-                  homepage={
-                    !isBuiltin ? registryPlugin?.homepage : undefined
-                  }
-                  dimmed={isBuiltin}
-                  status={builtinBadge}
-                  actions={
-                    <div className="flex flex-col items-end gap-2 w-full">
-                      <button
-                        onClick={() =>
-                          !isBuiltin &&
-                          doToggle(
-                            driver.id,
-                            driver.name,
-                            isEnabled,
-                          )
-                        }
-                        disabled={isBuiltin}
-                        aria-label={
-                          isEnabled
-                            ? "Disable plugin"
-                            : "Enable plugin"
-                        }
-                        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                          isEnabled
-                            ? "bg-blue-600"
-                            : "bg-surface-tertiary"
-                        } ${isBuiltin ? "cursor-not-allowed" : "cursor-pointer"}`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition duration-200 ease-in-out ${isEnabled ? "translate-x-4" : "translate-x-0"}`}
-                        />
-                      </button>
-                      {hasSettings && (
-                        <button
-                          onClick={() =>
-                            handleOpenPluginSettings(
-                              driver.id,
-                            )
-                          }
-                          className="p-1.5 text-secondary hover:text-primary transition-colors"
-                          title={t(
-                            "settings.plugins.pluginSettings.title",
-                          )}
-                        >
-                          <SettingsIcon size={15} />
-                        </button>
-                      )}
-                      {!isBuiltin && (
-                        <SlotAnchor
-                          name="settings.plugin.actions"
-                          context={{ targetPluginId: driver.id }}
-                          className="flex flex-col items-end gap-1"
-                        />
-                      )}
-                      {!isBuiltin && (
-                        <button
-                          onClick={() =>
-                            doRemove(driver.id, driver.name)
-                          }
-                          disabled={
-                            uninstallingPluginId === driver.id
-                          }
-                          className="flex items-center gap-1 text-[11px] text-red-500/70 hover:text-red-400 disabled:opacity-50 transition-colors"
-                        >
-                          {uninstallingPluginId === driver.id ? (
-                            <Loader2
-                              size={11}
-                              className="animate-spin"
-                            />
-                          ) : (
-                            <Trash2 size={11} />
-                          )}
-                          {t("settings.plugins.remove")}
-                        </button>
-                      )}
-                    </div>
-                  }
-                />
-              );
-            })}
-
-            {/* Disabled external plugins */}
-            {installedPlugins
-              .filter((p) => !allDrivers.some((d) => d.id === p.id))
-              .map((plugin) => {
-                const activeExt =
-                  settings.activeExternalDrivers || [];
-                const registryPlugin = registryPlugins.find(
-                  (r) => r.id === plugin.id,
-                );
-                return (
-                  <PluginCard
-                    key={plugin.id}
-                    name={plugin.name}
-                    description={plugin.description}
-                    version={plugin.version}
-                    author={registryPlugin?.author}
-                    homepage={registryPlugin?.homepage}
-                    actions={
-                      <div className="flex flex-col items-end gap-2 w-full">
-                        <button
-                          onClick={async () => {
-                            try {
-                              await invoke("enable_plugin", {
-                                pluginId: plugin.id,
-                              });
-                              updateSetting(
-                                "activeExternalDrivers",
-                                [...activeExt, plugin.id],
-                              );
-                              refreshDrivers();
-                            } catch (err) {
-                              setPluginStartError({
-                                pluginId: plugin.id,
-                                pluginName: plugin.name,
-                                error: String(err),
-                              });
-                            }
-                          }}
-                          aria-label="Enable plugin"
-                          className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-surface-tertiary transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                        >
-                          <span className="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition duration-200 ease-in-out translate-x-0" />
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleOpenPluginSettings(
-                              plugin.id,
-                            )
-                          }
-                          className="p-1.5 text-secondary hover:text-primary transition-colors"
-                          title={t(
-                            "settings.plugins.pluginSettings.title",
-                          )}
-                        >
-                          <SettingsIcon size={15} />
-                        </button>
-                        <SlotAnchor
-                          name="settings.plugin.actions"
-                          context={{ targetPluginId: plugin.id }}
-                          className="flex flex-col items-end gap-1"
-                        />
-                        <button
-                          onClick={() =>
-                            doRemove(plugin.id, plugin.name)
-                          }
-                          disabled={
-                            uninstallingPluginId === plugin.id
-                          }
-                          className="flex items-center gap-1 text-[11px] text-red-500/70 hover:text-red-400 disabled:opacity-50 transition-colors"
-                        >
-                          {uninstallingPluginId === plugin.id ? (
-                            <Loader2
-                              size={11}
-                              className="animate-spin"
-                            />
-                          ) : (
-                            <Trash2 size={11} />
-                          )}
-                          {t("settings.plugins.remove")}
-                        </button>
-                      </div>
-                    }
-                  />
-                );
-              })}
           </div>
-        </SettingSection>
+        </div>
       </div>
 
       {/* Modals */}

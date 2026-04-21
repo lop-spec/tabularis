@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { resolvePluginConfig, getDisplayInterpreter, resolveSettingsWithDefaults, validateSettings } from "../../src/utils/pluginConfig";
+import {
+  getDisplayInterpreter,
+  removePluginConfig,
+  resolvePluginConfig,
+  resolveSettingsWithDefaults,
+  validateSettings,
+} from "../../src/utils/pluginConfig";
 import type { PluginConfig } from "../../src/contexts/SettingsContext";
 import type { PluginSettingDefinition } from "../../src/types/plugins";
 
@@ -77,6 +83,39 @@ describe("pluginConfig", () => {
       const config: PluginConfig = { settings: {} };
       expect(getDisplayInterpreter(config)).toBe("");
     });
+  });
+});
+
+describe("removePluginConfig", () => {
+  it("removes only the selected plugin config", () => {
+    const plugins: Record<string, PluginConfig> = {
+      alpha: { interpreter: "python3", settings: { token: "secret" } },
+      beta: { settings: { timeout: 30 } },
+    };
+
+    expect(removePluginConfig(plugins, "alpha")).toEqual({
+      beta: { settings: { timeout: 30 } },
+    });
+  });
+
+  it("returns undefined when removing the last plugin config", () => {
+    const plugins: Record<string, PluginConfig> = {
+      alpha: { settings: { token: "secret" } },
+    };
+
+    expect(removePluginConfig(plugins, "alpha")).toBeUndefined();
+  });
+
+  it("keeps the original map when the plugin config is not present", () => {
+    const plugins: Record<string, PluginConfig> = {
+      beta: { settings: { timeout: 30 } },
+    };
+
+    expect(removePluginConfig(plugins, "alpha")).toBe(plugins);
+  });
+
+  it("returns undefined when there is no plugin config map", () => {
+    expect(removePluginConfig(undefined, "alpha")).toBeUndefined();
   });
 });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Settings as SettingsIcon,
@@ -7,7 +7,7 @@ import {
   Sparkles,
   ScrollText,
   Keyboard,
-  Database,
+  Plug,
   Info,
   FileJson,
 } from "lucide-react";
@@ -35,18 +35,24 @@ type SettingsTab =
   | "info"
   | `plugin:${string}`;
 
+interface PluginSidebarChange {
+  type: "install" | "remove";
+  pluginId: string;
+  pluginName?: string;
+}
+
 const TAB_ITEMS: Array<{
   id: SettingsTab;
   icon: React.ComponentType<{ size: number }>;
   labelKey: string;
 }> = [
   { id: "general", icon: SettingsIcon, labelKey: "settings.general" },
+  { id: "plugins", icon: Plug, labelKey: "settings.plugins.title" },
   { id: "appearance", icon: Palette, labelKey: "settings.appearance" },
   { id: "localization", icon: Languages, labelKey: "settings.localization" },
   { id: "ai", icon: Sparkles, labelKey: "settings.ai.tab" },
   { id: "logs", icon: ScrollText, labelKey: "settings.logs" },
   { id: "shortcuts", icon: Keyboard, labelKey: "settings.shortcuts.title" },
-  { id: "plugins", icon: Database, labelKey: "settings.plugins.title" },
   { id: "info", icon: Info, labelKey: "settings.info" },
 ];
 
@@ -63,9 +69,32 @@ const TAB_COMPONENTS: Partial<Record<SettingsTab, React.ComponentType>> = {
 
 export const Settings = () => {
   const { t } = useTranslation();
-  const { allDrivers, installedPlugins } = useDrivers();
+  const {
+    allDrivers,
+    installedPlugins,
+    refresh: refreshDrivers,
+  } = useDrivers();
   const [requestedTab, setRequestedTab] = useState<SettingsTab>("general");
   const [isConfigJsonModalOpen, setIsConfigJsonModalOpen] = useState(false);
+  const [pluginSidebarOverrides, setPluginSidebarOverrides] = useState<
+    Record<string, string | null>
+  >({});
+
+  const handlePluginsChanged = useCallback(
+    (change: PluginSidebarChange) => {
+      setPluginSidebarOverrides((prev) => {
+        const next = { ...prev };
+        if (change.type === "install") {
+          next[change.pluginId] = change.pluginName ?? change.pluginId;
+        } else {
+          next[change.pluginId] = null;
+        }
+        return next;
+      });
+      refreshDrivers();
+    },
+    [refreshDrivers],
+  );
 
   const pluginSettingItems = new Map<string, { id: string; name: string }>();
 
@@ -79,10 +108,23 @@ export const Settings = () => {
   }
 
   for (const plugin of installedPlugins) {
+    if (pluginSidebarOverrides[plugin.id] === null) continue;
     pluginSettingItems.set(plugin.id, {
       id: plugin.id,
       name: plugin.name,
     });
+  }
+
+  for (const [pluginId, pluginName] of Object.entries(pluginSidebarOverrides)) {
+    if (
+      pluginName !== null &&
+      !installedPlugins.some((plugin) => plugin.id === pluginId)
+    ) {
+      pluginSettingItems.set(pluginId, {
+        id: pluginId,
+        name: pluginName,
+      });
+    }
   }
 
   const pluginTabs = Array.from(pluginSettingItems.values()).sort((a, b) =>
@@ -122,7 +164,12 @@ export const Settings = () => {
                 )}
               >
                 <Icon size={16} />
-                {t(labelKey)}
+                <span className="truncate">{t(labelKey)}</span>
+                {id === "plugins" && pluginTabs.length > 0 && (
+                  <span className="ml-auto rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-400 border border-blue-500/20">
+                    {pluginTabs.length}
+                  </span>
+                )}
               </button>
 
               {id === "plugins" && pluginTabs.length > 0 && (
@@ -176,6 +223,7 @@ export const Settings = () => {
               onOpenPluginSettings={(pluginId) =>
                 setRequestedTab(`plugin:${pluginId}`)
               }
+              onPluginsChanged={handlePluginsChanged}
             />
           ) : (
             ActiveComponent && <ActiveComponent />

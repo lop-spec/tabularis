@@ -119,6 +119,7 @@ pub async fn install_plugin(
 pub async fn uninstall_plugin(plugin_id: String) -> Result<(), String> {
     // Unregister from in-memory driver registry first
     crate::drivers::registry::unregister_driver(&plugin_id).await;
+    crate::drivers::registry::unregister_manifest(&plugin_id).await;
 
     // Remove from filesystem
     installer::uninstall(&plugin_id)?;
