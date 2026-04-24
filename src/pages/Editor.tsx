@@ -493,13 +493,14 @@ export const Editor = () => {
   }, [tabs, updateScrollArrows]);
 
   const fetchPkColumn = useCallback(
-    async (table: string, tabId?: string) => {
+    async (table: string, tabId?: string, tabSchema?: string) => {
       if (!activeConnectionId) return;
+      const effectiveSchema = tabSchema ?? activeSchema;
       try {
         const cols = await invoke<TableColumn[]>("get_columns", {
           connectionId: activeConnectionId,
           tableName: table,
-          ...(activeSchema ? { schema: activeSchema } : {}),
+          ...(effectiveSchema ? { schema: effectiveSchema } : {}),
         });
         const pk = cols.find((c) => c.is_pk);
         const autoInc = cols
@@ -683,7 +684,7 @@ export const Editor = () => {
 
         if (tableName) {
           // Wait for PK column to be fetched before showing results
-          await fetchPkColumn(tableName, targetTabId);
+          await fetchPkColumn(tableName, targetTabId, targetTab?.schema ?? undefined);
         } else {
           // No table, explicitly set pkColumn to null (read-only mode)
           updateTab(targetTabId, { pkColumn: null });
