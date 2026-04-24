@@ -1,4 +1,15 @@
 pub mod ai;
+pub mod ai_activity;
+#[cfg(test)]
+pub mod ai_activity_tests;
+pub mod ai_approval;
+#[cfg(test)]
+pub mod ai_approval_tests;
+pub mod ai_approval_watcher;
+pub mod ai_commands;
+pub mod ai_notebook_export;
+#[cfg(test)]
+pub mod ai_notebook_export_tests;
 pub mod cli;
 pub mod clipboard_import;
 pub mod commands;
@@ -172,6 +183,9 @@ pub fn run() {
                 });
             }
 
+            // Watch for pending MCP approval requests and run periodic cleanup.
+            ai_approval_watcher::spawn(app.handle().clone());
+
             // Open devtools automatically in debug mode
             if args.debug {
                 if let Some(window) = app.get_webview_window("main") {
@@ -331,6 +345,16 @@ pub fn run() {
             // MCP
             mcp::install::get_mcp_status,
             mcp::install::install_mcp_config,
+            // AI Activity / Approvals
+            ai_commands::get_ai_activity,
+            ai_commands::get_ai_sessions,
+            ai_commands::get_ai_session_events,
+            ai_commands::clear_ai_activity,
+            ai_commands::export_ai_activity_json,
+            ai_commands::export_ai_activity_csv,
+            ai_commands::export_ai_session_as_notebook,
+            ai_commands::list_pending_approvals,
+            ai_commands::decide_pending_approval,
             // Themes
             theme_commands::get_all_themes,
             theme_commands::get_theme,

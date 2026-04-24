@@ -47,6 +47,15 @@ export interface Settings {
   pingInterval?: number;
   queryHistoryMaxEntries?: number;
   showWelcome?: boolean;
+  // AI / MCP safety
+  aiAuditEnabled?: boolean;
+  aiAuditMaxEntries?: number;
+  aiSessionGapMinutes?: number;
+  mcpReadonlyDefault?: boolean;
+  mcpReadonlyConnections?: string[];
+  mcpApprovalMode?: "off" | "writes_only" | "all";
+  mcpApprovalTimeoutSeconds?: number;
+  mcpPreflightExplain?: boolean;
 }
 
 export interface SettingsContextType {
@@ -87,4 +96,12 @@ export const DEFAULT_SETTINGS: Settings = {
   editorShowLineNumbers: true,
   pingInterval: 30,
   queryHistoryMaxEntries: 500,
+  aiAuditEnabled: true,
+  aiAuditMaxEntries: 5000,
+  aiSessionGapMinutes: 10,
+  mcpReadonlyDefault: false,
+  mcpReadonlyConnections: [],
+  mcpApprovalMode: "writes_only",
+  mcpApprovalTimeoutSeconds: 120,
+  mcpPreflightExplain: true,
 };

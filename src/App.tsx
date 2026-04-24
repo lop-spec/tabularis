@@ -17,6 +17,7 @@ import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
 import { CommunityModal } from "./components/modals/CommunityModal";
 import { WhatsNewModal } from "./components/modals/WhatsNewModal";
+import { AiApprovalGate } from "./components/modals/AiApprovalGate";
 import { useUpdate } from "./hooks/useUpdate";
 import { useChangelog } from "./hooks/useChangelog";
 import { useSettings } from "./hooks/useSettings";
@@ -147,6 +148,8 @@ export function App() {
         entries={whatsNewEntries}
         isLoading={isChangelogLoading}
       />
+
+      <AiApprovalGate />
     </>
   );
 }
