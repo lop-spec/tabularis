@@ -43,6 +43,17 @@ pub struct ApprovalDecision {
     pub edited_query: Option<String>,
 }
 
+/// Result of polling for an approval decision when liveness checking is in
+/// play. `HostUnavailable` signals that the GUI heartbeat went stale during
+/// polling — there is nobody left to write the decision file, so further
+/// waiting is pointless.
+#[derive(Debug, PartialEq)]
+pub enum PollOutcome {
+    Decided(ApprovalDecision),
+    TimedOut,
+    HostUnavailable,
+}
+
 // ---------------------------------------------------------------------------
 // Path helpers (testable: take a directory)
 // ---------------------------------------------------------------------------
@@ -150,18 +161,46 @@ pub async fn poll_decision_in(
     timeout_secs: u64,
     poll_interval_ms: u64,
 ) -> Result<Option<ApprovalDecision>, String> {
+    match poll_decision_with_liveness_in(base, approval_id, timeout_secs, poll_interval_ms, || {
+        true
+    })
+    .await?
+    {
+        PollOutcome::Decided(d) => Ok(Some(d)),
+        PollOutcome::TimedOut => Ok(None),
+        // Unreachable when `is_alive` always returns true, but map defensively.
+        PollOutcome::HostUnavailable => Ok(None),
+    }
+}
+
+/// Same as `poll_decision_in`, but also bails out with
+/// `PollOutcome::HostUnavailable` as soon as `is_alive()` returns false.
+/// Used by the MCP subprocess to detect that the Tabularis GUI exited
+/// mid-approval and fail without waiting for the full timeout.
+pub async fn poll_decision_with_liveness_in<F>(
+    base: &Path,
+    approval_id: &str,
+    timeout_secs: u64,
+    poll_interval_ms: u64,
+    is_alive: F,
+) -> Result<PollOutcome, String>
+where
+    F: Fn() -> bool,
+{
     let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs);
     loop {
         if let Some(decision) = read_decision_in(base, approval_id)? {
-            // Cleanup: best-effort.
             let _ = fs::remove_file(decision_file(base, approval_id));
             let _ = fs::remove_file(pending_file(base, approval_id));
-            return Ok(Some(decision));
+            return Ok(PollOutcome::Decided(decision));
+        }
+        if !is_alive() {
+            let _ = fs::remove_file(pending_file(base, approval_id));
+            return Ok(PollOutcome::HostUnavailable);
         }
         if std::time::Instant::now() >= deadline {
-            // Cleanup pending so we don't leak it.
             let _ = fs::remove_file(pending_file(base, approval_id));
-            return Ok(None);
+            return Ok(PollOutcome::TimedOut);
         }
         tokio::time::sleep(Duration::from_millis(poll_interval_ms)).await;
     }
@@ -228,6 +267,28 @@ pub async fn poll_decision(
         approval_id,
         timeout_secs,
         poll_interval_ms,
+    )
+    .await
+}
+
+/// Default-dir wrapper for liveness-aware polling. The MCP subprocess wires
+/// `is_alive` to the heartbeat module so it can short-circuit when the GUI
+/// is closed.
+pub async fn poll_decision_with_liveness<F>(
+    approval_id: &str,
+    timeout_secs: u64,
+    poll_interval_ms: u64,
+    is_alive: F,
+) -> Result<PollOutcome, String>
+where
+    F: Fn() -> bool,
+{
+    poll_decision_with_liveness_in(
+        &get_app_config_dir(),
+        approval_id,
+        timeout_secs,
+        poll_interval_ms,
+        is_alive,
     )
     .await
 }

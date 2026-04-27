@@ -1,9 +1,12 @@
 #[cfg(test)]
 mod tests {
     use crate::ai_approval::{
-        cleanup_expired_in, list_pending_in, new_approval_id, poll_decision_in, read_decision_in,
-        read_pending_in, write_decision_in, write_pending_in, ApprovalDecision, PendingApproval,
+        cleanup_expired_in, list_pending_in, new_approval_id, poll_decision_in,
+        poll_decision_with_liveness_in, read_decision_in, read_pending_in, write_decision_in,
+        write_pending_in, ApprovalDecision, PendingApproval, PollOutcome,
     };
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use std::path::Path;
     use tempfile::TempDir;
     use tokio::time::Duration;
@@ -122,6 +125,68 @@ mod tests {
         assert!(res.is_none());
         // Pending file should be cleaned up on timeout to avoid leaks.
         assert!(read_pending_in(tmp.path(), "never").unwrap().is_none());
+    }
+
+    // Liveness-aware polling ----------------------------------------------
+
+    #[tokio::test]
+    async fn liveness_poll_returns_decision_when_alive() {
+        let tmp = TempDir::new().unwrap();
+        write_pending_in(tmp.path(), &make_pending("ok")).unwrap();
+        write_decision_in(tmp.path(), &make_decision("ok", "approve")).unwrap();
+        let outcome = poll_decision_with_liveness_in(tmp.path(), "ok", 5, 50, || true)
+            .await
+            .unwrap();
+        match outcome {
+            PollOutcome::Decided(d) => assert_eq!(d.decision, "approve"),
+            other => panic!("expected Decided, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn liveness_poll_exits_early_when_host_dead_before_start() {
+        let tmp = TempDir::new().unwrap();
+        write_pending_in(tmp.path(), &make_pending("dead")).unwrap();
+        // 60s timeout, but liveness=false → should return almost instantly.
+        let start = std::time::Instant::now();
+        let outcome = poll_decision_with_liveness_in(tmp.path(), "dead", 60, 50, || false)
+            .await
+            .unwrap();
+        assert!(start.elapsed() < Duration::from_secs(1));
+        assert_eq!(outcome, PollOutcome::HostUnavailable);
+        // Pending file should be cleaned up to avoid leaks.
+        assert!(read_pending_in(tmp.path(), "dead").unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn liveness_poll_exits_early_when_host_dies_mid_flight() {
+        let tmp = TempDir::new().unwrap();
+        write_pending_in(tmp.path(), &make_pending("flip")).unwrap();
+        let alive = Arc::new(AtomicBool::new(true));
+        let alive_for_flipper = alive.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            alive_for_flipper.store(false, Ordering::SeqCst);
+        });
+        let alive_for_check = alive.clone();
+        let start = std::time::Instant::now();
+        let outcome = poll_decision_with_liveness_in(tmp.path(), "flip", 60, 50, move || {
+            alive_for_check.load(Ordering::SeqCst)
+        })
+        .await
+        .unwrap();
+        assert!(start.elapsed() < Duration::from_secs(2));
+        assert_eq!(outcome, PollOutcome::HostUnavailable);
+    }
+
+    #[tokio::test]
+    async fn liveness_poll_times_out_when_alive_but_no_decision() {
+        let tmp = TempDir::new().unwrap();
+        write_pending_in(tmp.path(), &make_pending("slow")).unwrap();
+        let outcome = poll_decision_with_liveness_in(tmp.path(), "slow", 1, 50, || true)
+            .await
+            .unwrap();
+        assert_eq!(outcome, PollOutcome::TimedOut);
     }
 
     // Concurrency ----------------------------------------------------------

@@ -24,6 +24,9 @@ pub mod explain_import;
 pub mod explain_import_tests;
 pub mod export;
 pub mod health_check;
+pub mod heartbeat;
+#[cfg(test)]
+pub mod heartbeat_tests;
 pub mod keychain_utils;
 pub mod log_commands;
 pub mod logger;
@@ -185,6 +188,11 @@ pub fn run() {
 
             // Watch for pending MCP approval requests and run periodic cleanup.
             ai_approval_watcher::spawn(app.handle().clone());
+
+            // Refresh the GUI heartbeat so the MCP subprocess can detect
+            // when Tabularis is closed and fail fast on approval-gated
+            // queries instead of waiting for the full approval timeout.
+            heartbeat::spawn();
 
             // Open devtools automatically in debug mode
             if args.debug {

@@ -1,5 +1,5 @@
 use crate::ai_activity::{self, AiActivityEvent};
-use crate::ai_approval::{self, PendingApproval};
+use crate::ai_approval::{self, PendingApproval, PollOutcome};
 use crate::commands;
 use crate::config::{
     self, AppConfig, DEFAULT_AI_AUDIT_ENABLED, DEFAULT_AI_AUDIT_MAX_ENTRIES,
@@ -8,6 +8,7 @@ use crate::config::{
 };
 use crate::credential_cache;
 use crate::drivers::{mysql, postgres, sqlite};
+use crate::heartbeat;
 use crate::models::{ConnectionParams, SshConnection};
 use crate::paths;
 use crate::persistence;
@@ -855,6 +856,20 @@ async fn tool_run_query(
     let mut effective_query: String = query.to_string();
 
     if needs_approval {
+        // Fail fast if the GUI is not running — otherwise we'd queue a
+        // pending approval that nobody can approve and wait the full
+        // `mcp_approval_timeout_seconds` (default 120s) for nothing.
+        if !heartbeat::is_alive() {
+            audit.status = "host_unavailable".to_string();
+            let msg = "Tabularis app is not running — open it to approve writes".to_string();
+            audit.error = Some(msg.clone());
+            return Err(JsonRpcError {
+                code: -32000,
+                message: msg,
+                data: None,
+            });
+        }
+
         let timeout_secs = config
             .mcp_approval_timeout_seconds
             .unwrap_or(DEFAULT_MCP_APPROVAL_TIMEOUT_SECONDS) as u64;
@@ -898,10 +913,15 @@ async fn tool_run_query(
             });
         }
 
-        match ai_approval::poll_decision(&approval_id, timeout_secs, APPROVAL_POLL_INTERVAL_MS)
-            .await
+        match ai_approval::poll_decision_with_liveness(
+            &approval_id,
+            timeout_secs,
+            APPROVAL_POLL_INTERVAL_MS,
+            heartbeat::is_alive,
+        )
+        .await
         {
-            Ok(Some(decision)) => {
+            Ok(PollOutcome::Decided(decision)) => {
                 if decision.decision == "approve" {
                     if let Some(edited) = decision
                         .edited_query
@@ -929,12 +949,23 @@ async fn tool_run_query(
                     });
                 }
             }
-            Ok(None) => {
+            Ok(PollOutcome::TimedOut) => {
                 audit.status = "timeout".to_string();
                 let msg = format!(
                     "Approval timed out after {}s — open Tabularis to approve writes",
                     timeout_secs
                 );
+                audit.error = Some(msg.clone());
+                return Err(JsonRpcError {
+                    code: -32000,
+                    message: msg,
+                    data: None,
+                });
+            }
+            Ok(PollOutcome::HostUnavailable) => {
+                audit.status = "host_unavailable".to_string();
+                let msg =
+                    "Tabularis app closed during approval — open it to approve writes".to_string();
                 audit.error = Some(msg.clone());
                 return Err(JsonRpcError {
                     code: -32000,
