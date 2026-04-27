@@ -1,3 +1,19 @@
+# [0.10.0](https://github.com/debba/tabularis/compare/v0.9.21...v0.10.0) (2026-04-27)
+
+
+### Bug Fixes
+
+* **hooks:** preserve session events while loading and stabilize filter ([86b243b](https://github.com/debba/tabularis/commit/86b243b74f5f1768e1850f26a570e26cfbb7a54d))
+* **plugins:** unregister running driver and verify installed manifest ([d045eea](https://github.com/debba/tabularis/commit/d045eea46f66846cc4c5b413b7b76bc245c488db))
+
+
+### Features
+
+* **ai:** add AI audit log, approval gate, notebook export and UI ([2399370](https://github.com/debba/tabularis/commit/2399370deeec493dfda01c01e620d25225fb31c2))
+* **gitnexus:** add GitNexus skills and MCP UI page ([f3e0214](https://github.com/debba/tabularis/commit/f3e021485f969505e36964760236481e192d4015))
+* **heartbeat:** add GUI heartbeat and liveness-aware approval polling ([93f6765](https://github.com/debba/tabularis/commit/93f67655fbc13cdaad2a735a97f83340d8fb755a))
+* **ui:** add session search, sorting and plan expand ([cbd5d91](https://github.com/debba/tabularis/commit/cbd5d91269e938605b1a4c3e20954b0e162fd3fa))
+
 ## [0.9.21](https://github.com/debba/tabularis/compare/v0.9.20...v0.9.21) (2026-04-22)
 
 
