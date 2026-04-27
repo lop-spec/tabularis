@@ -9,6 +9,7 @@ import { PluginModalProvider } from "./contexts/PluginModalProvider";
 import { AlertProvider } from "./contexts/AlertProvider";
 import { Connections } from "./pages/Connections";
 import { Editor } from "./pages/Editor";
+import { McpPage } from "./pages/McpPage";
 import { Settings } from "./pages/Settings";
 import { SchemaDiagramPage } from "./pages/SchemaDiagramPage";
 import { TaskManagerPage } from "./pages/TaskManagerPage";
@@ -17,6 +18,7 @@ import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
 import { CommunityModal } from "./components/modals/CommunityModal";
 import { WhatsNewModal } from "./components/modals/WhatsNewModal";
+import { AiApprovalGate } from "./components/modals/AiApprovalGate";
 import { useUpdate } from "./hooks/useUpdate";
 import { useChangelog } from "./hooks/useChangelog";
 import { useSettings } from "./hooks/useSettings";
@@ -110,6 +112,7 @@ export function App() {
                       />
                       <Route path="connections" element={<Connections />} />
                       <Route path="editor" element={<Editor />} />
+                      <Route path="mcp" element={<McpPage />} />
                       <Route path="settings" element={<Settings />} />
                     </Route>
                     <Route
@@ -147,6 +150,8 @@ export function App() {
         entries={whatsNewEntries}
         isLoading={isChangelogLoading}
       />
+
+      <AiApprovalGate />
     </>
   );
 }
