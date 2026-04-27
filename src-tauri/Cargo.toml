@@ -1,6 +1,6 @@
 [package]
 name = "tabularis"
-version = "0.9.21"
+version = "0.10.0"
 description = "tabularis - A database manager for developers"
 authors = ["Debba"]
 edition = "2021"
