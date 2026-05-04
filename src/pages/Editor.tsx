@@ -1428,6 +1428,35 @@ export const Editor = () => {
     [updateTab],
   );
 
+  const handleDuplicateRow = useCallback(
+    (rowData: Record<string, unknown>) => {
+      if (!activeTabIdRef.current) return;
+      const tabId = activeTabIdRef.current;
+      const currentTab = tabsRef.current.find((t) => t.id === tabId);
+      if (!currentTab) return;
+
+      const autoIncrementCols = currentTab.autoIncrementColumns ?? [];
+      const data: Record<string, unknown> = { ...rowData };
+      autoIncrementCols.forEach((col) => {
+        data[col] = null;
+      });
+
+      const tempId = generateTempId();
+      const currentPendingInsertions = currentTab.pendingInsertions || {};
+      const existingRowCount = currentTab.result?.rows.length || 0;
+      const insertionCount = Object.keys(currentPendingInsertions).length;
+      const displayIndex = existingRowCount + insertionCount;
+
+      updateTab(tabId, {
+        pendingInsertions: {
+          ...currentPendingInsertions,
+          [tempId]: { tempId, data, displayIndex },
+        },
+      });
+    },
+    [updateTab],
+  );
+
   const handleNewRow = useCallback(async () => {
     if (
       !activeTabIdRef.current ||
@@ -3071,6 +3100,7 @@ export const Editor = () => {
                     onRevertDeletion={handleRevertDeletion}
                     onMarkForDeletion={handleMarkForDeletion}
                     onMarkMultipleForDeletion={handleMarkMultipleForDeletion}
+                    onDuplicateRow={handleDuplicateRow}
                     selectedRows={new Set(activeTab.selectedRows || [])}
                     onSelectionChange={handleSelectionChange}
                     copyFormat={copyFormat}
