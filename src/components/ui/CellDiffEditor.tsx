@@ -44,6 +44,9 @@ export const CellDiffEditor = ({
     if (currentTheme) {
       loadMonacoTheme(currentTheme, monaco);
     }
+
+    editor.getOriginalEditor().updateOptions({ readOnly: true });
+    editor.getModifiedEditor().updateOptions({ readOnly });
     if (onChange) {
       editor.getModifiedEditor().onDidChangeModelContent(() => {
         onChange(editor.getModifiedEditor().getValue());
@@ -53,6 +56,7 @@ export const CellDiffEditor = ({
 
   return (
     <DiffEditor
+      key={renderSideBySide ? "sbs" : "inline"}
       height={height}
       language={language}
       theme={currentTheme?.id ?? DEFAULT_THEME}
@@ -60,15 +64,15 @@ export const CellDiffEditor = ({
       modified={modified}
       onMount={handleMount}
       options={{
-        readOnly,
-        originalEditable: false,
         renderSideBySide,
+        useInlineViewWhenSpaceIsLimited: false,
         minimap: { enabled: false },
         lineNumbers: "on",
         automaticLayout: true,
         scrollBeyondLastLine: false,
         wordWrap: "on",
         wrappingIndent: "indent",
+        diffWordWrap: "on",
         renderOverviewRuler: false,
       }}
     />
