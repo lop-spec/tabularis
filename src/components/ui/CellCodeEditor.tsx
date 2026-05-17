@@ -7,23 +7,25 @@ import type * as MonacoTypes from "monaco-editor";
 import { ThemeContext } from "../../contexts/ThemeContext";
 import { loadMonacoTheme } from "../../themes/themeUtils";
 
-interface JsonCodeEditorProps {
+interface CellCodeEditorProps {
   value: string;
   onChange: (text: string) => void;
   onValidate?: (markers: MonacoTypes.editor.IMarker[]) => void;
   height?: string | number;
   readOnly?: boolean;
+  language?: "json" | "plaintext";
 }
 
 const DEFAULT_THEME = "vs-dark";
 
-export const JsonCodeEditor = ({
+export const CellCodeEditor = ({
   value,
   onChange,
   onValidate,
   height = "100%",
   readOnly = false,
-}: JsonCodeEditorProps) => {
+  language = "json",
+}: CellCodeEditorProps) => {
   const themeCtx = useContext(ThemeContext);
   const currentTheme = themeCtx?.currentTheme;
   const monacoRef = useRef<typeof MonacoTypes | null>(null);
@@ -52,7 +54,7 @@ export const JsonCodeEditor = ({
   return (
     <MonacoEditor
       height={height}
-      language="json"
+      language={language}
       theme={currentTheme?.id ?? DEFAULT_THEME}
       value={value}
       beforeMount={handleBeforeMount}
@@ -63,7 +65,7 @@ export const JsonCodeEditor = ({
         minimap: { enabled: false },
         lineNumbers: "on",
         automaticLayout: true,
-        formatOnPaste: true,
+        formatOnPaste: language === "json",
         scrollBeyondLastLine: false,
         wordWrap: "on",
         wrappingIndent: "indent",

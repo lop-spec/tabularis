@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { JsonExpansionEditor } from "../../../src/components/ui/JsonExpansionEditor";
 
-vi.mock("../../../src/components/ui/JsonCodeEditor", () => ({
-  JsonCodeEditor: ({
+vi.mock("../../../src/components/ui/CellCodeEditor", () => ({
+  CellCodeEditor: ({
     value,
     onChange,
     readOnly,

@@ -3,42 +3,37 @@ import { useTranslation } from "react-i18next";
 import { Columns2, GitCompare } from "lucide-react";
 import { CellCodeEditor } from "./CellCodeEditor";
 import { CellDiffEditor } from "./CellDiffEditor";
+import { formatTextForEditor } from "../../utils/text";
 import {
   MIN_SIDE_BY_SIDE_WIDTH,
   useContainerWidth,
 } from "../../hooks/useContainerWidth";
-import {
-  formatJsonForEditor,
-  parseJsonEditorValue,
-  validateJson,
-} from "../../utils/json";
 
-interface JsonExpansionEditorProps {
+interface TextExpansionEditorProps {
   value: unknown;
   readOnly: boolean;
-  onSave: (next: unknown) => void;
+  onSave: (next: string) => void;
   onCancel: () => void;
   originalValue?: unknown;
 }
 
-export const JsonExpansionEditor = ({
+export const TextExpansionEditor = ({
   value,
   readOnly,
   onSave,
   onCancel,
   originalValue,
-}: JsonExpansionEditorProps) => {
+}: TextExpansionEditorProps) => {
   const { t } = useTranslation();
-  const initial = useMemo(() => formatJsonForEditor(value), [value]);
+  const initial = useMemo(() => formatTextForEditor(value), [value]);
   const originalText = useMemo(
     () =>
-      originalValue !== undefined ? formatJsonForEditor(originalValue) : null,
+      originalValue !== undefined ? formatTextForEditor(originalValue) : null,
     [originalValue],
   );
   const [draft, setDraft] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
   const [prevInitial, setPrevInitial] = useState(initial);
-  const [diffEnabled, setDiffEnabled] = useState(true);
+  const [diffEnabled, setDiffEnabled] = useState(false);
   const [sideBySide, setSideBySide] = useState(false);
   const { ref: rootRef, width: containerWidth } = useContainerWidth<HTMLDivElement>();
   const sideBySideFits = containerWidth >= MIN_SIDE_BY_SIDE_WIDTH;
@@ -47,22 +42,14 @@ export const JsonExpansionEditor = ({
   if (initial !== prevInitial) {
     setPrevInitial(initial);
     setDraft(initial);
-    setError(null);
   }
 
   const isDirty = draft !== initial;
-  const hasError = error !== null;
   const hasDiff = originalText !== null && originalText !== draft;
   const showDiff = diffEnabled && hasDiff && originalText !== null;
 
-  const handleChange = (next: string) => {
-    setDraft(next);
-    setError(validateJson(next));
-  };
-
   const handleSave = () => {
-    if (hasError) return;
-    onSave(parseJsonEditorValue(draft));
+    onSave(draft);
   };
 
   return (
@@ -80,10 +67,10 @@ export const JsonExpansionEditor = ({
                   ? "bg-blue-600/30 text-blue-100 border-blue-500/50"
                   : "bg-surface-secondary text-secondary border-default hover:bg-surface-tertiary"
               }`}
-              title={t("jsonInput.diff", { defaultValue: "Diff" })}
+              title={t("textInput.diff", { defaultValue: "Diff" })}
             >
               <GitCompare size={12} />
-              {t("jsonInput.diff", { defaultValue: "Diff" })}
+              {t("textInput.diff", { defaultValue: "Diff" })}
               {hasDiff && (
                 <span
                   aria-hidden
@@ -101,10 +88,10 @@ export const JsonExpansionEditor = ({
                     ? "bg-blue-600/30 text-blue-100 border-blue-500/50"
                     : "bg-surface-secondary text-secondary border-default hover:bg-surface-tertiary"
                 }`}
-                title={t("jsonInput.sideBySide", { defaultValue: "Side by side" })}
+                title={t("textInput.sideBySide", { defaultValue: "Side by side" })}
               >
                 <Columns2 size={12} />
-                {t("jsonInput.sideBySide", { defaultValue: "Side by side" })}
+                {t("textInput.sideBySide", { defaultValue: "Side by side" })}
               </button>
             )}
           </div>
@@ -113,15 +100,6 @@ export const JsonExpansionEditor = ({
         )}
         {!readOnly && (
           <div className="flex items-center gap-2">
-            {error && (
-              <span
-                className="text-red-400 mr-auto truncate"
-                title={error}
-                data-testid="json-expansion-error"
-              >
-                {error}
-              </span>
-            )}
             <button
               type="button"
               onClick={onCancel}
@@ -132,10 +110,10 @@ export const JsonExpansionEditor = ({
             <button
               type="button"
               onClick={handleSave}
-              disabled={hasError || !isDirty}
+              disabled={!isDirty}
               className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded font-medium transition-colors"
             >
-              {t("jsonViewer.save")}
+              {t("textViewer.save", { defaultValue: "Save" })}
             </button>
           </div>
         )}
@@ -143,19 +121,19 @@ export const JsonExpansionEditor = ({
       <div className="h-[320px] border border-default rounded overflow-hidden">
         {showDiff ? (
           <CellDiffEditor
-            language="json"
+            language="plaintext"
             original={originalText}
             modified={draft}
-            onChange={handleChange}
+            onChange={setDraft}
             readOnly={readOnly}
             height="100%"
             renderSideBySide={renderSideBySide}
           />
         ) : (
           <CellCodeEditor
-            language="json"
+            language="plaintext"
             value={draft}
-            onChange={handleChange}
+            onChange={setDraft}
             readOnly={readOnly}
             height="100%"
           />

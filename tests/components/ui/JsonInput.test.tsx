@@ -17,8 +17,8 @@ interface TreeViewMockProps {
 const codeProps: { current: CodeEditorMockProps | null } = { current: null };
 const treeProps: { current: TreeViewMockProps | null } = { current: null };
 
-vi.mock("../../../src/components/ui/JsonCodeEditor", () => ({
-  JsonCodeEditor: (props: CodeEditorMockProps) => {
+vi.mock("../../../src/components/ui/CellCodeEditor", () => ({
+  CellCodeEditor: (props: CodeEditorMockProps) => {
     codeProps.current = props;
     return (
       <textarea
@@ -190,7 +190,7 @@ describe("JsonInput", () => {
   });
 
   describe("readOnly mode", () => {
-    it("forwards readOnly to JsonCodeEditor in code mode", () => {
+    it("forwards readOnly to CellCodeEditor in code mode", () => {
       render(<JsonInput value={{ a: 1 }} onChange={vi.fn()} readOnly />);
 
       expect(codeProps.current?.readOnly).toBe(true);

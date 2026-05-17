@@ -4,25 +4,27 @@ import type * as MonacoTypes from "monaco-editor";
 import { ThemeContext } from "../../contexts/ThemeContext";
 import { loadMonacoTheme } from "../../themes/themeUtils";
 
-interface JsonDiffEditorProps {
+interface CellDiffEditorProps {
   original: string;
   modified: string;
   onChange?: (next: string) => void;
   height?: string | number;
   readOnly?: boolean;
   renderSideBySide?: boolean;
+  language?: "json" | "plaintext";
 }
 
 const DEFAULT_THEME = "vs-dark";
 
-export const JsonDiffEditor = ({
+export const CellDiffEditor = ({
   original,
   modified,
   onChange,
   height = "100%",
   readOnly = false,
   renderSideBySide = false,
-}: JsonDiffEditorProps) => {
+  language = "json",
+}: CellDiffEditorProps) => {
   const themeCtx = useContext(ThemeContext);
   const currentTheme = themeCtx?.currentTheme;
   const monacoRef = useRef<typeof MonacoTypes | null>(null);
@@ -52,7 +54,7 @@ export const JsonDiffEditor = ({
   return (
     <DiffEditor
       height={height}
-      language="json"
+      language={language}
       theme={currentTheme?.id ?? DEFAULT_THEME}
       original={original}
       modified={modified}
