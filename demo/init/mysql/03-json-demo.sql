@@ -7,6 +7,8 @@
 --                  testing the "detect JSON in text columns" opt-in
 -- =============================================================
 
+SET NAMES utf8mb4;
+
 USE tabularis_demo;
 
 DROP TABLE IF EXISTS json_demo;
