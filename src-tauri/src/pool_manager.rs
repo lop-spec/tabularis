@@ -4,8 +4,8 @@ use once_cell::sync::Lazy;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::client::WebPkiServerVerifier;
 use rustls::crypto::CryptoProvider;
-use rustls::CertificateError;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::CertificateError;
 use rustls::DigitallySignedStruct;
 use rustls::{ClientConfig, Error as TlsError, RootCertStore};
 use rustls_platform_verifier::BuilderVerifierExt;
@@ -200,13 +200,28 @@ fn load_platform_roots() -> RootCertStore {
 /// strict `id-kp-serverAuth` EKU check to user-supplied root anchors, which
 /// rejects valid CA certs with "The extended key usage is not valid".
 ///
+/// `ssl_ca` (PEM file or bundle) overrides the platform trust store. This
+/// is the path RDS users take: the macOS keychain does not trust the
+/// regional Amazon RDS root CAs, so they must supply
+/// `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`
+/// (or a region-specific bundle) via the connection's CA Certificate field.
+///
+/// We deliberately do NOT vendor the RDS bundle in the repo: AWS rotates
+/// these CAs every 1-3 years, and shipping a stale bundle in a release
+/// silently breaks RDS users until they upgrade. Distributors who want
+/// out-of-the-box RDS support can pull a fresh bundle at packaging time
+/// (e.g. via a Dockerfile `RUN curl ...` or a build script that drops it
+/// into `src-tauri/assets/`) and point users at the resulting path.
+///
 /// SSL modes:
 /// - `disable`: no TLS
 /// - `allow`/`prefer`: TLS without certificate verification
 /// - `require`: force TLS without certificate verification
 /// - `verify-ca`: force TLS, validate certificate chain, skip hostname check
 /// - `verify-full`: force TLS, validate certificate chain and hostname
-pub(crate) fn build_postgres_tls_connector(params: &ConnectionParams) -> Result<MakeRustlsConnect, String> {
+pub(crate) fn build_postgres_tls_connector(
+    params: &ConnectionParams,
+) -> Result<MakeRustlsConnect, String> {
     ensure_rustls_crypto_provider();
     let ssl_mode = params.ssl_mode.as_deref().unwrap_or("prefer");
     let user_ca = params.ssl_ca.as_deref().filter(|s| !s.trim().is_empty());
@@ -275,19 +290,21 @@ pub(crate) fn build_postgres_tls_connector(params: &ConnectionParams) -> Result<
 
 /// Load root certificates from a PEM file.
 pub(crate) fn load_roots_from_pem(path: &str) -> Result<RootCertStore, String> {
-    let pem = std::fs::read(path)
-        .map_err(|e| format!("Failed to read ssl_ca file '{}': {}", path, e))?;
+    let pem =
+        std::fs::read(path).map_err(|e| format!("Failed to read ssl_ca file '{}': {}", path, e))?;
     let mut roots = RootCertStore::empty();
     let mut cursor = std::io::Cursor::new(&pem[..]);
     for cert in rustls_pemfile::certs(&mut cursor) {
-        let cert =
-            cert.map_err(|e| format!("Failed to parse ssl_ca '{}': {}", path, e))?;
+        let cert = cert.map_err(|e| format!("Failed to parse ssl_ca '{}': {}", path, e))?;
         roots
             .add(cert)
             .map_err(|e| format!("Failed to add ssl_ca cert from '{}': {}", path, e))?;
     }
     if roots.is_empty() {
-        return Err(format!("ssl_ca '{}' contained no PEM CERTIFICATE blocks", path));
+        return Err(format!(
+            "ssl_ca '{}' contained no PEM CERTIFICATE blocks",
+            path
+        ));
     }
     Ok(roots)
 }
@@ -374,17 +391,18 @@ impl ServerCertVerifier for VerifyCaCertVerifier {
                 // For verify-ca, we accept hostname mismatches.
                 // Re-verify the chain without hostname check to ensure
                 // the certificate is actually valid.
-                self.inner.verify_server_cert(
-                    end_entity,
-                    intermediates,
-                    // Use localhost as a name that will always match or be
-                    // ignored — the point is we already caught the hostname
-                    // error above and are choosing to accept it.
-                    &ServerName::try_from("localhost").unwrap(),
-                    ocsp_response,
-                    now,
-                )
-                .or(Ok(ServerCertVerified::assertion()))
+                self.inner
+                    .verify_server_cert(
+                        end_entity,
+                        intermediates,
+                        // Use localhost as a name that will always match or be
+                        // ignored — the point is we already caught the hostname
+                        // error above and are choosing to accept it.
+                        &ServerName::try_from("localhost").unwrap(),
+                        ocsp_response,
+                        now,
+                    )
+                    .or(Ok(ServerCertVerified::assertion()))
             }
             Err(e) => Err(e),
         }
@@ -487,9 +505,9 @@ async fn get_mysql_pool_for_database_with_id(
         )
     })?
     .map_err(|e| {
-            log::error!("Failed to create MySQL connection pool: {}", e);
-            e.to_string()
-        })?;
+        log::error!("Failed to create MySQL connection pool: {}", e);
+        e.to_string()
+    })?;
 
     log::info!(
         "MySQL connection pool created successfully for: {} (key: {})",
