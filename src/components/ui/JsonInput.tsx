@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Check,
   Code,
+  Columns2,
   FileText,
   GitCompare,
   Maximize2,
@@ -16,9 +17,13 @@ import {
   parseJsonEditorValue,
   validateJson,
 } from "../../utils/json";
-import { JsonCodeEditor } from "./JsonCodeEditor";
-import { JsonDiffEditor } from "./JsonDiffEditor";
+import { CellCodeEditor } from "./CellCodeEditor";
+import { CellDiffEditor } from "./CellDiffEditor";
 import { JsonTreeView } from "./JsonTreeView";
+import {
+  MIN_SIDE_BY_SIDE_WIDTH,
+  useContainerWidth,
+} from "../../hooks/useContainerWidth";
 
 type JsonInputMode = "code" | "tree" | "raw";
 
@@ -54,6 +59,10 @@ export const JsonInput: React.FC<JsonInputProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [prevValueKey, setPrevValueKey] = useState(valueKey);
   const [diffEnabled, setDiffEnabled] = useState(false);
+  const [sideBySide, setSideBySide] = useState(false);
+  const { ref: rootRef, width: containerWidth } = useContainerWidth<HTMLDivElement>();
+  const sideBySideFits = containerWidth >= MIN_SIDE_BY_SIDE_WIDTH;
+  const renderSideBySide = sideBySide && sideBySideFits;
 
   if (valueKey !== prevValueKey) {
     setPrevValueKey(valueKey);
@@ -170,7 +179,7 @@ export const JsonInput: React.FC<JsonInputProps> = ({
     : "relative";
 
   return (
-    <div className={rootClass}>
+    <div ref={rootRef} className={rootClass}>
       {/* Mode selector */}
       <div
         role="tablist"
@@ -213,15 +222,18 @@ export const JsonInput: React.FC<JsonInputProps> = ({
             style={fillHeight ? undefined : { height: 220 }}
           >
             {diffEnabled && hasDiff && originalText !== null ? (
-              <JsonDiffEditor
+              <CellDiffEditor
+                language="json"
                 original={originalText}
                 modified={text}
                 onChange={handleCodeChange}
                 readOnly={readOnly}
                 height="100%"
+                renderSideBySide={renderSideBySide}
               />
             ) : (
-              <JsonCodeEditor
+              <CellCodeEditor
+                language="json"
                 value={text}
                 onChange={handleCodeChange}
                 height="100%"
@@ -305,6 +317,22 @@ export const JsonInput: React.FC<JsonInputProps> = ({
                     className="ml-0.5 inline-block w-1.5 h-1.5 rounded-full bg-amber-400"
                   />
                 )}
+              </button>
+            )}
+            {mode === "code" && diffEnabled && hasDiff && sideBySideFits && (
+              <button
+                type="button"
+                onClick={() => setSideBySide((v) => !v)}
+                aria-pressed={sideBySide}
+                className={`px-2 py-1 text-xs rounded border transition-colors flex items-center gap-1 ${
+                  sideBySide
+                    ? "bg-blue-600/30 text-blue-100 border-blue-500/50"
+                    : "bg-surface-secondary text-secondary border-default hover:bg-surface-tertiary"
+                }`}
+                title={t("jsonInput.sideBySide", { defaultValue: "Side by side" })}
+              >
+                <Columns2 size={12} />
+                {t("jsonInput.sideBySide", { defaultValue: "Side by side" })}
               </button>
             )}
             {!disableExpand && (

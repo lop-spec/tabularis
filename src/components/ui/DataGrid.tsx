@@ -49,6 +49,7 @@ import {
 import { isGeometricType, formatGeometricValue } from "../../utils/geometry";
 import { isBlobColumn, isBlobWireFormat } from "../../utils/blob";
 import { isJsonColumn, isJsonContent } from "../../utils/json";
+import { isLongTextCellTarget } from "../../utils/text";
 import {
   pickPrimaryForeignKeyByColumn,
   isForeignKeyValueNavigable,
@@ -63,6 +64,8 @@ import { DateInput } from "./DateInput";
 import { RowEditorSidebar } from "./RowEditorSidebar";
 import { JsonCell } from "./JsonCell";
 import { JsonExpansionEditor } from "./JsonExpansionEditor";
+import { TextCell } from "./TextCell";
+import { TextExpansionEditor } from "./TextExpansionEditor";
 import { useDatabase } from "../../hooks/useDatabase";
 import {
   rowsToCSV,
@@ -191,13 +194,14 @@ export const DataGrid = React.memo(
       rowIndex: number;
       focusField?: string;
     } | null>(null);
-    const [expandedJsonCell, setExpandedJsonCell] = useState<{
+    const [expandedCell, setExpandedCell] = useState<{
       rowIndex: number;
       colIndex: number;
+      kind: "json" | "text";
     } | null>(null);
 
     useEffect(() => {
-      setExpandedJsonCell(null);
+      setExpandedCell(null);
     }, [data]);
 
     const [internalSelectedRowIndices, setInternalSelectedRowIndices] =
@@ -1204,7 +1208,7 @@ export const DataGrid = React.memo(
                       ? pendingDeletions?.[pkVal] !== undefined
                       : false;
                   const expansionMatchesRow =
-                    expandedJsonCell?.rowIndex === rowIndex;
+                    expandedCell?.rowIndex === rowIndex;
 
                   return (
                     <React.Fragment key={row.id}>
@@ -1280,6 +1284,13 @@ export const DataGrid = React.memo(
                         const isJsonCell =
                           isJsonCellTarget(colTypeForCell, rawCellValue) &&
                           !isPendingDelete;
+                        const isLongTextCell =
+                          !isJsonCell &&
+                          !isPendingDelete &&
+                          isLongTextCellTarget(
+                            colTypeForCell,
+                            hasPendingChange ? displayValue : rawCellValue,
+                          );
 
                         const stateClass = getCellStateClass({
                           isPendingDelete,
@@ -1475,9 +1486,9 @@ export const DataGrid = React.memo(
 
                                     if (isJsonCell) {
                                       const isExpanded =
-                                        expandedJsonCell?.rowIndex ===
-                                          rowIndex &&
-                                        expandedJsonCell?.colIndex === colIndex;
+                                        expandedCell?.kind === "json" &&
+                                        expandedCell?.rowIndex === rowIndex &&
+                                        expandedCell?.colIndex === colIndex;
                                       return (
                                         <JsonCell
                                           value={displayValue}
@@ -1485,10 +1496,14 @@ export const DataGrid = React.memo(
                                           isExpanded={isExpanded}
                                           isPendingDelete={isPendingDelete}
                                           onToggleExpand={() =>
-                                            setExpandedJsonCell(
+                                            setExpandedCell(
                                               isExpanded
                                                 ? null
-                                                : { rowIndex, colIndex },
+                                                : {
+                                                    rowIndex,
+                                                    colIndex,
+                                                    kind: "json",
+                                                  },
                                             )
                                           }
                                           onOpenViewer={() => {
@@ -1508,6 +1523,32 @@ export const DataGrid = React.memo(
                                               readonlyProp ?? false,
                                             );
                                           }}
+                                        />
+                                      );
+                                    }
+
+                                    if (isLongTextCell) {
+                                      const isExpanded =
+                                        expandedCell?.kind === "text" &&
+                                        expandedCell?.rowIndex === rowIndex &&
+                                        expandedCell?.colIndex === colIndex;
+                                      return (
+                                        <TextCell
+                                          value={displayValue}
+                                          displayText={formattedDisplay}
+                                          isExpanded={isExpanded}
+                                          isPendingDelete={isPendingDelete}
+                                          onToggleExpand={() =>
+                                            setExpandedCell(
+                                              isExpanded
+                                                ? null
+                                                : {
+                                                    rowIndex,
+                                                    colIndex,
+                                                    kind: "text",
+                                                  },
+                                            )
+                                          }
                                         />
                                       );
                                     }
@@ -1605,87 +1646,94 @@ export const DataGrid = React.memo(
                         );
                       })}
                     </tr>
-                    {expansionMatchesRow && expandedJsonCell && (
-                      <tr
-                        ref={rowVirtualizer.measureElement}
-                        data-expansion-for={virtualRow.index}
-                      >
-                        <td
-                          colSpan={columns.length + 1}
-                          className="p-0 border-b border-default"
+                    {expansionMatchesRow && expandedCell && (() => {
+                      const expColName = columns[expandedCell.colIndex];
+                      const mergedRow = mergedRows[rowIndex];
+                      const pendingExpansionValue = (() => {
+                        if (!mergedRow) return undefined;
+                        if (
+                          mergedRow.type === "existing" &&
+                          pkIndexMap !== null
+                        ) {
+                          const pkVal = mergedRow.rowData[pkIndexMap];
+                          const pendingVal =
+                            pkVal !== null &&
+                            pkVal !== undefined &&
+                            pkVal !== ""
+                              ? pendingChanges?.[String(pkVal)]?.changes?.[
+                                  expColName
+                                ]
+                              : undefined;
+                          if (pendingVal !== undefined) return pendingVal;
+                        }
+                        return mergedRow.rowData?.[expandedCell.colIndex];
+                      })();
+                      const expansionOriginalValue =
+                        mergedRow?.type === "existing"
+                          ? mergedRow?.rowData?.[expandedCell.colIndex]
+                          : undefined;
+                      const persistExpansionSave = (next: unknown) => {
+                        if (!mergedRow || !expandedCell) return;
+                        if (
+                          mergedRow.type === "insertion" &&
+                          onPendingInsertionChange &&
+                          mergedRow.tempId
+                        ) {
+                          onPendingInsertionChange(
+                            mergedRow.tempId,
+                            expColName,
+                            next,
+                          );
+                        } else if (
+                          mergedRow.type === "existing" &&
+                          onPendingChange &&
+                          pkIndexMap !== null
+                        ) {
+                          const pkVal = mergedRow.rowData[pkIndexMap];
+                          onPendingChange(pkVal, expColName, next);
+                        }
+                        setExpandedCell(null);
+                      };
+                      return (
+                        <tr
+                          ref={rowVirtualizer.measureElement}
+                          data-expansion-for={virtualRow.index}
                         >
-                          <div
-                            className="sticky left-0 bg-base/60 p-3"
-                            style={{
-                              width:
-                                parentViewportWidth > 0
-                                  ? `${parentViewportWidth}px`
-                                  : "100%",
-                            }}
+                          <td
+                            colSpan={columns.length + 1}
+                            className="p-0 border-b border-default"
                           >
-                            <JsonExpansionEditor
-                              value={(() => {
-                                const mergedRow = mergedRows[rowIndex];
-                                if (!mergedRow) return undefined;
-                                const expColName =
-                                  columns[expandedJsonCell.colIndex];
-                                if (
-                                  mergedRow.type === "existing" &&
-                                  pkIndexMap !== null
-                                ) {
-                                  const pkVal = mergedRow.rowData[pkIndexMap];
-                                  const pendingVal =
-                                    pkVal !== null &&
-                                    pkVal !== undefined &&
-                                    pkVal !== ""
-                                      ? pendingChanges?.[String(pkVal)]
-                                          ?.changes?.[expColName]
-                                      : undefined;
-                                  if (pendingVal !== undefined) return pendingVal;
-                                }
-                                return mergedRow.rowData?.[
-                                  expandedJsonCell.colIndex
-                                ];
-                              })()}
-                              originalValue={
-                                mergedRows[rowIndex]?.type === "existing"
-                                  ? mergedRows[rowIndex]?.rowData?.[
-                                      expandedJsonCell.colIndex
-                                    ]
-                                  : undefined
-                              }
-                              readOnly={readonlyProp ?? false}
-                              onCancel={() => setExpandedJsonCell(null)}
-                              onSave={(next) => {
-                                const mergedRow = mergedRows[rowIndex];
-                                if (!mergedRow || !expandedJsonCell) return;
-                                const colName =
-                                  columns[expandedJsonCell.colIndex];
-                                if (
-                                  mergedRow.type === "insertion" &&
-                                  onPendingInsertionChange &&
-                                  mergedRow.tempId
-                                ) {
-                                  onPendingInsertionChange(
-                                    mergedRow.tempId,
-                                    colName,
-                                    next,
-                                  );
-                                } else if (
-                                  mergedRow.type === "existing" &&
-                                  onPendingChange &&
-                                  pkIndexMap !== null
-                                ) {
-                                  const pkVal = mergedRow.rowData[pkIndexMap];
-                                  onPendingChange(pkVal, colName, next);
-                                }
-                                setExpandedJsonCell(null);
+                            <div
+                              className="sticky left-0 bg-base/60 p-3"
+                              style={{
+                                width:
+                                  parentViewportWidth > 0
+                                    ? `${parentViewportWidth}px`
+                                    : "100%",
                               }}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    )}
+                            >
+                              {expandedCell.kind === "json" ? (
+                                <JsonExpansionEditor
+                                  value={pendingExpansionValue}
+                                  originalValue={expansionOriginalValue}
+                                  readOnly={readonlyProp ?? false}
+                                  onCancel={() => setExpandedCell(null)}
+                                  onSave={persistExpansionSave}
+                                />
+                              ) : (
+                                <TextExpansionEditor
+                                  value={pendingExpansionValue}
+                                  originalValue={expansionOriginalValue}
+                                  readOnly={readonlyProp ?? false}
+                                  onCancel={() => setExpandedCell(null)}
+                                  onSave={persistExpansionSave}
+                                />
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
                     </React.Fragment>
                   );
                 })}
