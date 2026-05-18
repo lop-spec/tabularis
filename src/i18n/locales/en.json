@@ -637,7 +637,9 @@
       "disable": "Disable",
       "allow": "Allow",
       "prefer": "Prefer",
-      "require": "Require"
+      "require": "Require",
+      "verify-ca": "Verify CA",
+      "verify-full": "Verify Full"
     }
   },
   "sshConnections": {

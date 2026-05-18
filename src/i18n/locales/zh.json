@@ -592,7 +592,9 @@
       "disable": "禁用",
       "allow": "允许",
       "prefer": "首选",
-      "require": "要求"
+      "require": "要求",
+      "verify-ca": "验证 CA",
+      "verify-full": "完全验证"
     }
   },
   "sshConnections": {
