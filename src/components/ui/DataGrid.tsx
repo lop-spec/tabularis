@@ -846,17 +846,7 @@ export const DataGrid = React.memo(
       pendingDeletions,
     ]);
 
-    const deleteSelectedRow = useCallback(() => {
-      if (!contextMenu) return;
-
-      // If the right-clicked row is part of a multi-selection, delete all selected rows.
-      // Otherwise fall back to deleting just the right-clicked row.
-      const rightClickedIsSelected = selectedRowIndices.has(contextMenu.rowIndex);
-      const indicesToDelete =
-        rightClickedIsSelected && selectedRowIndices.size > 1
-          ? Array.from(selectedRowIndices)
-          : [contextMenu.rowIndex];
-
+    const deleteRowsByIndices = useCallback((indicesToDelete: number[]) => {
       const pkVals: unknown[] = [];
       for (const idx of indicesToDelete) {
         const mergedRow = mergedRows[idx];
@@ -877,18 +867,22 @@ export const DataGrid = React.memo(
           pkVals.forEach((v) => onMarkForDeletion(v));
         }
       }
+    }, [mergedRows, onDiscardInsertion, onMarkForDeletion, onMarkMultipleForDeletion, pkColumn, pkIndexMap]);
 
+    const deleteSelectedRow = useCallback(() => {
+      if (!contextMenu) return;
+
+      // If the right-clicked row is part of a multi-selection, delete all selected rows.
+      // Otherwise fall back to deleting just the right-clicked row.
+      const rightClickedIsSelected = selectedRowIndices.has(contextMenu.rowIndex);
+      const indicesToDelete =
+        rightClickedIsSelected && selectedRowIndices.size > 1
+          ? Array.from(selectedRowIndices)
+          : [contextMenu.rowIndex];
+
+      deleteRowsByIndices(indicesToDelete);
       setContextMenu(null);
-    }, [
-      contextMenu,
-      selectedRowIndices,
-      mergedRows,
-      onDiscardInsertion,
-      onMarkForDeletion,
-      onMarkMultipleForDeletion,
-      pkColumn,
-      pkIndexMap,
-    ]);
+    }, [contextMenu, selectedRowIndices, deleteRowsByIndices]);
 
     const duplicateSelectedRow = useCallback(() => {
       if (!contextMenu || !onDuplicateRow) return;
@@ -1118,11 +1112,17 @@ export const DataGrid = React.memo(
             }
           }
         }
+
+        // Delete / Backspace — delete selected rows
+        if ((e.key === "Delete" || e.key === "Backspace") && !editingCell && !readonlyProp && selectedRowIndices.size > 0) {
+          e.preventDefault();
+          deleteRowsByIndices(Array.from(selectedRowIndices));
+        }
       };
 
       document.addEventListener("keydown", handleKeyDown);
       return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [editingCell, selectedRowIndices, focusedCell, copyCellValue, copySelectedCells]);
+    }, [editingCell, selectedRowIndices, focusedCell, copyCellValue, copySelectedCells, readonlyProp, deleteRowsByIndices]);
 
     // Show "no data" if there are no columns (even with pending insertions, we can't render without column info)
     // OR if there are columns but no data and no pending insertions
