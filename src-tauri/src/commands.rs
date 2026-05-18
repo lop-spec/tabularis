@@ -310,17 +310,25 @@ pub fn find_connection_by_id<R: Runtime>(
     app: &AppHandle<R>,
     id: &str,
 ) -> Result<SavedConnection, String> {
-    let path = get_config_path(app)?;
-    if !path.exists() {
-        return Err("Connection not found".into());
-    }
-    // Use persistence module to properly load connections (handles both old and new formats)
-    let conn_file = persistence::load_connections_file(&path)?;
-    let mut conn = conn_file
-        .connections
-        .into_iter()
-        .find(|c| c.id == id)
-        .ok_or_else(|| "Connection not found".to_string())?;
+    let conn_cache =
+        app.state::<std::sync::Arc<crate::connection_cache::ConnectionCache>>();
+
+    let mut conn = match conn_cache.lookup(id) {
+        crate::connection_cache::CacheLookup::Hit(c) => c,
+        crate::connection_cache::CacheLookup::Miss => {
+            return Err("Connection not found".to_string())
+        }
+        crate::connection_cache::CacheLookup::Cold => {
+            let path = get_config_path(app)?;
+            let conn_file = persistence::load_connections_file(&path).unwrap_or_default();
+            conn_cache.populate(&conn_file.connections);
+            conn_file
+                .connections
+                .into_iter()
+                .find(|c| c.id == id)
+                .ok_or_else(|| "Connection not found".to_string())?
+        }
+    };
 
     // Load passwords from keychain if needed, via the in-memory cache.
     // On a warm cache hit this is a HashMap lookup (nanoseconds); on a cold miss
@@ -351,6 +359,19 @@ pub fn find_connection_by_id<R: Runtime>(
     }
 
     Ok(conn)
+}
+
+/// Write the connections file and invalidate the in-memory connection cache so
+/// the next `find_connection_by_id` call re-reads fresh data from disk.
+fn save_connections_and_invalidate<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &std::path::Path,
+    file: &crate::models::ConnectionsFile,
+) -> Result<(), String> {
+    persistence::save_connections_file(path, file)?;
+    app.state::<std::sync::Arc<crate::connection_cache::ConnectionCache>>()
+        .invalidate();
+    Ok(())
 }
 
 // --- Commands ---
@@ -519,7 +540,7 @@ pub async fn save_connection<R: Runtime>(
         detect_json_in_text_columns,
     };
     conn_file.connections.push(new_conn.clone());
-    persistence::save_connections_file(&path, &conn_file)?;
+    save_connections_and_invalidate(&app, &path, &conn_file)?;
 
     log::info!("Connection saved successfully: {} (ID: {})", name, id);
 
@@ -551,7 +572,7 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
     let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
     credential_cache::invalidate_all_for_connection(&cache, &id);
 
-    persistence::save_connections_file(&path, &conn_file)?;
+    save_connections_and_invalidate(&app, &path, &conn_file)?;
 
     // Clean up query history for this connection
     if let Err(e) = crate::query_history::remove_history_for_connection(&app, &id) {
@@ -635,7 +656,7 @@ pub async fn update_connection<R: Runtime>(
 
     conn_file.connections[conn_idx] = updated.clone();
 
-    persistence::save_connections_file(&path, &conn_file)?;
+    save_connections_and_invalidate(&app, &path, &conn_file)?;
 
     // On single→multi transition, associate existing favorites/history (with no
     // database set) to the original single database name.
@@ -751,7 +772,7 @@ pub async fn duplicate_connection<R: Runtime>(
 
     conn_file.connections.push(new_conn.clone());
 
-    persistence::save_connections_file(&path, &conn_file)?;
+    save_connections_and_invalidate(&app, &path, &conn_file)?;
 
     let mut returned_conn = new_conn;
     // Return with passwords for frontend consistency
@@ -895,7 +916,7 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
 
     // Save migrated connections using new format (preserving groups)
     conn_file.connections = migrated_connections;
-    persistence::save_connections_file(&conn_path, &conn_file)?;
+    save_connections_and_invalidate(app, &conn_path, &conn_file)?;
 
     println!(
         "[Migration] Successfully migrated {} SSH connections",
@@ -3339,7 +3360,7 @@ pub async fn create_connection_group<R: Runtime>(
     };
 
     file.groups.push(group.clone());
-    persistence::save_connections_file(&path, &file)?;
+    save_connections_and_invalidate(&app, &path, &file)?;
 
     Ok(group)
 }
@@ -3372,7 +3393,7 @@ pub async fn update_connection_group<R: Runtime>(
     }
 
     let updated = group.clone();
-    persistence::save_connections_file(&path, &file)?;
+    save_connections_and_invalidate(&app, &path, &file)?;
 
     Ok(updated)
 }
@@ -3394,7 +3415,7 @@ pub async fn delete_connection_group<R: Runtime>(
 
     // Remove the group
     file.groups.retain(|g| g.id != id);
-    persistence::save_connections_file(&path, &file)?;
+    save_connections_and_invalidate(&app, &path, &file)?;
 
     Ok(())
 }
@@ -3421,7 +3442,7 @@ pub async fn move_connection_to_group<R: Runtime>(
     }
 
     let updated = conn.clone();
-    persistence::save_connections_file(&path, &file)?;
+    save_connections_and_invalidate(&app, &path, &file)?;
 
     Ok(updated)
 }
@@ -3440,7 +3461,7 @@ pub async fn reorder_groups<R: Runtime>(
         }
     }
 
-    persistence::save_connections_file(&path, &file)?;
+    save_connections_and_invalidate(&app, &path, &file)?;
     Ok(())
 }
 
@@ -3458,7 +3479,7 @@ pub async fn reorder_connections_in_group<R: Runtime>(
         }
     }
 
-    persistence::save_connections_file(&path, &file)?;
+    save_connections_and_invalidate(&app, &path, &file)?;
     Ok(())
 }
 
@@ -3643,7 +3664,7 @@ pub async fn import_connections_payload<R: Runtime>(
     }
 
     // Save files
-    persistence::save_connections_file(&conn_path, &current_file)?;
+    save_connections_and_invalidate(&app, &conn_path, &current_file)?;
     let ssh_json = serde_json::to_string_pretty(&current_ssh).map_err(|e| e.to_string())?;
     fs::write(ssh_path, ssh_json).map_err(|e| e.to_string())?;
 

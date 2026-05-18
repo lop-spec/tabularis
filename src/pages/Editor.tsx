@@ -700,14 +700,6 @@ export const Editor = () => {
           }
         }
 
-        if (tableName) {
-          // Wait for PK column to be fetched before showing results
-          await fetchPkColumn(tableName, targetTabId, targetTab?.schema ?? undefined);
-        } else {
-          // No table, explicitly set pkColumn to null (read-only mode)
-          updateTab(targetTabId, { pkColumn: null });
-        }
-
         const resultWithCount =
           res.pagination &&
           res.pagination.total_rows === null &&
@@ -727,6 +719,13 @@ export const Editor = () => {
           isLoading: false,
           activeTable: tableName || null,
         });
+
+        if (tableName) {
+          // Fetch column metadata in the background; tab updates when ready
+          fetchPkColumn(tableName, targetTabId, targetTab?.schema ?? undefined);
+        } else {
+          updateTab(targetTabId, { pkColumn: null });
+        }
 
         if (shouldRecordHistory) {
           addHistoryEntry(
