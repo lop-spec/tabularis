@@ -11,7 +11,8 @@
   <a href="./README.es.md">Español</a> |
   <a href="./README.zh-CN.md">中文</a> |
   <a href="./README.fr.md">Français</a> |
-  <a href="./README.de.md">Deutsch</a>
+  <a href="./README.de.md">Deutsch</a> |
+  <a href="./README.ja.md">日本語</a>
 </p>
 
 <p align="center">
@@ -32,7 +33,7 @@
 
 An open-source desktop client for modern databases. Supports PostgreSQL, MySQL/MariaDB and SQLite and is hackable with plugins, with notebooks, AI, and MCP built in.
 
-**Available in:** English, Italian, Spanish, Chinese (Simplified), French, German
+**Available in:** English, Italian, Spanish, Chinese (Simplified), French, German, Japanese
 
 **Discord** - [Join our Discord server](https://discord.com/invite/K2hmhfHRSt) to talk with the maintainers, share feedback, and get help from the community.
 

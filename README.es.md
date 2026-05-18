@@ -11,7 +11,8 @@
   <a href="./README.es.md">Español</a> |
   <a href="./README.zh-CN.md">中文</a> |
   <a href="./README.fr.md">Français</a> |
-  <a href="./README.de.md">Deutsch</a>
+  <a href="./README.de.md">Deutsch</a> |
+  <a href="./README.ja.md">日本語</a>
 </p>
 
 Cliente de escritorio open source para bases de datos modernas. Soporta PostgreSQL, MySQL/MariaDB y SQLite, con notebooks SQL, funciones de IA, integración MCP y sistema de plugins externo.
