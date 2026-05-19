@@ -2,6 +2,7 @@ use super::helpers::{
     escape_identifier, extract_base_type, is_raw_sql_function, is_wkt_geometry,
     json_array_to_pg_literal, try_parse_pg_array,
 };
+use crate::drivers::common::parse_unsafe_bigint_string;
 use tokio_postgres::types::ToSql;
 
 pub(super) type PgParam = Box<dyn ToSql + Send + Sync>;
@@ -38,6 +39,14 @@ pub(super) fn build_pk_predicate(
         serde_json::Value::String(s) => {
             if let Ok(uuid) = s.parse::<uuid::Uuid>() {
                 Ok((format!("{} = ${}", col, placeholder_idx), Box::new(uuid)))
+            } else if let Some(n) = parse_unsafe_bigint_string(&s) {
+                // Bigint PK values outside JS safe range arrive from the UI as
+                // strings. Cast through bigint so the equality test against an
+                // int8 column does not trip a PostgreSQL type mismatch.
+                Ok((
+                    format!("{} = CAST(${} AS bigint)", col, placeholder_idx),
+                    Box::new(n),
+                ))
             } else {
                 Ok((format!("{} = ${}", col, placeholder_idx), Box::new(s)))
             }
