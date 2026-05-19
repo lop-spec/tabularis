@@ -147,6 +147,18 @@ fn test_is_select_query() {
 }
 
 #[test]
+fn test_is_select_query_with_leading_comments() {
+    assert!(is_select_query("-- header\nSELECT * FROM users"));
+    assert!(is_select_query("-- l1\n-- l2\n\nSELECT id FROM posts"));
+    assert!(is_select_query("/* block comment */SELECT * FROM users"));
+    assert!(is_select_query(
+        "-- ============\n-- title\n-- ============\n\nSELECT 1"
+    ));
+    assert!(!is_select_query("-- header\nUPDATE users SET name = 't'"));
+    assert!(!is_select_query("/* sel */ INSERT INTO t VALUES (1)"));
+}
+
+#[test]
 fn test_calculate_offset() {
     assert_eq!(super::calculate_offset(1, 100), 0);
     assert_eq!(super::calculate_offset(2, 100), 100);
@@ -319,6 +331,41 @@ fn test_build_paginated_query_subquery_with_limit() {
     assert_eq!(
         result,
         "SELECT * FROM (SELECT id FROM t ORDER BY id LIMIT 100) sub ORDER BY id LIMIT 5 OFFSET 0"
+    );
+}
+
+#[test]
+fn test_build_paginated_query_with_leading_comments() {
+    let q = "-- header\nSELECT * FROM t ORDER BY id";
+    let result = build_paginated_query(q, 100, 1);
+    assert_eq!(
+        result,
+        "-- header\nSELECT * FROM t ORDER BY id LIMIT 101 OFFSET 0"
+    );
+}
+
+#[test]
+fn test_build_paginated_query_multiline_comments_with_user_limit() {
+    // Leading-comment newlines must survive `strip_limit_offset` so the
+    // appended `LIMIT … OFFSET …` lands on its own line rather than
+    // being swallowed into the `--` header as comment text.
+    let q = "-- ============\n-- title\n-- ============\n\nSELECT * FROM t ORDER BY id LIMIT 50";
+    let result = build_paginated_query(q, 100, 1);
+    assert_eq!(
+        result,
+        "-- ============\n-- title\n-- ============\n\nSELECT * FROM t ORDER BY id LIMIT 50 OFFSET 0"
+    );
+}
+
+#[test]
+fn test_strip_limit_offset_preserves_leading_comments() {
+    assert_eq!(
+        strip_limit_offset("-- header\nSELECT * FROM t LIMIT 10"),
+        "-- header\nSELECT * FROM t"
+    );
+    assert_eq!(
+        strip_limit_offset("-- l1\n-- l2\nSELECT * FROM t"),
+        "-- l1\n-- l2\nSELECT * FROM t"
     );
 }
 
