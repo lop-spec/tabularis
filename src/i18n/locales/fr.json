@@ -624,7 +624,9 @@
       "disable": "Désactiver",
       "allow": "Autoriser",
       "prefer": "Préférer",
-      "require": "Exiger"
+      "require": "Exiger",
+      "verify-ca": "Vérifier CA",
+      "verify-full": "Vérification complète"
     }
   },
   "sshConnections": {

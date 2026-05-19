@@ -62,7 +62,6 @@ This matches what most code editors do out of the box and is the
 * **DataGrid:** handle empty column names from drivers ([b015b35](https://github.com/debba/tabularis/commit/b015b3507a92516a365c772f09731c4fedfdcbfa))
 * **notebook:** render db selector dropdown via portal to avoid clipping ([b0f51ed](https://github.com/debba/tabularis/commit/b0f51ed6a48a6a1b3ea3bb69e5c9acfdc85de354))
 
-
 ### Features
 
 * Add connection export and import functionality ([aee7df1](https://github.com/debba/tabularis/commit/aee7df1718542a5b3ad6ff9e6e5d5f9bfe41fc6e))
@@ -1037,6 +1036,3 @@ requires_length and requires_precision and adds default_length
 * **settings:** implement query limit UI and backend streaming support ([9fd89f3](https://github.com/debba/debba.sql/commit/9fd89f3c3b3538b0d09fe8324e89ba4172339100))
 * **ssh:** add SSH tunnel support with connection edit/delete UI ([3a9fc49](https://github.com/debba/debba.sql/commit/3a9fc495d44cdd907d5f561a73d5734d0ccb0590))
 * **ssh:** add system SSH backend and URL encoding for DB URLs ([5e93ea3](https://github.com/debba/debba.sql/commit/5e93ea38f1a74966ab1a41f5ddda4e8cb13bb23c))
-
-
-

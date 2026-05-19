@@ -1003,7 +1003,7 @@ export const NewConnectionModal = ({
           value={formData.ssl_mode || (driver === "postgres" ? "prefer" : "required")}
           options={
             driver === "postgres"
-              ? ["disable", "allow", "prefer", "require"]
+              ? ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
               : ["disabled", "preferred", "required", "verify_ca", "verify_identity"]
           }
           labels={
@@ -1013,6 +1013,8 @@ export const NewConnectionModal = ({
                   allow: t("newConnection.sslModes.allow", { defaultValue: "Allow" }),
                   prefer: t("newConnection.sslModes.prefer", { defaultValue: "Prefer" }),
                   require: t("newConnection.sslModes.require", { defaultValue: "Require" }),
+                  "verify-ca": t("newConnection.sslModes.verify-ca", { defaultValue: "Verify CA" }),
+                  "verify-full": t("newConnection.sslModes.verify-full", { defaultValue: "Verify Full" }),
                 }
               : {
                   disabled: t("newConnection.sslModes.disabled", { defaultValue: "Disabled" }),
