@@ -59,21 +59,8 @@ This matches what most code editors do out of the box and is the
 
 ### Bug Fixes
 
-* **postgres:** fix verify-ca verifier to avoid double-validation and
-  potential panic on empty root stores
-* **postgres:** require explicit CA file for verify-ca mode to avoid
-  macOS Secure Transport EKU incompatibilities
 * **DataGrid:** handle empty column names from drivers ([b015b35](https://github.com/debba/tabularis/commit/b015b3507a92516a365c772f09731c4fedfdcbfa))
 * **notebook:** render db selector dropdown via portal to avoid clipping ([b0f51ed](https://github.com/debba/tabularis/commit/b0f51ed6a48a6a1b3ea3bb69e5c9acfdc85de354))
-
-
-### BREAKING CHANGES
-
-* **postgres:** `sslmode=require` now matches libpq behavior (TLS without
-  certificate validation). Previously it validated the certificate chain.
-  Users who need certificate validation should use `verify-ca` (with an
-  explicit CA file) or `verify-full` instead.
-
 
 ### Features
 
