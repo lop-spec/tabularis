@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { JsonCodeEditor } from "../../../src/components/ui/JsonCodeEditor";
+import { CellCodeEditor } from "../../../src/components/ui/CellCodeEditor";
 import { ThemeContext, type ThemeContextType } from "../../../src/contexts/ThemeContext";
 import type { Theme } from "../../../src/types/theme";
 import type { ReactNode } from "react";
@@ -23,7 +23,6 @@ vi.mock("@monaco-editor/react", () => {
     __esModule: true,
     default: (props: MonacoMockProps) => {
       lastProps.current = props;
-      // Invoke beforeMount with a stub monaco instance
       props.beforeMount?.({});
       return (
         <textarea
@@ -74,22 +73,32 @@ const withTheme =
     </ThemeContext.Provider>
   );
 
-describe("JsonCodeEditor", () => {
+describe("CellCodeEditor", () => {
   beforeEach(() => {
     lastProps.current = null;
     vi.clearAllMocks();
   });
 
-  it("renders with the provided value and json language", () => {
-    render(<JsonCodeEditor value='{"a":1}' onChange={vi.fn()} />);
+  it("defaults to the json language when language is omitted", () => {
+    render(<CellCodeEditor value='{"a":1}' onChange={vi.fn()} />);
 
     const editor = screen.getByTestId("monaco-editor");
     expect(editor).toHaveValue('{"a":1}');
     expect(editor.getAttribute("data-language")).toBe("json");
   });
 
+  it("renders with the plaintext language when requested", () => {
+    render(
+      <CellCodeEditor value="hello" onChange={vi.fn()} language="plaintext" />,
+    );
+
+    expect(
+      screen.getByTestId("monaco-editor").getAttribute("data-language"),
+    ).toBe("plaintext");
+  });
+
   it("falls back to vs-dark when no ThemeContext is present", () => {
-    render(<JsonCodeEditor value="" onChange={vi.fn()} />);
+    render(<CellCodeEditor value="" onChange={vi.fn()} />);
 
     expect(screen.getByTestId("monaco-editor").getAttribute("data-theme")).toBe(
       "vs-dark",
@@ -97,7 +106,7 @@ describe("JsonCodeEditor", () => {
   });
 
   it("uses currentTheme.id when ThemeContext provides one", () => {
-    render(<JsonCodeEditor value="" onChange={vi.fn()} />, {
+    render(<CellCodeEditor value="" onChange={vi.fn()} />, {
       wrapper: withTheme(makeTheme("tabularis-dark")),
     });
 
@@ -108,7 +117,7 @@ describe("JsonCodeEditor", () => {
 
   it("forwards edits through onChange", () => {
     const onChange = vi.fn();
-    render(<JsonCodeEditor value="" onChange={onChange} />);
+    render(<CellCodeEditor value="" onChange={onChange} />);
 
     fireEvent.change(screen.getByTestId("monaco-editor"), {
       target: { value: '{"updated":true}' },
@@ -119,7 +128,7 @@ describe("JsonCodeEditor", () => {
 
   it("passes an empty string when Monaco reports undefined", () => {
     const onChange = vi.fn();
-    render(<JsonCodeEditor value="x" onChange={onChange} />);
+    render(<CellCodeEditor value="x" onChange={onChange} />);
 
     lastProps.current?.onChange?.(undefined);
 
@@ -129,7 +138,7 @@ describe("JsonCodeEditor", () => {
   it("surfaces validation markers via onValidate", () => {
     const onValidate = vi.fn();
     render(
-      <JsonCodeEditor value="" onChange={vi.fn()} onValidate={onValidate} />,
+      <CellCodeEditor value="" onChange={vi.fn()} onValidate={onValidate} />,
     );
 
     const markers = [{ message: "bad", severity: 8 }];
@@ -138,8 +147,8 @@ describe("JsonCodeEditor", () => {
     expect(onValidate).toHaveBeenCalledWith(markers);
   });
 
-  it("configures Monaco options per spec", () => {
-    render(<JsonCodeEditor value="" onChange={vi.fn()} />);
+  it("configures Monaco options per spec for json", () => {
+    render(<CellCodeEditor value="" onChange={vi.fn()} />);
 
     const opts = lastProps.current?.options ?? {};
     expect(opts).toMatchObject({
@@ -152,8 +161,16 @@ describe("JsonCodeEditor", () => {
     });
   });
 
+  it("disables formatOnPaste for plaintext", () => {
+    render(
+      <CellCodeEditor value="" onChange={vi.fn()} language="plaintext" />,
+    );
+
+    expect(lastProps.current?.options?.formatOnPaste).toBe(false);
+  });
+
   it("respects the readOnly prop", () => {
-    render(<JsonCodeEditor value="" onChange={vi.fn()} readOnly />);
+    render(<CellCodeEditor value="" onChange={vi.fn()} readOnly />);
 
     expect(
       screen.getByTestId("monaco-editor").getAttribute("data-readonly"),
@@ -162,7 +179,7 @@ describe("JsonCodeEditor", () => {
   });
 
   it("forwards the height prop", () => {
-    render(<JsonCodeEditor value="" onChange={vi.fn()} height="240px" />);
+    render(<CellCodeEditor value="" onChange={vi.fn()} height="240px" />);
 
     expect(lastProps.current?.height).toBe("240px");
   });

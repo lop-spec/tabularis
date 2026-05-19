@@ -5,9 +5,11 @@ import { GeometryInput } from "./GeometryInput";
 import { BlobInput } from "./BlobInput";
 import { DateInput } from "./DateInput";
 import { JsonInput } from "./JsonInput";
+import { TextInput } from "./TextInput";
 import { isGeometricType, formatGeometricValue } from "../../utils/geometry";
 import { isBlobColumn } from "../../utils/blob";
 import { isJsonColumn, isJsonContent } from "../../utils/json";
+import { isLongTextValue, isTextColumn } from "../../utils/text";
 import { getDateInputMode } from "../../utils/dateInput";
 import { USE_DEFAULT_SENTINEL } from "../../utils/dataGrid";
 
@@ -70,6 +72,13 @@ export const FieldEditor = ({
       isJsonContent(originalValue));
   const isJson = isJsonByType || detectedJson;
   const dateMode = !isJson && type ? getDateInputMode(type) : null;
+  const isLongText =
+    !isBlob &&
+    !isGeometric &&
+    !isJson &&
+    !dateMode &&
+    isTextColumn(type) &&
+    (isLongTextValue(value) || isLongTextValue(originalValue));
 
   const defaultPlaceholder = placeholder || t("rowEditor.enterValue");
 
@@ -122,6 +131,14 @@ export const FieldEditor = ({
       value={String(value ?? "")}
       mode={dateMode}
       onChange={(newValue) => onChange(newValue)}
+      className={className}
+    />
+  ) : isLongText ? (
+    <TextInput
+      value={value}
+      originalValue={originalValue}
+      onChange={(newValue) => onChange(newValue)}
+      placeholder={defaultPlaceholder}
       className={className}
     />
   ) : (

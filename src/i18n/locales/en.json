@@ -1174,7 +1174,9 @@
     "copyPath": "Copy Path",
     "copyValue": "Copy Value",
     "addItem": "Add Item",
-    "removeItem": "Remove Item"
+    "removeItem": "Remove Item",
+    "diff": "Diff",
+    "sideBySide": "Side by side"
   },
   "jsonViewer": {
     "close": "Close",
@@ -1183,6 +1185,16 @@
   "jsonCell": {
     "expand": "Toggle inline JSON tree",
     "openViewer": "Open JSON viewer"
+  },
+  "textCell": {
+    "expand": "Toggle inline text editor"
+  },
+  "textInput": {
+    "diff": "Diff",
+    "sideBySide": "Side by side"
+  },
+  "textViewer": {
+    "save": "Save"
   },
   "rowEditor": {
     "title": "Edit Row",
