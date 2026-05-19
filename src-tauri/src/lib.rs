@@ -15,6 +15,8 @@ pub mod clipboard_import;
 pub mod commands;
 pub mod config;
 pub mod connection_cache;
+#[cfg(test)]
+pub mod connection_cache_tests;
 pub mod credential_cache;
 pub mod dump_commands; // Added
 #[cfg(test)]
