@@ -14,6 +14,9 @@ pub mod cli;
 pub mod clipboard_import;
 pub mod commands;
 pub mod config;
+pub mod connection_cache;
+#[cfg(test)]
+pub mod connection_cache_tests;
 pub mod credential_cache;
 pub mod dump_commands; // Added
 #[cfg(test)]
@@ -160,6 +163,9 @@ pub fn run() {
         .manage(log_buffer)
         .manage(std::sync::Arc::new(
             credential_cache::CredentialCache::default(),
+        ))
+        .manage(std::sync::Arc::new(
+            connection_cache::ConnectionCache::default(),
         ))
         .manage(explain_import::PendingExplainFile::default())
         .manage(json_viewer::JsonViewerStore::default())
