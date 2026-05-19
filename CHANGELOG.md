@@ -3,8 +3,20 @@
 
 ### Bug Fixes
 
+* **postgres:** fix verify-ca verifier to avoid double-validation and
+  potential panic on empty root stores
+* **postgres:** require explicit CA file for verify-ca mode to avoid
+  macOS Secure Transport EKU incompatibilities
 * **DataGrid:** handle empty column names from drivers ([b015b35](https://github.com/debba/tabularis/commit/b015b3507a92516a365c772f09731c4fedfdcbfa))
 * **notebook:** render db selector dropdown via portal to avoid clipping ([b0f51ed](https://github.com/debba/tabularis/commit/b0f51ed6a48a6a1b3ea3bb69e5c9acfdc85de354))
+
+
+### BREAKING CHANGES
+
+* **postgres:** `sslmode=require` now matches libpq behavior (TLS without
+  certificate validation). Previously it validated the certificate chain.
+  Users who need certificate validation should use `verify-ca` (with an
+  explicit CA file) or `verify-full` instead.
 
 
 ### Features
@@ -981,6 +993,3 @@ requires_length and requires_precision and adds default_length
 * **settings:** implement query limit UI and backend streaming support ([9fd89f3](https://github.com/debba/debba.sql/commit/9fd89f3c3b3538b0d09fe8324e89ba4172339100))
 * **ssh:** add SSH tunnel support with connection edit/delete UI ([3a9fc49](https://github.com/debba/debba.sql/commit/3a9fc495d44cdd907d5f561a73d5734d0ccb0590))
 * **ssh:** add system SSH backend and URL encoding for DB URLs ([5e93ea3](https://github.com/debba/debba.sql/commit/5e93ea38f1a74966ab1a41f5ddda4e8cb13bb23c))
-
-
-

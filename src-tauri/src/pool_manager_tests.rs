@@ -228,11 +228,56 @@ mod postgres_tls_connector_tests {
     }
 
     #[test]
-    fn test_tls_connector_verify_ca() {
+    fn test_tls_connector_verify_ca_requires_ca_file() {
         let params = params_with_ssl("verify-ca");
         let result = build_postgres_tls_connector(&params);
-        // Should succeed with VerifyCaCertVerifier using platform roots
+        // verify-ca requires an explicit CA file — no platform roots fallback
+        match result {
+            Err(e) => assert!(e.contains("verify-ca mode requires an explicit CA file")),
+            Ok(_) => panic!("Expected error for verify-ca without CA file"),
+        }
+    }
+
+    #[test]
+    fn test_tls_connector_verify_ca_with_ca_file() {
+        use std::io::Write;
+
+        // Create a minimal test CA certificate
+        let temp_dir = std::env::temp_dir();
+        let file_path = temp_dir.join("test_verify_ca_ca.pem");
+        {
+            // Write a minimal valid PEM certificate block for testing
+            let cert_pem = include_bytes!("../tests/test_ca.pem");
+            let mut file = std::fs::File::create(&file_path).unwrap();
+            file.write_all(cert_pem).unwrap();
+        }
+
+        let params = ConnectionParams {
+            driver: "postgres".to_string(),
+            host: Some("localhost".to_string()),
+            port: Some(5432),
+            username: Some("test".to_string()),
+            password: Some("test".to_string()),
+            database: DatabaseSelection::Single("testdb".to_string()),
+            ssl_mode: Some("verify-ca".to_string()),
+            ssl_ca: Some(file_path.to_str().unwrap().to_string()),
+            ssl_cert: None,
+            ssl_key: None,
+            ssh_enabled: None,
+            ssh_connection_id: None,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_file: None,
+            ssh_key_passphrase: None,
+            save_in_keychain: None,
+            connection_id: None,
+        };
+        let result = build_postgres_tls_connector(&params);
         assert!(result.is_ok());
+
+        let _ = std::fs::remove_file(&file_path);
     }
 
     #[test]
@@ -272,34 +317,5 @@ mod postgres_tls_connector_tests {
 
         // Cleanup
         let _ = std::fs::remove_file(&file_path);
-    }
-
-    #[test]
-    fn test_is_hostname_error() {
-        use crate::pool_manager::is_hostname_error;
-        use rustls::CertificateError;
-        use rustls::Error as TlsError;
-
-        // Test NotValidForName
-        assert!(is_hostname_error(&TlsError::InvalidCertificate(
-            CertificateError::NotValidForName
-        )));
-
-        // Test NotValidForNameContext
-        assert!(is_hostname_error(&TlsError::InvalidCertificate(
-            CertificateError::NotValidForNameContext {
-                expected: rustls::pki_types::ServerName::try_from("example.com").unwrap(),
-                presented: vec!["other.com".to_string()],
-            }
-        )));
-
-        // Test non-hostname errors
-        assert!(!is_hostname_error(&TlsError::InvalidCertificate(
-            CertificateError::Expired
-        )));
-        assert!(!is_hostname_error(&TlsError::InvalidCertificate(
-            CertificateError::UnknownIssuer
-        )));
-        assert!(!is_hostname_error(&TlsError::NoCertificatesPresented));
     }
 }

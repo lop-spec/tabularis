@@ -2,11 +2,13 @@ use crate::models::ConnectionParams;
 use deadpool_postgres::{Manager as PgPoolManager, Pool as PgPool};
 use once_cell::sync::Lazy;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::client::WebPkiServerVerifier;
+use rustls::client::{verify_server_cert_signed_by_trust_anchor, WebPkiServerVerifier};
+use rustls::crypto::verify_tls12_signature;
+use rustls::crypto::verify_tls13_signature;
 use rustls::crypto::CryptoProvider;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use rustls::CertificateError;
-use rustls::DigitallySignedStruct;
+use rustls::server::ParsedCertificate;
+use rustls::{DigitallySignedStruct};
 use rustls::{ClientConfig, Error as TlsError, RootCertStore};
 use rustls_platform_verifier::BuilderVerifierExt;
 use sqlx::{sqlite::SqliteConnectOptions, MySql, Pool, Sqlite};
@@ -175,25 +177,6 @@ pub(crate) fn build_postgres_configurations(params: &ConnectionParams) -> PgConf
     cfg
 }
 
-/// Check if a TLS error is a hostname verification failure.
-pub(crate) fn is_hostname_error(err: &TlsError) -> bool {
-    matches!(
-        err,
-        TlsError::InvalidCertificate(CertificateError::NotValidForName)
-            | TlsError::InvalidCertificate(CertificateError::NotValidForNameContext { .. })
-    )
-}
-
-/// Load platform root certificates into a RootCertStore.
-fn load_platform_roots() -> RootCertStore {
-    let mut roots = RootCertStore::empty();
-    let result = rustls_native_certs::load_native_certs();
-    for cert in result.certs {
-        let _ = roots.add(cert);
-    }
-    roots
-}
-
 /// Build the rustls connector for the PostgreSQL pool.
 ///
 /// `rustls` (not `native-tls`) because macOS Secure Transport applies a
@@ -217,7 +200,12 @@ fn load_platform_roots() -> RootCertStore {
 /// - `disable`: no TLS
 /// - `allow`/`prefer`: TLS without certificate verification
 /// - `require`: force TLS without certificate verification
-/// - `verify-ca`: force TLS, validate certificate chain, skip hostname check
+///   NOTE: Prior to v0.10.3, `require` validated the certificate chain.
+///   It now matches libpq behavior (TLS without validation). Users who
+///   need certificate validation should use `verify-ca` or `verify-full`.
+/// - `verify-ca`: force TLS, validate certificate chain, skip hostname check.
+///   Requires an explicit CA file — platform roots are not used to avoid
+///   macOS Secure Transport EKU incompatibilities.
 /// - `verify-full`: force TLS, validate certificate chain and hostname
 pub(crate) fn build_postgres_tls_connector(
     params: &ConnectionParams,
@@ -230,7 +218,7 @@ pub(crate) fn build_postgres_tls_connector(
         "disable" | "allow" | "prefer" => {
             // No certificate verification for these modes.
             // The PgSslMode setting handles whether TLS is attempted.
-            let verifier = Arc::new(NoCertVerifier);
+            let verifier = Arc::new(NoCertVerifier::new());
             ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(verifier)
@@ -238,7 +226,7 @@ pub(crate) fn build_postgres_tls_connector(
         }
         "require" => {
             // Force TLS but skip all certificate validation.
-            let verifier = Arc::new(NoCertVerifier);
+            let verifier = Arc::new(NoCertVerifier::new());
             ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(verifier)
@@ -246,11 +234,20 @@ pub(crate) fn build_postgres_tls_connector(
         }
         "verify-ca" => {
             // Validate certificate chain but skip hostname verification.
-            let roots = match user_ca {
-                Some(ca_path) => load_roots_from_pem(ca_path)?,
-                None => load_platform_roots(),
-            };
-            let verifier = Arc::new(VerifyCaCertVerifier::new(roots));
+            // Requires an explicit CA file — we deliberately do NOT fall back
+            // to platform roots because macOS Secure Transport applies strict
+            // id-kp-serverAuth EKU checks that reject valid CA certificates
+            // (e.g. the AWS RDS bundle). This matches libpq's behavior where
+            // sslmode=verify-ca expects root certs to be supplied explicitly.
+            let ca_path = user_ca.ok_or_else(|| {
+                "verify-ca mode requires an explicit CA file via the connection's \
+                CA Certificate field. On macOS, platform root certificates are \
+                not compatible with strict EKU checks. For automatic platform \
+                trust, use verify-full instead."
+                    .to_string()
+            })?;
+            let roots = load_roots_from_pem(ca_path)?;
+            let verifier = Arc::new(VerifyCaCertVerifier::new(roots)?);
             ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(verifier)
@@ -278,7 +275,7 @@ pub(crate) fn build_postgres_tls_connector(
         }
         _ => {
             // Unknown mode, fall back to no verification.
-            let verifier = Arc::new(NoCertVerifier);
+            let verifier = Arc::new(NoCertVerifier::new());
             ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(verifier)
@@ -312,7 +309,19 @@ pub(crate) fn load_roots_from_pem(path: &str) -> Result<RootCertStore, String> {
 /// A certificate verifier that skips certificate validation entirely.
 /// Used for sslmode=require, prefer, allow.
 #[derive(Debug)]
-struct NoCertVerifier;
+struct NoCertVerifier {
+    supported: rustls::crypto::WebPkiSupportedAlgorithms,
+}
+
+impl NoCertVerifier {
+    fn new() -> Self {
+        let provider = CryptoProvider::get_default()
+            .expect("rustls CryptoProvider not installed");
+        Self {
+            supported: provider.signature_verification_algorithms,
+        }
+    }
+}
 
 impl ServerCertVerifier for NoCertVerifier {
     fn verify_server_cert(
@@ -345,27 +354,41 @@ impl ServerCertVerifier for NoCertVerifier {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        CryptoProvider::get_default()
-            .unwrap()
-            .signature_verification_algorithms
-            .supported_schemes()
+        self.supported.supported_schemes()
     }
 }
 
 /// A certificate verifier that validates the certificate chain against
 /// a custom root store but skips hostname verification.
 /// Matches libpq `sslmode=verify-ca` behavior.
+///
+/// Uses `verify_server_cert_signed_by_trust_anchor` directly rather than
+/// wrapping `WebPkiServerVerifier` — this makes the "skip hostname check"
+/// intent explicit, avoids double-verifying the chain, and prevents the
+/// fragile `.or(Ok(...))` error-recovery pattern.
 #[derive(Debug)]
 struct VerifyCaCertVerifier {
-    inner: Arc<WebPkiServerVerifier>,
+    roots: Arc<RootCertStore>,
+    supported: rustls::crypto::WebPkiSupportedAlgorithms,
 }
 
 impl VerifyCaCertVerifier {
-    fn new(roots: RootCertStore) -> Self {
-        let inner = WebPkiServerVerifier::builder(Arc::new(roots))
-            .build()
-            .expect("WebPkiServerVerifier build failed");
-        Self { inner }
+    fn new(roots: RootCertStore) -> Result<Self, String> {
+        if roots.is_empty() {
+            return Err(
+                "No root certificates available. For verify-ca mode, \
+                you must specify an explicit CA file via the connection's \
+                CA Certificate field. On macOS, the system keychain does \
+                not provide root anchors compatible with strict EKU checks."
+                    .to_string(),
+            );
+        }
+        let provider = CryptoProvider::get_default()
+            .ok_or("No rustls CryptoProvider installed")?;
+        Ok(Self {
+            roots: Arc::new(roots),
+            supported: provider.signature_verification_algorithms,
+        })
     }
 }
 
@@ -374,38 +397,21 @@ impl ServerCertVerifier for VerifyCaCertVerifier {
         &self,
         end_entity: &CertificateDer<'_>,
         intermediates: &[CertificateDer<'_>],
-        server_name: &ServerName<'_>,
-        ocsp_response: &[u8],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
         now: UnixTime,
     ) -> Result<ServerCertVerified, TlsError> {
-        // Delegate to WebPkiServerVerifier for chain + hostname validation
-        match self.inner.verify_server_cert(
-            end_entity,
+        // Validate the certificate chain against our root store.
+        // We intentionally skip hostname verification (verify-ca semantics).
+        let cert = ParsedCertificate::try_from(end_entity)?;
+        verify_server_cert_signed_by_trust_anchor(
+            &cert,
+            &self.roots,
             intermediates,
-            server_name,
-            ocsp_response,
             now,
-        ) {
-            Ok(result) => Ok(result),
-            Err(e) if is_hostname_error(&e) => {
-                // For verify-ca, we accept hostname mismatches.
-                // Re-verify the chain without hostname check to ensure
-                // the certificate is actually valid.
-                self.inner
-                    .verify_server_cert(
-                        end_entity,
-                        intermediates,
-                        // Use localhost as a name that will always match or be
-                        // ignored — the point is we already caught the hostname
-                        // error above and are choosing to accept it.
-                        &ServerName::try_from("localhost").unwrap(),
-                        ocsp_response,
-                        now,
-                    )
-                    .or(Ok(ServerCertVerified::assertion()))
-            }
-            Err(e) => Err(e),
-        }
+            self.supported.all,
+        )?;
+        Ok(ServerCertVerified::assertion())
     }
 
     fn verify_tls12_signature(
@@ -414,7 +420,7 @@ impl ServerCertVerifier for VerifyCaCertVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, TlsError> {
-        self.inner.verify_tls12_signature(message, cert, dss)
+        verify_tls12_signature(message, cert, dss, &self.supported)
     }
 
     fn verify_tls13_signature(
@@ -423,11 +429,11 @@ impl ServerCertVerifier for VerifyCaCertVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, TlsError> {
-        self.inner.verify_tls13_signature(message, cert, dss)
+        verify_tls13_signature(message, cert, dss, &self.supported)
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        self.inner.supported_verify_schemes()
+        self.supported.supported_schemes()
     }
 }
 

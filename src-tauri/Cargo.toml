@@ -63,9 +63,7 @@ deadpool-postgres = "0.14.1"
 tokio-postgres-rustls = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 rustls-pemfile = "2"
-rustls-native-certs = "0.8"
 rustls-platform-verifier = "0.6"
-webpki = { package = "rustls-webpki", version = "0.101" }
 notify = "6"
 ulid = "1.2.1"
 
