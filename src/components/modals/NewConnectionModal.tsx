@@ -1013,7 +1013,7 @@ export const NewConnectionModal = ({
                   allow: t("newConnection.sslModes.allow", { defaultValue: "Allow" }),
                   prefer: t("newConnection.sslModes.prefer", { defaultValue: "Prefer" }),
                   require: t("newConnection.sslModes.require", { defaultValue: "Require" }),
-                  "verify-ca": t("newConnection.sslModes.verifyCa", { defaultValue: "Verify CA" }),
+                  "verify-ca": t("newConnection.sslModes.verify-ca", { defaultValue: "Verify CA" }),
                   "verify-full": t("newConnection.sslModes.verifyFull", { defaultValue: "Verify Full" }),
                 }
               : {
