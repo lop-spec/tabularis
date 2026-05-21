@@ -2099,10 +2099,6 @@ export const Editor = () => {
         }
       },
     });
-    editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-      handleRunButton,
-    );
   };
 
   useEffect(() => {
