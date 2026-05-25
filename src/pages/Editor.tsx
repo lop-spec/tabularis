@@ -103,6 +103,7 @@ import type {
 } from "../types/editor";
 import { buildForeignKeyFilterClause } from "../utils/foreignKeys";
 import { formatSqlIdentifier } from "../utils/identifiers";
+import { RelatedRecordsPanel } from "../components/ui/RelatedRecordsPanel";
 import {
   getTabScrollState,
   getAdjacentTabIndex,
@@ -194,6 +195,16 @@ export const Editor = () => {
     rowsProcessed: 0,
     fileName: "",
   });
+
+  const [activeFkQuery, setActiveFkQuery] = useState<{
+    fk: ForeignKey;
+    value: unknown;
+    sourceColumnType?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    setActiveFkQuery(null);
+  }, [activeTabId]);
 
   useEffect(() => {
     const unlisten = listen<ExportProgress>("export_progress", (event) => {
@@ -1225,6 +1236,26 @@ export const Editor = () => {
       runQuery(undefined, 1, undefined, undefined, filter, sort, limit);
     },
     [updateTab, runQuery],
+  );
+
+  const handleForeignKeyShowPanel = useCallback(
+    (fk: ForeignKey, value: unknown) => {
+      const currentTab = tabsRef.current.find(
+        (tb) => tb.id === activeTabIdRef.current,
+      );
+      if (!currentTab || !activeConnectionId) return;
+
+      const sourceType = currentTab.columnMetadata?.find(
+        (c) => c.name === fk.column_name,
+      )?.data_type;
+
+      setActiveFkQuery({
+        fk,
+        value,
+        sourceColumnType: sourceType,
+      });
+    },
+    [activeConnectionId],
   );
 
   const handleForeignKeyNavigate = useCallback(
@@ -3214,44 +3245,58 @@ export const Editor = () => {
                   </div>
                 )}
 
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <DataGrid
-                    key={`${activeTab.id}-${activeTab.sortClause || "none"}-${activeTab.filterClause || "none"}-${activeTab.result?.rows.length || 0}-${Object.keys(activeTab.pendingInsertions || {}).length}`}
-                    columns={activeTab.result?.columns || []}
-                    data={activeTab.result?.rows || []}
-                    tableName={activeTab.activeTable}
-                    pkColumn={activeTab.pkColumn}
-                    autoIncrementColumns={activeTab.autoIncrementColumns}
-                    defaultValueColumns={activeTab.defaultValueColumns}
-                    nullableColumns={activeTab.nullableColumns}
-                    columnMetadata={activeTab.columnMetadata}
-                    foreignKeys={activeTab.foreignKeys}
-                    onForeignKeyNavigate={handleForeignKeyNavigate}
-                    connectionId={activeConnectionId}
-                    onRefresh={handleRefresh}
-                    pendingChanges={activeTab.pendingChanges}
-                    pendingDeletions={activeTab.pendingDeletions}
-                    pendingInsertions={activeTab.pendingInsertions}
-                    onPendingChange={handlePendingChange}
-                    onPendingInsertionChange={handlePendingInsertionChange}
-                    onDiscardInsertion={handleDiscardInsertion}
-                    onRevertDeletion={handleRevertDeletion}
-                    onMarkForDeletion={handleMarkForDeletion}
-                    onMarkMultipleForDeletion={handleMarkMultipleForDeletion}
-                    onDuplicateRow={handleDuplicateRow}
-                    selectedRows={new Set(activeTab.selectedRows || [])}
-                    onSelectionChange={handleSelectionChange}
-                    copyFormat={copyFormat}
-                    csvDelimiter={csvDelimiter}
-                    sortClause={activeTab.sortClause}
-                    onSort={
-                      activeTab.type === "table" &&
-                      (activeTab.result?.rows.length ?? 0) > 0
-                        ? handleSort
-                        : undefined
-                    }
-                    readonly={driverReadonly}
-                  />
+                <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <DataGrid
+                      key={`${activeTab.id}-${activeTab.sortClause || "none"}-${activeTab.filterClause || "none"}-${activeTab.result?.rows.length || 0}-${Object.keys(activeTab.pendingInsertions || {}).length}`}
+                      columns={activeTab.result?.columns || []}
+                      data={activeTab.result?.rows || []}
+                      tableName={activeTab.activeTable}
+                      pkColumn={activeTab.pkColumn}
+                      autoIncrementColumns={activeTab.autoIncrementColumns}
+                      defaultValueColumns={activeTab.defaultValueColumns}
+                      nullableColumns={activeTab.nullableColumns}
+                      columnMetadata={activeTab.columnMetadata}
+                      foreignKeys={activeTab.foreignKeys}
+                      onForeignKeyNavigate={handleForeignKeyNavigate}
+                      onForeignKeyShowPanel={handleForeignKeyShowPanel}
+                      onForeignKeyHidePanel={() => setActiveFkQuery(null)}
+                      connectionId={activeConnectionId}
+                      onRefresh={handleRefresh}
+                      pendingChanges={activeTab.pendingChanges}
+                      pendingDeletions={activeTab.pendingDeletions}
+                      pendingInsertions={activeTab.pendingInsertions}
+                      onPendingChange={handlePendingChange}
+                      onPendingInsertionChange={handlePendingInsertionChange}
+                      onDiscardInsertion={handleDiscardInsertion}
+                      onRevertDeletion={handleRevertDeletion}
+                      onMarkForDeletion={handleMarkForDeletion}
+                      onMarkMultipleForDeletion={handleMarkMultipleForDeletion}
+                      onDuplicateRow={handleDuplicateRow}
+                      selectedRows={new Set(activeTab.selectedRows || [])}
+                      onSelectionChange={handleSelectionChange}
+                      copyFormat={copyFormat}
+                      csvDelimiter={csvDelimiter}
+                      sortClause={activeTab.sortClause}
+                      onSort={
+                        activeTab.type === "table" &&
+                        (activeTab.result?.rows.length ?? 0) > 0
+                          ? handleSort
+                          : undefined
+                      }
+                      readonly={driverReadonly}
+                    />
+                  </div>
+                  {activeFkQuery && activeConnectionId && (
+                    <RelatedRecordsPanel
+                      activeFkQuery={activeFkQuery}
+                      connectionId={activeConnectionId}
+                      driver={activeDriver}
+                      schema={activeSchema}
+                      onClose={() => setActiveFkQuery(null)}
+                      onNavigateToTab={handleForeignKeyNavigate}
+                    />
+                  )}
                 </div>
               </div>
             ) : (
