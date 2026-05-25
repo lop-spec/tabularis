@@ -172,6 +172,7 @@ pub fn run() {
         ))
         .manage(explain_import::PendingExplainFile::default())
         .manage(json_viewer::JsonViewerStore::default())
+        .manage(query_history::QueryHistoryState::default())
         .setup(move |app| {
             // Read persisted config to know which external plugins are enabled.
             // `None` means no preference has been saved yet → load all installed plugins.

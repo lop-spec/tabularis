@@ -591,7 +591,7 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
     }
 
     // Clean up query history for this connection
-    if let Err(e) = crate::query_history::remove_history_for_connection(&app, &id) {
+    if let Err(e) = crate::query_history::remove_history_for_connection(&app, &id).await {
         log::warn!("Failed to remove query history for connection {}: {}", id, e);
     }
 
@@ -698,7 +698,9 @@ pub async fn update_connection<R: Runtime>(
             &app,
             &id,
             &previous_db,
-        ) {
+        )
+        .await
+        {
             log::warn!(
                 "Failed to backfill query history database for {}: {}",
                 id,
