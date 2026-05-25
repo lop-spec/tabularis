@@ -240,6 +240,32 @@
     "exportTitle": "Export Connections",
     "exportWarning": "The exported file will contain your database and SSH passwords in plaintext. Please store it securely."
   },
+  "connectionAppearance": {
+    "section": "Appearance",
+    "accentColor": "Accent color",
+    "customColor": "Custom",
+    "resetColor": "Reset to driver default",
+    "resetIcon": "Reset to driver default",
+    "icon": "Icon",
+    "tabs": {
+      "default": "Default",
+      "pack": "Icon",
+      "emoji": "Emoji",
+      "image": "Image"
+    },
+    "previewLabel": "Preview",
+    "defaultHint": "Using the driver's default icon.",
+    "emojiSelected": "Selected emoji",
+    "emojiHint": "Click another emoji below to change.",
+    "removeEmoji": "Clear",
+    "chooseImage": "Choose image…",
+    "removeImage": "Remove",
+    "imageHint": "PNG, JPG, WebP or SVG · max 512 KB",
+    "errors": {
+      "invalidEmoji": "Please enter exactly one emoji",
+      "invalidHex": "Please enter a valid hex color like #1a2b3c"
+    }
+  },
   "settings": {
     "title": "Settings",
     "general": "General",
@@ -603,6 +629,7 @@
     "loadDatabases": "Load Databases",
     "loadingDatabases": "Loading...",
     "selectDatabases": "Select Databases",
+    "appearance": "Appearance",
     "noDatabasesSelected": "Select at least one database",
     "selectedDatabases": "{{count}} database(s) selected",
     "selectDatabase": "Select a database",

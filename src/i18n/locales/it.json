@@ -227,6 +227,32 @@
     "exportTitle": "Esporta connessioni",
     "exportWarning": "Il file esportato conterrà le password del database e SSH in chiaro. Conservalo in modo sicuro."
   },
+  "connectionAppearance": {
+    "section": "Aspetto",
+    "accentColor": "Colore di accento",
+    "customColor": "Personalizzato",
+    "resetColor": "Ripristina predefinito",
+    "resetIcon": "Ripristina predefinito",
+    "icon": "Icona",
+    "tabs": {
+      "default": "Predefinito",
+      "pack": "Icona",
+      "emoji": "Emoji",
+      "image": "Immagine"
+    },
+    "previewLabel": "Anteprima",
+    "defaultHint": "In uso l'icona predefinita del driver.",
+    "emojiSelected": "Emoji selezionato",
+    "emojiHint": "Clicca un altro emoji qui sotto per cambiarlo.",
+    "removeEmoji": "Rimuovi",
+    "chooseImage": "Scegli immagine…",
+    "removeImage": "Rimuovi",
+    "imageHint": "PNG, JPG, WebP o SVG · max 512 KB",
+    "errors": {
+      "invalidEmoji": "Inserisci esattamente un emoji",
+      "invalidHex": "Inserisci un colore hex valido come #1a2b3c"
+    }
+  },
   "settings": {
     "title": "Impostazioni",
     "general": "Generali",
@@ -590,6 +616,7 @@
     "loadDatabases": "Carica Database",
     "loadingDatabases": "Caricamento...",
     "selectDatabases": "Seleziona Database",
+    "appearance": "Aspetto",
     "noDatabasesSelected": "Seleziona almeno un database",
     "selectedDatabases": "{{count}} database selezionato/i",
     "selectDatabase": "Seleziona un database",

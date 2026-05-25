@@ -13,6 +13,9 @@ pub mod ai_notebook_export_tests;
 pub mod cli;
 pub mod clipboard_import;
 pub mod commands;
+pub mod connection_appearance;
+#[cfg(test)]
+pub mod connection_appearance_tests;
 pub mod config;
 pub mod connection_cache;
 #[cfg(test)]
@@ -441,6 +444,10 @@ pub fn run() {
             task_manager::kill_plugin_process,
             task_manager::restart_plugin_process,
             task_manager::open_task_manager_window,
+            // Connection Appearance
+            connection_appearance::save_connection_icon,
+            connection_appearance::delete_connection_icon,
+            commands::set_connection_appearance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
