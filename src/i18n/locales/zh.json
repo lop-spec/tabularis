@@ -607,6 +607,7 @@
     "sshKeyFilePlaceholder": "/path/to/id_rsa",
     "sshKeyPassphrase": "SSH 密钥密码（可选）",
     "sshKeyPassphrasePlaceholder": "如果加密请输入密钥密码",
+    "allowSshPrompt": "允许 SSH 密码/PIN 提示",
     "saveKeychain": "在密钥链中保存密码",
     "testConnection": "测试连接",
     "save": "保存",

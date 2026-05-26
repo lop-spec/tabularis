@@ -644,6 +644,7 @@
     "sshKeyFilePlaceholder": "/ruta/a/id_rsa",
     "sshKeyPassphrase": "Frase de Paso de Clave SSH (Opcional)",
     "sshKeyPassphrasePlaceholder": "Ingresa la frase de paso si la clave está cifrada",
+    "allowSshPrompt": "Permitir solicitud de contraseña/PIN de SSH",
     "saveKeychain": "Guardar contraseñas en el Llavero",
     "testConnection": "Probar Conexión",
     "save": "Guardar",

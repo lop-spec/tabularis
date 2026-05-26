@@ -639,6 +639,7 @@
     "sshKeyFilePlaceholder": "/pfad/zu/id_rsa",
     "sshKeyPassphrase": "Passphrase für SSH-Schlüssel (optional)",
     "sshKeyPassphrasePlaceholder": "Passphrase eingeben, falls der Schlüssel verschlüsselt ist",
+    "allowSshPrompt": "SSH-Passwort/PIN-Eingabeaufforderung erlauben",
     "saveKeychain": "Passwörter im Keychain speichern",
     "testConnection": "Verbindung testen",
     "save": "Speichern",

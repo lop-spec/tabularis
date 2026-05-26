@@ -644,6 +644,7 @@
     "sshKeyFilePlaceholder": "/percorso/id_rsa",
     "sshKeyPassphrase": "Passphrase Chiave SSH (Opzionale)",
     "sshKeyPassphrasePlaceholder": "Inserisci passphrase se la chiave è cifrata",
+    "allowSshPrompt": "Consenti prompt password/PIN SSH",
     "saveKeychain": "Salva password nel Portachiavi",
     "testConnection": "Testa Connessione",
     "save": "Salva",

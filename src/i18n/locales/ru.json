@@ -633,6 +633,7 @@
     "sshKeyFilePlaceholder": "/path/to/id_rsa",
     "sshKeyPassphrase": "Пароль SSH-ключа (необязательно)",
     "sshKeyPassphrasePlaceholder": "Введите пароль, если ключ зашифрован",
+    "allowSshPrompt": "Разрешить запрос пароля/PIN-кода SSH",
     "saveKeychain": "Сохранять пароли в Keychain",
     "testConnection": "Проверить подключение",
     "save": "Сохранить",

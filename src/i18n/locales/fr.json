@@ -639,6 +639,7 @@
     "sshKeyFilePlaceholder": "/chemin/vers/id_rsa",
     "sshKeyPassphrase": "Phrase secrète de clé SSH (optionnel)",
     "sshKeyPassphrasePlaceholder": "Saisissez la phrase secrète si la clé est chiffrée",
+    "allowSshPrompt": "Autoriser l'invite de mot de passe/PIN SSH",
     "saveKeychain": "Enregistrer les mots de passe dans le trousseau",
     "testConnection": "Tester la connexion",
     "save": "Enregistrer",

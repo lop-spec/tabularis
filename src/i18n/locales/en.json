@@ -660,6 +660,7 @@
     "sshKeyFilePlaceholder": "/path/to/id_rsa",
     "sshKeyPassphrase": "SSH Key Passphrase (Optional)",
     "sshKeyPassphrasePlaceholder": "Enter key passphrase if encrypted",
+    "allowSshPrompt": "Allow SSH password/PIN prompt",
     "saveKeychain": "Save passwords in Keychain",
     "testConnection": "Test Connection",
     "save": "Save",
