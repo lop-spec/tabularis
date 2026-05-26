@@ -59,6 +59,7 @@ interface ConnectionParams {
   ssh_password?: string;
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
+  ssh_allow_passphrase_prompt?: boolean;
   save_in_keychain?: boolean;
 }
 
@@ -1432,6 +1433,23 @@ export const NewConnectionModal = ({
                 type="password"
                 placeholder={t("newConnection.sshKeyPassphrasePlaceholder")}
               />
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="checkbox"
+                  id="ssh-prompt-toggle"
+                  checked={!!formData.ssh_allow_passphrase_prompt}
+                  onChange={(e) =>
+                    updateField("ssh_allow_passphrase_prompt", e.target.checked)
+                  }
+                  className="accent-blue-500 w-3.5 h-3.5 rounded cursor-pointer"
+                />
+                <label
+                  htmlFor="ssh-prompt-toggle"
+                  className="text-xs font-medium text-secondary cursor-pointer select-none"
+                >
+                  {t("newConnection.allowSshPrompt")}
+                </label>
+              </div>
             </div>
           )}
         </div>
