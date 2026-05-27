@@ -201,12 +201,17 @@ impl SshTunnel {
 
         println!("[SSH Tunnel] Executing: ssh {:?}", args);
 
-        let mut child = Command::new("ssh")
+        let mut command = Command::new("ssh");
+        command
             .args(&args)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| {
+            .stderr(Stdio::piped());
+
+        if ssh_allow_passphrase_prompt {
+            command.env("SSH_ASKPASS_REQUIRE", "force");
+        }
+
+        let mut child = command.spawn().map_err(|e| {
                 let err = format!(
                     "Failed to launch system ssh: {}. Ensure 'ssh' is in PATH.",
                     e
@@ -604,7 +609,14 @@ fn test_ssh_connection_system(
 
     println!("[SSH Test] Executing: ssh {:?}", args);
 
-    let output = Command::new("ssh").args(&args).output().map_err(|e| {
+    let mut command = Command::new("ssh");
+    command.args(&args);
+
+    if ssh_allow_passphrase_prompt {
+        command.env("SSH_ASKPASS_REQUIRE", "force");
+    }
+
+    let output = command.output().map_err(|e| {
         format!(
             "Failed to execute ssh command: {}. Ensure 'ssh' is in PATH.",
             e
