@@ -122,6 +122,10 @@ pub fn run() {
     let args = cli::parse();
 
     if args.mcp {
+        // Initialize the logger so plugin-loading and driver RPC errors (which
+        // use the `log` crate) are visible. The custom logger writes to stderr
+        // only, leaving the stdout JSON-RPC stream clean.
+        init_logger(create_log_buffer(1000), log::LevelFilter::Info);
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
         rt.block_on(mcp::run_mcp_server());
         return;
