@@ -98,6 +98,10 @@ export const clearAutocompleteCache = (connectionId?: string) => {
   }
 };
 
+// Find a table by name in the list of tables
+const findTableByName = (name: string, tables: TableInfo[]) =>
+  tables.find((t) => t.name.toLowerCase() === name.toLowerCase())?.name;
+
 export const registerSqlAutocomplete = (
   monaco: Monaco,
   connectionId: string | null,
@@ -141,13 +145,13 @@ export const registerSqlAutocomplete = (
         
         // Check if it's an alias or table name
         let actualTableName = tableAliases?.get(typedName);
-        
+
         if (!actualTableName) {
-          // Try direct table name match
-          const foundTable = tables.find(t => t.name.toLowerCase() === typedName);
-          actualTableName = foundTable?.name;
+          actualTableName = findTableByName(typedName, tables);
+        } else {
+          actualTableName = findTableByName(actualTableName, tables) ?? actualTableName;
         }
-        
+
         if (actualTableName) {
           const columns = await getTableColumns(connectionId, actualTableName, schema);
           
@@ -170,6 +174,8 @@ export const registerSqlAutocomplete = (
           
           return { suggestions };
         }
+
+        return { suggestions: [] };
       }
 
       // ============================================
@@ -188,7 +194,7 @@ export const registerSqlAutocomplete = (
         // User is inside a query with FROM/JOIN - suggest columns from those tables
         const tableNames = Array.from(new Set(tableAliases.values()));
         const matchingTables = tableNames
-          .map(name => tables.find(t => t.name.toLowerCase() === name.toLowerCase()))
+          .map((name) => tables.find((t) => t.name.toLowerCase() === name.toLowerCase()))
           .filter(Boolean) as TableInfo[];
         
         // Limit parallel fetches to prevent memory spikes
