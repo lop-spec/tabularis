@@ -15,6 +15,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 
 vi.mock('../../src/utils/autocomplete', () => ({
   clearAutocompleteCache: vi.fn(),
+  disposeSqlAutocomplete: vi.fn(),
 }));
 
 vi.mock('../../src/hooks/useSettings', () => ({
