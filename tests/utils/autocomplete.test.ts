@@ -151,6 +151,50 @@ describe('autocomplete', () => {
       expect(tableSuggestions[1].label).toBe('orders');
     });
 
+    it('inserts double-quoted table names for postgres', async () => {
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'AccountEventLog' }],
+        null,
+        'postgres',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      const result = await provider.provideCompletionItems(
+        createMockModel('SELECT * FROM '),
+        { lineNumber: 1, column: 15 },
+      );
+
+      const tableSuggestions = result.suggestions.filter((s: { sortText?: string }) =>
+        s.sortText?.startsWith('1_'),
+      );
+      expect(tableSuggestions[0]?.insertText).toBe('"AccountEventLog"');
+    });
+
+    it('inserts schema-qualified table names for postgres when schema is set', async () => {
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'AccountEventLog' }],
+        'public',
+        'postgres',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      const result = await provider.provideCompletionItems(
+        createMockModel('SELECT * FROM '),
+        { lineNumber: 1, column: 15 },
+      );
+
+      const tableSuggestions = result.suggestions.filter((s: { sortText?: string }) =>
+        s.sortText?.startsWith('1_'),
+      );
+      expect(tableSuggestions[0]?.insertText).toBe('"public"."AccountEventLog"');
+    });
+
     it('should include all table suggestions regardless of count', async () => {
       const monaco = createMockMonaco();
       const tables: TableInfo[] = Array.from({ length: 60 }, (_, i) => ({
@@ -320,6 +364,33 @@ describe('autocomplete', () => {
       
       // Should include column suggestions
       expect(result.suggestions.length).toBeGreaterThan(0);
+    });
+
+    it('inserts double-quoted column names for postgres', async () => {
+      const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+      mockInvoke.mockResolvedValue([{ name: 'CreatedAt', data_type: 'timestamp' }]);
+
+      const { parseTablesFromQuery } = await import('../../src/utils/sqlAnalysis');
+      (parseTablesFromQuery as ReturnType<typeof vi.fn>).mockReturnValue(
+        new Map([['ael', 'AccountEventLog']]),
+      );
+
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'AccountEventLog' }],
+        'public',
+        'postgres',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      const model = createMockModel('SELECT ael.');
+      model.getValueInRange = vi.fn(() => 'SELECT ael.');
+
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 12 });
+
+      expect(result.suggestions[0]?.insertText).toBe('"CreatedAt"');
     });
   });
 

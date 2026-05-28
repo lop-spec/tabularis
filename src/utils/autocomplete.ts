@@ -1,6 +1,7 @@
 import type { Monaco } from "@monaco-editor/react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TableInfo } from "../contexts/DatabaseContext";
+import { formatSqlIdentifier, quoteTableRef } from "./identifiers";
 import { getCurrentStatement, parseTablesFromQuery } from "./sqlAnalysis";
 
 // Lightweight column cache with TTL and size limits
@@ -102,11 +103,28 @@ export const clearAutocompleteCache = (connectionId?: string) => {
 const findTableByName = (name: string, tables: TableInfo[]) =>
   tables.find((t) => t.name.toLowerCase() === name.toLowerCase())?.name;
 
+const tableInsertText = (
+  tableName: string,
+  driver?: string | null,
+  schema?: string | null,
+) =>
+  schema
+    ? quoteTableRef(tableName, driver, schema)
+    : formatSqlIdentifier(tableName, driver);
+
+let sqlCompletionProvider: { dispose: () => void } | null = null;
+
+export const disposeSqlAutocomplete = (): void => {
+  sqlCompletionProvider?.dispose();
+  sqlCompletionProvider = null;
+};
+
 export const registerSqlAutocomplete = (
   monaco: Monaco,
   connectionId: string | null,
   tables: TableInfo[],
   schema?: string | null,
+  driver?: string | null,
 ) => {
   const provider = monaco.languages.registerCompletionItemProvider("sql", {
     triggerCharacters: [".", " "],
@@ -167,7 +185,7 @@ export const registerSqlAutocomplete = (
             label: c.label,
             kind: monaco.languages.CompletionItemKind.Field,
             detail: c.detail,
-            insertText: c.label,
+            insertText: formatSqlIdentifier(c.label, driver),
             range: columnRange,
             sortText: `0_${c.label}`,
           }));
@@ -229,7 +247,7 @@ export const registerSqlAutocomplete = (
                 label: col.label,
                 kind: monaco.languages.CompletionItemKind.Field,
                 detail: `${col.detail} — ${table.name}${aliasHint}`,
-                insertText: col.label,
+                insertText: formatSqlIdentifier(col.label, driver),
                 range,
                 sortText: `0_${col.label}`,
               });
@@ -265,7 +283,7 @@ export const registerSqlAutocomplete = (
         label: t.name,
         kind: monaco.languages.CompletionItemKind.Class,
         detail: "Table",
-        insertText: t.name,
+        insertText: tableInsertText(t.name, driver, schema),
         range,
         sortText: `1_${t.name}`
       }));
@@ -280,5 +298,7 @@ export const registerSqlAutocomplete = (
     },
   });
 
+  sqlCompletionProvider?.dispose();
+  sqlCompletionProvider = provider;
   return provider;
 };

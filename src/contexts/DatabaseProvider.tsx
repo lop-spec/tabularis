@@ -14,7 +14,7 @@ import {
 } from './DatabaseContext';
 import type { ReactNode } from 'react';
 import type { PluginManifest } from '../types/plugins';
-import { clearAutocompleteCache } from '../utils/autocomplete';
+import { clearAutocompleteCache, disposeSqlAutocomplete } from '../utils/autocomplete';
 import { toErrorMessage } from '../utils/errors';
 import { useSettings } from '../hooks/useSettings';
 import { findConnectionsForDrivers } from '../utils/connectionManager';
@@ -691,6 +691,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     if (!targetId) return;
 
     clearAutocompleteCache(targetId);
+    disposeSqlAutocomplete();
 
     try {
       await invoke('disconnect_connection', { connectionId: targetId });
@@ -782,6 +783,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         console.warn(`[DatabaseProvider] Connection health check failed for ${connectionId}: ${event.payload.error}`);
 
         clearAutocompleteCache(connectionId);
+        disposeSqlAutocomplete();
 
         setOpenConnectionIds(prev => prev.filter(id => id !== connectionId));
         setConnectionDataMap(prev => {
