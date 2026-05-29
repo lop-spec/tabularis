@@ -360,6 +360,24 @@ pub fn classify_query_kind(sql: &str) -> &'static str {
     if trimmed.is_empty() {
         return "unknown";
     }
+    // Fail closed for multi-statement payloads: a leading `SELECT 1; DROP …`
+    // must NOT be tagged as a clean read just because the first keyword is
+    // SELECT — the read-only and approval gates rely on this classification.
+    //
+    // SQL dialects disagree on backslash escaping inside string literals:
+    // MySQL/MariaDB treat `\'` as an escaped quote by default, while
+    // PostgreSQL standard-conforming strings treat `\` as a literal byte.
+    // That disagreement shifts where a string literal ends, and therefore
+    // where a `;` becomes a visible statement separator — e.g. MySQL reads
+    // `SELECT '\''; DROP TABLE users` as two statements, the standard reading
+    // as one. We strip under both interpretations and fail closed if EITHER
+    // reveals a trailing statement, so a payload cannot hide an injected
+    // separator by exploiting whichever dialect we happen not to assume.
+    if has_trailing_statements(&stripped)
+        || has_trailing_statements(&strip_impl(sql, true))
+    {
+        return "unknown";
+    }
     let upper = trimmed.to_uppercase();
     let first = first_keyword(&upper);
 
@@ -372,6 +390,26 @@ pub fn classify_query_kind(sql: &str) -> &'static str {
         "WITH" => classify_cte(&upper),
         _ => "unknown",
     }
+}
+
+/// Returns true when `stripped` contains a semicolon followed by additional
+/// non-whitespace SQL content — i.e., more than one statement.
+///
+/// The input must already have been run through `strip_impl`, which replaces
+/// string-literal, comment, and quoted-identifier bytes with whitespace, so
+/// any `;` that survives here is a real statement terminator under the
+/// escaping interpretation used to produce `stripped`.
+fn has_trailing_statements(stripped: &str) -> bool {
+    let mut found_semi = false;
+    for c in stripped.chars() {
+        if found_semi && !c.is_whitespace() {
+            return true;
+        }
+        if c == ';' {
+            found_semi = true;
+        }
+    }
+    false
 }
 
 fn first_keyword(upper: &str) -> String {
@@ -420,7 +458,22 @@ fn contains_keyword(haystack: &str, needle: &str) -> bool {
 /// Replace string literals and SQL comments with whitespace so keyword
 /// scanning cannot be fooled by tokens that live inside a value, comment,
 /// or quoted identifier.
+///
+/// Uses the SQL-standard reading of single-quoted strings (only `''` escapes
+/// a quote). For the backslash-aware reading used to harden multi-statement
+/// detection against MySQL-style escaping, see [`strip_impl`].
 pub fn strip_strings_and_comments(sql: &str) -> String {
+    strip_impl(sql, false)
+}
+
+/// Backing implementation for [`strip_strings_and_comments`].
+///
+/// When `backslash_escapes` is true, a `\` inside a single-quoted string
+/// escapes the following byte (MySQL/MariaDB default). When false, backslash
+/// is an ordinary literal byte (SQL standard / PostgreSQL standard strings).
+/// Only single-quoted string scanning honours the flag — comments and quoted
+/// identifiers are dialect-independent here.
+fn strip_impl(sql: &str, backslash_escapes: bool) -> String {
     let bytes = sql.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -460,7 +513,13 @@ pub fn strip_strings_and_comments(sql: &str) -> String {
             out.push(b' ');
             i += 1;
             while i < bytes.len() {
-                if bytes[i] == b'\'' && i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                if backslash_escapes && bytes[i] == b'\\' && i + 1 < bytes.len() {
+                    // MySQL-style backslash escape: the next byte is part of
+                    // the string regardless of what it is (including `'`).
+                    out.push(b' ');
+                    out.push(b' ');
+                    i += 2;
+                } else if bytes[i] == b'\'' && i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
                     out.push(b' ');
                     out.push(b' ');
                     i += 2;

@@ -1009,7 +1009,28 @@ async fn tool_run_query(
                         .map(str::trim)
                         .filter(|s| !s.is_empty())
                     {
+                        // Re-classify and re-enforce read-only on the edited
+                        // query. Without this, an approver can flip a benign
+                        // SELECT into a DELETE/DROP (or a multi-statement
+                        // payload) and slip past the gate that runs against
+                        // the *original* query above.
                         effective_query = edited.to_string();
+                        let new_kind = ai_activity::classify_query_kind(&effective_query);
+                        audit.query = Some(effective_query.clone());
+                        audit.query_kind = Some(new_kind.to_string());
+
+                        if config::is_connection_readonly(config, &conn.id)
+                            && new_kind != "select"
+                        {
+                            audit.status = "blocked_readonly".to_string();
+                            let msg = "Edited query blocked by Tabularis read-only mode. Enable writes for this connection in Settings → MCP → Read-only mode.".to_string();
+                            audit.error = Some(msg.clone());
+                            return Err(JsonRpcError {
+                                code: -32000,
+                                message: msg,
+                                data: None,
+                            });
+                        }
                     }
                 } else {
                     let reason = decision
