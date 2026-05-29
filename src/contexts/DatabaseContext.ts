@@ -46,6 +46,8 @@ export interface SavedConnection {
     password?: string;
     ssh_enabled?: boolean;
     ssh_connection_id?: string;
+    k8s_enabled?: boolean;
+    k8s_connection_id?: string;
   };
   group_id?: string;
   sort_order?: number;
