@@ -554,7 +554,8 @@
       "pressKeys": "Appuyez sur une combinaison de touches...",
       "notebookRunAll": "Exécuter toutes les cellules",
       "categories_notebook": "Notebook",
-      "pasteImportClipboard": "Importer depuis le Presse-papiers"
+      "pasteImportClipboard": "Importer depuis le Presse-papiers",
+      "quickNavigator": "Navigateur rapide"
     },
     "aiActivity": "Activité IA"
   },

@@ -522,7 +522,8 @@
       "notOverridable": "内置，不可自定义",
       "pressKeys": "按下组合键...",
       "notebookRunAll": "运行所有单元格",
-      "categories_notebook": "笔记本"
+      "categories_notebook": "笔记本",
+      "quickNavigator": "快速导航"
     },
     "aiActivity": "AI 活动"
   },

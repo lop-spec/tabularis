@@ -549,7 +549,8 @@
       "pressKeys": "Нажмите сочетание клавиш...",
       "notebookRunAll": "Выполнить все ячейки",
       "categories_notebook": "Ноутбук",
-      "pasteImportClipboard": "Импортировать из буфера обмена"
+      "pasteImportClipboard": "Импортировать из буфера обмена",
+      "quickNavigator": "Быстрый навигатор"
     },
     "aiActivity": "Активность AI"
   },

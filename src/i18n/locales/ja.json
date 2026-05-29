@@ -568,7 +568,8 @@
       "pressKeys": "キーの組み合わせを押してください...",
       "notebookRunAll": "すべてのセルを実行",
       "categories_notebook": "ノートブック",
-      "pasteImportClipboard": "クリップボードからインポート"
+      "pasteImportClipboard": "クリップボードからインポート",
+      "quickNavigator": "クイックナビゲーター"
     },
     "aiActivity": "AI アクティビティ"
   },

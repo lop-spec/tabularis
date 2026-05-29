@@ -554,7 +554,8 @@
       "pressKeys": "Tastenkombination drücken...",
       "notebookRunAll": "Alle Zellen ausführen",
       "categories_notebook": "Notebook",
-      "pasteImportClipboard": "Aus Zwischenablage importieren"
+      "pasteImportClipboard": "Aus Zwischenablage importieren",
+      "quickNavigator": "Schnellnavigation"
     },
     "aiActivity": "KI-Aktivität"
   },

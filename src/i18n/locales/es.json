@@ -559,7 +559,8 @@
       "pressKeys": "Pulsa la combinación de teclas...",
       "notebookRunAll": "Ejecutar Todas las Celdas",
       "categories_notebook": "Notebook",
-      "pasteImportClipboard": "Importar desde Portapapeles"
+      "pasteImportClipboard": "Importar desde Portapapeles",
+      "quickNavigator": "Navegador rápido"
     },
     "aiActivity": "Actividad IA"
   },

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supportsManageTables } from "../../../utils/driverCapabilities";
 import { useTranslation } from "react-i18next";
 import {
@@ -98,6 +98,7 @@ export const SidebarDatabaseItem = ({
   const { t } = useTranslation();
 
   const [isExpanded, setIsExpanded] = useState(activeSchema === databaseName);
+  const [prevActiveSchema, setPrevActiveSchema] = useState(activeSchema);
   const [tablesOpen, setTablesOpen] = useState(true);
   const [viewsOpen, setViewsOpen] = useState(true);
   const [routinesOpen, setRoutinesOpen] = useState(false);
@@ -119,6 +120,24 @@ export const SidebarDatabaseItem = ({
     : triggers;
   const isLoading = databaseData?.isLoading ?? false;
   const isLoaded = databaseData?.isLoaded ?? false;
+
+  // Auto-expand this database when it becomes the active one, e.g. after
+  // picking a table from the Quick Navigator. Mirrors SidebarSchemaItem; done
+  // during render (same-component setState) so the table item is mounted in
+  // time for the scroll-into-view in ExplorerSidebar.
+  if (activeSchema !== prevActiveSchema) {
+    setPrevActiveSchema(activeSchema);
+    if (activeSchema === databaseName) {
+      setIsExpanded(true);
+    }
+  }
+
+  // Lazily load the tables once this database is expanded but not yet loaded.
+  useEffect(() => {
+    if (isExpanded && !isLoaded && !isLoading) {
+      onLoadDatabase(databaseName);
+    }
+  }, [isExpanded, isLoaded, isLoading, databaseName, onLoadDatabase]);
 
   const groupedRoutines = routines.length > 0
     ? groupRoutinesByType(routines)

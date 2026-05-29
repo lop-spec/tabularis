@@ -575,7 +575,8 @@
       "pressKeys": "Press key combination...",
       "notebookRunAll": "Run All Cells",
       "categories_notebook": "Notebook",
-      "pasteImportClipboard": "Import from Clipboard"
+      "pasteImportClipboard": "Import from Clipboard",
+      "quickNavigator": "Quick Navigator"
     },
     "aiActivity": "AI Activity"
   },
@@ -831,6 +832,23 @@
       "tabs_one": "{{count}} tab",
       "tabs_other": "{{count}} tabs",
       "escHint": "Esc to close"
+    },
+    "quickNavigator": {
+      "placeholder": "Search tables, views, routines, triggers...",
+      "noResults": "No matching elements found",
+      "count_one": "1 element",
+      "count_other": "{{count}} elements",
+      "navigationHint": "↑↓ to navigate, Enter to open",
+      "escHint": "Esc to close",
+      "type_table": "table",
+      "type_view": "view",
+      "type_routine": "routine",
+      "type_trigger": "trigger",
+      "actions": {
+        "inspect": "Inspect structure",
+        "generateSql": "Generate SQL templates",
+        "query": "Run SELECT query"
+      }
     },
     "submitChanges": "Submit Changes",
     "rollbackChanges": "Rollback Changes",
