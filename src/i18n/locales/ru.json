@@ -1030,8 +1030,14 @@
   "generateSQL": {
     "title": "Сгенерированный SQL: {{table}}",
     "loading": "Генерация SQL...",
+    "runInConsole": "Запустить в консоли",
     "copy": "Копировать SQL",
-    "copied": "Скопировано!"
+    "copied": "Скопировано!",
+    "tabCreateTable": "Создать таблицу",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [поля]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "Добавить столбец",

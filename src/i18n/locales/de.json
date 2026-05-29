@@ -1024,8 +1024,14 @@
   "generateSQL": {
     "title": "Generiertes SQL: {{table}}",
     "loading": "SQL wird generiert...",
+    "runInConsole": "In Konsole ausführen",
     "copy": "SQL kopieren",
-    "copied": "Kopiert!"
+    "copied": "Kopiert!",
+    "tabCreateTable": "Tabelle erstellen",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [Felder]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "Spalte hinzufügen",

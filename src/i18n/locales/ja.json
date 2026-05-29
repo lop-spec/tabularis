@@ -1036,8 +1036,14 @@
   "generateSQL": {
     "title": "生成された SQL: {{table}}",
     "loading": "SQL を生成中...",
+    "runInConsole": "コンソールで実行",
     "copy": "SQL をコピー",
-    "copied": "コピーしました！"
+    "copied": "コピーしました！",
+    "tabCreateTable": "テーブル作成",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [フィールド]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "カラムを追加",

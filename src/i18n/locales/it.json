@@ -1043,8 +1043,14 @@
   "generateSQL": {
     "title": "SQL Generato: {{table}}",
     "loading": "Generazione SQL in corso...",
+    "runInConsole": "Esegui nella console",
     "copy": "Copia SQL",
-    "copied": "Copiato!"
+    "copied": "Copiato!",
+    "tabCreateTable": "Crea tabella",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [campi]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "Aggiungi Colonna",

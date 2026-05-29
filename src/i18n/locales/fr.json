@@ -1024,8 +1024,14 @@
   "generateSQL": {
     "title": "SQL généré : {{table}}",
     "loading": "Génération du SQL...",
+    "runInConsole": "Exécuter dans la console",
     "copy": "Copier le SQL",
-    "copied": "Copié !"
+    "copied": "Copié !",
+    "tabCreateTable": "Créer une table",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [champs]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "Ajouter une colonne",

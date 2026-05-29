@@ -48,7 +48,6 @@ export const SqlPreview = ({
           lineNumbers: showLineNumbers ? "on" : "off",
           glyphMargin: false,
           folding: false,
-          lineDecorationsWidth: 0,
           lineNumbersMinChars: 5,
           scrollBeyondLastLine: false,
           automaticLayout: true,
