@@ -356,7 +356,6 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql }: QuickNav
                     )}
                     <div
                       onClick={() => handleSelect(item)}
-                      onMouseEnter={() => setSelectedIndex(idx)}
                       data-active={isActive}
                       className={`flex items-center justify-between gap-3 px-4 py-2.5 cursor-pointer group transition-colors ${
                         isActive
