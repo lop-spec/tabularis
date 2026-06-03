@@ -1,22 +1,24 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, X, Table, Eye, Code2, Zap, Database, Play } from "lucide-react";
+import { Search, X, Table, Eye, Code2, Zap, Database, Play, Copy, Hash, FileText, FileCode } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useAlert } from "../../hooks/useAlert";
 import { quoteTableRef } from "../../utils/identifiers";
 import { isMultiDatabaseCapable, getDatabaseList } from "../../utils/database";
 import { getNavigatorItems, filterNavigatorItems } from "../../utils/quickNavigator";
+import { newConsoleForTable } from "../../utils/newConsole";
 import type { RoutineInfo, TriggerInfo } from "../../contexts/DatabaseContext";
 
 interface QuickNavigatorModalProps {
   isOpen: boolean;
   onClose: () => void;
   onGenerateSql?: (tableName: string) => void;
+  onInspect?: (tableName: string, schema?: string) => void;
 }
 
-export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql }: QuickNavigatorModalProps) => {
+export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql, onInspect }: QuickNavigatorModalProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showAlert } = useAlert();
@@ -244,6 +246,37 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql }: QuickNav
     t,
   ]);
 
+  // Open the editor with a COUNT(*) query for the table/view
+  const handleCountRows = useCallback((item: typeof items[number]) => {
+    onClose();
+    const { name, schema } = item;
+    const quotedTable = isMultiDatabaseCapable(activeCapabilities)
+      ? quoteTableRef(name, activeDriver)
+      : quoteTableRef(name, activeDriver, schema);
+    navigate("/editor", {
+      state: {
+        initialQuery: `SELECT COUNT(*) as count FROM ${quotedTable}`,
+        schema,
+        targetConnectionId: activeConnectionId,
+      },
+    });
+  }, [activeCapabilities, activeConnectionId, activeDriver, navigate, onClose]);
+
+  // Open a new console pre-filled with a SELECT on the table, without running it
+  const handleNewConsole = useCallback((item: typeof items[number]) => {
+    onClose();
+    const spec = newConsoleForTable(item.name, activeDriver, item.schema);
+    navigate("/editor", {
+      state: {
+        initialQuery: spec.sql,
+        queryName: spec.title,
+        preventAutoRun: true,
+        schema: spec.schema,
+        targetConnectionId: activeConnectionId,
+      },
+    });
+  }, [activeConnectionId, activeDriver, navigate, onClose]);
+
   // Keyboard navigation
   useEffect(() => {
     if (!isOpen) return;
@@ -378,20 +411,28 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql }: QuickNav
                         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
                           {item.type === "table" && (
                             <>
+                              {onInspect && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClose();
+                                    onInspect(item.name, item.schema);
+                                  }}
+                                  className="p-1 rounded hover:bg-surface-tertiary text-muted hover:text-blue-400 transition-colors"
+                                  title={t("editor.quickNavigator.actions.inspect")}
+                                >
+                                  <FileText size={12} />
+                                </button>
+                              )}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onClose();
-                                  if (item.schema) {
-                                    setActiveTable(item.name, item.schema);
-                                  } else {
-                                    setActiveTable(item.name, null);
-                                  }
+                                  handleNewConsole(item);
                                 }}
-                                className="p-1 rounded hover:bg-surface-tertiary text-muted hover:text-blue-400 transition-colors"
-                                title={t("editor.quickNavigator.actions.inspect")}
+                                className="p-1 rounded hover:bg-surface-tertiary text-muted hover:text-yellow-500 transition-colors"
+                                title={t("editor.quickNavigator.actions.newConsole")}
                               >
-                                <Eye size={12} />
+                                <FileCode size={12} />
                               </button>
                               {onGenerateSql && (
                                 <button
@@ -409,17 +450,40 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql }: QuickNav
                             </>
                           )}
                           {(item.type === "table" || item.type === "view") && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelect(item);
-                              }}
-                              className="p-1 rounded hover:bg-surface-tertiary text-muted hover:text-green-500 transition-colors"
-                              title={t("editor.quickNavigator.actions.query")}
-                            >
-                              <Play size={12} />
-                            </button>
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCountRows(item);
+                                }}
+                                className="p-1 rounded hover:bg-surface-tertiary text-muted hover:text-orange-400 transition-colors"
+                                title={t("editor.quickNavigator.actions.countRows")}
+                              >
+                                <Hash size={12} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelect(item);
+                                }}
+                                className="p-1 rounded hover:bg-surface-tertiary text-muted hover:text-green-500 transition-colors"
+                                title={t("editor.quickNavigator.actions.query")}
+                              >
+                                <Play size={12} />
+                              </button>
+                            </>
                           )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(item.name);
+                              onClose();
+                            }}
+                            className="p-1 rounded hover:bg-surface-tertiary text-muted hover:text-primary transition-colors"
+                            title={t("editor.quickNavigator.actions.copyName")}
+                          >
+                            <Copy size={12} />
+                          </button>
                         </div>
 
                         <span className="text-[10px] uppercase font-bold text-muted border border-default/50 px-1.5 py-0.5 rounded tracking-wider shrink-0 select-none">

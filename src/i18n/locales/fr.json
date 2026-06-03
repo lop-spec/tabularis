@@ -766,6 +766,26 @@
     "auto": "Auto"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "Rechercher tables, vues, routines, triggers...",
+      "noResults": "Aucun élément correspondant trouvé",
+      "count_one": "1 élément",
+      "count_other": "{{count}} éléments",
+      "navigationHint": "↑↓ pour naviguer, Entrée pour ouvrir",
+      "escHint": "Échap pour fermer",
+      "type_table": "table",
+      "type_view": "vue",
+      "type_routine": "routine",
+      "type_trigger": "trigger",
+      "actions": {
+        "inspect": "Inspecter la structure",
+        "newConsole": "Nouvelle console",
+        "generateSql": "Générer des modèles SQL",
+        "countRows": "Compter les lignes",
+        "query": "Exécuter une requête SELECT",
+        "copyName": "Copier le nom"
+      }
+    },
     "noTabs": "Aucun onglet ouvert pour cette connexion.",
     "newConsole": "Nouvelle console",
     "noActiveSession": "Aucune session active. Veuillez sélectionner une connexion.",

@@ -827,8 +827,11 @@
       "type_trigger": "trigger",
       "actions": {
         "inspect": "Ispeziona struttura",
+        "newConsole": "Nuova console",
         "generateSql": "Genera modelli SQL",
-        "query": "Esegui query SELECT"
+        "countRows": "Conta righe",
+        "query": "Esegui query SELECT",
+        "copyName": "Copia nome"
       }
     },
     "submitChanges": "Invia Modifiche",

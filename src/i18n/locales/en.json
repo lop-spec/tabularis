@@ -846,8 +846,11 @@
       "type_trigger": "trigger",
       "actions": {
         "inspect": "Inspect structure",
+        "newConsole": "New console",
         "generateSql": "Generate SQL templates",
-        "query": "Run SELECT query"
+        "countRows": "Count rows",
+        "query": "Run SELECT query",
+        "copyName": "Copy name"
       }
     },
     "submitChanges": "Submit Changes",

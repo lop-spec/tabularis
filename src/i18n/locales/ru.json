@@ -761,6 +761,26 @@
     "auto": "Авто"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "Поиск таблиц, представлений, процедур, триггеров...",
+      "noResults": "Совпадающие элементы не найдены",
+      "count_one": "1 элемент",
+      "count_other": "{{count}} элементов",
+      "navigationHint": "↑↓ для навигации, Enter для открытия",
+      "escHint": "Esc для закрытия",
+      "type_table": "таблица",
+      "type_view": "представление",
+      "type_routine": "процедура",
+      "type_trigger": "триггер",
+      "actions": {
+        "inspect": "Показать структуру",
+        "newConsole": "Новая консоль",
+        "generateSql": "Сгенерировать SQL-шаблоны",
+        "countRows": "Подсчитать строки",
+        "query": "Выполнить SELECT-запрос",
+        "copyName": "Скопировать имя"
+      }
+    },
     "noTabs": "Нет открытых вкладок для этого подключения.",
     "newConsole": "Новая консоль",
     "noActiveSession": "Нет активной сессии. Выберите подключение.",

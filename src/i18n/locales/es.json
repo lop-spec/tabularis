@@ -765,6 +765,26 @@
     "auto": "Auto"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "Buscar tablas, vistas, rutinas, triggers...",
+      "noResults": "No se encontraron elementos coincidentes",
+      "count_one": "1 elemento",
+      "count_other": "{{count}} elementos",
+      "navigationHint": "↑↓ para navegar, Enter para abrir",
+      "escHint": "Esc para cerrar",
+      "type_table": "tabla",
+      "type_view": "vista",
+      "type_routine": "rutina",
+      "type_trigger": "trigger",
+      "actions": {
+        "inspect": "Inspeccionar estructura",
+        "newConsole": "Nueva consola",
+        "generateSql": "Generar plantillas SQL",
+        "countRows": "Contar filas",
+        "query": "Ejecutar consulta SELECT",
+        "copyName": "Copiar nombre"
+      }
+    },
     "noTabs": "No hay pestañas abiertas para esta conexión.",
     "newConsole": "Nueva Consola",
     "noActiveSession": "No hay sesión activa. Selecciona una conexión.",

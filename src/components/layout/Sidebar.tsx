@@ -18,6 +18,7 @@ import { PanelDatabaseProvider } from "./PanelDatabaseProvider";
 import { DiscordCommunityCallout } from "./sidebar/DiscordCommunityCallout";
 import { QuickNavigatorModal } from "../modals/QuickNavigatorModal";
 import { GenerateSQLModal } from "../modals/GenerateSQLModal";
+import { SchemaModal } from "../modals/SchemaModal";
 
 // Hooks & Utils
 import { useSidebarResize } from "../../hooks/useSidebarResize";
@@ -43,6 +44,7 @@ export const Sidebar = () => {
   const [showShortcutHints, setShowShortcutHints] = useState(false);
   const [isQuickNavigatorOpen, setIsQuickNavigatorOpen] = useState(false);
   const [generateSQLTable, setGenerateSQLTable] = useState<string | null>(null);
+  const [inspectTable, setInspectTable] = useState<{ tableName: string; schema?: string } | null>(null);
   const { isMac } = useKeybindings();
 
   useEffect(() => {
@@ -371,6 +373,7 @@ export const Sidebar = () => {
           isOpen={isQuickNavigatorOpen}
           onClose={() => setIsQuickNavigatorOpen(false)}
           onGenerateSql={(tableName) => setGenerateSQLTable(tableName)}
+          onInspect={(tableName, schema) => setInspectTable({ tableName, schema })}
         />
       )}
       {generateSQLTable && (
@@ -378,6 +381,14 @@ export const Sidebar = () => {
           isOpen={true}
           tableName={generateSQLTable}
           onClose={() => setGenerateSQLTable(null)}
+        />
+      )}
+      {inspectTable && (
+        <SchemaModal
+          isOpen={true}
+          tableName={inspectTable.tableName}
+          schema={inspectTable.schema}
+          onClose={() => setInspectTable(null)}
         />
       )}
     </div>

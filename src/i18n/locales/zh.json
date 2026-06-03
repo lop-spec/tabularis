@@ -734,6 +734,26 @@
     "auto": "自动"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "搜索表、视图、例程、触发器...",
+      "noResults": "未找到匹配的元素",
+      "count_one": "1 个元素",
+      "count_other": "{{count}} 个元素",
+      "navigationHint": "↑↓ 导航，Enter 打开",
+      "escHint": "Esc 关闭",
+      "type_table": "表",
+      "type_view": "视图",
+      "type_routine": "例程",
+      "type_trigger": "触发器",
+      "actions": {
+        "inspect": "查看结构",
+        "newConsole": "新建控制台",
+        "generateSql": "生成 SQL 模板",
+        "countRows": "统计行数",
+        "query": "执行 SELECT 查询",
+        "copyName": "复制名称"
+      }
+    },
     "noTabs": "此连接无打开的标签。",
     "newConsole": "新建控制台",
     "noActiveSession": "无活动会话。请选择一个连接。",

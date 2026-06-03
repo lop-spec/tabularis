@@ -779,6 +779,26 @@
     "auto": "自動"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "テーブル、ビュー、ルーチン、トリガーを検索...",
+      "noResults": "一致する要素が見つかりません",
+      "count_one": "1件",
+      "count_other": "{{count}}件",
+      "navigationHint": "↑↓で移動、Enterで開く",
+      "escHint": "Escで閉じる",
+      "type_table": "テーブル",
+      "type_view": "ビュー",
+      "type_routine": "ルーチン",
+      "type_trigger": "トリガー",
+      "actions": {
+        "inspect": "構造を表示",
+        "newConsole": "新規コンソール",
+        "generateSql": "SQLテンプレートを生成",
+        "countRows": "行数をカウント",
+        "query": "SELECTクエリを実行",
+        "copyName": "名前をコピー"
+      }
+    },
     "noTabs": "この接続に対して開いているタブはありません。",
     "newConsole": "新規コンソール",
     "noActiveSession": "アクティブなセッションがありません。接続を選択してください。",
