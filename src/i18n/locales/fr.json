@@ -705,6 +705,12 @@
     "testFailed": "Échec du test de connexion",
     "savedInKeychain": "Mot de passe enregistré dans le trousseau système"
   },
+  "sshAskpass": {
+    "title": "Authentification SSH",
+    "subtitle": "La connexion SSH nécessite votre intervention",
+    "placeholder": "PIN ou phrase secrète",
+    "waiting": "En attente de votre clé de sécurité — touchez-la pour confirmer."
+  },
   "dataGrid": {
     "newRow": "NOUVELLE",
     "noData": "Aucune donnée à afficher",

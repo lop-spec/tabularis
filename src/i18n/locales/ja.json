@@ -719,6 +719,12 @@
     "testFailed": "接続テストに失敗しました",
     "savedInKeychain": "パスワードをシステムのキーチェーンに保存しました"
   },
+  "sshAskpass": {
+    "title": "SSH認証",
+    "subtitle": "SSH接続には入力が必要です",
+    "placeholder": "PINまたはパスフレーズ",
+    "waiting": "セキュリティキーを待っています — タッチして確認してください。"
+  },
   "dataGrid": {
     "noData": "表示するデータがありません",
     "editRow": "行を編集",

@@ -710,6 +710,12 @@
     "testFailed": "Test connessione fallito",
     "savedInKeychain": "Password salvata nel portachiavi di sistema"
   },
+  "sshAskpass": {
+    "title": "Autenticazione SSH",
+    "subtitle": "La connessione SSH richiede un tuo intervento",
+    "placeholder": "PIN o passphrase",
+    "waiting": "In attesa della security key — toccala per confermare."
+  },
   "dataGrid": {
     "newRow": "NUOVA",
     "noData": "Nessun dato da visualizzare",

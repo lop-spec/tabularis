@@ -726,6 +726,12 @@
     "testFailed": "Connection test failed",
     "savedInKeychain": "Password saved in system keychain"
   },
+  "sshAskpass": {
+    "title": "SSH Authentication",
+    "subtitle": "The SSH connection needs your input",
+    "placeholder": "PIN or passphrase",
+    "waiting": "Waiting for your security key — touch it to confirm."
+  },
   "dataGrid": {
     "newRow": "NEW",
     "noData": "No data to display",

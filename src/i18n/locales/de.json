@@ -705,6 +705,12 @@
     "testFailed": "Verbindungstest fehlgeschlagen",
     "savedInKeychain": "Passwort im System-Keychain gespeichert"
   },
+  "sshAskpass": {
+    "title": "SSH-Authentifizierung",
+    "subtitle": "Die SSH-Verbindung benötigt Ihre Eingabe",
+    "placeholder": "PIN oder Passphrase",
+    "waiting": "Warten auf Ihren Sicherheitsschlüssel — zum Bestätigen berühren."
+  },
   "dataGrid": {
     "newRow": "NEU",
     "noData": "Keine Daten zum Anzeigen",

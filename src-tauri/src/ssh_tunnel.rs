@@ -207,18 +207,16 @@ impl SshTunnel {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        if ssh_allow_passphrase_prompt {
-            command.env("SSH_ASKPASS_REQUIRE", "force");
-        }
+        let askpass_server = configure_askpass(&mut command, ssh_allow_passphrase_prompt)?;
 
         let mut child = command.spawn().map_err(|e| {
-                let err = format!(
-                    "Failed to launch system ssh: {}. Ensure 'ssh' is in PATH.",
-                    e
-                );
-                eprintln!("[SSH Tunnel Error] {}", err);
-                err
-            })?;
+            let err = format!(
+                "Failed to launch system ssh: {}. Ensure 'ssh' is in PATH.",
+                e
+            );
+            eprintln!("[SSH Tunnel Error] {}", err);
+            err
+        })?;
 
         let stdout_log = Arc::new(Mutex::new(Vec::with_capacity(LOG_BUFFER_INITIAL_CAPACITY)));
         let stderr_log = Arc::new(Mutex::new(Vec::with_capacity(LOG_BUFFER_INITIAL_CAPACITY)));
@@ -261,11 +259,18 @@ impl SshTunnel {
         let child_arc = Arc::new(Mutex::new(child));
 
         // Wait for the tunnel to become ready (port listening)
-        let start = Instant::now();
+        let mut start = Instant::now();
         let timeout = Duration::from_secs(SSH_TUNNEL_TIMEOUT_SECS);
         let mut ready = false;
 
         while start.elapsed() < timeout {
+            // While the user is answering an askpass prompt (PIN entry,
+            // security-key touch) the clock must not run against them. The
+            // prompt itself is bounded by the askpass response timeout.
+            if askpass_server.as_ref().is_some_and(|s| s.has_pending()) {
+                start = Instant::now();
+            }
+
             // Check if process is still alive
             {
                 let mut c = child_arc.lock().unwrap();
@@ -612,9 +617,9 @@ fn test_ssh_connection_system(
     let mut command = Command::new("ssh");
     command.args(&args);
 
-    if ssh_allow_passphrase_prompt {
-        command.env("SSH_ASKPASS_REQUIRE", "force");
-    }
+    // Keep the askpass server alive while ssh runs: prompts can arrive at any
+    // point until the process exits.
+    let _askpass_server = configure_askpass(&mut command, ssh_allow_passphrase_prompt)?;
 
     let output = command.output().map_err(|e| {
         format!(
@@ -732,6 +737,37 @@ fn test_ssh_connection_russh(
     })
     .join()
     .map_err(|e| format!("Thread panicked: {:?}", e))?
+}
+
+/// When passphrase/PIN prompts are allowed, wire ssh's askpass machinery to
+/// the in-app prompt bridge (see the `askpass` module). Falls back to the
+/// system askpass helper when the app is not fully initialised (e.g. tests),
+/// preserving the plain `SSH_ASKPASS_REQUIRE=force` behaviour.
+fn configure_askpass(
+    command: &mut Command,
+    ssh_allow_passphrase_prompt: bool,
+) -> Result<Option<crate::askpass::AskpassServer>, String> {
+    if !ssh_allow_passphrase_prompt {
+        return Ok(None);
+    }
+    match crate::askpass::start_frontend_server() {
+        Ok(server) => {
+            server.configure_command(command)?;
+            println!(
+                "[SSH Tunnel] In-app askpass bridge active at {}",
+                server.endpoint()
+            );
+            Ok(Some(server))
+        }
+        Err(e) => {
+            eprintln!(
+                "[SSH Tunnel] In-app askpass unavailable ({}); falling back to system askpass",
+                e
+            );
+            command.env("SSH_ASKPASS_REQUIRE", "force");
+            Ok(None)
+        }
+    }
 }
 
 /// Build tunnel map key from SSH parameters.
