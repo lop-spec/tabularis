@@ -549,7 +549,8 @@
       "pressKeys": "Нажмите сочетание клавиш...",
       "notebookRunAll": "Выполнить все ячейки",
       "categories_notebook": "Ноутбук",
-      "pasteImportClipboard": "Импортировать из буфера обмена"
+      "pasteImportClipboard": "Импортировать из буфера обмена",
+      "quickNavigator": "Быстрый навигатор"
     },
     "aiActivity": "Активность AI"
   },
@@ -649,7 +650,30 @@
       "allow": "Разрешён",
       "prefer": "Предпочтительный",
       "require": "Обязательный"
-    }
+    },
+    "chooseContext": "Выберите контекст...",
+    "chooseK8s": "Выберите подключение...",
+    "chooseNamespace": "Выберите пространство имён...",
+    "chooseResource": "Выберите ресурс...",
+    "createInlineK8s": "Встроенно",
+    "k8sContext": "Контекст",
+    "k8sNamespace": "Пространство имён",
+    "k8sNotAvailable": "Kubernetes недоступен для этого драйвера.",
+    "k8sPort": "Порт контейнера",
+    "k8sResourceName": "Имя ресурса",
+    "k8sResourceType": "Тип ресурса",
+    "k8sResourceTypePod": "Pod",
+    "k8sResourceTypeService": "Service",
+    "k8sSelectType": "Выберите тип...",
+    "manageK8s": "Управление",
+    "noK8sConnections": "Нет сохранённых подключений — создайте ниже",
+    "noK8sContexts": "Контексты не найдены (установлен ли kubectl?)",
+    "selectContextFirst": "Сначала выберите контекст",
+    "selectK8sConnection": "Выберите подключение K8s",
+    "selectTypeFirst": "Сначала выберите контекст/пространство имён/тип",
+    "useK8s": "Использовать проброс портов Kubernetes",
+    "useK8sConnection": "Сохранённое подключение",
+    "appearance": "Внешний вид"
   },
   "sshConnections": {
     "title": "SSH-подключения",
@@ -738,6 +762,26 @@
     "auto": "Авто"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "Поиск таблиц, представлений, процедур, триггеров...",
+      "noResults": "Совпадающие элементы не найдены",
+      "count_one": "1 элемент",
+      "count_other": "{{count}} элементов",
+      "navigationHint": "↑↓ для навигации, Enter для открытия",
+      "escHint": "Esc для закрытия",
+      "type_table": "таблица",
+      "type_view": "представление",
+      "type_routine": "процедура",
+      "type_trigger": "триггер",
+      "actions": {
+        "inspect": "Показать структуру",
+        "newConsole": "Новая консоль",
+        "generateSql": "Сгенерировать SQL-шаблоны",
+        "countRows": "Подсчитать строки",
+        "query": "Выполнить SELECT-запрос",
+        "copyName": "Скопировать имя"
+      }
+    },
     "noTabs": "Нет открытых вкладок для этого подключения.",
     "newConsole": "Новая консоль",
     "noActiveSession": "Нет активной сессии. Выберите подключение.",
@@ -1007,8 +1051,14 @@
   "generateSQL": {
     "title": "Сгенерированный SQL: {{table}}",
     "loading": "Генерация SQL...",
+    "runInConsole": "Запустить в консоли",
     "copy": "Копировать SQL",
-    "copied": "Скопировано!"
+    "copied": "Скопировано!",
+    "tabCreateTable": "Создать таблицу",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [поля]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "Добавить столбец",
@@ -1512,5 +1562,25 @@
     "body": "Мы только что открыли отдельное место для пользователей Tabularis. Получайте помощь, делитесь советами, участвуйте в формировании дорожной карты.",
     "cta": "Вступить сейчас",
     "dismiss": "Закрыть"
+  },
+  "k8sConnections": {
+    "title": "Подключения Kubernetes",
+    "add": "Добавить",
+    "empty": "Нет сохранённых подключений Kubernetes. Нажмите «Добавить», чтобы создать.",
+    "name": "Имя",
+    "namePlaceholder": "Мой кластер K8s",
+    "context": "Контекст",
+    "chooseContext": "Выберите контекст...",
+    "namespace": "Пространство имён",
+    "chooseNamespace": "Выберите пространство имён...",
+    "resourceType": "Тип ресурса",
+    "resourceTypeService": "Service",
+    "resourceTypePod": "Pod",
+    "resourceName": "Имя ресурса",
+    "chooseResource": "Выберите ресурс...",
+    "port": "Порт контейнера",
+    "test": "Проверить",
+    "testing": "Проверка...",
+    "validationFailed": "Ошибка проверки"
   }
 }

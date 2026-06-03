@@ -1,3 +1,25 @@
+# [0.13.0](https://github.com/debba/tabularis/compare/v0.12.0...v0.13.0) (2026-06-03)
+
+
+### Bug Fixes
+
+* **ai-activity:** render timestamps in local time + add display timezone setting ([#251](https://github.com/debba/tabularis/issues/251)) ([44899f3](https://github.com/debba/tabularis/commit/44899f3d19610337d47204622a8ec9cc5a780d43))
+* **k8s:** add k8s fields to SavedConnection params type ([f54843f](https://github.com/debba/tabularis/commit/f54843f338c143726e5c296beb43ceb5002a8079)), closes [#246](https://github.com/debba/tabularis/issues/246)
+* **mcp:** close approval/read-only bypass in run_query ([#261](https://github.com/debba/tabularis/issues/261)) ([1b1bb03](https://github.com/debba/tabularis/commit/1b1bb033e2d9474edb372eba60f29244cab33339))
+* **mcp:** dispatch plugin drivers via the registry + harden the subprocess ([#256](https://github.com/debba/tabularis/issues/256)) ([259f089](https://github.com/debba/tabularis/commit/259f08958087a798672f4359fd06ff07abb70f74))
+* **plugins:** correct plugin data folder paths ([358514e](https://github.com/debba/tabularis/commit/358514ed1c951eaae7a2cc00d480065c764768b6))
+* prevent selectedIndex rerender on mouse scroll ([12f4586](https://github.com/debba/tabularis/commit/12f45865a3680ff4e1527d511b0b5ce6f049f633))
+* **query-history:** recover from corruption + atomic writes ([#253](https://github.com/debba/tabularis/issues/253)) ([c2b5598](https://github.com/debba/tabularis/commit/c2b5598f81c4a2e466305647e0193b6f17af16b3))
+* **schemas:** surface get_schemas failure with error + retry ([#242](https://github.com/debba/tabularis/issues/242)) ([8fc0f3a](https://github.com/debba/tabularis/commit/8fc0f3ac173be64651166e878ab61c955e50da56))
+
+
+### Features
+
+* **discord-release:** add tabularis-discord-release agent skill ([cb599ed](https://github.com/debba/tabularis/commit/cb599edcb213d7b662bd7397e3f41128295aaafc))
+* integrate Quick Navigator search overlay ([#252](https://github.com/debba/tabularis/issues/252)) ([1802165](https://github.com/debba/tabularis/commit/1802165c402c2463faf0c19fed7544e2b3976641))
+* Kubernetes port-forward tunnel support ([#246](https://github.com/debba/tabularis/issues/246)) ([66a0aec](https://github.com/debba/tabularis/commit/66a0aec1e6406cd5f724c804c3ec69679a644900))
+* **quick-navigator:** add inspect, new console, count & copy actions ([ca3b599](https://github.com/debba/tabularis/commit/ca3b5995213ff2cb308f10d9a8498de824c7dc70))
+
 # [0.12.0](https://github.com/debba/tabularis/compare/v0.11.0...v0.12.0) (2026-05-25)
 
 

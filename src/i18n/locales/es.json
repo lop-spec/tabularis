@@ -559,7 +559,8 @@
       "pressKeys": "Pulsa la combinación de teclas...",
       "notebookRunAll": "Ejecutar Todas las Celdas",
       "categories_notebook": "Notebook",
-      "pasteImportClipboard": "Importar desde Portapapeles"
+      "pasteImportClipboard": "Importar desde Portapapeles",
+      "quickNavigator": "Navegador rápido"
     },
     "aiActivity": "Actividad IA"
   },
@@ -662,7 +663,29 @@
       "require": "Requerido",
       "verify-ca": "Verificar CA",
       "verify-full": "Verificación completa"
-    }
+    },
+    "chooseContext": "Elige un contexto...",
+    "chooseK8s": "Elige una conexión...",
+    "chooseNamespace": "Elige un namespace...",
+    "chooseResource": "Elige un recurso...",
+    "createInlineK8s": "En línea",
+    "k8sContext": "Contexto",
+    "k8sNamespace": "Namespace",
+    "k8sNotAvailable": "Kubernetes no está disponible para este controlador.",
+    "k8sPort": "Puerto del contenedor",
+    "k8sResourceName": "Nombre del recurso",
+    "k8sResourceType": "Tipo de recurso",
+    "k8sResourceTypePod": "Pod",
+    "k8sResourceTypeService": "Service",
+    "k8sSelectType": "Selecciona tipo...",
+    "manageK8s": "Gestionar",
+    "noK8sConnections": "No hay conexiones guardadas — crea una abajo",
+    "noK8sContexts": "No se encontraron contextos (¿está kubectl instalado?)",
+    "selectContextFirst": "Selecciona primero un contexto",
+    "selectK8sConnection": "Selecciona conexión de K8s",
+    "selectTypeFirst": "Selecciona primero contexto/namespace/tipo",
+    "useK8s": "Usar Port-Forward de Kubernetes",
+    "useK8sConnection": "Conexión guardada"
   },
   "sshConnections": {
     "title": "Conexiones SSH",
@@ -743,6 +766,26 @@
     "auto": "Auto"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "Buscar tablas, vistas, rutinas, triggers...",
+      "noResults": "No se encontraron elementos coincidentes",
+      "count_one": "1 elemento",
+      "count_other": "{{count}} elementos",
+      "navigationHint": "↑↓ para navegar, Enter para abrir",
+      "escHint": "Esc para cerrar",
+      "type_table": "tabla",
+      "type_view": "vista",
+      "type_routine": "rutina",
+      "type_trigger": "trigger",
+      "actions": {
+        "inspect": "Inspeccionar estructura",
+        "newConsole": "Nueva consola",
+        "generateSql": "Generar plantillas SQL",
+        "countRows": "Contar filas",
+        "query": "Ejecutar consulta SELECT",
+        "copyName": "Copiar nombre"
+      }
+    },
     "noTabs": "No hay pestañas abiertas para esta conexión.",
     "newConsole": "Nueva Consola",
     "noActiveSession": "No hay sesión activa. Selecciona una conexión.",
@@ -997,8 +1040,14 @@
   "generateSQL": {
     "title": "SQL Generado: {{table}}",
     "loading": "Generando SQL...",
+    "runInConsole": "Ejecutar en consola",
     "copy": "Copiar SQL",
-    "copied": "¡Copiado!"
+    "copied": "¡Copiado!",
+    "tabCreateTable": "Crear Tabla",
+    "tabSelectAll": "Select *",
+    "tabSelectFields": "Select [campos]",
+    "tabUpdate": "Update",
+    "tabDelete": "Delete"
   },
   "modifyColumn": {
     "titleAdd": "Agregar Columna",
@@ -1398,5 +1447,25 @@
     "body": "Acabamos de abrir una comunidad dedicada a Tabularis: pide ayuda, comparte trucos y da forma al roadmap.",
     "cta": "Únete ahora",
     "dismiss": "Cerrar"
+  },
+  "k8sConnections": {
+    "title": "Conexiones de Kubernetes",
+    "add": "Añadir",
+    "empty": "No hay conexiones de Kubernetes guardadas. Haz clic en \"Añadir\" para crear una.",
+    "name": "Nombre",
+    "namePlaceholder": "Mi clúster de K8s",
+    "context": "Contexto",
+    "chooseContext": "Elige un contexto...",
+    "namespace": "Namespace",
+    "chooseNamespace": "Elige un namespace...",
+    "resourceType": "Tipo de recurso",
+    "resourceTypeService": "Service",
+    "resourceTypePod": "Pod",
+    "resourceName": "Nombre del recurso",
+    "chooseResource": "Elige un recurso...",
+    "port": "Puerto del contenedor",
+    "test": "Probar",
+    "testing": "Probando...",
+    "validationFailed": "Error de validación"
   }
 }

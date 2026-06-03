@@ -29,6 +29,14 @@ export interface ConnectionParams {
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
   ssh_allow_passphrase_prompt?: boolean;
+  // K8s
+  k8s_enabled?: boolean;
+  k8s_connection_id?: string;
+  k8s_context?: string;
+  k8s_namespace?: string;
+  k8s_resource_type?: string;
+  k8s_resource_name?: string;
+  k8s_port?: number;
 }
 
 /**

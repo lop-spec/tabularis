@@ -14,12 +14,14 @@ export function useGlobalShortcuts() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't fire when typing in inputs / textareas / contenteditable
+      // Don't fire when typing in inputs / textareas / contenteditable (except for the quick navigator)
       const target = e.target as HTMLElement;
+      const isQuickNavigator = matchesShortcut(e, "quick_navigator");
       if (
-        target.tagName === "INPUT" ||
+        (target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
-        target.isContentEditable
+        target.isContentEditable) &&
+        !isQuickNavigator
       ) {
         return;
       }
@@ -33,6 +35,12 @@ export function useGlobalShortcuts() {
       if (matchesShortcut(e, "paste_import_clipboard")) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("tabularis:paste-import"));
+        return;
+      }
+
+      if (matchesShortcut(e, "quick_navigator")) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("tabularis:open-quick-navigator"));
         return;
       }
 

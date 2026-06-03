@@ -474,6 +474,94 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
+    // Multi-statement payloads must NOT be tagged as a clean select just
+    // because the leading keyword is SELECT. The read-only / approval gates
+    // rely on `kind != "select"` to fail closed.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn classify_select_then_drop_is_unknown() {
+        assert_eq!(
+            classify_query_kind("SELECT 1; DROP TABLE users;"),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn classify_select_then_delete_is_unknown() {
+        assert_eq!(
+            classify_query_kind("SELECT * FROM t; DELETE FROM t WHERE id = 1"),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn classify_select_then_update_is_unknown() {
+        assert_eq!(
+            classify_query_kind("SELECT 1;\nUPDATE accounts SET balance = 0"),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn classify_trailing_semicolon_keeps_kind() {
+        // A single statement with a trailing `;` is still that kind — the
+        // multi-statement gate only fires when content follows the semicolon.
+        assert_eq!(classify_query_kind("SELECT 1;"), "select");
+        assert_eq!(classify_query_kind("UPDATE t SET x = 1;"), "write");
+        assert_eq!(classify_query_kind("DROP TABLE t;  "), "ddl");
+    }
+
+    #[test]
+    fn classify_semicolon_inside_string_is_single_statement() {
+        // Semicolons inside literals are stripped before scanning, so the
+        // query is still a clean SELECT.
+        assert_eq!(
+            classify_query_kind("SELECT ';DROP TABLE users;' FROM dual"),
+            "select"
+        );
+    }
+
+    #[test]
+    fn classify_semicolon_inside_comment_is_single_statement() {
+        assert_eq!(
+            classify_query_kind("SELECT 1 /* ; DROP TABLE u */ FROM dual"),
+            "select"
+        );
+        assert_eq!(
+            classify_query_kind("SELECT 1 -- ; DROP TABLE u\nFROM dual"),
+            "select"
+        );
+    }
+
+    #[test]
+    fn classify_mysql_backslash_escape_cannot_hide_separator() {
+        // MySQL/MariaDB read `'\''` as the one-character string `'`, so the
+        // `;` that follows is a real statement separator. Under the SQL-
+        // standard reading the `''` would be an escaped quote and the `;`
+        // would stay inside the string. We fail closed to the multi-statement
+        // interpretation so neither dialect can smuggle a write past the gate.
+        assert_eq!(
+            classify_query_kind("SELECT '\\''; DROP TABLE users"),
+            "unknown"
+        );
+        assert_eq!(
+            classify_query_kind("SELECT '\\'; DELETE FROM accounts"),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn classify_escaped_quote_boundary_is_single_statement() {
+        // `''` is a real escaped quote here, so the `;` lives inside the
+        // literal and the query stays a clean SELECT under both readings.
+        assert_eq!(
+            classify_query_kind("SELECT 'it''s; DROP' FROM dual"),
+            "select"
+        );
+    }
+
+    // -----------------------------------------------------------------------
     // Session state / compute_or_rotate_session_id
     // -----------------------------------------------------------------------
 

@@ -37,6 +37,7 @@ pub mod heartbeat;
 pub mod heartbeat_tests;
 pub mod json_viewer;
 pub mod keychain_utils;
+pub mod k8s_tunnel;
 pub mod log_commands;
 pub mod logger;
 pub mod mcp;
@@ -122,6 +123,10 @@ pub fn run() {
     let args = cli::parse();
 
     if args.mcp {
+        // Initialize the logger so plugin-loading and driver RPC errors (which
+        // use the `log` crate) are visible. The custom logger writes to stderr
+        // only, leaving the stdout JSON-RPC stream clean.
+        init_logger(create_log_buffer(1000), log::LevelFilter::Info);
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
         rt.block_on(mcp::run_mcp_server());
         return;
@@ -264,6 +269,15 @@ pub fn run() {
             commands::update_ssh_connection,
             commands::delete_ssh_connection,
             commands::test_ssh_connection,
+            // K8s Connections
+            commands::get_k8s_connections,
+            commands::save_k8s_connection,
+            commands::update_k8s_connection,
+            commands::delete_k8s_connection,
+            commands::test_k8s_connection_cmd,
+            commands::get_k8s_contexts_cmd,
+            commands::get_k8s_namespaces_cmd,
+            commands::get_k8s_resources_cmd,
             // Connection Groups
             commands::get_connection_groups,
             commands::get_connections_with_groups,

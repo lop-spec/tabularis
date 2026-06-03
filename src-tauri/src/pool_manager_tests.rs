@@ -1,6 +1,42 @@
 #[cfg(test)]
 mod tests {
-    use crate::pool_manager::format_error_chain;
+    use crate::models::{ConnectionParams, DatabaseSelection};
+    use crate::pool_manager::{build_connection_key, build_mysql_options, format_error_chain};
+    use sqlx::mysql::MySqlSslMode;
+
+    fn connection_params(driver: &str, ssl_mode: Option<&str>) -> ConnectionParams {
+        ConnectionParams {
+            driver: driver.to_string(),
+            host: Some("127.0.0.1".to_string()),
+            port: Some(match driver {
+                "postgres" => 5432,
+                "mysql" => 3306,
+                _ => 0,
+            }),
+            username: Some("dec".to_string()),
+            password: Some("secret".to_string()),
+            database: DatabaseSelection::Single("dec".to_string()),
+            ssl_mode: ssl_mode.map(ToOwned::to_owned),
+            ssl_ca: None,
+            ssl_cert: None,
+            ssl_key: None,
+            ssh_enabled: Some(true),
+            ssh_connection_id: Some("ssh-1".to_string()),
+            ssh_host: Some("149.202.85.42".to_string()),
+            ssh_port: Some(2222),
+            ssh_user: Some("julien".to_string()),
+            ssh_password: None,
+            ssh_key_file: Some("/Users/julienbarbe/.ssh/id_rsa".to_string()),
+            ssh_key_passphrase: None,
+            save_in_keychain: None,
+            connection_id: Some("conn-1".to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn mysql_params(ssl_mode: &str) -> ConnectionParams {
+        connection_params("mysql", Some(ssl_mode))
+    }
 
     #[test]
     fn format_error_chain_walks_sources() {
@@ -34,6 +70,58 @@ mod tests {
             "outer message -> inner cause"
         );
     }
+
+    #[test]
+    fn mysql_pool_key_changes_when_ssl_mode_changes() {
+        let required = mysql_params("required");
+        let disabled = mysql_params("disabled");
+
+        assert_ne!(
+            build_connection_key(&required, Some("conn-1")),
+            build_connection_key(&disabled, Some("conn-1"))
+        );
+    }
+
+    #[test]
+    fn postgres_pool_key_ignores_mysql_ssl_key_fields() {
+        let required = connection_params("postgres", Some("required"));
+        let disabled = connection_params("postgres", Some("disabled"));
+
+        assert_eq!(
+            build_connection_key(&required, Some("conn-1")),
+            build_connection_key(&disabled, Some("conn-1"))
+        );
+    }
+
+    #[test]
+    fn sqlite_pool_key_ignores_mysql_ssl_key_fields() {
+        let required = connection_params("sqlite", Some("required"));
+        let disabled = connection_params("sqlite", Some("disabled"));
+
+        assert_eq!(
+            build_connection_key(&required, Some("conn-1")),
+            build_connection_key(&disabled, Some("conn-1"))
+        );
+    }
+
+    #[test]
+    fn mysql_options_accept_snake_case_verify_ssl_modes() {
+        let verify_ca = mysql_params("verify_ca");
+        let verify_identity = mysql_params("verify_identity");
+
+        assert!(matches!(
+            build_mysql_options(&verify_ca, None)
+                .unwrap()
+                .get_ssl_mode(),
+            MySqlSslMode::VerifyCa
+        ));
+        assert!(matches!(
+            build_mysql_options(&verify_identity, None)
+                .unwrap()
+                .get_ssl_mode(),
+            MySqlSslMode::VerifyIdentity
+        ));
+    }
 }
 
 #[cfg(test)]
@@ -51,19 +139,7 @@ mod postgres_ssl_config_tests {
             password: Some("test".to_string()),
             database: DatabaseSelection::Single("testdb".to_string()),
             ssl_mode: Some(mode.to_string()),
-            ssl_ca: None,
-            ssl_cert: None,
-            ssl_key: None,
-            ssh_enabled: None,
-            ssh_connection_id: None,
-            ssh_host: None,
-            ssh_port: None,
-            ssh_user: None,
-            ssh_password: None,
-            ssh_key_file: None,
-            ssh_key_passphrase: None,
-            save_in_keychain: None,
-            connection_id: None,
+            ..Default::default()
         }
     }
 
@@ -75,20 +151,7 @@ mod postgres_ssl_config_tests {
             username: Some("test".to_string()),
             password: Some("test".to_string()),
             database: DatabaseSelection::Single("testdb".to_string()),
-            ssl_mode: None,
-            ssl_ca: None,
-            ssl_cert: None,
-            ssl_key: None,
-            ssh_enabled: None,
-            ssh_connection_id: None,
-            ssh_host: None,
-            ssh_port: None,
-            ssh_user: None,
-            ssh_password: None,
-            ssh_key_file: None,
-            ssh_key_passphrase: None,
-            save_in_keychain: None,
-            connection_id: None,
+            ..Default::default()
         }
     }
 
@@ -179,19 +242,7 @@ mod postgres_tls_connector_tests {
             password: Some("test".to_string()),
             database: DatabaseSelection::Single("testdb".to_string()),
             ssl_mode: Some(mode.to_string()),
-            ssl_ca: None,
-            ssl_cert: None,
-            ssl_key: None,
-            ssh_enabled: None,
-            ssh_connection_id: None,
-            ssh_host: None,
-            ssh_port: None,
-            ssh_user: None,
-            ssh_password: None,
-            ssh_key_file: None,
-            ssh_key_passphrase: None,
-            save_in_keychain: None,
-            connection_id: None,
+            ..Default::default()
         }
     }
 
@@ -261,18 +312,7 @@ mod postgres_tls_connector_tests {
             database: DatabaseSelection::Single("testdb".to_string()),
             ssl_mode: Some("verify-ca".to_string()),
             ssl_ca: Some(file_path.to_str().unwrap().to_string()),
-            ssl_cert: None,
-            ssl_key: None,
-            ssh_enabled: None,
-            ssh_connection_id: None,
-            ssh_host: None,
-            ssh_port: None,
-            ssh_user: None,
-            ssh_password: None,
-            ssh_key_file: None,
-            ssh_key_passphrase: None,
-            save_in_keychain: None,
-            connection_id: None,
+            ..Default::default()
         };
         let result = build_postgres_tls_connector(&params);
         assert!(result.is_ok());

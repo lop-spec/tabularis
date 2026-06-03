@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { quoteTableRef } from "../../utils/identifiers";
@@ -60,6 +60,7 @@ import { TriggerEditorModal } from "../modals/TriggerEditorModal";
 import { ConfirmModal } from "../modals/ConfirmModal";
 import { Accordion } from "./sidebar/Accordion";
 import { SidebarTableItem } from "./sidebar/SidebarTableItem";
+import { buildTableItemSelector } from "../../utils/sidebarTableItem";
 import { SidebarViewItem } from "./sidebar/SidebarViewItem";
 import { SidebarRoutineItem } from "./sidebar/SidebarRoutineItem";
 import { SidebarSchemaItem } from "./sidebar/SidebarSchemaItem";
@@ -147,6 +148,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const { showAlert } = useAlert();
   const navigate = useNavigate();
   const [schemaVersion, setSchemaVersion] = useState(0);
+  const sidebarBodyRef = useRef<HTMLDivElement>(null);
   const [schemaErrorExpanded, setSchemaErrorExpanded] = useState(false);
   const [schemaErrorCopied, setSchemaErrorCopied] = useState(false);
 
@@ -388,6 +390,30 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
 
   const isMultiDb = isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
 
+  useEffect(() => {
+    if (!activeTable) return;
+    const container = sidebarBodyRef.current;
+    if (!container) return;
+
+    const selector = buildTableItemSelector(activeTable, activeSchema);
+    // The target database/schema may have just been expanded and its tables
+    // loaded asynchronously, so the item might not be in the DOM on the first
+    // tick. Retry across frames until it appears; without this an upward scroll
+    // to a freshly expanded section silently does nothing.
+    let frame = 0;
+    let rafId = requestAnimationFrame(function tryScroll() {
+      const el = container.querySelector<HTMLElement>(selector);
+      if (el) {
+        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return;
+      }
+      if (frame++ < 120) {
+        rafId = requestAnimationFrame(tryScroll);
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [activeTable, activeSchema]);
+
   return (
     <>
       <aside
@@ -571,7 +597,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto py-2">
+        <div ref={sidebarBodyRef} className="flex-1 overflow-y-auto py-2">
           {/* Favorites tab */}
           {sidebarTab === "favorites" && (<div className="animate-fade-in">{(() => {
             const sorted = [...queries].sort((a, b) => {
