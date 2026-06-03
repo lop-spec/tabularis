@@ -2091,6 +2091,9 @@ export const Editor = () => {
   ) => {
     editorsRef.current[tabId] = editor;
     setMonacoInstance(monaco);
+    // Focus the editor when a console tab is opened (Ctrl+T / new console)
+    const mountedTab = tabsRef.current.find((t) => t.id === tabId);
+    if (mountedTab?.type === "console") editor.focus();
     editor.addAction({
       id: "run-selection",
       label: "Execute Selection",
