@@ -285,7 +285,7 @@ pub async fn get_ai_models(
                 // Always refresh custom-openai as it depends on user configuration
                 if let (Some(base_url), Ok(api_key)) = (
                     app_config.ai_custom_openai_url.clone(),
-                    config::get_ai_api_key("custom-openai"),
+                    config::get_ai_api_key(&app, "custom-openai"),
                 ) {
                     if !base_url.is_empty() && !api_key.is_empty() {
                         let custom_models = fetch_custom_openai_models(&base_url, &api_key).await;
@@ -311,7 +311,7 @@ pub async fn get_ai_models(
     }
 
     // 2. OpenAI (Dynamic if key exists)
-    if let Ok(key) = config::get_ai_api_key("openai") {
+    if let Ok(key) = config::get_ai_api_key(&app, "openai") {
         let remote_models = fetch_openai_models(&key).await;
         if !remote_models.is_empty() {
             if let Some(static_list) = models.get_mut("openai") {
@@ -342,7 +342,7 @@ pub async fn get_ai_models(
     // 4. Custom OpenAI (Dynamic if configured)
     if let (Some(base_url), Ok(api_key)) = (
         app_config.ai_custom_openai_url,
-        config::get_ai_api_key("custom-openai"),
+        config::get_ai_api_key(&app, "custom-openai"),
     ) {
         if !base_url.is_empty() && !api_key.is_empty() {
             let custom_models = fetch_custom_openai_models(&base_url, &api_key).await;
@@ -424,13 +424,14 @@ async fn resolve_model(
 }
 
 async fn dispatch_provider(
+    app: &AppHandle,
     app_config: &config::AppConfig,
     gen_req: &AiGenerateRequest,
     system_prompt: &str,
     ollama_port: u16,
 ) -> Result<String, String> {
     let api_key = if gen_req.provider != "ollama" {
-        config::get_ai_api_key(&gen_req.provider)?
+        config::get_ai_api_key(app, &gen_req.provider)?
     } else {
         String::new()
     };
@@ -463,10 +464,10 @@ pub async fn generate_query(app: AppHandle, mut req: AiGenerateRequest) -> Resul
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
     req.model = resolve_model(&req.provider, &req.model, &app_config, ollama_port).await?;
 
-    let raw_prompt = config::get_system_prompt(app);
+    let raw_prompt = config::get_system_prompt(app.clone());
     let system_prompt = raw_prompt.replace("{{SCHEMA}}", &req.schema);
 
-    let result = dispatch_provider(&app_config, &req, &system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(_) => log::info!("AI query generated successfully using {}", req.model),
@@ -483,7 +484,7 @@ pub async fn explain_query(app: AppHandle, mut req: AiExplainRequest) -> Result<
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
     req.model = resolve_model(&req.provider, &req.model, &app_config, ollama_port).await?;
 
-    let raw_prompt = config::get_explain_prompt(app);
+    let raw_prompt = config::get_explain_prompt(app.clone());
     let system_prompt = raw_prompt.replace("{{LANGUAGE}}", &req.language);
 
     let gen_req = AiGenerateRequest {
@@ -493,7 +494,7 @@ pub async fn explain_query(app: AppHandle, mut req: AiExplainRequest) -> Result<
         schema: String::new(),
     };
 
-    let result = dispatch_provider(&app_config, &gen_req, &system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &gen_req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(_) => log::info!(
@@ -516,7 +517,7 @@ pub async fn analyze_explain_plan(
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
     req.model = resolve_model(&req.provider, &req.model, &app_config, ollama_port).await?;
 
-    let raw_prompt = config::get_explainplan_prompt(app);
+    let raw_prompt = config::get_explainplan_prompt(app.clone());
     let system_prompt = raw_prompt.replace("{{LANGUAGE}}", &req.language);
 
     let gen_req = AiGenerateRequest {
@@ -526,7 +527,7 @@ pub async fn analyze_explain_plan(
         schema: String::new(),
     };
 
-    let result = dispatch_provider(&app_config, &gen_req, &system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &gen_req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(_) => log::info!(
@@ -553,7 +554,7 @@ async fn generate_with_simple_prompt(
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
     let resolved_model = resolve_model(&provider, &model, &app_config, ollama_port).await?;
 
-    let system_prompt = get_prompt(app);
+    let system_prompt = get_prompt(app.clone());
 
     let gen_req = AiGenerateRequest {
         provider: provider.clone(),
@@ -562,7 +563,7 @@ async fn generate_with_simple_prompt(
         schema: String::new(),
     };
 
-    let result = dispatch_provider(&app_config, &gen_req, &system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &gen_req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(v) => log::info!("{} generated: {}", label, v),
@@ -617,7 +618,7 @@ pub async fn suggest_table_name(
     };
 
     let system_prompt = "You are a database naming expert. Reply with only a snake_case table name, no explanation.";
-    let result = dispatch_provider(&app_config, &gen_req, system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &gen_req, system_prompt, ollama_port).await;
 
     match &result {
         Ok(name) => {

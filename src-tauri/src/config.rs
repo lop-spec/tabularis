@@ -410,13 +410,21 @@ pub fn set_selected_schemas(
 }
 
 #[tauri::command]
-pub fn set_ai_key(provider: String, key: String) -> Result<(), String> {
-    keychain_utils::set_ai_key(&provider, &key)
+pub fn set_ai_key(app: AppHandle, provider: String, key: String) -> Result<(), String> {
+    keychain_utils::set_ai_key(&provider, &key)?;
+    // Write-through so subsequent reads avoid hitting the keychain (and its prompt).
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    crate::credential_cache::set_ai_key_cached(&cache, &provider, &key);
+    Ok(())
 }
 
 #[tauri::command]
-pub fn delete_ai_key(provider: String) -> Result<(), String> {
-    keychain_utils::delete_ai_key(&provider)
+pub fn delete_ai_key(app: AppHandle, provider: String) -> Result<(), String> {
+    keychain_utils::delete_ai_key(&provider)?;
+    // Drop the cached value so the next read reflects the deletion.
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    crate::credential_cache::invalidate_ai_key(&cache, &provider);
+    Ok(())
 }
 
 /// Get the configured maximum BLOB size in bytes, or DEFAULT_MAX_BLOB_SIZE if not set
@@ -427,9 +435,12 @@ pub fn get_max_blob_size<R: tauri::Runtime>(app: &AppHandle<R>) -> u64 {
         .unwrap_or(crate::drivers::common::DEFAULT_MAX_BLOB_SIZE)
 }
 
-pub fn get_ai_api_key(provider: &str) -> Result<String, String> {
-    // 1. Try Keychain First (Override)
-    if let Ok(key) = keychain_utils::get_ai_key(provider) {
+pub fn get_ai_api_key(app: &AppHandle, provider: &str) -> Result<String, String> {
+    // 1. Try Keychain First (Override) — via the in-memory credential cache so
+    //    repeated lookups don't trigger a macOS Keychain authorization prompt
+    //    each time. The keychain is read at most once per provider per session.
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    if let Ok(key) = crate::credential_cache::get_ai_key_cached(&cache, provider) {
         if !key.is_empty() {
             return Ok(key);
         }
@@ -466,9 +477,10 @@ pub struct AiKeyStatus {
     pub from_env: bool,
 }
 
-pub fn get_ai_api_key_status(provider: &str) -> AiKeyStatus {
-    // 1. Check Keychain
-    let keychain_exists = keychain_utils::get_ai_key(provider).is_ok();
+pub fn get_ai_api_key_status(app: &AppHandle, provider: &str) -> AiKeyStatus {
+    // 1. Check Keychain (through the cache to avoid repeated auth prompts)
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    let keychain_exists = crate::credential_cache::get_ai_key_cached(&cache, provider).is_ok();
 
     // 2. Check Env Var
     let env_var = match provider {
@@ -511,13 +523,13 @@ pub fn get_ai_api_key_status(provider: &str) -> AiKeyStatus {
 }
 
 #[tauri::command]
-pub fn check_ai_key(provider: String) -> bool {
-    get_ai_api_key(&provider).is_ok()
+pub fn check_ai_key(app: AppHandle, provider: String) -> bool {
+    get_ai_api_key(&app, &provider).is_ok()
 }
 
 #[tauri::command]
-pub fn check_ai_key_status(provider: String) -> AiKeyStatus {
-    get_ai_api_key_status(&provider)
+pub fn check_ai_key_status(app: AppHandle, provider: String) -> AiKeyStatus {
+    get_ai_api_key_status(&app, &provider)
 }
 
 const DEFAULT_SYSTEM_PROMPT: &str = "You are an expert SQL assistant. Your task is to generate a SQL query based on the user's request and the provided database schema.\nReturn ONLY the SQL query, without any markdown formatting, explanations, or code blocks.\n\nSchema:\n{{SCHEMA}}";
