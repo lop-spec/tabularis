@@ -41,7 +41,6 @@ import { isMultiDatabaseCapable } from "../../utils/database";
 import { fetchConnectionWithCredentials } from "../../utils/credentials";
 import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 import {
-  looksLikeConnectionString,
   parseConnectionString,
   toConnectionParams,
 } from "../../utils/connectionStringParser";
@@ -726,43 +725,41 @@ export const NewConnectionModal = ({
       capabilities: item.capabilities,
     }));
 
-    if (looksLikeConnectionString(value, parserDrivers)) {
-      const result = parseConnectionString(value, parserDrivers);
-      if (result.success) {
-        const parsed = toConnectionParams(result.params);
-        const newDriver = parsed.driver || driver;
-        const parsedDriver = drivers.find((item) => item.id === newDriver);
-        const parsedIsMultiDb = isMultiDatabaseCapable(
-          parsedDriver?.capabilities,
-        );
+    const result = parseConnectionString(value, parserDrivers);
+    if (result.success) {
+      const parsed = toConnectionParams(result.params);
+      const newDriver = parsed.driver || driver;
+      const parsedDriver = drivers.find((item) => item.id === newDriver);
+      const parsedIsMultiDb = isMultiDatabaseCapable(
+        parsedDriver?.capabilities,
+      );
 
-        const parsedFields: Partial<ConnectionParams> = {
-          driver: newDriver,
-          host: parsed.host || "localhost",
-          port: parsed.port,
-          username: parsed.username || "",
-          password: parsed.password || "",
-          database: parsed.database || "",
-        };
+      const parsedFields: Partial<ConnectionParams> = {
+        driver: newDriver,
+        host: parsed.host || "localhost",
+        port: parsed.port,
+        username: parsed.username || "",
+        password: parsed.password || "",
+        database: parsed.database || "",
+      };
 
-        if (parsedIsMultiDb && parsed.database) {
-          setSelectedDatabasesState([parsed.database]);
-          setActiveTab("databases");
-        }
-
-        if (newDriver !== driver) {
-          setDriver(newDriver);
-        }
-
-        setFormData((prev) => ({
-          ...prev,
-          ...parsedFields,
-        }));
-
-        void loadDatabases(parsedFields);
-      } else {
-        setConnectionStringError(result.error);
+      if (parsedIsMultiDb && parsed.database) {
+        setSelectedDatabasesState([parsed.database]);
+        setActiveTab("databases");
       }
+
+      if (newDriver !== driver) {
+        setDriver(newDriver);
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        ...parsedFields,
+      }));
+
+      void loadDatabases(parsedFields);
+    } else {
+      setConnectionStringError(result.error);
     }
   };
 
