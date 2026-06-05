@@ -745,7 +745,6 @@ export const NewConnectionModal = ({
 
       if (parsedIsMultiDb && parsed.database) {
         setSelectedDatabasesState([parsed.database]);
-        setActiveTab("databases");
       }
 
       if (newDriver !== driver) {

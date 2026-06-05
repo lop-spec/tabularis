@@ -623,7 +623,7 @@
     "dbNamePlaceholder": "Nome database",
     "loadDatabases": "Carica Database",
     "loadingDatabases": "Caricamento...",
-    "selectDatabases": "Seleziona Database",
+    "selectDatabases": "Database",
     "appearance": "Aspetto",
     "noDatabasesSelected": "Seleziona almeno un database",
     "selectedDatabases": "{{count}} database selezionato/i",

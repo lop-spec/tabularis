@@ -613,7 +613,7 @@
     "dbNamePlaceholder": "Имя базы данных",
     "loadDatabases": "Загрузить базы данных",
     "loadingDatabases": "Загрузка...",
-    "selectDatabases": "Выбрать базы данных",
+    "selectDatabases": "Базы данных",
     "noDatabasesSelected": "Выберите хотя бы одну базу данных",
     "selectedDatabases": "Выбрано баз данных: {{count}}",
     "selectDatabase": "Выберите базу данных",

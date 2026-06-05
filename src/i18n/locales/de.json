@@ -618,7 +618,7 @@
     "dbNamePlaceholder": "Datenbankname",
     "loadDatabases": "Datenbanken laden",
     "loadingDatabases": "Wird geladen...",
-    "selectDatabases": "Datenbanken auswählen",
+    "selectDatabases": "Datenbanken",
     "appearance": "Erscheinungsbild",
     "noDatabasesSelected": "Wähle mindestens eine Datenbank aus",
     "selectedDatabases": "{{count}} Datenbank(en) ausgewählt",

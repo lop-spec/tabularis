@@ -639,7 +639,7 @@
     "dbNamePlaceholder": "Database name",
     "loadDatabases": "Load Databases",
     "loadingDatabases": "Loading...",
-    "selectDatabases": "Select Databases",
+    "selectDatabases": "Databases",
     "appearance": "Appearance",
     "noDatabasesSelected": "Select at least one database",
     "selectedDatabases": "{{count}} database(s) selected",
