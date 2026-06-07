@@ -79,6 +79,9 @@ vi.mock("@monaco-editor/react", () => ({
 
 // Mock lucide-react icons
 vi.mock("lucide-react", () => ({
+  ShieldCheck: () => null,
+  Download: () => null,
+  AlertTriangle: () => null,
   Trash2: () => null,
   Edit: () => null,
   ArrowUp: () => null,
@@ -166,8 +169,9 @@ vi.mock("lucide-react", () => ({
   PanelTop: () => null,
   ChevronsDownUp: () => null,
   ChevronsUpDown: () => null,
-  AlertTriangle: () => null,
   Home: () => null,
+  Boxes: () => null,
+  CheckCircle2: () => null,
 }));
 
 // Mock scrollIntoView (not available in JSDOM)

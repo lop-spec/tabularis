@@ -91,6 +91,23 @@ export interface RegistryPluginWithStatus {
   installed_version: string | null;
   update_available: boolean;
   platform_supported: boolean;
+  // Richer Tabularium-only fields. All optional so legacy data still works.
+  icon?: string | null;
+  repo_url?: string | null;
+  kind?: string | null;
+  tags?: string[];
+  category?: string | null;
+  downloads?: number | null;
+  /** Base URL of the registry that served this plugin (e.g. https://registry.spitzli.dev). */
+  registry_base_url?: string | null;
+  /** Concrete database the driver connects to (registry manifest extensions.engine). */
+  engine?: string | null;
+  /** Data-model families, primary first (registry manifest extensions.paradigms). */
+  paradigms?: string[];
+  /** Registry-assigned verification flag. */
+  verified?: boolean;
+  /** Deeplink-only: resolved action for the confirmation modal. */
+  install_action?: "install" | "update" | "up_to_date" | null;
 }
 
 export interface InstalledPluginInfo {
