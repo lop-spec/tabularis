@@ -1,4 +1,20 @@
 {
+  "deepLink": {
+    "installTitle": "Install plugin from registry",
+    "installSubtitle": "A Tabularium registry asked Tabularis to install a plugin.",
+    "plugin": "Plugin",
+    "version": "Version",
+    "registry": "Registry",
+    "latest": "Latest",
+    "installConfirm": "Install",
+    "installing": "Installing…",
+    "loadingPreview": "Loading details…",
+    "usingConfigured": "using configured registry",
+    "mismatchTitle": "Different registry than your configured one",
+    "mismatchBody": "Your configured registry is {{configured}}. The link points elsewhere; review before continuing.",
+    "updateConfirm": "Update to v{{version}}",
+    "alreadyInstalled": "Version {{version}} is already installed."
+  },
   "toolbar": {
     "filters": "Filters",
     "toggleFilterPanel": "Toggle structured filter panel",
@@ -454,6 +470,8 @@
       "downgrade": "Downgrade to",
       "olderVersions": "Older versions",
       "noPlugins": "No plugins available in the registry.",
+      "poweredBy": "Powered by",
+      "openHomepage": "Open homepage",
       "searchPlaceholder": "Search plugins…",
       "filterAll": "All",
       "filterInstalled": "Installed",
@@ -632,6 +650,7 @@
     "createInlineSsh": "Configure SSH Inline",
     "manageSshConnections": "Manage SSH Connections",
     "noSshConnections": "No SSH connections available",
+    "changeDatabase": "Change database",
     "sslMode": "SSL Mode",
     "sslModes": {
       "disable": "Disable",

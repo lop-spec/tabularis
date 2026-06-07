@@ -1,4 +1,18 @@
 {
+  "deepLink": {
+    "installTitle": "レジストリからプラグインをインストール",
+    "installSubtitle": "Tabularium レジストリが Tabularis にプラグインのインストールを要求しました。",
+    "plugin": "プラグイン",
+    "version": "バージョン",
+    "registry": "レジストリ",
+    "latest": "最新",
+    "installConfirm": "インストール",
+    "installing": "インストール中…",
+    "loadingPreview": "詳細を読み込み中…",
+    "usingConfigured": "設定済みレジストリ",
+    "mismatchTitle": "設定とは異なるレジストリ",
+    "mismatchBody": "設定済みのレジストリは {{configured}} です。リンクは別の場所を指しています — 続行前にご確認ください。"
+  },
   "toolbar": {
     "filters": "フィルター",
     "toggleFilterPanel": "構造化フィルターパネルを切り替え",
@@ -452,6 +466,8 @@
       "downgrade": "ダウングレード:",
       "olderVersions": "以前のバージョン",
       "noPlugins": "レジストリに利用可能なプラグインがありません。",
+      "poweredBy": "提供：",
+      "openHomepage": "ホームページを開く",
       "searchPlaceholder": "プラグインを検索…",
       "filterAll": "すべて",
       "filterInstalled": "インストール済み",

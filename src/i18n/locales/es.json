@@ -1,4 +1,18 @@
 {
+  "deepLink": {
+    "installTitle": "Instalar plugin desde el registro",
+    "installSubtitle": "Un registro de Tabularium pidió a Tabularis que instale un plugin.",
+    "plugin": "Plugin",
+    "version": "Versión",
+    "registry": "Registro",
+    "latest": "Última",
+    "installConfirm": "Instalar",
+    "installing": "Instalando…",
+    "loadingPreview": "Cargando detalles…",
+    "usingConfigured": "registro configurado",
+    "mismatchTitle": "Registro distinto al configurado",
+    "mismatchBody": "Tu registro configurado es {{configured}}. El enlace apunta a otro — revisa antes de continuar."
+  },
   "toolbar": {
     "filters": "Filtros",
     "toggleFilterPanel": "Panel de filtros estructurados",
@@ -441,6 +455,8 @@
       "downgrade": "Degradar a",
       "olderVersions": "Versiones anteriores",
       "noPlugins": "No hay plugins disponibles en el registro.",
+      "poweredBy": "Con tecnología de",
+      "openHomepage": "Abrir página",
       "searchPlaceholder": "Buscar plugins…",
       "filterAll": "Todos",
       "filterInstalled": "Instalados",

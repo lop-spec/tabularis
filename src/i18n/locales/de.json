@@ -1,4 +1,20 @@
 {
+  "deepLink": {
+    "installTitle": "Plugin aus Registry installieren",
+    "installSubtitle": "Eine Tabularium-Registry hat Tabularis gebeten, ein Plugin zu installieren.",
+    "plugin": "Plugin",
+    "version": "Version",
+    "registry": "Registry",
+    "latest": "Neueste",
+    "installConfirm": "Installieren",
+    "installing": "Installiere…",
+    "loadingPreview": "Lade Details…",
+    "usingConfigured": "konfigurierte Registry",
+    "mismatchTitle": "Abweichende Registry",
+    "mismatchBody": "Deine konfigurierte Registry ist {{configured}}. Der Link verweist auf eine andere — bitte vor dem Fortfahren prüfen.",
+    "updateConfirm": "Auf v{{version}} aktualisieren",
+    "alreadyInstalled": "Version {{version}} ist bereits installiert."
+  },
   "toolbar": {
     "filters": "Filter",
     "toggleFilterPanel": "Strukturiertes Filterpanel ein-/ausblenden",
@@ -441,6 +457,8 @@
       "downgrade": "Herabstufen auf",
       "olderVersions": "Ältere Versionen",
       "noPlugins": "Keine Plugins im Registry verfügbar.",
+      "poweredBy": "Bereitgestellt von",
+      "openHomepage": "Homepage öffnen",
       "searchPlaceholder": "Plugins suchen…",
       "filterAll": "Alle",
       "filterInstalled": "Installiert",

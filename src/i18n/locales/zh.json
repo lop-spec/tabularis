@@ -1,4 +1,18 @@
 {
+  "deepLink": {
+    "installTitle": "从注册表安装插件",
+    "installSubtitle": "Tabularium 注册表请求 Tabularis 安装一个插件。",
+    "plugin": "插件",
+    "version": "版本",
+    "registry": "注册表",
+    "latest": "最新",
+    "installConfirm": "安装",
+    "installing": "正在安装…",
+    "loadingPreview": "正在加载详情…",
+    "usingConfigured": "已配置的注册表",
+    "mismatchTitle": "与已配置的注册表不一致",
+    "mismatchBody": "你配置的注册表是 {{configured}}。链接指向其他位置 — 请先确认再继续。"
+  },
   "toolbar": {
     "filters": "筛选器",
     "toggleFilterPanel": "切换结构化筛选面板",
@@ -410,6 +424,8 @@
       "downgrade": "降级到",
       "olderVersions": "旧版本",
       "noPlugins": "注册表中无可用插件。",
+      "poweredBy": "技术支持：",
+      "openHomepage": "打开主页",
       "searchPlaceholder": "搜索插件…",
       "filterAll": "全部",
       "filterInstalled": "已安装",
