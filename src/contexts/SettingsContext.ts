@@ -36,6 +36,8 @@ export interface Settings {
   copyFormat?: CopyFormat;
   csvDelimiter?: string;
   activeExternalDrivers?: string[];
+  /** Base URL of the Tabularium plugin registry. Defaults to the built-in instance when unset. */
+  tabulariumRegistryUrl?: string;
   plugins?: Record<string, PluginConfig>;
   editorTheme?: string;
   editorFontFamily?: string;

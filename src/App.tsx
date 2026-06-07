@@ -21,9 +21,11 @@ import { UpdateNotificationModal } from "./components/modals/UpdateNotificationM
 import { CommunityModal } from "./components/modals/CommunityModal";
 import { WhatsNewModal } from "./components/modals/WhatsNewModal";
 import { AiApprovalGate } from "./components/modals/AiApprovalGate";
+import { PluginInstallConfirmModal } from "./components/modals/PluginInstallConfirmModal";
 import { useUpdate } from "./hooks/useUpdate";
 import { useChangelog } from "./hooks/useChangelog";
 import { useSettings } from "./hooks/useSettings";
+import { useDeepLinkInstall } from "./hooks/useDeepLinkInstall";
 import { APP_VERSION } from "./version";
 import { isVersionAtMost, isVersionNewer } from "./utils/versionCompare";
 
@@ -40,6 +42,7 @@ export function App() {
   } = useUpdate();
   const { settings, updateSetting, isLoading: isSettingsLoading } = useSettings();
   const [isDebugMode, setIsDebugMode] = useState(false);
+  const deepLinkInstall = useDeepLinkInstall();
   const [isCommunityModalDismissed, setIsCommunityModalDismissed] = useState(false);
 
   const lastSeenVersion = localStorage.getItem(WHATS_NEW_VERSION_KEY);
@@ -167,6 +170,17 @@ export function App() {
       />
 
       <AiApprovalGate />
+
+      <PluginInstallConfirmModal
+        request={deepLinkInstall.pending}
+        busy={deepLinkInstall.busy}
+        error={deepLinkInstall.error}
+        onConfirm={() => {
+          void deepLinkInstall.confirm();
+        }}
+        onCancel={deepLinkInstall.cancel}
+        configuredRegistry={settings.tabulariumRegistryUrl ?? null}
+      />
     </>
   );
 }
