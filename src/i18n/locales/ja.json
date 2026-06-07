@@ -138,6 +138,10 @@
     "schemas": "スキーマ",
     "noSchemas": "スキーマが見つかりません",
     "loadingSchemas": "スキーマを読み込み中...",
+    "schemaLoadError": "スキーマの読み込みに失敗しました",
+    "errorDetails": "詳細",
+    "copyError": "エラーメッセージをコピー",
+    "retry": "再試行",
     "expandExplorer": "エクスプローラーを展開",
     "selectSchemas": "スキーマを選択",
     "selectSchemasHint": "読み込むスキーマを選択:",
@@ -166,6 +170,9 @@
     "noHistorySearchResults": "検索に一致するクエリがありません",
     "searchHistory": "履歴を検索...",
     "clearAllHistory": "すべての履歴を削除",
+    "historyRecoveredTitle": "クエリ履歴をリセットしました",
+    "historyRecoveredBody": "履歴ファイルが破損していたためバックアップに移動しました。新しいクエリは通常どおり記録されます。バックアップ ファイル:",
+    "historyRecoveredDismiss": "閉じる",
     "confirmDeleteHistoryEntry": "このクエリを履歴から削除してもよろしいですか？",
     "confirmClearHistory": "この接続のクエリ履歴をすべて削除してもよろしいですか？",
     "confirmClearHistoryTitle": "クエリ履歴を削除",
@@ -254,6 +261,27 @@
     "exportTitle": "接続をエクスポート",
     "exportWarning": "エクスポートされたファイルには、データベースおよび SSH のパスワードが平文で含まれます。安全な場所に保管してください。"
   },
+  "connectionAppearance": {
+    "section": "外観",
+    "accentColor": "アクセントカラー",
+    "customColor": "カスタム",
+    "resetColor": "ドライバーの初期設定に戻す",
+    "resetIcon": "ドライバーの初期設定に戻す",
+    "icon": "アイコン",
+    "tabs": {
+      "default": "デフォルト",
+      "pack": "アイコン",
+      "emoji": "絵文字",
+      "image": "画像"
+    },
+    "chooseImage": "画像を選択…",
+    "removeImage": "削除",
+    "imageHint": "PNG、JPG、WebP または SVG · 最大 512 KB",
+    "errors": {
+      "invalidEmoji": "絵文字を 1 つだけ入力してください",
+      "invalidHex": "#1a2b3c のような有効な 16 進カラーを入力してください"
+    }
+  },
   "settings": {
     "title": "設定",
     "general": "一般",
@@ -315,6 +343,9 @@
     "language": "言語",
     "languageDesc": "使用する言語を選択します。「自動」はシステムの言語を使用します。",
     "auto": "自動 (システム)",
+    "timezone": "タイムゾーン",
+    "timezoneDesc": "タイムスタンプの表示とエクスポートに使用するタイムゾーン。「自動」はシステムのタイムゾーンに従います。",
+    "timezoneSearch": "タイムゾーンを検索...",
     "english": "英語",
     "italian": "イタリア語",
     "spanish": "スペイン語",
@@ -553,7 +584,8 @@
       "pressKeys": "キーの組み合わせを押してください...",
       "notebookRunAll": "すべてのセルを実行",
       "categories_notebook": "ノートブック",
-      "pasteImportClipboard": "クリップボードからインポート"
+      "pasteImportClipboard": "クリップボードからインポート",
+      "quickNavigator": "クイックナビゲーター"
     },
     "aiActivity": "AI アクティビティ"
   },
@@ -616,7 +648,8 @@
     "dbNamePlaceholder": "データベース名",
     "loadDatabases": "データベースを読み込み",
     "loadingDatabases": "読み込み中...",
-    "selectDatabases": "データベースを選択",
+    "selectDatabases": "データベース",
+    "appearance": "外観",
     "noDatabasesSelected": "少なくとも 1 つのデータベースを選択してください",
     "selectedDatabases": "{{count}} 個のデータベースを選択中",
     "selectDatabase": "データベースを選択",
@@ -654,7 +687,29 @@
       "require": "必須",
       "verify-ca": "CAを検証",
       "verify-full": "完全検証"
-    }
+    },
+    "chooseContext": "コンテキストを選択...",
+    "chooseK8s": "接続を選択...",
+    "chooseNamespace": "ネームスペースを選択...",
+    "chooseResource": "リソースを選択...",
+    "createInlineK8s": "インライン",
+    "k8sContext": "コンテキスト",
+    "k8sNamespace": "ネームスペース",
+    "k8sNotAvailable": "このドライバーでは Kubernetes を使用できません。",
+    "k8sPort": "コンテナポート",
+    "k8sResourceName": "リソース名",
+    "k8sResourceType": "リソースタイプ",
+    "k8sResourceTypePod": "Pod",
+    "k8sResourceTypeService": "Service",
+    "k8sSelectType": "タイプを選択...",
+    "manageK8s": "管理",
+    "noK8sConnections": "保存された接続がありません — 下で作成してください",
+    "noK8sContexts": "コンテキストが見つかりません（kubectl はインストールされていますか？）",
+    "selectContextFirst": "先にコンテキストを選択してください",
+    "selectK8sConnection": "K8s 接続を選択",
+    "selectTypeFirst": "先にコンテキスト/ネームスペース/タイプを選択してください",
+    "useK8s": "Kubernetes ポートフォワードを使用",
+    "useK8sConnection": "保存された接続"
   },
   "sshConnections": {
     "title": "SSH 接続",
@@ -708,7 +763,9 @@
     "setNull": "NULL に設定",
     "setDefault": "DEFAULT に設定",
     "setEmpty": "EMPTY に設定",
-    "setServerNow": "現在のタイムスタンプを挿入"
+    "setServerNow": "現在のタイムスタンプを挿入",
+    "previewReferenced": "関連レコードをプレビュー",
+    "openReferenced": "{{table}} で参照行を開く"
   },
   "editRow": {
     "title": "行を編集",
@@ -738,6 +795,26 @@
     "auto": "自動"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "テーブル、ビュー、ルーチン、トリガーを検索...",
+      "noResults": "一致する要素が見つかりません",
+      "count_one": "1件",
+      "count_other": "{{count}}件",
+      "navigationHint": "↑↓で移動、Enterで開く",
+      "escHint": "Escで閉じる",
+      "type_table": "テーブル",
+      "type_view": "ビュー",
+      "type_routine": "ルーチン",
+      "type_trigger": "トリガー",
+      "actions": {
+        "inspect": "構造を表示",
+        "newConsole": "新規コンソール",
+        "generateSql": "SQLテンプレートを生成",
+        "countRows": "行数をカウント",
+        "query": "SELECTクエリを実行",
+        "copyName": "名前をコピー"
+      }
+    },
     "noTabs": "この接続に対して開いているタブはありません。",
     "newConsole": "新規コンソール",
     "noActiveSession": "アクティブなセッションがありません。接続を選択してください。",
@@ -780,7 +857,7 @@
     "tabSwitcher": {
       "title": "開いているタブ",
       "hint": "Ctrl+Tab",
-      "tabs": "タブ",
+      "tabs": "{{count}} タブ",
       "escHint": "Esc で閉じる"
     },
     "submitChanges": "変更を送信",
@@ -995,8 +1072,14 @@
   "generateSQL": {
     "title": "生成された SQL: {{table}}",
     "loading": "SQL を生成中...",
+    "runInConsole": "コンソールで実行",
     "copy": "SQL をコピー",
-    "copied": "コピーしました！"
+    "copied": "コピーしました！",
+    "tabCreateTable": "テーブル作成",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [フィールド]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "カラムを追加",
@@ -1441,5 +1524,25 @@
     "body": "Tabularis ユーザー専用のコミュニティを立ち上げました。質問・情報交換・ロードマップへのフィードバックをお寄せください。",
     "cta": "今すぐ参加",
     "dismiss": "閉じる"
+  },
+  "k8sConnections": {
+    "title": "Kubernetes 接続",
+    "add": "追加",
+    "empty": "保存された Kubernetes 接続がありません。「追加」をクリックして作成してください。",
+    "name": "名前",
+    "namePlaceholder": "マイ K8s クラスター",
+    "context": "コンテキスト",
+    "chooseContext": "コンテキストを選択...",
+    "namespace": "ネームスペース",
+    "chooseNamespace": "ネームスペースを選択...",
+    "resourceType": "リソースタイプ",
+    "resourceTypeService": "Service",
+    "resourceTypePod": "Pod",
+    "resourceName": "リソース名",
+    "chooseResource": "リソースを選択...",
+    "port": "コンテナポート",
+    "test": "テスト",
+    "testing": "テスト中...",
+    "validationFailed": "検証に失敗しました"
   }
 }

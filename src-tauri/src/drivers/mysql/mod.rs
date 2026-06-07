@@ -1154,7 +1154,7 @@ pub async fn drop_trigger(
 // ============================================================
 
 use crate::drivers::driver_trait::{
-    DatabaseDriver, DriverCapabilities, PluginManifest, PluginSettingDefinition,
+    DatabaseDriver, DriverCapabilities, PluginManifest, PluginSettingDefinition, SqlDialect,
 };
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -1221,6 +1221,7 @@ impl MysqlDriver {
                     manage_tables: true,
                     readonly: false,
                     triggers: true,
+                    sql_dialect: SqlDialect::Mysql,
                 },
                 is_builtin: true,
                 default_username: "root".to_string(),
@@ -1312,8 +1313,16 @@ impl DatabaseDriver for MysqlDriver {
         let connect_timeout =
             mysql_numeric_setting("connectTimeout", DEFAULT_MYSQL_CONNECT_TIMEOUT_MS);
         let timezone = mysql_string_setting("timezone", DEFAULT_MYSQL_TIMEZONE);
+        let ssl_mode = match params.ssl_mode.as_deref() {
+            Some("disabled") | Some("disable") => "disabled",
+            Some("preferred") | Some("prefer") => "preferred",
+            Some("required") | Some("require") => "required",
+            Some("verify_ca") => "verify_ca",
+            Some("verify_identity") => "verify_identity",
+            _ => "required",
+        };
         Ok(format!(
-            "mysql://{}@{}:{}/{}?maxAllowedPacket={}&socketTimeout={}&connectTimeout={}&timezone={}",
+            "mysql://{}@{}:{}/{}?maxAllowedPacket={}&socketTimeout={}&connectTimeout={}&timezone={}&ssl-mode={}",
             credentials,
             params.host.as_deref().unwrap_or("localhost"),
             params.port.unwrap_or(3306),
@@ -1322,6 +1331,7 @@ impl DatabaseDriver for MysqlDriver {
             socket_timeout,
             connect_timeout,
             encode(&timezone),
+            ssl_mode,
         ))
     }
 

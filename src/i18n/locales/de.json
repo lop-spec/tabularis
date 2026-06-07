@@ -127,6 +127,10 @@
     "schemas": "Schemata",
     "noSchemas": "Keine Schemata gefunden",
     "loadingSchemas": "Schemata werden geladen...",
+    "schemaLoadError": "Schemata konnten nicht geladen werden",
+    "errorDetails": "Details",
+    "copyError": "Fehlermeldung kopieren",
+    "retry": "Erneut versuchen",
     "expandExplorer": "Explorer ausklappen",
     "selectSchemas": "Schemata auswählen",
     "selectSchemasHint": "Wähle die zu ladenden Schemata aus:",
@@ -155,6 +159,9 @@
     "noHistorySearchResults": "Keine Abfragen entsprechen deiner Suche",
     "searchHistory": "Verlauf durchsuchen...",
     "clearAllHistory": "Gesamten Verlauf löschen",
+    "historyRecoveredTitle": "Abfrageverlauf zurückgesetzt",
+    "historyRecoveredBody": "Die Verlaufsdatei war beschädigt und wurde beiseitegelegt. Neue Abfragen werden wie gewohnt aufgezeichnet. Sicherungsdatei:",
+    "historyRecoveredDismiss": "Schließen",
     "confirmDeleteHistoryEntry": "Möchtest du diese Abfrage wirklich aus dem Verlauf löschen?",
     "confirmClearHistory": "Möchtest du den gesamten Abfrageverlauf für diese Verbindung wirklich löschen?",
     "confirmClearHistoryTitle": "Abfrageverlauf löschen",
@@ -242,6 +249,27 @@
     "import": "Verbindungen importieren",
     "exportTitle": "Verbindungen exportieren",
     "exportWarning": "Die exportierte Datei enthält deine Datenbank- und SSH-Passwörter im Klartext. Bewahre sie sicher auf."
+  },
+  "connectionAppearance": {
+    "section": "Darstellung",
+    "accentColor": "Akzentfarbe",
+    "customColor": "Benutzerdefiniert",
+    "resetColor": "Auf Treiber-Standard zurücksetzen",
+    "resetIcon": "Auf Treiber-Standard zurücksetzen",
+    "icon": "Symbol",
+    "tabs": {
+      "default": "Standard",
+      "pack": "Symbol",
+      "emoji": "Emoji",
+      "image": "Bild"
+    },
+    "chooseImage": "Bild auswählen…",
+    "removeImage": "Entfernen",
+    "imageHint": "PNG, JPG, WebP oder SVG · max. 512 KB",
+    "errors": {
+      "invalidEmoji": "Bitte genau ein Emoji eingeben",
+      "invalidHex": "Bitte einen gültigen Hex-Wert wie #1a2b3c eingeben"
+    }
   },
   "settings": {
     "title": "Einstellungen",
@@ -544,7 +572,8 @@
       "pressKeys": "Tastenkombination drücken...",
       "notebookRunAll": "Alle Zellen ausführen",
       "categories_notebook": "Notebook",
-      "pasteImportClipboard": "Aus Zwischenablage importieren"
+      "pasteImportClipboard": "Aus Zwischenablage importieren",
+      "quickNavigator": "Schnellnavigation"
     },
     "aiActivity": "KI-Aktivität"
   },
@@ -607,7 +636,8 @@
     "dbNamePlaceholder": "Datenbankname",
     "loadDatabases": "Datenbanken laden",
     "loadingDatabases": "Wird geladen...",
-    "selectDatabases": "Datenbanken auswählen",
+    "selectDatabases": "Datenbanken",
+    "appearance": "Erscheinungsbild",
     "noDatabasesSelected": "Wähle mindestens eine Datenbank aus",
     "selectedDatabases": "{{count}} Datenbank(en) ausgewählt",
     "selectDatabase": "Datenbank auswählen",
@@ -645,7 +675,29 @@
       "require": "Erforderlich",
       "verify-ca": "CA prüfen",
       "verify-full": "Vollständig prüfen"
-    }
+    },
+    "chooseContext": "Kontext auswählen...",
+    "chooseK8s": "Verbindung auswählen...",
+    "chooseNamespace": "Namespace auswählen...",
+    "chooseResource": "Ressource auswählen...",
+    "createInlineK8s": "Inline",
+    "k8sContext": "Kontext",
+    "k8sNamespace": "Namespace",
+    "k8sNotAvailable": "Kubernetes ist für diesen Treiber nicht verfügbar.",
+    "k8sPort": "Container-Port",
+    "k8sResourceName": "Ressourcenname",
+    "k8sResourceType": "Ressourcentyp",
+    "k8sResourceTypePod": "Pod",
+    "k8sResourceTypeService": "Service",
+    "k8sSelectType": "Typ auswählen...",
+    "manageK8s": "Verwalten",
+    "noK8sConnections": "Keine gespeicherten Verbindungen — erstelle unten eine",
+    "noK8sContexts": "Keine Kontexte gefunden (ist kubectl installiert?)",
+    "selectContextFirst": "Zuerst einen Kontext auswählen",
+    "selectK8sConnection": "K8s-Verbindung auswählen",
+    "selectTypeFirst": "Zuerst Kontext/Namespace/Typ auswählen",
+    "useK8s": "Kubernetes-Port-Forward verwenden",
+    "useK8sConnection": "Gespeicherte Verbindung"
   },
   "sshConnections": {
     "title": "SSH-Verbindungen",
@@ -701,6 +753,7 @@
     "setDefault": "DEFAULT setzen",
     "setEmpty": "EMPTY setzen",
     "setServerNow": "Aktuellen Zeitstempel einfügen",
+    "previewReferenced": "Verknüpften Datensatz anzeigen",
     "openReferenced": "Referenzierte Zeile in {{table}} öffnen"
   },
   "editRow": {
@@ -731,6 +784,26 @@
     "auto": "Auto"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "Tabellen, Views, Routinen, Trigger suchen...",
+      "noResults": "Keine passenden Elemente gefunden",
+      "count_one": "1 Element",
+      "count_other": "{{count}} Elemente",
+      "navigationHint": "↑↓ zum Navigieren, Enter zum Öffnen",
+      "escHint": "Esc zum Schließen",
+      "type_table": "Tabelle",
+      "type_view": "View",
+      "type_routine": "Routine",
+      "type_trigger": "Trigger",
+      "actions": {
+        "inspect": "Struktur anzeigen",
+        "newConsole": "Neue Konsole",
+        "generateSql": "SQL-Vorlagen generieren",
+        "countRows": "Zeilen zählen",
+        "query": "SELECT-Abfrage ausführen",
+        "copyName": "Namen kopieren"
+      }
+    },
     "noTabs": "Keine geöffneten Tabs für diese Verbindung.",
     "newConsole": "Neue Konsole",
     "noActiveSession": "Keine aktive Sitzung. Bitte wähle eine Verbindung aus.",
@@ -773,7 +846,8 @@
     "tabSwitcher": {
       "title": "Geöffnete Tabs",
       "hint": "Ctrl+Tab",
-      "tabs": "Tabs",
+      "tabs_one": "{{count}} Tab",
+      "tabs_other": "{{count}} Tabs",
       "escHint": "Esc zum Schließen"
     },
     "submitChanges": "Änderungen übernehmen",
@@ -988,8 +1062,14 @@
   "generateSQL": {
     "title": "Generiertes SQL: {{table}}",
     "loading": "SQL wird generiert...",
+    "runInConsole": "In Konsole ausführen",
     "copy": "SQL kopieren",
-    "copied": "Kopiert!"
+    "copied": "Kopiert!",
+    "tabCreateTable": "Tabelle erstellen",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [Felder]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "Spalte hinzufügen",
@@ -1427,5 +1507,25 @@
     "body": "Wir haben einen eigenen Treffpunkt für Tabularis-Nutzer eröffnet: Hilfe, Tipps und Mitgestaltung der Roadmap.",
     "cta": "Jetzt beitreten",
     "dismiss": "Schließen"
+  },
+  "k8sConnections": {
+    "title": "Kubernetes-Verbindungen",
+    "add": "Hinzufügen",
+    "empty": "Keine Kubernetes-Verbindungen gespeichert. Klicke auf „Hinzufügen“, um eine zu erstellen.",
+    "name": "Name",
+    "namePlaceholder": "Mein K8s-Cluster",
+    "context": "Kontext",
+    "chooseContext": "Kontext auswählen...",
+    "namespace": "Namespace",
+    "chooseNamespace": "Namespace auswählen...",
+    "resourceType": "Ressourcentyp",
+    "resourceTypeService": "Service",
+    "resourceTypePod": "Pod",
+    "resourceName": "Ressourcenname",
+    "chooseResource": "Ressource auswählen...",
+    "port": "Container-Port",
+    "test": "Testen",
+    "testing": "Wird getestet...",
+    "validationFailed": "Validierung fehlgeschlagen"
   }
 }

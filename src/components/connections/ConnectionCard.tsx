@@ -5,7 +5,7 @@ import clsx from 'clsx';
 import type { SavedConnection } from '../../contexts/DatabaseContext';
 import type { PluginManifest } from '../../types/plugins';
 import { useDatabase } from '../../hooks/useDatabase';
-import { getDriverColor, getDriverIcon } from '../../utils/driverUI';
+import { getConnectionAccent, getConnectionIcon } from '../../utils/driverUI';
 import { getCapabilitiesForDriver } from '../../utils/driverCapabilities';
 import { connectionSubtitle, getCardClass } from '../../utils/connections';
 import { StatusBadge } from './StatusBadge';
@@ -47,7 +47,7 @@ export const ConnectionCard = ({
   const driverManifest = allDrivers.find(d => d.id === conn.params.driver);
   const capabilities = getCapabilitiesForDriver(conn.params.driver, allDrivers);
   const subtitle = connectionSubtitle(conn, capabilities);
-  const driverColor = getDriverColor(driverManifest);
+  const driverColor = getConnectionAccent(conn, driverManifest);
 
   return (
     <div
@@ -66,7 +66,7 @@ export const ConnectionCard = ({
           className="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md"
           style={{ backgroundColor: driverColor }}
         >
-          {getDriverIcon(driverManifest, 20)}
+          {getConnectionIcon(conn, driverManifest, 20)}
         </div>
         <div className="flex-1 min-w-0 pt-0.5">
           <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -86,6 +86,11 @@ export const ConnectionCard = ({
             {conn.params.ssh_enabled && (
               <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-md">
                 <Shield size={8} /> SSH
+              </span>
+            )}
+            {conn.params.k8s_enabled && (
+              <span className="flex items-center gap-0.5 text-[10px] font-bold text-blue-400 bg-blue-400/10 border border-blue-400/20 px-1.5 py-0.5 rounded-md">
+                <Shield size={8} /> K8s
               </span>
             )}
             {!isDriverEnabled && (

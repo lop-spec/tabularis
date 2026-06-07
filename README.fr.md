@@ -12,7 +12,8 @@
   <a href="./README.zh-CN.md">中文</a> |
   <a href="./README.fr.md">Français</a> |
   <a href="./README.de.md">Deutsch</a> |
-  <a href="./README.ja.md">日本語</a>
+  <a href="./README.ja.md">日本語</a> |
+  <a href="./README.ru.md">Русский</a>
 </p>
 
 Client desktop open source pour bases de données modernes. Il prend en charge PostgreSQL, MySQL/MariaDB et SQLite, avec notebooks SQL, fonctions IA, intégration MCP et système de plugins externe.
@@ -90,6 +91,7 @@ La galerie complète est disponible sur [tabularis.dev](https://tabularis.dev).
 - Profils de connexion enregistrés localement.
 - Tunnels SSH et stockage des mots de passe dans le trousseau système.
 - Page de connexions avec vues grille/liste et recherche en temps réel.
+- Apparence personnalisée par connexion : icône (Lucide, emoji ou image) et couleur d'accent.
 
 ### Explorateur de base de données
 
@@ -161,6 +163,7 @@ Fichiers principaux :
 - `config.json`
 - `themes/`
 - `preferences/`
+- `connection-icons/` (images personnalisées pour les icônes de connexion)
 
 Dans `config.json`, le champ `language` prend en charge `auto`, `en`, `it`, `es`, `zh`, `fr`, `de`.
 

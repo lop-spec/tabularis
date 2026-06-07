@@ -138,5 +138,15 @@
     "winMatch": { "ctrlKey": true, "shiftKey": true, "key": "Enter" },
     "i18nKey": "settings.shortcuts.notebookRunAll",
     "overridable": true
+  },
+  {
+    "id": "quick_navigator",
+    "category": "navigation",
+    "defaultMac": "⌘+P",
+    "defaultWin": "Ctrl+P",
+    "macMatch": { "metaKey": true, "key": "p" },
+    "winMatch": { "ctrlKey": true, "key": "p" },
+    "i18nKey": "settings.shortcuts.quickNavigator",
+    "overridable": true
   }
 ]

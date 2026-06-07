@@ -12,7 +12,8 @@
   <a href="./README.zh-CN.md">中文</a> |
   <a href="./README.fr.md">Français</a> |
   <a href="./README.de.md">Deutsch</a> |
-  <a href="./README.ja.md">日本語</a>
+  <a href="./README.ja.md">日本語</a> |
+  <a href="./README.ru.md">Русский</a>
 </p>
 
 <p align="center">
@@ -33,7 +34,7 @@
 
 An open-source desktop client for modern databases. Supports PostgreSQL, MySQL/MariaDB and SQLite and is hackable with plugins, with notebooks, AI, and MCP built in.
 
-**Available in:** English, Italian, Spanish, Chinese (Simplified), French, German, Japanese
+**Available in:** English, Italian, Spanish, Chinese (Simplified), French, German, Japanese, Russian
 
 **Discord** - [Join our Discord server](https://discord.com/invite/K2hmhfHRSt) to talk with the maintainers, share feedback, and get help from the community.
 
@@ -45,7 +46,7 @@ An open-source desktop client for modern databases. Supports PostgreSQL, MySQL/M
 
 ## Release Download:
 
-[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/TabularisDB/tabularis/releases/download/v0.11.0/tabularis_0.11.0_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/TabularisDB/tabularis/releases/download/v0.11.0/tabularis_0.11.0_x64.dmg) [![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/TabularisDB/tabularis/releases/download/v0.11.0/tabularis_0.11.0_amd64.AppImage) [![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/TabularisDB/tabularis/releases/download/v0.11.0/tabularis_0.11.0_amd64.deb) [![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/TabularisDB/tabularis/releases/download/v0.11.0/tabularis-0.9.7-1.x86_64.rpm)
+[![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_x64-setup.exe) [![macOS](https://img.shields.io/badge/macOS-Download-black?logo=apple)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_x64.dmg) [![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_amd64.AppImage) [![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_amd64.deb) [![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis-0.9.7-1.x86_64.rpm)
 
 <!-- SPONSORS:START -->
 
@@ -53,6 +54,7 @@ An open-source desktop client for modern databases. Supports PostgreSQL, MySQL/M
 
 - <a href="https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/turbosmtp_compact.png" height="28" alt="turboSMTP" /></a> **[turboSMTP](https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Professional SMTP relay — your emails delivered straight to the inbox, never to spam
 - <a href="https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/kilocode_compact.png" height="28" alt="Kilo Code" /></a> **[Kilo Code](https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Open source AI coding agent — build, ship, and iterate faster with 500+ models
+- <a href="https://m.do.co/c/f6ab3d158275?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/digitalocean_compact.png" height="28" alt="DigitalOcean" /></a> **[DigitalOcean](https://m.do.co/c/f6ab3d158275?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Simple, predictable cloud infrastructure for developers and growing teams.
 - <a href="https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/usero_compact.png" height="28" alt="Usero" /></a> **[Usero](https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Feedback becomes code. Automatically.
 - <a href="https://devglobe.xyz/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/devglobe_compact.png" height="28" alt="DevGlobe" /></a> **[DevGlobe](https://devglobe.xyz/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Connect your IDE, show up on the globe, and showcase your projects to a community of builders.
 
@@ -197,6 +199,7 @@ Join our [Discord server](https://discord.com/invite/K2hmhfHRSt) to talk with th
 - **Multi-Database Selection:** Select multiple MySQL/MariaDB databases in a single connection — each appears as its own collapsible node in the sidebar.
 - Save, manage, and clone connection profiles with secure local persistence.
 - **Redesigned Connections Page:** Grid and list view modes, real-time search, branded driver icons (PostgreSQL elephant, MySQL dolphin, SQLite cylinder) in their official colors.
+- **Per-Connection Appearance:** Override the icon and accent color of each saved connection. Choose any [Lucide icon](https://lucide.dev/icons/) (~1900, searchable), an emoji from the full Unicode picker, or upload a custom image (PNG/JPEG/WebP/GIF/SVG, ≤512 KB). Color is picked from a 12-swatch palette or a full hex picker.
 - **Open in Editor:** Right-click any connection in the sidebar to open it directly in the editor via context menu.
 - Manage **SSH Connections** from the connection manager.
 - Optional secure password storage in system **Keychain**.
@@ -224,7 +227,7 @@ Join our [Discord server](https://discord.com/invite/K2hmhfHRSt) to talk with th
 - **Split View:** Open multiple database connections side-by-side in a resizable split-pane layout.
 - **Multi-Statement Execution:** Run All, Run Selected, or pick individual queries from a multi-statement script. Results from each query appear in separate tabs with independent pagination and error handling.
 - **Multi-Result Tabs:** Close, rename, re-run, and manage result tabs via context menu. Query parameters are collected once across all queries.
-- **Smart Query Splitting:** Powered by `dbgate-query-splitter` — correctly handles stored procedures, functions, and `$$`-delimited blocks.
+- **Smart Query Splitting:** Correctly handles stored procedures, functions, and `$$`-delimited blocks.
 - **Saved Queries:** Persist frequently used SQL.
 - **AI Assist Overlay:** AI assistance buttons accessible as a floating overlay directly in the editor.
 
@@ -313,6 +316,7 @@ Configuration is stored in `~/.config/tabularis/` (Linux), `~/Library/Applicatio
 - `config.json`: App settings (theme, language, page size).
 - `themes/`: Custom themes.
 - `preferences/`: Editor preferences per connection (tabs, queries, layout).
+- `connection-icons/`: Custom images uploaded as per-connection icons (see [Per-Connection Appearance](#connection-management)).
 
 #### Editor Preferences
 
@@ -344,7 +348,7 @@ This approach ensures fast startup times while preserving your workspace layout 
 - `theme`: Theme ID (e.g., `"tabularis-dark"`, `"monokai"`).
 - `fontFamily`: Editor font family.
 - `fontSize`: Editor font size (px).
-- `language`: `"auto"`, `"en"` (English), `"it"` (Italian), `"es"` (Spanish), `"zh"` (Chinese Simplified), `"fr"` (French), `"de"` (German).
+- `language`: `"auto"`, `"en"` (English), `"it"` (Italian), `"es"` (Spanish), `"zh"` (Chinese Simplified), `"fr"` (French), `"de"` (German), `"ja"` (Japanese), `"ru"` (Russian).
 - `resultPageSize`: Default rows per page.
 - `aiEnabled`: Enable/Disable AI features.
 - `customRegistryUrl`: Custom URL for the plugin registry (overrides the default official registry).
@@ -362,7 +366,7 @@ You can override or add custom models for AI providers by editing `config.json` 
   "aiCustomModels": {
     "openai": ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-5-preview"],
     "anthropic": ["claude-3-opus-20240229", "claude-3-sonnet-20240229"],
-    "minimax": ["MiniMax-M2.7", "MiniMax-M2.7-highspeed"],
+    "minimax": ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.7-highspeed"],
     "openrouter": ["google/gemini-pro-1.5", "meta-llama/llama-3-70b-instruct"]
   }
 }
@@ -374,7 +378,7 @@ Optional Text-to-SQL and query explanation powered by:
 
 - **OpenAI**
 - **Anthropic**
-- **MiniMax** (MiniMax-M2.7 and MiniMax-M2.7-highspeed, 204K context)
+- **MiniMax** (MiniMax-M3 default, with MiniMax-M2.7 and MiniMax-M2.7-highspeed)
 - **OpenRouter** (access to Gemini, Llama, DeepSeek, etc.)
 - **Ollama** (Local LLM support for total privacy)
 - **OpenAI-Compatible APIs** (Groq, Perplexity, Azure OpenAI, LocalAI, and more)

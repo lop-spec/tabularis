@@ -13,6 +13,9 @@ pub mod ai_notebook_export_tests;
 pub mod cli;
 pub mod clipboard_import;
 pub mod commands;
+pub mod connection_appearance;
+#[cfg(test)]
+pub mod connection_appearance_tests;
 pub mod config;
 pub mod connection_cache;
 #[cfg(test)]
@@ -34,6 +37,7 @@ pub mod heartbeat;
 pub mod heartbeat_tests;
 pub mod json_viewer;
 pub mod keychain_utils;
+pub mod k8s_tunnel;
 pub mod log_commands;
 pub mod logger;
 pub mod mcp;
@@ -119,6 +123,10 @@ pub fn run() {
     let args = cli::parse();
 
     if args.mcp {
+        // Initialize the logger so plugin-loading and driver RPC errors (which
+        // use the `log` crate) are visible. The custom logger writes to stderr
+        // only, leaving the stdout JSON-RPC stream clean.
+        init_logger(create_log_buffer(1000), log::LevelFilter::Info);
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
         rt.block_on(mcp::run_mcp_server());
         return;
@@ -187,6 +195,7 @@ pub fn run() {
         ))
         .manage(explain_import::PendingExplainFile::default())
         .manage(json_viewer::JsonViewerStore::default())
+        .manage(query_history::QueryHistoryState::default())
         .setup(move |app| {
             // Read persisted config to know which external plugins are enabled.
             // `None` means no preference has been saved yet → load all installed plugins.
@@ -317,6 +326,15 @@ pub fn run() {
             commands::update_ssh_connection,
             commands::delete_ssh_connection,
             commands::test_ssh_connection,
+            // K8s Connections
+            commands::get_k8s_connections,
+            commands::save_k8s_connection,
+            commands::update_k8s_connection,
+            commands::delete_k8s_connection,
+            commands::test_k8s_connection_cmd,
+            commands::get_k8s_contexts_cmd,
+            commands::get_k8s_namespaces_cmd,
+            commands::get_k8s_resources_cmd,
             // Connection Groups
             commands::get_connection_groups,
             commands::get_connections_with_groups,
@@ -500,6 +518,10 @@ pub fn run() {
             task_manager::kill_plugin_process,
             task_manager::restart_plugin_process,
             task_manager::open_task_manager_window,
+            // Connection Appearance
+            connection_appearance::save_connection_icon,
+            connection_appearance::delete_connection_icon,
+            commands::set_connection_appearance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

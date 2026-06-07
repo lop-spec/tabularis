@@ -100,6 +100,9 @@ fn test_is_explainable_query_dml() {
         "WITH cte AS (SELECT 1) SELECT * FROM cte"
     ));
     assert!(is_explainable_query("TABLE users"));
+    assert!(is_explainable_query(
+        "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET v = s.v"
+    ));
 }
 
 #[test]
@@ -323,6 +326,57 @@ fn test_build_paginated_query_table_name_contains_limit_with_user_limit() {
         result,
         "SELECT * FROM tapp_appointment_message_event_limit ORDER BY id LIMIT 10 OFFSET 0"
     );
+}
+
+#[test]
+fn test_extract_user_offset_present() {
+    assert_eq!(
+        super::extract_user_offset("SELECT * FROM t LIMIT 1 OFFSET 1"),
+        Some(1)
+    );
+}
+
+#[test]
+fn test_extract_user_offset_only_offset() {
+    assert_eq!(
+        super::extract_user_offset("SELECT * FROM t ORDER BY id OFFSET 5"),
+        Some(5)
+    );
+}
+
+#[test]
+fn test_extract_user_offset_absent() {
+    assert_eq!(
+        super::extract_user_offset("SELECT * FROM t LIMIT 50"),
+        None
+    );
+}
+
+#[test]
+fn test_build_paginated_query_preserves_user_offset() {
+    // Regression for #273: `LIMIT 1 OFFSET 1` must keep OFFSET 1 on page 1,
+    // not collapse to OFFSET 0 (which returned the 1st row instead of the 2nd).
+    let q = "SELECT DISTINCT salary FROM employees ORDER BY salary DESC LIMIT 1 OFFSET 1";
+    let result = build_paginated_query(q, 100, 1);
+    assert_eq!(
+        result,
+        "SELECT DISTINCT salary FROM employees ORDER BY salary DESC LIMIT 1 OFFSET 1"
+    );
+}
+
+#[test]
+fn test_build_paginated_query_user_offset_no_limit() {
+    let q = "SELECT * FROM t ORDER BY id OFFSET 5";
+    let result = build_paginated_query(q, 100, 1);
+    assert_eq!(result, "SELECT * FROM t ORDER BY id LIMIT 101 OFFSET 5");
+}
+
+#[test]
+fn test_build_paginated_query_user_offset_second_page() {
+    // page offset (100) is added on top of the user's OFFSET (5).
+    let q = "SELECT * FROM t ORDER BY id OFFSET 5";
+    let result = build_paginated_query(q, 100, 2);
+    assert_eq!(result, "SELECT * FROM t ORDER BY id LIMIT 101 OFFSET 105");
 }
 
 #[test]

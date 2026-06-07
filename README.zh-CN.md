@@ -12,7 +12,8 @@
   <a href="./README.zh-CN.md">中文</a> |
   <a href="./README.fr.md">Français</a> |
   <a href="./README.de.md">Deutsch</a> |
-  <a href="./README.ja.md">日本語</a>
+  <a href="./README.ja.md">日本語</a> |
+  <a href="./README.ru.md">Русский</a>
 </p>
 
 面向现代数据库的开源桌面客户端。支持 PostgreSQL、MySQL/MariaDB 和 SQLite，内置 SQL 笔记本、AI 功能、MCP 集成以及外部插件系统。
@@ -90,6 +91,7 @@ yay -S tabularis-bin
 - 本地保存连接配置。
 - 支持 SSH 隧道和系统钥匙串密码存储。
 - 连接页面支持网格/列表视图与实时搜索。
+- 每个连接可单独自定义外观：自选图标（Lucide、Emoji 或自定义图片）和强调色。
 
 ### 数据库浏览器
 
@@ -160,6 +162,7 @@ yay -S tabularis-bin
 - `config.json`
 - `themes/`
 - `preferences/`
+- `connection-icons/`（连接图标的自定义图片）
 
 `config.json` 中的 `language` 字段支持 `auto`、`en`、`it`、`es`、`zh`、`fr`、`de`。
 

@@ -142,9 +142,41 @@ pub struct ConnectionParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_key_passphrase: Option<String>,
     pub save_in_keychain: Option<bool>,
+    // Kubernetes Tunnel (mutually exclusive with SSH)
+    #[serde(default)]
+    pub k8s_enabled: Option<bool>,
+    #[serde(default)]
+    pub k8s_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub k8s_context: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub k8s_namespace: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub k8s_resource_type: Option<String>, // "service" or "pod"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub k8s_resource_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub k8s_port: Option<u16>,
     // Connection ID for stable pooling (not persisted, set at runtime)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum IconOverride {
+    Pack { id: String },
+    Emoji { value: String },
+    Image { path: String },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionAppearance {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<IconOverride>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accent_color: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -158,6 +190,8 @@ pub struct SavedConnection {
     pub sort_order: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detect_json_in_text_columns: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<ConnectionAppearance>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -179,11 +213,46 @@ pub struct ConnectionsFile {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct K8sConnection {
+    pub id: String,
+    pub name: String,
+    pub context: String,
+    pub namespace: String,
+    pub resource_type: String, // "service" or "pod"
+    pub resource_name: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct K8sConnectionInput {
+    pub name: String,
+    pub context: String,
+    pub namespace: String,
+    pub resource_type: String,
+    pub resource_name: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct K8sTestParams {
+    pub context: String,
+    pub namespace: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ExportPayload {
     pub version: i32,
     pub groups: Vec<ConnectionGroup>,
     pub connections: Vec<SavedConnection>,
     pub ssh_connections: Vec<SshConnection>,
+    #[serde(default)]
+    pub k8s_connections: Vec<K8sConnection>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -401,4 +470,50 @@ pub struct DataTypeInfo {
 pub struct DataTypeRegistry {
     pub driver: String,
     pub types: Vec<DataTypeInfo>,
+}
+
+#[cfg(test)]
+mod appearance_tests {
+    use super::*;
+
+    #[test]
+    fn icon_override_pack_roundtrip() {
+        let v = IconOverride::Pack { id: "server".into() };
+        let s = serde_json::to_string(&v).unwrap();
+        assert_eq!(s, r#"{"type":"pack","id":"server"}"#);
+        let back: IconOverride = serde_json::from_str(&s).unwrap();
+        assert!(matches!(back, IconOverride::Pack { id } if id == "server"));
+    }
+
+    #[test]
+    fn icon_override_emoji_roundtrip() {
+        let v = IconOverride::Emoji { value: "🐘".into() };
+        let s = serde_json::to_string(&v).unwrap();
+        assert_eq!(s, r#"{"type":"emoji","value":"🐘"}"#);
+        let back: IconOverride = serde_json::from_str(&s).unwrap();
+        assert!(matches!(back, IconOverride::Emoji { value } if value == "🐘"));
+    }
+
+    #[test]
+    fn icon_override_image_roundtrip() {
+        let v = IconOverride::Image { path: "connection-icons/abc.png".into() };
+        let s = serde_json::to_string(&v).unwrap();
+        assert_eq!(s, r#"{"type":"image","path":"connection-icons/abc.png"}"#);
+        let back: IconOverride = serde_json::from_str(&s).unwrap();
+        assert!(matches!(back, IconOverride::Image { path } if path == "connection-icons/abc.png"));
+    }
+
+    #[test]
+    fn saved_connection_without_appearance_deserializes() {
+        let s = r#"{"id":"1","name":"x","params":{"driver":"mysql","database":""}}"#;
+        let c: SavedConnection = serde_json::from_str(s).unwrap();
+        assert!(c.appearance.is_none());
+    }
+
+    #[test]
+    fn connection_appearance_with_only_color_serializes_compactly() {
+        let a = ConnectionAppearance { icon: None, accent_color: Some("#ff0000".into()) };
+        let s = serde_json::to_string(&a).unwrap();
+        assert_eq!(s, r##"{"accentColor":"#ff0000"}"##);
+    }
 }
