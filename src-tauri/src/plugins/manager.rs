@@ -29,8 +29,11 @@ pub fn get_plugin_startup_errors() -> Vec<PluginLoadError> {
 
 #[derive(Serialize, Deserialize)]
 pub struct ConfigManifest {
-    pub id: String,
+    /// Legacy field; the canonical schema uses `name` as the identity/slug.
+    #[serde(default)]
+    pub id: Option<String>,
     pub name: String,
+    /// The registry guarantees `version` in the manifest (`.tabularium`).
     pub version: String,
     pub description: String,
     #[serde(default)]
@@ -135,19 +138,10 @@ pub async fn load_plugin_from_dir(
     interpreter_override: Option<String>,
     settings: HashMap<String, serde_json::Value>,
 ) -> Result<(), String> {
-    let manifest_path = path.join("manifest.json");
-    if !manifest_path.exists() {
-        return Err(format!("manifest.json not found in {:?}", path));
-    }
-
-    let manifest_str = fs::read_to_string(&manifest_path)
-        .map_err(|e| format!("Failed to read plugin manifest {:?}: {}", manifest_path, e))?;
-
-    let config: ConfigManifest = serde_json::from_str(&manifest_str)
-        .map_err(|e| format!("Failed to parse plugin manifest {:?}: {}", manifest_path, e))?;
+    let config: ConfigManifest = crate::plugins::installer::read_manifest(path)?;
 
     let manifest = PluginManifest {
-        id: config.id,
+        id: config.id.unwrap_or_else(|| config.name.clone()),
         name: config.name,
         version: config.version,
         description: config.description,
