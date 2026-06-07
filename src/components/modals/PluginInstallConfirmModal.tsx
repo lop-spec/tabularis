@@ -52,21 +52,17 @@ export const PluginInstallConfirmModal = ({
 }: PluginInstallConfirmModalProps) => {
   const { t } = useTranslation();
   const [preview, setPreview] = useState<PluginPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  // Starts true for an active request: the modal is keyed by request in App.tsx,
+  // so each new request remounts this component with fresh state — no synchronous
+  // reset in the effect needed (which would trigger cascading renders).
+  const [previewLoading, setPreviewLoading] = useState(() => Boolean(request));
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  // Reset + fetch whenever a new install request arrives.
+  // Fetch the preview for this request. State is only updated from the async
+  // callbacks below; the initial empty/loading state comes from the keyed remount.
   useEffect(() => {
-    if (!request) {
-      setPreview(null);
-      setPreviewLoading(false);
-      setPreviewError(null);
-      return;
-    }
+    if (!request) return;
     let cancelled = false;
-    setPreview(null);
-    setPreviewError(null);
-    setPreviewLoading(true);
     invoke<PluginPreview>("fetch_tabularium_plugin_preview", {
       slug: request.slug,
       registryUrl: request.registry ?? null,

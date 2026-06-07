@@ -30,7 +30,6 @@ import { useDrivers } from "../../hooks/useDrivers";
 import { useSettings } from "../../hooks/useSettings";
 import { usePluginSlotRegistry } from "../../hooks/usePluginSlotRegistry";
 import { Modal } from "../ui/Modal";
-import type { PluginManifest } from "../../types/plugins";
 import { loadSshConnections, type SshConnection } from "../../utils/ssh";
 import {
   loadK8sConnections,

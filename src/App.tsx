@@ -172,6 +172,11 @@ export function App() {
       <AiApprovalGate />
 
       <PluginInstallConfirmModal
+        key={
+          deepLinkInstall.pending
+            ? `${deepLinkInstall.pending.slug}@${deepLinkInstall.pending.version ?? ""}@${deepLinkInstall.pending.registry ?? ""}`
+            : "idle"
+        }
         request={deepLinkInstall.pending}
         busy={deepLinkInstall.busy}
         error={deepLinkInstall.error}
