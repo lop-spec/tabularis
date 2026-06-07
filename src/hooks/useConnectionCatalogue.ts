@@ -65,8 +65,10 @@ export function useConnectionCatalogue(): ConnectionCatalogue {
       return builtinToCatalogueDriver(m, meta.engine, meta.paradigms);
     });
     const registryDrivers = registry
-      // built-ins are represented from manifests above; skip any registry echo
-      .filter((p) => !(p.id in BUILTIN_META))
+      // built-ins are represented from manifests above; skip any registry echo.
+      // hasOwnProperty (not `in`) so plugin ids like "constructor"/"toString"
+      // aren't matched against Object.prototype and wrongly hidden.
+      .filter((p) => !Object.prototype.hasOwnProperty.call(BUILTIN_META, p.id))
       .map(toCatalogueDriver);
     return groupByEngine([...builtinDrivers, ...registryDrivers]);
   }, [builtins, registry]);

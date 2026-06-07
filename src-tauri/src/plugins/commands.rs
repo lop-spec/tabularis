@@ -39,7 +39,12 @@ pub async fn fetch_plugin_registry(
                 .iter()
                 .find(|i| i.id == plugin.id)
                 .map(|i| i.version.clone());
-            plugin.registry_base_url = Some(base_url.clone());
+            // Only a real Tabularium API serves plugin detail pages. A legacy
+            // `.json` base would make the frontend build a broken
+            // `…/registry.json/plugins/<id>` link, so leave it unset there.
+            if !base_url.ends_with(".json") {
+                plugin.registry_base_url = Some(base_url.clone());
+            }
             to_plugin_with_status(plugin, installed_version, &platform)
         })
         .collect();

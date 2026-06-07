@@ -66,7 +66,8 @@ export const PluginInstallConfirmModal = ({
     invoke<PluginPreview>("fetch_tabularium_plugin_preview", {
       slug: request.slug,
       registryUrl: request.registry ?? null,
-      version: request.version ?? null,
+      // `?version=` in the deep link yields "" — treat it as "no pin".
+      version: request.version || null,
     })
       .then((p) => {
         if (cancelled) return;
@@ -97,7 +98,7 @@ export const PluginInstallConfirmModal = ({
   );
   const pluginPageUrl = base ? `${base}/plugins/${request.slug}` : null;
   const targetVersion =
-    request.version ?? preview?.latest_version ?? null;
+    (request.version || null) ?? preview?.latest_version ?? null;
 
   const action = preview?.install_action ?? "install";
   const isUpToDate = action === "up_to_date";

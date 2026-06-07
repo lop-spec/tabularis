@@ -182,24 +182,25 @@ pub fn get_current_platform() -> String {
 pub async fn fetch_tabularium_registry(base_url: &str) -> Result<PluginRegistry, String> {
     let list = tabularium::fetch_plugin_list(base_url).await?;
 
-    let mut plugins = Vec::with_capacity(list.len());
-    for item in list {
-        let slug = item.id.clone();
-        match tabularium::fetch_plugin_detail(base_url, &slug).await {
-            Ok(detail) => plugins.push(detail),
-            Err(err) => {
-                // Don't fail the whole listing if one plugin's detail call breaks —
-                // surface it as a list entry with no releases so the user sees the
-                // entry but can't install (matches "platform unsupported" UX).
-                log::warn!(
-                    "Tabularium detail fetch failed for {}: {} — falling back to list item",
-                    slug,
-                    err
-                );
-                plugins.push(item);
+    // Fetch every plugin's detail concurrently instead of N sequential
+    // round-trips. A failed detail call degrades to the list item (entry
+    // visible but not installable — matches "platform unsupported" UX).
+    let plugins: Vec<RegistryPlugin> =
+        futures::future::join_all(list.into_iter().map(|item| async move {
+            let slug = item.id.clone();
+            match tabularium::fetch_plugin_detail(base_url, &slug).await {
+                Ok(detail) => detail,
+                Err(err) => {
+                    log::warn!(
+                        "Tabularium detail fetch failed for {}: {} — falling back to list item",
+                        slug,
+                        err
+                    );
+                    item
+                }
             }
-        }
-    }
+        }))
+        .await;
 
     Ok(PluginRegistry {
         schema_version: 1,
