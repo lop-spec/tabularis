@@ -82,7 +82,7 @@ SELECT
     DATE_ADD('2000-01-01 00:00:00', INTERVAL g.g SECOND),
     DATE_ADD('2010-01-01 00:00:00', INTERVAL (g.g*2) SECOND),
     DATE_ADD('1970-01-01', INTERVAL (g.g MOD 18000) DAY),
-    (g.g MOD 2),
+    (g.g MOD 2 = 0),
     (g.g MOD 3 = 0),
     ROUND((g.g MOD 100000) * 1.25, 2),
     ROUND((g.g MOD 50000) * 0.337, 4),
