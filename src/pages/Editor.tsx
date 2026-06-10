@@ -39,6 +39,7 @@ import {
   Check,
   Undo2,
   BookOpen,
+  Pencil,
   Hash,
   Loader2,
   Copy,
@@ -80,8 +81,7 @@ import {
 import { formatDuration } from "../utils/formatTime";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
 import { NotebookView } from "../components/notebook/NotebookView";
-import { extractSqlFromCells } from "../utils/notebook";
-import { createNotebook } from "../utils/notebookStore";
+import { createNotebook, renameNotebook } from "../utils/notebookStore";
 import { registerSqlAutocomplete } from "../utils/autocomplete";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -179,6 +179,8 @@ export const Editor = () => {
     y: number;
     tabId: string;
   } | null>(null);
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingTabTitle, setEditingTabTitle] = useState("");
 
   const [errorModal, setErrorModal] = useState<{
     isOpen: boolean;
@@ -226,22 +228,34 @@ export const Editor = () => {
     setTabContextMenu({ x: e.clientX, y: e.clientY, tabId });
   };
 
+  const startTabRename = useCallback((tabId: string) => {
+    const tab = tabsRef.current.find((t) => t.id === tabId);
+    if (!tab) return;
+    setEditingTabId(tabId);
+    setEditingTabTitle(tab.title);
+  }, []);
+
+  const commitTabRename = useCallback(() => {
+    const tabId = editingTabId;
+    if (!tabId) return;
+    setEditingTabId(null);
+    const title = editingTabTitle.trim();
+    const tab = tabsRef.current.find((t) => t.id === tabId);
+    if (!tab || !title || title === tab.title) return;
+    updateTab(tabId, { title });
+    // Persist the rename to the notebook file too (covers background tabs whose
+    // NotebookView isn't mounted to sync the title automatically).
+    if (tab.type === "notebook" && tab.notebookId && tab.connectionId) {
+      renameNotebook(tab.notebookId, tab.connectionId, title).catch((e) =>
+        console.error("Failed to rename notebook:", e),
+      );
+    }
+  }, [editingTabId, editingTabTitle, updateTab]);
+
   const handleConvertToConsole = useCallback(
     (tabId: string) => {
       const tab = tabsRef.current.find((t) => t.id === tabId);
       if (!tab) return;
-
-      // Notebook: extract all SQL cells
-      if (tab.type === "notebook" && tab.notebookState) {
-        const allSql = extractSqlFromCells(tab.notebookState.cells);
-        addTab({
-          type: "console",
-          title: `Console - ${tab.title}`,
-          query: allSql,
-          connectionId: tab.connectionId,
-        });
-        return;
-      }
 
       const effectiveSchema =
         activeCapabilities?.schemas === true ? tab.schema : undefined;
@@ -2488,14 +2502,41 @@ export const Editor = () => {
               ) : (
                 <FileCode size={12} className="text-green-500 shrink-0" />
               )}
-              <span className="truncate flex-1 flex items-center gap-1">
-                <span className="truncate">{tab.title}</span>
-                {tab.type === "console" && isMultiDb && (
-                  <span className="text-muted shrink-0">
-                    ({tab.schema || selectedDatabases[0]})
-                  </span>
-                )}
-              </span>
+              {editingTabId === tab.id ? (
+                <input
+                  type="text"
+                  value={editingTabTitle}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setEditingTabTitle(e.target.value)}
+                  onBlur={commitTabRename}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter") commitTabRename();
+                    if (e.key === "Escape") setEditingTabId(null);
+                  }}
+                  className="flex-1 min-w-0 bg-surface-secondary border border-blue-500/50 rounded px-1 py-0.5 text-xs text-primary focus:outline-none"
+                />
+              ) : (
+                <span
+                  className="truncate flex-1 flex items-center gap-1"
+                  onDoubleClick={
+                    tab.type === "notebook"
+                      ? (e) => {
+                          e.stopPropagation();
+                          startTabRename(tab.id);
+                        }
+                      : undefined
+                  }
+                >
+                  <span className="truncate">{tab.title}</span>
+                  {tab.type === "console" && isMultiDb && (
+                    <span className="text-muted shrink-0">
+                      ({tab.schema || selectedDatabases[0]})
+                    </span>
+                  )}
+                </span>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -2537,8 +2578,9 @@ export const Editor = () => {
         </button>
         <button
           onClick={async () => {
+            if (!activeConnectionId) return;
             const title = "Notebook";
-            const { notebookId } = await createNotebook(title);
+            const { notebookId } = await createNotebook(title, activeConnectionId);
             addTab({
               type: "notebook",
               notebookId,
@@ -2778,6 +2820,7 @@ export const Editor = () => {
                 tab={tab}
                 updateTab={updateTab}
                 connectionId={activeConnectionId || ""}
+                isActive={isActive}
               />
             </div>
           );
@@ -3450,8 +3493,19 @@ export const Editor = () => {
           y={tabContextMenu.y}
           onClose={() => setTabContextMenu(null)}
           items={[
-            ...(tabs.find((t) => t.id === tabContextMenu.tabId)?.type !==
-            "console"
+            ...(tabs.find((t) => t.id === tabContextMenu.tabId)?.type ===
+            "notebook"
+              ? [
+                  {
+                    label: t("sidebar.notebooks.rename"),
+                    icon: Pencil,
+                    action: () => startTabRename(tabContextMenu.tabId),
+                  },
+                ]
+              : []),
+            ...(!["console", "notebook", "query_builder"].includes(
+              tabs.find((t) => t.id === tabContextMenu.tabId)?.type ?? "",
+            )
               ? [
                   {
                     label: t("editor.convertToConsole"),
