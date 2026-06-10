@@ -2192,7 +2192,9 @@ export const Editor = () => {
       if (activeCapabilities?.schemas && activeSchema) {
         effectiveTables = schemaDataMap[activeSchema]?.tables ?? tables;
       } else if (isMultiDb) {
-        effectiveTables = selectedDatabases.flatMap(db => databaseDataMap[db]?.tables ?? []);
+        effectiveTables = selectedDatabases.flatMap(db =>
+          (databaseDataMap[db]?.tables ?? []).map(t => ({ ...t, schema: db }))
+        );
       }
       const disposable = registerSqlAutocomplete(
         monacoInstance,
