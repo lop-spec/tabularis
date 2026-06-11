@@ -494,6 +494,8 @@ pub fn run() {
             notebooks::save_notebook,
             notebooks::load_notebook,
             notebooks::delete_notebook,
+            notebooks::rename_notebook,
+            notebooks::list_notebooks,
             // Plugin Registry
             plugins::commands::fetch_plugin_registry,
             plugins::commands::install_plugin,

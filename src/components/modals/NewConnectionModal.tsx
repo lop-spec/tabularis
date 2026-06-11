@@ -1342,7 +1342,7 @@ export const NewConnectionModal = ({
     <div className="space-y-4">
       <p className="text-xs text-muted">
         {t("newConnection.sslDescription", {
-          defaultValue: "Configure SSL/TLS certificates for secure MySQL connections (optional).",
+          defaultValue: "Configure SSL/TLS for secure database connections (optional).",
         })}
       </p>
 
@@ -1352,11 +1352,20 @@ export const NewConnectionModal = ({
           {t("newConnection.sslMode", { defaultValue: "SSL Mode" })}
         </label>
         <Select
-          value={formData.ssl_mode || (driver === "postgres" ? "prefer" : "required")}
+          value={
+            formData.ssl_mode ||
+            (driver === "postgres"
+              ? "prefer"
+              : driver === "clickhouse"
+                ? "disable"
+                : "required")
+          }
           options={
             driver === "postgres"
               ? ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
-              : ["disabled", "preferred", "required", "verify_ca", "verify_identity"]
+              : driver === "clickhouse"
+                ? ["disable", "require"]
+                : ["disabled", "preferred", "required", "verify_ca", "verify_identity"]
           }
           labels={
             driver === "postgres"
@@ -1368,13 +1377,18 @@ export const NewConnectionModal = ({
                   "verify-ca": t("newConnection.sslModes.verify-ca", { defaultValue: "Verify CA" }),
                   "verify-full": t("newConnection.sslModes.verify-full", { defaultValue: "Verify Full" }),
                 }
-              : {
-                  disabled: t("newConnection.sslModes.disabled", { defaultValue: "Disabled" }),
-                  preferred: t("newConnection.sslModes.preferred", { defaultValue: "Preferred" }),
-                  required: t("newConnection.sslModes.required", { defaultValue: "Required" }),
-                  verify_ca: t("newConnection.sslModes.verify_ca", { defaultValue: "Verify CA" }),
-                  verify_identity: t("newConnection.sslModes.verify_identity", { defaultValue: "Verify Identity" }),
-                }
+              : driver === "clickhouse"
+                ? {
+                    disable: t("newConnection.sslModes.disable", { defaultValue: "Disable" }),
+                    require: t("newConnection.sslModes.require", { defaultValue: "Require" }),
+                  }
+                : {
+                    disabled: t("newConnection.sslModes.disabled", { defaultValue: "Disabled" }),
+                    preferred: t("newConnection.sslModes.preferred", { defaultValue: "Preferred" }),
+                    required: t("newConnection.sslModes.required", { defaultValue: "Required" }),
+                    verify_ca: t("newConnection.sslModes.verify_ca", { defaultValue: "Verify CA" }),
+                    verify_identity: t("newConnection.sslModes.verify_identity", { defaultValue: "Verify Identity" }),
+                  }
           }
           onChange={(v) => updateField("ssl_mode", v)}
           searchable={false}
@@ -2138,7 +2152,7 @@ export const NewConnectionModal = ({
                         },
                       ]
                     : []),
-                  ...((driver === "mysql" || driver === "postgres") && isNetworkDriver
+                  ...(activeDriver?.capabilities?.supports_ssl && isNetworkDriver
                     ? [{ id: "ssl", label: "SSL" }]
                     : []),
                   ...(isNetworkDriver ? [{ id: "ssh", label: "SSH" }] : []),
