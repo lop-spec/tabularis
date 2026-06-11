@@ -1555,6 +1555,22 @@ pub async fn get_k8s_resources_cmd<R: Runtime>(
     crate::k8s_tunnel::get_k8s_resources(&context, &namespace, &resource_type)
 }
 
+#[tauri::command]
+pub async fn get_k8s_resource_ports_cmd<R: Runtime>(
+    _app: AppHandle<R>,
+    context: String,
+    namespace: String,
+    resource_type: String,
+    resource_name: String,
+) -> Result<Vec<u16>, String> {
+    crate::k8s_tunnel::get_k8s_resource_ports(
+        &context,
+        &namespace,
+        &resource_type,
+        &resource_name,
+    )
+}
+
 /// Expand K8s connection params by loading saved config and creating/reusing a tunnel.
 pub async fn expand_k8s_connection_params<R: Runtime>(
     app: &AppHandle<R>,

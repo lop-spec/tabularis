@@ -278,6 +278,7 @@ pub fn run() {
             commands::get_k8s_contexts_cmd,
             commands::get_k8s_namespaces_cmd,
             commands::get_k8s_resources_cmd,
+            commands::get_k8s_resource_ports_cmd,
             // Connection Groups
             commands::get_connection_groups,
             commands::get_connections_with_groups,
