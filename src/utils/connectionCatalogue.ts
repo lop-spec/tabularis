@@ -119,7 +119,20 @@ export function groupByEngine(drivers: CatalogueDriver[]): EngineGroup[] {
       downloads,
     });
   }
-  return groups.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  // Section order in the catalogue follows Map-insertion order over this list,
+  // so the sort here drives it. Builtin engines (MySQL, PostgreSQL, SQLite)
+  // come first — surfacing the SQL section first, the common case — and engines
+  // with no paradigm metadata ('other', mostly legacy-registry plugins) sink to
+  // the end so the catalogue doesn't lead with a wall of 'Other'. Everything
+  // else is alphabetical.
+  return groups.sort(
+    (a, b) =>
+      Number(b.drivers.some((d) => d.isBuiltin)) -
+        Number(a.drivers.some((d) => d.isBuiltin)) ||
+      Number(a.primaryParadigm === 'other') -
+        Number(b.primaryParadigm === 'other') ||
+      a.displayName.localeCompare(b.displayName),
+  );
 }
 
 export function paradigmFacets(groups: EngineGroup[]): ParadigmFacet[] {
