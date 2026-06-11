@@ -6,6 +6,7 @@ import {
   getK8sContexts,
   getK8sNamespaces,
   getK8sResources,
+  getK8sResourcePorts,
   loadK8sConnections,
   saveK8sConnection,
   updateK8sConnection,
@@ -238,6 +239,28 @@ describe("k8s", () => {
         resourceType: "service",
       });
       expect(result).toEqual(["mysql-svc", "postgres-svc"]);
+    });
+  });
+
+  describe("getK8sResourcePorts", () => {
+    it("should call invoke with all parameters", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      vi.mocked(invoke).mockResolvedValue([5432]);
+
+      const result = await getK8sResourcePorts(
+        "minikube",
+        "database",
+        "service",
+        "postgres-svc",
+      );
+
+      expect(invoke).toHaveBeenCalledWith("get_k8s_resource_ports_cmd", {
+        context: "minikube",
+        namespace: "database",
+        resourceType: "service",
+        resourceName: "postgres-svc",
+      });
+      expect(result).toEqual([5432]);
     });
   });
 

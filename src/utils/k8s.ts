@@ -102,6 +102,23 @@ export async function getK8sResources(
 }
 
 /**
+ * List exposed ports for a Kubernetes resource.
+ */
+export async function getK8sResourcePorts(
+  context: string,
+  namespace: string,
+  resourceType: string,
+  resourceName: string,
+): Promise<number[]> {
+  return await invoke<number[]>("get_k8s_resource_ports_cmd", {
+    context,
+    namespace,
+    resourceType,
+    resourceName,
+  });
+}
+
+/**
  * Format a K8s connection for display
  */
 export function formatK8sConnectionString(k8s: K8sConnection): string {
