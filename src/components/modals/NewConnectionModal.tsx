@@ -199,6 +199,13 @@ export const NewConnectionModal = ({
   const [isK8sModalOpen, setIsK8sModalOpen] = useState(false);
   const [k8sMode, setK8sMode] = useState<"existing" | "inline">("existing");
   const [isK8sPortOverridden, setIsK8sPortOverridden] = useState(false);
+  const [k8sAutoPort, setK8sAutoPort] = useState<{
+    context: string;
+    namespace: string;
+    resourceType: string;
+    resourceName: string;
+    port: number;
+  } | null>(null);
   const [k8sContexts, setK8sContexts] = useState<string[]>([]);
   const [k8sNamespaces, setK8sNamespaces] = useState<string[]>([]);
   const [k8sResources, setK8sResources] = useState<string[]>([]);
@@ -288,6 +295,19 @@ export const NewConnectionModal = ({
     activeDriver?.capabilities?.file_based === false &&
     !activeDriver?.capabilities?.folder_based;
   const k8sDefaultPort = activeDriver?.default_port ?? undefined;
+  const getK8sAutoPort = (params: Partial<ConnectionParams>) =>
+    k8sAutoPort &&
+    params.k8s_context === k8sAutoPort.context &&
+    params.k8s_namespace === k8sAutoPort.namespace &&
+    params.k8s_resource_type === k8sAutoPort.resourceType &&
+    params.k8s_resource_name === k8sAutoPort.resourceName
+      ? k8sAutoPort.port
+      : undefined;
+  const resolveK8sPort = (params: Partial<ConnectionParams>) =>
+    params.k8s_enabled && k8sMode === "inline"
+      ? params.k8s_port ?? getK8sAutoPort(params) ?? k8sDefaultPort
+      : params.k8s_port;
+  const effectiveK8sPort = resolveK8sPort(formData);
   const connectionStringEnabled =
     activeDriver?.capabilities?.connection_string ??
     activeDriver?.capabilities?.connectionString ??
@@ -381,35 +401,16 @@ export const NewConnectionModal = ({
   }, [formData.k8s_context, formData.k8s_namespace, formData.k8s_resource_type]);
 
   useEffect(() => {
-    if (
-      !formData.k8s_enabled ||
-      k8sMode !== "inline" ||
-      isK8sPortOverridden ||
-      formData.k8s_port != null ||
-      k8sDefaultPort == null
-    ) {
-      return;
-    }
-
-    setFormData((prev) =>
-      prev.k8s_port != null ? prev : { ...prev, k8s_port: k8sDefaultPort },
-    );
-  }, [
-    formData.k8s_enabled,
-    formData.k8s_port,
-    isK8sPortOverridden,
-    k8sDefaultPort,
-    k8sMode,
-  ]);
-
-  useEffect(() => {
+    const context = formData.k8s_context;
+    const namespace = formData.k8s_namespace;
+    const resourceType = formData.k8s_resource_type;
     const resourceName = formData.k8s_resource_name;
     if (
       !formData.k8s_enabled ||
       k8sMode !== "inline" ||
-      !formData.k8s_context ||
-      !formData.k8s_namespace ||
-      formData.k8s_resource_type !== "service" ||
+      !context ||
+      !namespace ||
+      resourceType !== "service" ||
       !resourceName ||
       isK8sPortOverridden
     ) {
@@ -420,16 +421,16 @@ export const NewConnectionModal = ({
     void (async () => {
       try {
         const ports = await getK8sResourcePorts(
-          formData.k8s_context!,
-          formData.k8s_namespace!,
-          formData.k8s_resource_type!,
+          context,
+          namespace,
+          resourceType,
           resourceName,
         );
-        if (!cancelled && ports.length === 1) {
-          setFormData((prev) =>
-            prev.k8s_resource_name === resourceName
-              ? { ...prev, k8s_port: ports[0] }
-              : prev,
+        if (!cancelled) {
+          setK8sAutoPort(
+            ports.length === 1
+              ? { context, namespace, resourceType, resourceName, port: ports[0] }
+              : null,
           );
         }
       } catch {
@@ -471,7 +472,7 @@ export const NewConnectionModal = ({
     setLoadingDatabases(true);
     setDatabaseLoadError(null);
     try {
-      const listParams: Partial<ConnectionParams> = {
+      const listParamsBase: Partial<ConnectionParams> = {
         ...formData,
         ...overrides,
         driver: effectiveDriver,
@@ -481,6 +482,10 @@ export const NewConnectionModal = ({
             : formData.port != null
               ? Number(formData.port)
               : undefined,
+      };
+      const listParams: Partial<ConnectionParams> = {
+        ...listParamsBase,
+        k8s_port: resolveK8sPort(listParamsBase),
       };
       const databases = await invoke<string[]>("list_databases", {
         request: {
@@ -654,6 +659,7 @@ export const NewConnectionModal = ({
         driver,
         ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
+        k8s_port: effectiveK8sPort,
         database: isMultiDb
           ? (selectedDatabasesState[0] ??
             (typeof formData.database === "string" ? formData.database : ""))
@@ -728,6 +734,7 @@ export const NewConnectionModal = ({
         driver,
         ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
+        k8s_port: effectiveK8sPort,
         database: isMultiDb
           ? selectedDatabasesState.length === 1
             ? selectedDatabasesState[0]
@@ -1639,9 +1646,6 @@ export const NewConnectionModal = ({
           onChange={(e) => {
             const enabled = e.target.checked;
             updateField("k8s_enabled", enabled);
-            if (enabled && k8sMode === "inline" && !formData.k8s_port && k8sDefaultPort != null) {
-              updateField("k8s_port", k8sDefaultPort);
-            }
             // Mutual exclusion with SSH
             if (enabled && formData.ssh_enabled) {
               updateField("ssh_enabled", false);
@@ -1675,9 +1679,6 @@ export const NewConnectionModal = ({
                     setIsK8sPortOverridden(false);
                   } else {
                     updateField("k8s_connection_id", undefined);
-                    if (!formData.k8s_port && k8sDefaultPort != null) {
-                      updateField("k8s_port", k8sDefaultPort);
-                    }
                   }
                 }}
                 className={clsx(
@@ -1859,10 +1860,11 @@ export const NewConnectionModal = ({
                 label={t("newConnection.k8sPort", {
                   defaultValue: "Container Port",
                 })}
-                value={formData.k8s_port ?? ""}
+                value={effectiveK8sPort ?? ""}
+                type="number"
                 onChange={(v) => {
-                  setIsK8sPortOverridden(true);
-                  updateField("k8s_port", Number(v));
+                  setIsK8sPortOverridden(v !== "");
+                  updateField("k8s_port", v === "" ? undefined : Number(v));
                 }}
                 placeholder={k8sDefaultPort != null ? String(k8sDefaultPort) : undefined}
               />
