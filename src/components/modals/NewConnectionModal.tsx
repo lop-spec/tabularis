@@ -295,6 +295,7 @@ export const NewConnectionModal = ({
     activeDriver?.capabilities?.file_based === false &&
     !activeDriver?.capabilities?.folder_based;
   const k8sDefaultPort = activeDriver?.default_port ?? undefined;
+  // Derive K8s ports instead of seeding formData so edit flows with no saved port are covered.
   const getK8sAutoPort = (params: Partial<ConnectionParams>) =>
     k8sAutoPort &&
     params.k8s_context === k8sAutoPort.context &&
