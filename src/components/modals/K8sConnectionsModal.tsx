@@ -55,8 +55,9 @@ export function K8sConnectionsModal({
   const [namespace, setNamespace] = useState("");
   const [resourceType, setResourceType] = useState<string>("service");
   const [resourceName, setResourceName] = useState("");
-  const effectiveDefaultPort = defaultPort ?? 3306;
-  const [port, setPort] = useState<number>(effectiveDefaultPort);
+  const effectiveDefaultPort = defaultPort ?? undefined;
+  const [port, setPort] = useState<number | undefined>(undefined);
+  const effectivePort = port ?? effectiveDefaultPort;
   const [isPortOverridden, setIsPortOverridden] = useState(false);
 
   // Discovery state
@@ -145,7 +146,7 @@ export function K8sConnectionsModal({
           resourceName,
         );
         if (!cancelled && ports.length === 1) {
-          setPort(ports[0]);
+          setPort((prev) => (prev === ports[0] ? prev : ports[0]));
         }
       } catch {
         // Best-effort convenience only: keep the current/default port.
@@ -163,7 +164,7 @@ export function K8sConnectionsModal({
     setNamespace("");
     setResourceType("service");
     setResourceName("");
-    setPort(effectiveDefaultPort);
+    setPort(undefined);
     setIsPortOverridden(false);
     setTestStatus("idle");
     setTestMessage("");
@@ -198,22 +199,31 @@ export function K8sConnectionsModal({
   };
 
   const handleSave = async () => {
-    const input: K8sConnectionInput = {
+    const validation = validateK8sConnection({
       name,
       context,
       namespace,
       resource_type: resourceType,
       resource_name: resourceName,
-      port,
-    };
-
-    const validation = validateK8sConnection(input);
+      port: effectivePort,
+    });
     if (!validation.isValid) {
       setValidationError(
         validation.error ?? t("k8sConnections.validationFailed"),
       );
       return;
     }
+
+    if (effectivePort == null) return;
+
+    const input: K8sConnectionInput = {
+      name,
+      context,
+      namespace,
+      resource_type: resourceType,
+      resource_name: resourceName,
+      port: effectivePort,
+    };
 
     try {
       if (isCreating) {
@@ -304,9 +314,9 @@ export function K8sConnectionsModal({
                   setResourceType={setResourceType}
                   resourceName={resourceName}
                   setResourceName={setResourceName}
-                  port={port}
+                  port={effectivePort}
                   setPort={(value) => {
-                    setIsPortOverridden(true);
+                    setIsPortOverridden(value != null);
                     setPort(value);
                   }}
                   defaultPort={effectiveDefaultPort}
@@ -366,9 +376,9 @@ export function K8sConnectionsModal({
                 setResourceType={setResourceType}
                 resourceName={resourceName}
                 setResourceName={setResourceName}
-                port={port}
+                port={effectivePort}
                 setPort={(value) => {
-                  setIsPortOverridden(true);
+                  setIsPortOverridden(value != null);
                   setPort(value);
                 }}
                 defaultPort={effectiveDefaultPort}
@@ -413,9 +423,9 @@ interface EditFormProps {
   setResourceType: (v: string) => void;
   resourceName: string;
   setResourceName: (v: string) => void;
-  port: number;
-  setPort: (v: number) => void;
-  defaultPort: number;
+  port: number | undefined;
+  setPort: (v: number | undefined) => void;
+  defaultPort?: number;
   contexts: string[];
   namespaces: string[];
   resources: string[];
@@ -524,10 +534,12 @@ function EditForm({
         <label className={LabelClass}>{t("k8sConnections.port")}</label>
         <input
           type="number"
-          value={port}
-          onChange={(e) => setPort(Number(e.target.value))}
+          value={port ?? ""}
+          onChange={(e) =>
+            setPort(e.target.value === "" ? undefined : Number(e.target.value))
+          }
           className={InputClass}
-          placeholder={String(defaultPort)}
+          placeholder={defaultPort != null ? String(defaultPort) : undefined}
         />
       </div>
 
