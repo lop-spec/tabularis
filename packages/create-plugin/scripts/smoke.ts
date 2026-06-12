@@ -37,7 +37,7 @@ function scaffoldOne(kind: "network" | "file", withUi: boolean): void {
   if (withUi) args.push("--with-ui");
   run(process.execPath, [CLI, ...args], dir);
 
-  for (const expected of ["Cargo.toml", "manifest.json", "src/main.rs", "justfile"]) {
+  for (const expected of ["Cargo.toml", ".tabularium", "src/main.rs", "justfile"]) {
     const p = join(target, expected);
     if (!existsSync(p) || statSync(p).size === 0) {
       throw new Error(`missing or empty: ${p}`);
