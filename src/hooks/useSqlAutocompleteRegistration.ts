@@ -3,7 +3,7 @@ import type { Monaco } from "@monaco-editor/react";
 import { loader } from "@monaco-editor/react";
 import { useDatabase } from "./useDatabase";
 import { isMultiDatabaseCapable } from "../utils/database";
-import { registerSqlAutocomplete } from "../utils/autocomplete";
+import { registerSqlAutocomplete, disposeSqlAutocomplete } from "../utils/autocomplete";
 
 type Options = {
   monaco?: Monaco | null;
@@ -62,17 +62,18 @@ export function useSqlAutocompleteRegistration(
       );
     };
 
+    const cleanup = () => {
+      cancelled = true;
+      disposeSqlAutocomplete();
+    };
+
     if (options?.monaco) {
       register(options.monaco);
-      return () => {
-        cancelled = true;
-      };
+      return cleanup;
     }
 
     loader.init().then((monaco) => register(monaco));
-    return () => {
-      cancelled = true;
-    };
+    return cleanup;
   }, [
     connectionId,
     enabled,

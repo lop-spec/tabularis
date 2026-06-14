@@ -173,7 +173,7 @@ describe('autocomplete', () => {
       expect(tableSuggestions[0]?.insertText).toBe('"AccountEventLog"');
     });
 
-    it('inserts schema-qualified table names for postgres when schema is set', async () => {
+    it('does not prefix schema and quotes table name only if needed for postgres', async () => {
       const monaco = createMockMonaco();
       registerSqlAutocomplete(
         monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
@@ -192,7 +192,29 @@ describe('autocomplete', () => {
       const tableSuggestions = result.suggestions.filter((s: { sortText?: string }) =>
         s.sortText?.startsWith('1_'),
       );
-      expect(tableSuggestions[0]?.insertText).toBe('"public"."AccountEventLog"');
+      expect(tableSuggestions[0]?.insertText).toBe('"AccountEventLog"');
+    });
+
+    it('does not quote plain lowercase table names for postgres', async () => {
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'users' }],
+        null,
+        'postgres',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      const result = await provider.provideCompletionItems(
+        createMockModel('SELECT * FROM '),
+        { lineNumber: 1, column: 15 },
+      );
+
+      const tableSuggestions = result.suggestions.filter((s: { sortText?: string }) =>
+        s.sortText?.startsWith('1_'),
+      );
+      expect(tableSuggestions[0]?.insertText).toBe('users');
     });
 
     it('should include all table suggestions regardless of count', async () => {
@@ -391,6 +413,33 @@ describe('autocomplete', () => {
       const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 12 });
 
       expect(result.suggestions[0]?.insertText).toBe('"CreatedAt"');
+    });
+
+    it('does not quote plain lowercase column names for postgres', async () => {
+      const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+      mockInvoke.mockResolvedValue([{ name: 'email', data_type: 'varchar' }]);
+
+      const { parseTablesFromQuery } = await import('../../src/utils/sqlAnalysis');
+      (parseTablesFromQuery as ReturnType<typeof vi.fn>).mockReturnValue(
+        new Map([['u', 'users']]),
+      );
+
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'users' }],
+        'public',
+        'postgres',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      const model = createMockModel('SELECT u.');
+      model.getValueInRange = vi.fn(() => 'SELECT u.');
+
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 10 });
+
+      expect(result.suggestions[0]?.insertText).toBe('email');
     });
   });
 

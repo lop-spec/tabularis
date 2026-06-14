@@ -1,7 +1,7 @@
 import type { Monaco } from "@monaco-editor/react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TableInfo } from "../contexts/DatabaseContext";
-import { formatSqlIdentifier, quoteTableRef } from "./identifiers";
+import { formatSqlIdentifier } from "./identifiers";
 import { getCurrentStatement, parseTablesFromQuery } from "./sqlAnalysis";
 
 // Lightweight column cache with TTL and size limits
@@ -102,15 +102,6 @@ export const clearAutocompleteCache = (connectionId?: string) => {
 // Find a table by name in the list of tables
 const findTableByName = (name: string, tables: TableInfo[]) =>
   tables.find((t) => t.name.toLowerCase() === name.toLowerCase())?.name;
-
-const tableInsertText = (
-  tableName: string,
-  driver?: string | null,
-  schema?: string | null,
-) =>
-  schema
-    ? quoteTableRef(tableName, driver, schema)
-    : formatSqlIdentifier(tableName, driver);
 
 let sqlCompletionProvider: { dispose: () => void } | null = null;
 
@@ -283,7 +274,7 @@ export const registerSqlAutocomplete = (
         label: t.name,
         kind: monaco.languages.CompletionItemKind.Class,
         detail: "Table",
-        insertText: tableInsertText(t.name, driver, schema),
+        insertText: formatSqlIdentifier(t.name, driver),
         range,
         sortText: `1_${t.name}`
       }));
