@@ -17,7 +17,6 @@ export function AiApprovalGate() {
   const {
     settings,
     isLoading: isSettingsLoading,
-    isLanguageSettled,
   } = useSettings();
   const { pending, decide } = usePendingApprovals();
   const current = pending[0];
@@ -44,10 +43,6 @@ export function AiApprovalGate() {
       return;
     }
 
-    if (!isLanguageSettled) {
-      return;
-    }
-
     const bringToFront = settings.mcpApprovalAlwaysOnTop ?? true;
     const sendNotification = settings.mcpApprovalNotifySound ?? true;
 
@@ -68,7 +63,7 @@ export function AiApprovalGate() {
         await notifyApprovalRequest({ title, body });
       }
     })();
-  }, [currentApprovalId, isLanguageSettled, isSettingsLoading, restoreWindowState, settings.mcpApprovalAlwaysOnTop, settings.mcpApprovalNotifySound, t]);
+  }, [currentApprovalId, isSettingsLoading, restoreWindowState, settings.mcpApprovalAlwaysOnTop, settings.mcpApprovalNotifySound, t]);
 
   useEffect(() => {
     return () => {
@@ -76,7 +71,7 @@ export function AiApprovalGate() {
     };
   }, [restoreWindowState]);
 
-  if (!current || !isLanguageSettled) return null;
+  if (!current) return null;
 
   const handleClose = () => {
     // Closing without an explicit decision is treated as deny — the MCP

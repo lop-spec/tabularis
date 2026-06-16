@@ -49,9 +49,9 @@ describe("AiApprovalGate", () => {
     });
   });
 
-  it("waits for language settlement before rendering approval UI or sending notifications", async () => {
+  it("renders approval UI and sends notifications even before language settles", async () => {
     vi.mocked(useSettings)
-      .mockReturnValueOnce({
+      .mockReturnValue({
         settings: {
           mcpApprovalAlwaysOnTop: true,
           mcpApprovalNotifySound: true,
@@ -60,25 +60,9 @@ describe("AiApprovalGate", () => {
         isLanguageReady: false,
         isLanguageSettled: false,
         updateSetting: vi.fn(),
-      } as never)
-      .mockReturnValueOnce({
-        settings: {
-          mcpApprovalAlwaysOnTop: true,
-          mcpApprovalNotifySound: true,
-        },
-        isLoading: false,
-        isLanguageReady: true,
-        isLanguageSettled: true,
-        updateSetting: vi.fn(),
       } as never);
 
-    const { rerender } = render(<AiApprovalGate />);
-
-    expect(screen.queryByTestId("approval-modal")).not.toBeInTheDocument();
-    expect(focusWindowForApproval).not.toHaveBeenCalled();
-    expect(notifyApprovalRequest).not.toHaveBeenCalled();
-
-    rerender(<AiApprovalGate />);
+    render(<AiApprovalGate />);
 
     await waitFor(() => {
       expect(screen.getByTestId("approval-modal")).toBeInTheDocument();

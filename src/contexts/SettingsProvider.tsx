@@ -10,6 +10,12 @@ import { getFontCSS } from "../utils/settings";
 
 const LANGUAGE_APPLICATION_TIMEOUT_MS = 3000;
 
+type LanguageState = {
+  language: Settings["language"] | null;
+  ready: boolean;
+  settled: boolean;
+};
+
 function matchesAppliedLanguage(
   activeLanguage: string | null | undefined,
   requestedLanguage: Settings["language"],
@@ -33,8 +39,11 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { i18n } = useTranslation();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLanguageReady, setIsLanguageReady] = useState(false);
-  const [isLanguageSettled, setIsLanguageSettled] = useState(false);
+  const [languageState, setLanguageState] = useState<LanguageState>({
+    language: null,
+    ready: false,
+    settled: false,
+  });
   const appliedLanguageRef = useRef<Settings["language"] | null>(null);
   const requestedLanguageRef = useRef<Settings["language"] | null>(null);
   const languageRequestIdRef = useRef(0);
@@ -105,6 +114,15 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
     return languageQueueRef.current;
   }, [i18n]);
+
+  const currentLanguageApplied = isLanguageApplied(settings.language);
+  const trackedLanguageState =
+    languageState.language === settings.language ? languageState : null;
+  const isLanguageReady =
+    !isLoading && (currentLanguageApplied || trackedLanguageState?.ready === true);
+  const isLanguageSettled =
+    !isLoading &&
+    (currentLanguageApplied || trackedLanguageState?.settled === true);
 
   // Load settings from backend on mount
   useEffect(() => {
@@ -220,8 +238,11 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         }
 
         setSettings(finalSettings);
-        setIsLanguageReady(languageAlreadyApplied);
-        setIsLanguageSettled(languageAlreadyApplied);
+        setLanguageState({
+          language: finalSettings.language,
+          ready: languageAlreadyApplied,
+          settled: languageAlreadyApplied,
+        });
 
         if (!languageAlreadyApplied) {
           void queueLanguageApplication(finalSettings.language);
@@ -238,30 +259,32 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
   // Update i18n when language changes
   useEffect(() => {
-    if (isLoading || isLanguageApplied(settings.language)) {
-      if (!isLoading && isLanguageApplied(settings.language)) {
+    if (isLoading || currentLanguageApplied || trackedLanguageState?.settled) {
+      if (currentLanguageApplied) {
         appliedLanguageRef.current = settings.language;
         requestedLanguageRef.current = settings.language;
-        setIsLanguageReady(true);
-        setIsLanguageSettled(true);
       }
-
       return;
     }
 
     let cancelled = false;
-    setIsLanguageReady(false);
-    setIsLanguageSettled(false);
 
     const applyLanguage = async () => {
       const didApply = await queueLanguageApplication(settings.language);
 
       if (cancelled) return;
 
-      setIsLanguageReady(
-        didApply && appliedLanguageRef.current === settings.language,
-      );
-      setIsLanguageSettled(true);
+      setLanguageState((previous) => {
+        if (previous.language !== settings.language) {
+          return previous;
+        }
+
+        return {
+          language: settings.language,
+          ready: didApply && appliedLanguageRef.current === settings.language,
+          settled: true,
+        };
+      });
     };
 
     void applyLanguage();
@@ -269,7 +292,13 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [isLanguageApplied, isLoading, queueLanguageApplication, settings.language]);
+  }, [
+    currentLanguageApplied,
+    isLoading,
+    queueLanguageApplication,
+    settings.language,
+    trackedLanguageState?.settled,
+  ]);
 
   // Apply font family
   useEffect(() => {
@@ -311,6 +340,22 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     value: Settings[K],
   ): Promise<void> => {
     let persistPromise = Promise.resolve();
+
+    if (key === "language") {
+      const nextLanguage = value as Settings["language"];
+      const languageAlreadyApplied = isLanguageApplied(nextLanguage);
+
+      if (languageAlreadyApplied) {
+        appliedLanguageRef.current = nextLanguage;
+        requestedLanguageRef.current = nextLanguage;
+      }
+
+      setLanguageState({
+        language: nextLanguage,
+        ready: languageAlreadyApplied,
+        settled: languageAlreadyApplied,
+      });
+    }
 
     setSettings((prev) => {
       const newSettings = { ...prev, [key]: value };
