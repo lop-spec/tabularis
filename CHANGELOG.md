@@ -1,3 +1,25 @@
+## [0.13.2](https://github.com/TabularisDB/tabularis/compare/v0.13.1...v0.13.2) (2026-06-16)
+
+
+### Bug Fixes
+
+* **autocomplete:** suggest clause keywords and correct columns after … ([#295](https://github.com/TabularisDB/tabularis/issues/295)) ([35952f3](https://github.com/TabularisDB/tabularis/commit/35952f310d0b7ff23e99c3602d5579854c12e056))
+* **mysql:** multiply per-loop time by loops in EXPLAIN ANALYZE ([#303](https://github.com/TabularisDB/tabularis/issues/303)) ([6ed133f](https://github.com/TabularisDB/tabularis/commit/6ed133ff27fc45f4231005617b2e6407bfda561f)), closes [#300](https://github.com/TabularisDB/tabularis/issues/300)
+
+
+### Features
+
+* **connection:** show SSL tab for plugin drivers via supports_ssl capability ([#309](https://github.com/TabularisDB/tabularis/issues/309)) ([5a2e929](https://github.com/TabularisDB/tabularis/commit/5a2e929cb9efb7a279b71ae94a3435dd5e47d8a6)), closes [TabularisDB/tabularis-clickhouse-plugin#1](https://github.com/TabularisDB/tabularis-clickhouse-plugin/issues/1)
+* **explain:** show Actual Rows column in Visual EXPLAIN table view ([#302](https://github.com/TabularisDB/tabularis/issues/302)) ([c6048ce](https://github.com/TabularisDB/tabularis/commit/c6048ce481d4688b2f1f616f915ccf7489e28729)), closes [#298](https://github.com/TabularisDB/tabularis/issues/298)
+* **notebook:** manage saved notebooks per connection ([#304](https://github.com/TabularisDB/tabularis/issues/304)) ([4b5e7f2](https://github.com/TabularisDB/tabularis/commit/4b5e7f22e15f919a698cc7a2bce67315e4c73a01))
+* **plugins:** add Redis (Go) plugin v0.4.1 ([#314](https://github.com/TabularisDB/tabularis/issues/314)) ([31805eb](https://github.com/TabularisDB/tabularis/commit/31805eb0b1ec43e626e7886a5b9aa88375b400a2))
+* show sql progress in realtime ([#296](https://github.com/TabularisDB/tabularis/issues/296)) ([80613c3](https://github.com/TabularisDB/tabularis/commit/80613c36cda8ab9cb39fc6d6198b81f36c69c601))
+
+
+### Performance Improvements
+
+* **grid:** memoize DataGrid rows for fluid scroll with many rows/columns ([61794dc](https://github.com/TabularisDB/tabularis/commit/61794dc21f6618f9e8a1fa9687f445423ba38a00))
+
 ## [0.13.1](https://github.com/TabularisDB/tabularis/compare/v0.13.0...v0.13.1) (2026-06-05)
 
 
