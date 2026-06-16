@@ -171,7 +171,19 @@
     "dateGroupYesterday": "Yesterday",
     "dateGroupThisWeek": "This Week",
     "dateGroupThisMonth": "This Month",
-    "dateGroupOlder": "Older"
+    "dateGroupOlder": "Older",
+    "notebooks": {
+      "tab": "Notebooks",
+      "search": "Search notebooks",
+      "refresh": "Refresh",
+      "empty": "No saved notebooks yet.",
+      "noSearchResults": "No notebooks match your search.",
+      "open": "Open",
+      "rename": "Rename",
+      "delete": "Delete",
+      "deleteConfirm": "Delete notebook \"{{title}}\"? This cannot be undone.",
+      "renamePlaceholder": "Notebook name"
+    }
   },
   "mcp": {
     "title": "MCP Server Integration",
@@ -575,7 +587,8 @@
       "pressKeys": "Press key combination...",
       "notebookRunAll": "Run All Cells",
       "categories_notebook": "Notebook",
-      "pasteImportClipboard": "Import from Clipboard"
+      "pasteImportClipboard": "Import from Clipboard",
+      "quickNavigator": "Quick Navigator"
     },
     "aiActivity": "AI Activity"
   },
@@ -638,7 +651,7 @@
     "dbNamePlaceholder": "Database name",
     "loadDatabases": "Load Databases",
     "loadingDatabases": "Loading...",
-    "selectDatabases": "Select Databases",
+    "selectDatabases": "Databases",
     "appearance": "Appearance",
     "noDatabasesSelected": "Select at least one database",
     "selectedDatabases": "{{count}} database(s) selected",
@@ -677,7 +690,29 @@
       "require": "Require",
       "verify-ca": "Verify CA",
       "verify-full": "Verify Full"
-    }
+    },
+    "chooseContext": "Choose a context...",
+    "chooseK8s": "Choose a connection...",
+    "chooseNamespace": "Choose a namespace...",
+    "chooseResource": "Choose a resource...",
+    "createInlineK8s": "Inline",
+    "k8sContext": "Context",
+    "k8sNamespace": "Namespace",
+    "k8sNotAvailable": "Kubernetes is not available for this driver.",
+    "k8sPort": "Container Port",
+    "k8sResourceName": "Resource Name",
+    "k8sResourceType": "Resource Type",
+    "k8sResourceTypePod": "Pod",
+    "k8sResourceTypeService": "Service",
+    "k8sSelectType": "Select type...",
+    "manageK8s": "Manage",
+    "noK8sConnections": "No saved connections — create one below",
+    "noK8sContexts": "No contexts found (is kubectl installed?)",
+    "selectContextFirst": "Select a context first",
+    "selectK8sConnection": "Select K8s Connection",
+    "selectTypeFirst": "Select context/namespace/type first",
+    "useK8s": "Use Kubernetes Port-Forward",
+    "useK8sConnection": "Saved Connection"
   },
   "sshConnections": {
     "title": "SSH Connections",
@@ -810,6 +845,26 @@
       "tabs_other": "{{count}} tabs",
       "escHint": "Esc to close"
     },
+    "quickNavigator": {
+      "placeholder": "Search tables, views, routines, triggers...",
+      "noResults": "No matching elements found",
+      "count_one": "1 element",
+      "count_other": "{{count}} elements",
+      "navigationHint": "↑↓ to navigate, Enter to open",
+      "escHint": "Esc to close",
+      "type_table": "table",
+      "type_view": "view",
+      "type_routine": "routine",
+      "type_trigger": "trigger",
+      "actions": {
+        "inspect": "Inspect structure",
+        "newConsole": "New console",
+        "generateSql": "Generate SQL templates",
+        "countRows": "Count rows",
+        "query": "Run SELECT query",
+        "copyName": "Copy name"
+      }
+    },
     "submitChanges": "Submit Changes",
     "rollbackChanges": "Rollback Changes",
     "applyToAll": "Apply to all",
@@ -899,6 +954,7 @@
     "notebook": {
       "addSqlCell": "Add SQL Cell",
       "addMarkdownCell": "Add Markdown Cell",
+      "addCell": "Add",
       "runAll": "Run All",
       "runAllTooltip": "Execute all SQL cells top to bottom",
       "runCell": "Run Cell",
@@ -949,7 +1005,28 @@
       "editCellName": "Edit cell name",
       "aiGenerateName": "Generate name with AI",
       "generatingName": "Generating name...",
-      "aiGenerateOutlineNames": "Generate names for unnamed cells with AI"
+      "aiGenerateOutlineNames": "Generate names for unnamed cells with AI",
+      "undo": "Undo",
+      "redo": "Redo",
+      "history": {
+        "title": "Edit history",
+        "change": {
+          "initial": "Initial version",
+          "editCell": "Edited cell {{n}}",
+          "addSql": "Added SQL cell {{n}}",
+          "addMarkdown": "Added Markdown cell {{n}}",
+          "deleteCell": "Deleted cell {{n}}",
+          "reorder": "Reordered cells",
+          "renameCell": "Renamed cell {{n}}",
+          "schemaCell": "Changed database (cell {{n}})",
+          "chartCell": "Changed chart (cell {{n}})",
+          "parallelCell": "Toggled parallel (cell {{n}})",
+          "collapse": "Collapsed/expanded cells",
+          "params": "Changed parameters",
+          "stopOnError": "Toggled stop on error",
+          "other": "Edited notebook"
+        }
+      }
     },
     "querySelection": {
       "title": "Select Query to Execute",
@@ -1022,8 +1099,14 @@
   "generateSQL": {
     "title": "Generated SQL: {{table}}",
     "loading": "Generating SQL...",
+    "runInConsole": "Run in console",
     "copy": "Copy SQL",
-    "copied": "Copied!"
+    "copied": "Copied!",
+    "tabCreateTable": "Create Table",
+    "tabSelectAll": "Select *",
+    "tabSelectFields": "Select [fields]",
+    "tabUpdate": "Update",
+    "tabDelete": "Delete"
   },
   "modifyColumn": {
     "titleAdd": "Add Column",
@@ -1501,5 +1584,25 @@
     "body": "We just launched a dedicated home for Tabularis users. Get help, share tips, shape the roadmap.",
     "cta": "Join now",
     "dismiss": "Dismiss"
+  },
+  "k8sConnections": {
+    "title": "Kubernetes Connections",
+    "add": "Add",
+    "empty": "No Kubernetes connections saved. Click \"Add\" to create one.",
+    "name": "Name",
+    "namePlaceholder": "My K8s cluster",
+    "context": "Context",
+    "chooseContext": "Choose a context...",
+    "namespace": "Namespace",
+    "chooseNamespace": "Choose a namespace...",
+    "resourceType": "Resource Type",
+    "resourceTypeService": "Service",
+    "resourceTypePod": "Pod",
+    "resourceName": "Resource Name",
+    "chooseResource": "Choose a resource...",
+    "port": "Container Port",
+    "test": "Test",
+    "testing": "Testing...",
+    "validationFailed": "Validation failed"
   }
 }

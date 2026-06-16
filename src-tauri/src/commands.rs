@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::task::AbortHandle;
 use urlencoding::encode;
 use uuid::Uuid;
@@ -11,9 +11,9 @@ use crate::credential_cache;
 use crate::keychain_utils;
 use crate::models::{
     BatchStatementResult, ColumnDefinition, ConnectionGroup, ConnectionParams, ConnectionsFile,
-    ExplainPlan, ExportPayload, ForeignKey, Index, QueryResult, RoutineInfo, RoutineParameter,
-    SavedConnection, SshConnection, SshConnectionInput, SshTestParams, TableColumn, TableInfo,
-    TestConnectionRequest, TriggerInfo,
+    ExplainPlan, ExportPayload, ForeignKey, Index, K8sConnection, K8sConnectionInput, QueryResult,
+    RoutineInfo, RoutineParameter, SavedConnection, SshConnection, SshConnectionInput, SshTestParams,
+    TableColumn, TableInfo, TestConnectionRequest, TriggerInfo,
 };
 use crate::persistence;
 use crate::ssh_tunnel::{get_tunnels, SshTunnel};
@@ -219,7 +219,85 @@ fn build_tunnel_map_key(
     crate::ssh_tunnel::build_tunnel_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port)
 }
 
+/// Resolve K8s tunnel params synchronously (no saved-connection lookup; uses inline fields only).
+fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
+    let context = params
+        .k8s_context
+        .as_deref()
+        .ok_or("Missing K8s context")?;
+    let namespace = params
+        .k8s_namespace
+        .as_deref()
+        .ok_or("Missing K8s namespace")?;
+    let resource_type = params
+        .k8s_resource_type
+        .as_deref()
+        .ok_or("Missing K8s resource type")?;
+    let resource_name = params
+        .k8s_resource_name
+        .as_deref()
+        .ok_or("Missing K8s resource name")?;
+    let port = params.k8s_port.ok_or("Missing K8s port")?;
+
+    let map_key = crate::k8s_tunnel::build_tunnel_key(
+        context, namespace, resource_type, resource_name, port,
+    );
+
+    // Check for existing tunnel
+    {
+        let tunnels = crate::k8s_tunnel::get_tunnels().lock().unwrap();
+        if let Some(tunnel) = tunnels.get(&map_key) {
+            log::debug!("Reusing existing K8s tunnel on port {}", tunnel.local_port);
+            let mut new_params = params.clone();
+            new_params.k8s_enabled = Some(false);
+            new_params.host = Some("127.0.0.1".to_string());
+            new_params.port = Some(tunnel.local_port);
+            return Ok(new_params);
+        }
+    }
+
+    log::info!(
+        "Creating new K8s tunnel for {}/{} in {}:{} (context: {})",
+        resource_type, resource_name, namespace, port, context
+    );
+
+    let tunnel = crate::k8s_tunnel::K8sTunnel::new(
+        context, namespace, resource_type, resource_name, port,
+    )
+    .map_err(|e| {
+        eprintln!("[Connection Error] K8s Tunnel setup failed: {}", e);
+        e
+    })?;
+
+    let local_port = tunnel.local_port;
+    log::info!("K8s tunnel created successfully on port {}", local_port);
+
+    {
+        let mut tunnels = crate::k8s_tunnel::get_tunnels().lock().unwrap();
+        tunnels.insert(map_key, tunnel);
+    }
+
+    let mut new_params = params.clone();
+    new_params.k8s_enabled = Some(false);
+    new_params.host = Some("127.0.0.1".to_string());
+    new_params.port = Some(local_port);
+    Ok(new_params)
+}
+
 pub fn resolve_connection_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
+    // K8s and SSH are mutually exclusive
+    if params.k8s_enabled.unwrap_or(false) && params.ssh_enabled.unwrap_or(false) {
+        return Err(
+            "Kubernetes and SSH tunnel cannot both be enabled for the same connection".to_string()
+        );
+    }
+
+    // Handle K8s tunnel
+    if params.k8s_enabled.unwrap_or(false) {
+        return resolve_k8s_params(params);
+    }
+
+    // Handle SSH tunnel (existing logic)
     if !params.ssh_enabled.unwrap_or(false) {
         return Ok(params.clone());
     }
@@ -393,6 +471,7 @@ pub async fn get_schemas<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -411,6 +490,7 @@ pub async fn get_available_databases<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -427,6 +507,7 @@ pub async fn get_routines<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -448,6 +529,7 @@ pub async fn get_routine_parameters<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -472,6 +554,7 @@ pub async fn get_routine_definition<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -487,6 +570,7 @@ pub async fn get_schema_snapshot<R: Runtime>(
 ) -> Result<Vec<crate::models::TableSchema>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_schema_snapshot(&params, schema.as_deref()).await
@@ -1305,6 +1389,306 @@ pub async fn test_ssh_connection<R: Runtime>(
     )
 }
 
+// ---------------------------------------------------------------------------
+// Kubernetes Connections
+// ---------------------------------------------------------------------------
+
+/// Load K8s connections synchronously from the config file.
+fn load_k8s_connections_sync<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<Vec<K8sConnection>, String> {
+    let path = get_k8s_config_path(app)?;
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    Ok(serde_json::from_str(&content).unwrap_or_default())
+}
+
+/// Get the path to the k8s_connections.json file.
+fn get_k8s_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config dir: {}", e))?;
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    }
+    Ok(config_dir.join("k8s_connections.json"))
+}
+
+#[tauri::command]
+pub async fn get_k8s_connections<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Vec<K8sConnection>, String> {
+    let path = get_k8s_config_path(&app)?;
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let connections: Vec<K8sConnection> =
+        serde_json::from_str(&content).unwrap_or_default();
+    Ok(connections)
+}
+
+#[tauri::command]
+pub async fn save_k8s_connection<R: Runtime>(
+    app: AppHandle<R>,
+    k8s: K8sConnectionInput,
+) -> Result<K8sConnection, String> {
+    let path = get_k8s_config_path(&app)?;
+    let mut connections: Vec<K8sConnection> = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    let id = Uuid::new_v4().to_string();
+    let connection = K8sConnection {
+        id: id.clone(),
+        name: k8s.name,
+        context: k8s.context,
+        namespace: k8s.namespace,
+        resource_type: k8s.resource_type,
+        resource_name: k8s.resource_name,
+        port: k8s.port,
+    };
+
+    connections.push(connection.clone());
+    let json =
+        serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())?;
+
+    Ok(connection)
+}
+
+#[tauri::command]
+pub async fn update_k8s_connection<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    k8s: K8sConnectionInput,
+) -> Result<K8sConnection, String> {
+    let path = get_k8s_config_path(&app)?;
+    let mut connections: Vec<K8sConnection> = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        return Err("No K8s connections file found".to_string());
+    };
+
+    let idx = connections
+        .iter()
+        .position(|c| c.id == id)
+        .ok_or_else(|| format!("K8s connection with ID {} not found", id))?;
+
+    let connection = K8sConnection {
+        id: id.clone(),
+        name: k8s.name,
+        context: k8s.context,
+        namespace: k8s.namespace,
+        resource_type: k8s.resource_type,
+        resource_name: k8s.resource_name,
+        port: k8s.port,
+    };
+
+    connections[idx] = connection.clone();
+    let json =
+        serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())?;
+
+    Ok(connection)
+}
+
+#[tauri::command]
+pub async fn delete_k8s_connection<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+) -> Result<(), String> {
+    let path = get_k8s_config_path(&app)?;
+    let mut connections: Vec<K8sConnection> = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        return Ok(());
+    };
+
+    connections.retain(|c| c.id != id);
+    let json =
+        serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn test_k8s_connection_cmd<R: Runtime>(
+    _app: AppHandle<R>,
+    context: String,
+    namespace: String,
+) -> Result<String, String> {
+    crate::k8s_tunnel::test_k8s_connection(&context, &namespace)
+}
+
+#[tauri::command]
+pub async fn get_k8s_contexts_cmd<R: Runtime>(
+    _app: AppHandle<R>,
+) -> Result<Vec<String>, String> {
+    crate::k8s_tunnel::get_k8s_contexts()
+}
+
+#[tauri::command]
+pub async fn get_k8s_namespaces_cmd<R: Runtime>(
+    _app: AppHandle<R>,
+    context: String,
+) -> Result<Vec<String>, String> {
+    crate::k8s_tunnel::get_k8s_namespaces(&context)
+}
+
+#[tauri::command]
+pub async fn get_k8s_resources_cmd<R: Runtime>(
+    _app: AppHandle<R>,
+    context: String,
+    namespace: String,
+    resource_type: String,
+) -> Result<Vec<String>, String> {
+    crate::k8s_tunnel::get_k8s_resources(&context, &namespace, &resource_type)
+}
+
+/// Expand K8s connection params by loading saved config and creating/reusing a tunnel.
+pub async fn expand_k8s_connection_params<R: Runtime>(
+    app: &AppHandle<R>,
+    params: &ConnectionParams,
+) -> Result<ConnectionParams, String> {
+    if !params.k8s_enabled.unwrap_or(false) {
+        return Ok(params.clone());
+    }
+
+    // Mutual exclusion: K8s and SSH cannot both be active
+    if params.ssh_enabled.unwrap_or(false) {
+        return Err(
+            "Kubernetes and SSH tunnel cannot both be enabled for the same connection".to_string()
+        );
+    }
+
+    // Resolve K8s params from saved connection if using connection_id
+    let (context, namespace, resource_type, resource_name, port) =
+        if let Some(k8s_id) = &params.k8s_connection_id {
+            let k8s_conn = get_k8s_connection_by_id(app, k8s_id).await?;
+            (
+                k8s_conn.context,
+                k8s_conn.namespace,
+                k8s_conn.resource_type,
+                k8s_conn.resource_name,
+                k8s_conn.port,
+            )
+        } else {
+            let ctx = params
+                .k8s_context
+                .as_deref()
+                .ok_or("Missing K8s context")?
+                .to_string();
+            let ns = params
+                .k8s_namespace
+                .as_deref()
+                .ok_or("Missing K8s namespace")?
+                .to_string();
+            let rt = params
+                .k8s_resource_type
+                .as_deref()
+                .ok_or("Missing K8s resource type")?
+                .to_string();
+            let rn = params
+                .k8s_resource_name
+                .as_deref()
+                .ok_or("Missing K8s resource name")?
+                .to_string();
+            let p = params.k8s_port.ok_or("Missing K8s port")?;
+            (ctx, ns, rt, rn, p)
+        };
+
+    let _remote_host = params.host.as_deref().unwrap_or("localhost");
+    let _remote_port = params.port.unwrap_or(DEFAULT_MYSQL_PORT);
+
+    let map_key = crate::k8s_tunnel::build_tunnel_key(
+        &context,
+        &namespace,
+        &resource_type,
+        &resource_name,
+        port,
+    );
+
+    // Check for existing tunnel
+    {
+        let tunnels = crate::k8s_tunnel::get_tunnels().lock().unwrap();
+        if let Some(tunnel) = tunnels.get(&map_key) {
+            log::debug!(
+                "Reusing existing K8s tunnel on port {}",
+                tunnel.local_port
+            );
+            let mut new_params = params.clone();
+            new_params.k8s_enabled = Some(false);
+            new_params.host = Some("127.0.0.1".to_string());
+            new_params.port = Some(tunnel.local_port);
+            return Ok(new_params);
+        }
+    }
+
+    // Create new tunnel
+    log::info!(
+        "Creating new K8s tunnel for {}/{} in {}:{} (context: {})",
+        resource_type,
+        resource_name,
+        namespace,
+        port,
+        context
+    );
+
+    let tunnel = crate::k8s_tunnel::K8sTunnel::new(
+        &context,
+        &namespace,
+        &resource_type,
+        &resource_name,
+        port,
+    )
+    .map_err(|e| {
+        eprintln!("[Connection Error] K8s Tunnel setup failed: {}", e);
+        e
+    })?;
+
+    let local_port = tunnel.local_port;
+    log::info!("K8s tunnel created successfully on port {}", local_port);
+
+    {
+        let mut tunnels = crate::k8s_tunnel::get_tunnels().lock().unwrap();
+        tunnels.insert(map_key, tunnel);
+    }
+
+    let mut new_params = params.clone();
+    new_params.k8s_enabled = Some(false);
+    new_params.host = Some("127.0.0.1".to_string());
+    new_params.port = Some(local_port);
+    Ok(new_params)
+}
+
+/// Load a K8s connection by ID from the config file.
+async fn get_k8s_connection_by_id<R: Runtime>(
+    app: &AppHandle<R>,
+    k8s_id: &str,
+) -> Result<K8sConnection, String> {
+    let path = get_k8s_config_path(app)?;
+    if !path.exists() {
+        return Err(format!("K8s connection with ID {} not found", k8s_id));
+    }
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let connections: Vec<K8sConnection> =
+        serde_json::from_str(&content).unwrap_or_default();
+    connections
+        .into_iter()
+        .find(|c| c.id == k8s_id)
+        .ok_or_else(|| format!("K8s connection with ID {} not found", k8s_id))
+}
+
 #[tauri::command]
 pub async fn test_connection<R: Runtime>(
     app: AppHandle<R>,
@@ -1316,6 +1700,7 @@ pub async fn test_connection<R: Runtime>(
     );
 
     let mut expanded_params = expand_ssh_connection_params(&app, &request.params).await?;
+    expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
 
     if request.params.password.is_none() && expanded_params.password.is_none() {
         let saved_conn = match &request.connection_id {
@@ -1372,22 +1757,8 @@ mod tests {
             host: Some("localhost".to_string()),
             port: Some(3306),
             username: Some("root".to_string()),
-            password: None,
             database: DatabaseSelection::Single("testdb".to_string()),
-            ssl_mode: None,
-            ssl_ca: None,
-            ssl_cert: None,
-            ssl_key: None,
-            ssh_enabled: None,
-            ssh_connection_id: None,
-            ssh_host: None,
-            ssh_port: None,
-            ssh_user: None,
-            ssh_password: None,
-            ssh_key_file: None,
-            ssh_key_passphrase: None,
-            save_in_keychain: None,
-            connection_id: None,
+            ..Default::default()
         }
     }
 
@@ -1565,20 +1936,7 @@ mod tests {
                 username: Some(username.to_string()),
                 password: password.map(|p| p.to_string()),
                 database: DatabaseSelection::Single(database.to_string()),
-                ssl_mode: None,
-                ssl_ca: None,
-                ssl_cert: None,
-                ssl_key: None,
-                ssh_enabled: None,
-                ssh_connection_id: None,
-                ssh_host: None,
-                ssh_port: None,
-                ssh_user: None,
-                ssh_password: None,
-                ssh_key_file: None,
-                ssh_key_passphrase: None,
-                save_in_keychain: None,
-                connection_id: None,
+                ..Default::default()
             }
         }
 
@@ -1846,20 +2204,12 @@ mod tests {
                 username: Some("dbuser".to_string()),
                 password: Some("dbpass".to_string()),
                 database: DatabaseSelection::Single("testdb".to_string()),
-                ssl_mode: None,
-                ssl_ca: None,
-                ssl_cert: None,
-                ssl_key: None,
                 ssh_enabled: Some(true),
-                ssh_connection_id: None,
                 ssh_host: Some(ssh_host.to_string()),
                 ssh_port: Some(ssh_port),
                 ssh_user: Some(ssh_user.to_string()),
-                ssh_password: None,
                 ssh_key_file: Some("/home/user/.ssh/id_rsa".to_string()),
-                ssh_key_passphrase: None,
-                save_in_keychain: None,
-                connection_id: None,
+                ..Default::default()
             }
         }
 
@@ -1887,6 +2237,88 @@ mod tests {
             let result = resolve_connection_params(&params);
             assert!(result.is_err());
             assert!(result.unwrap_err().contains("SSH User"));
+        }
+    }
+
+    mod resolve_k8s_params_tests {
+        use super::*;
+
+        fn create_k8s_params(
+            context: &str,
+            namespace: &str,
+            resource_type: &str,
+            resource_name: &str,
+            port: u16,
+        ) -> ConnectionParams {
+            ConnectionParams {
+                driver: "mysql".to_string(),
+                host: Some("localhost".to_string()),
+                port: Some(3306),
+                username: Some("root".to_string()),
+                database: DatabaseSelection::Single("testdb".to_string()),
+                k8s_enabled: Some(true),
+                k8s_context: Some(context.to_string()),
+                k8s_namespace: Some(namespace.to_string()),
+                k8s_resource_type: Some(resource_type.to_string()),
+                k8s_resource_name: Some(resource_name.to_string()),
+                k8s_port: Some(port),
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn test_k8s_and_ssh_mutual_exclusion() {
+            let mut params = create_k8s_params("my-ctx", "default", "service", "my-db", 3306);
+            params.ssh_enabled = Some(true);
+            params.ssh_host = Some("jump.host".to_string());
+            let result = resolve_connection_params(&params);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("cannot both be enabled"));
+        }
+
+        #[test]
+        fn test_k8s_requires_context() {
+            let mut params = create_k8s_params("my-ctx", "default", "service", "my-db", 3306);
+            params.k8s_context = None;
+            let result = resolve_k8s_params(&params);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("K8s context"));
+        }
+
+        #[test]
+        fn test_k8s_requires_namespace() {
+            let mut params = create_k8s_params("my-ctx", "default", "service", "my-db", 3306);
+            params.k8s_namespace = None;
+            let result = resolve_k8s_params(&params);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("K8s namespace"));
+        }
+
+        #[test]
+        fn test_k8s_requires_resource_type() {
+            let mut params = create_k8s_params("my-ctx", "default", "service", "my-db", 3306);
+            params.k8s_resource_type = None;
+            let result = resolve_k8s_params(&params);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("K8s resource type"));
+        }
+
+        #[test]
+        fn test_k8s_requires_resource_name() {
+            let mut params = create_k8s_params("my-ctx", "default", "service", "my-db", 3306);
+            params.k8s_resource_name = None;
+            let result = resolve_k8s_params(&params);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("K8s resource name"));
+        }
+
+        #[test]
+        fn test_k8s_requires_port() {
+            let mut params = create_k8s_params("my-ctx", "default", "service", "my-db", 3306);
+            params.k8s_port = None;
+            let result = resolve_k8s_params(&params);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("K8s port"));
         }
     }
 
@@ -2137,6 +2569,7 @@ pub async fn list_databases<R: Runtime>(
     request: TestConnectionRequest,
 ) -> Result<Vec<String>, String> {
     let mut expanded_params = expand_ssh_connection_params(&app, &request.params).await?;
+    expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
 
     if request.params.password.is_none() && expanded_params.password.is_none() {
         let saved_conn = match &request.connection_id {
@@ -2177,6 +2610,7 @@ pub async fn get_tables<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     log::debug!(
@@ -2205,6 +2639,7 @@ pub async fn get_columns<R: Runtime>(
 ) -> Result<Vec<TableColumn>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_columns(&params, &table_name, schema.as_deref())
@@ -2220,6 +2655,7 @@ pub async fn get_foreign_keys<R: Runtime>(
 ) -> Result<Vec<ForeignKey>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_foreign_keys(&params, &table_name, schema.as_deref())
@@ -2235,6 +2671,7 @@ pub async fn get_indexes<R: Runtime>(
 ) -> Result<Vec<Index>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_indexes(&params, &table_name, schema.as_deref())
@@ -2260,6 +2697,7 @@ pub async fn delete_record<R: Runtime>(
     );
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
@@ -2292,6 +2730,7 @@ pub async fn update_record<R: Runtime>(
     );
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
@@ -2324,6 +2763,7 @@ pub async fn save_blob_to_file<R: Runtime>(
 ) -> Result<(), String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.save_blob_to_file(
@@ -2352,6 +2792,7 @@ pub async fn fetch_blob_as_data_url<R: Runtime>(
 ) -> Result<String, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     let wire = drv
@@ -2547,6 +2988,7 @@ pub async fn insert_record<R: Runtime>(
     );
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
@@ -2602,6 +3044,7 @@ pub async fn execute_query<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -2642,6 +3085,19 @@ pub async fn execute_query<R: Runtime>(
     }
 }
 
+/// Payload for the `batch-statement-complete` event, emitted once per
+/// statement the instant it finishes so the frontend can mark that result tab
+/// done in real time instead of waiting for the whole batch. `batch_id` lets a
+/// listener ignore events from other concurrent runs; `index` maps back to the
+/// statement's slot. Borrows the result so no clone of the (potentially large)
+/// row set is needed.
+#[derive(serde::Serialize, Clone)]
+struct BatchStatementEvent<'a> {
+    batch_id: &'a str,
+    index: usize,
+    statement: &'a BatchStatementResult,
+}
+
 /// Runs a sequence of statements that share a single physical database
 /// connection. Use this — not multiple parallel `execute_query` calls —
 /// whenever statements depend on connection-local session state
@@ -2650,6 +3106,10 @@ pub async fn execute_query<R: Runtime>(
 ///
 /// The whole batch shares one cancellation handle so `cancel_query`
 /// aborts the entire batch atomically.
+///
+/// When `batch_id` is supplied, a `batch-statement-complete` event is emitted
+/// after each statement so the UI updates result tabs progressively. The full
+/// `Vec` is still returned at the end for final reconciliation / fallback.
 #[tauri::command]
 pub async fn execute_query_batch<R: Runtime>(
     app: AppHandle<R>,
@@ -2659,6 +3119,7 @@ pub async fn execute_query_batch<R: Runtime>(
     limit: Option<u32>,
     page: Option<u32>,
     schema: Option<String>,
+    batch_id: Option<String>,
 ) -> Result<Vec<BatchStatementResult>, String> {
     log::info!(
         "Executing query batch on connection: {} | {} statement(s)",
@@ -2670,9 +3131,30 @@ pub async fn execute_query_batch<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
+
+    // Build a Tauri-agnostic progress sink the driver invokes per statement.
+    // Each invocation emits one event so result tabs resolve as they finish.
+    let progress: Option<Arc<crate::drivers::driver_trait::BatchProgressFn>> =
+        batch_id.map(|bid| {
+            let app = app.clone();
+            let cb: Arc<crate::drivers::driver_trait::BatchProgressFn> =
+                Arc::new(move |index, statement: &BatchStatementResult| {
+                    let _ = app.emit(
+                        "batch-statement-complete",
+                        BatchStatementEvent {
+                            batch_id: &bid,
+                            index,
+                            statement,
+                        },
+                    );
+                });
+            cb
+        });
+
     let task = tokio::spawn(async move {
         drv.execute_batch(
             &params,
@@ -2680,6 +3162,7 @@ pub async fn execute_query_batch<R: Runtime>(
             limit,
             page.unwrap_or(1),
             schema.as_deref(),
+            progress.as_deref(),
         )
         .await
     });
@@ -2742,6 +3225,7 @@ pub async fn explain_query_plan<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -2784,6 +3268,7 @@ pub async fn count_query<R: Runtime>(
 ) -> Result<u64, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let sanitized = query.trim().trim_end_matches(';').to_string();
@@ -3027,6 +3512,7 @@ pub async fn get_views<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     log::debug!(
@@ -3061,6 +3547,7 @@ pub async fn get_view_definition<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3092,6 +3579,7 @@ pub async fn create_view<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3123,6 +3611,7 @@ pub async fn alter_view<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3153,6 +3642,7 @@ pub async fn drop_view<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3181,6 +3671,7 @@ pub async fn get_view_columns<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3206,6 +3697,7 @@ pub async fn get_triggers<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3235,6 +3727,7 @@ pub async fn get_trigger_definition<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3253,6 +3746,7 @@ pub async fn create_trigger<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3284,6 +3778,7 @@ pub async fn drop_trigger<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
@@ -3318,6 +3813,7 @@ pub async fn disconnect_connection<R: Runtime>(
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     // Close the connection pool
@@ -3452,6 +3948,7 @@ pub async fn drop_index_action<R: Runtime>(
 ) -> Result<(), String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.drop_index(&params, &table, &index_name, schema.as_deref())
@@ -3468,6 +3965,7 @@ pub async fn drop_foreign_key_action<R: Runtime>(
 ) -> Result<(), String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.drop_foreign_key(&params, &table, &fk_name, schema.as_deref())
@@ -3681,6 +4179,7 @@ pub async fn get_server_now<R: Runtime>(
 ) -> Result<String, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let query = match saved_conn.params.driver.as_str() {
@@ -3759,6 +4258,7 @@ pub async fn export_connections_payload<R: Runtime>(
         groups: conn_file.groups,
         connections: conn_file.connections,
         ssh_connections,
+        k8s_connections: load_k8s_connections_sync(&app)?,
     })
 }
 
@@ -3858,6 +4358,19 @@ pub async fn import_connections_payload<R: Runtime>(
     save_connections_and_invalidate(&app, &conn_path, &current_file)?;
     let ssh_json = serde_json::to_string_pretty(&current_ssh).map_err(|e| e.to_string())?;
     fs::write(ssh_path, ssh_json).map_err(|e| e.to_string())?;
+
+    // Merge K8s connections
+    let k8s_path = get_k8s_config_path(&app)?;
+    let mut current_k8s = load_k8s_connections_sync(&app)?;
+    for new_k8s in payload.k8s_connections {
+        if let Some(existing) = current_k8s.iter_mut().find(|k| k.id == new_k8s.id) {
+            *existing = new_k8s;
+        } else {
+            current_k8s.push(new_k8s);
+        }
+    }
+    let k8s_json = serde_json::to_string_pretty(&current_k8s).map_err(|e| e.to_string())?;
+    fs::write(k8s_path, k8s_json).map_err(|e| e.to_string())?;
 
     Ok(())
 }

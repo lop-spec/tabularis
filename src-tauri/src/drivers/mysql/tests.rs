@@ -1,5 +1,40 @@
-use super::explain::parse_mysql_query_block;
+use super::explain::{parse_analyze_actual, parse_mysql_analyze_text, parse_mysql_query_block};
+use super::MysqlDriver;
+use crate::drivers::driver_trait::DatabaseDriver;
 use crate::models::ExplainNode;
+use crate::models::{ConnectionParams, DatabaseSelection};
+
+#[test]
+fn build_connection_url_includes_disabled_ssl_mode() {
+    let driver = MysqlDriver::new();
+    let params = ConnectionParams {
+        driver: "mysql".to_string(),
+        host: Some("127.0.0.1".to_string()),
+        port: Some(3306),
+        username: Some("root".to_string()),
+        password: Some("secret".to_string()),
+        database: DatabaseSelection::Single("dec".to_string()),
+        ssl_mode: Some("disabled".to_string()),
+        ssl_ca: None,
+        ssl_cert: None,
+        ssl_key: None,
+        ssh_enabled: None,
+        ssh_connection_id: None,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_password: None,
+        ssh_key_file: None,
+        ssh_key_passphrase: None,
+        save_in_keychain: None,
+        connection_id: None,
+        ..Default::default()
+    };
+
+    let url = driver.build_connection_url(&params).unwrap();
+
+    assert!(url.contains("ssl-mode=disabled"), "url was: {url}");
+}
 
 /// Helper: parse a MariaDB ANALYZE FORMAT=JSON string and return the root node.
 fn parse_json(json: &str) -> ExplainNode {
@@ -515,4 +550,54 @@ fn test_filesort_with_direct_table() {
     assert_eq!(table.node_type, "Full Table Scan");
     assert_eq!(table.relation.as_deref(), Some("t"));
     assert!((table.actual_rows.unwrap() - 100.0).abs() < 0.1);
+}
+
+#[test]
+fn parse_analyze_actual_multiplies_per_loop_time_by_loops() {
+    // MySQL tree-format EXPLAIN ANALYZE reports per-loop time. The total node
+    // time is the per-loop end time multiplied by the loop count.
+    // Regression for github issue #300.
+    let (time_ms, rows, loops) =
+        parse_analyze_actual("  (actual time=0.00773..0.00798 rows=1 loops=331603)");
+
+    assert_eq!(loops, Some(331603));
+    assert_eq!(rows, Some(1.0));
+    // 0.00798 * 331603 ≈ 2646.19 ms (not the bare 0.00798 ms per loop)
+    let total = time_ms.expect("time should be parsed");
+    assert!(
+        (total - 2646.19).abs() < 1.0,
+        "expected ~2646ms total, got {total}"
+    );
+}
+
+#[test]
+fn parse_analyze_actual_single_loop_is_unchanged() {
+    let (time_ms, _, loops) =
+        parse_analyze_actual("  (actual time=0.10..0.42 rows=5 loops=1)");
+    assert_eq!(loops, Some(1));
+    assert!((time_ms.unwrap() - 0.42).abs() < 1e-9);
+}
+
+#[test]
+fn parse_analyze_actual_missing_loops_keeps_per_loop_time() {
+    let (time_ms, _, loops) = parse_analyze_actual("  (actual time=0.10..0.42 rows=5)");
+    assert_eq!(loops, None);
+    assert!((time_ms.unwrap() - 0.42).abs() < 1e-9);
+}
+
+#[test]
+fn parse_mysql_analyze_text_reports_total_time_for_looped_node() {
+    let text = "-> Nested loop inner join  (cost=10.00 rows=5) (actual time=0.50..1.20 rows=5 loops=1)\n    -> Index lookup on ms using <auto_key0>  (cost=0.35 rows=1) (actual time=0.00773..0.00798 rows=1 loops=331603)";
+    let mut counter = 0;
+    let root = parse_mysql_analyze_text(text, &mut counter);
+
+    assert_eq!(root.node_type, "Nested Loop");
+    let lookup = &root.children[0];
+    assert_eq!(lookup.node_type, "Index Lookup");
+    assert_eq!(lookup.actual_loops, Some(331603));
+    let total = lookup.actual_time_ms.expect("looped node has a time");
+    assert!(
+        (total - 2646.19).abs() < 1.0,
+        "expected ~2646ms total for index lookup, got {total}"
+    );
 }

@@ -15,12 +15,13 @@ import {
   AnthropicIcon,
   AntigravityIcon,
   CursorIcon,
+  OpenAIIcon,
   WindsurfIcon,
 } from "../components/icons/ClientIcons";
 import { AiActivityPanel } from "../components/settings/AiActivityPanel";
 import { McpSafetySection } from "../components/modals/mcp/McpSafetySection";
 import { useAlert } from "../hooks/useAlert";
-import { useTheme } from "../hooks/useTheme";
+import { useEditorTheme } from "../hooks/useEditorTheme";
 import { loadMonacoTheme } from "../themes/themeUtils";
 
 interface McpClientStatus {
@@ -30,6 +31,7 @@ interface McpClientStatus {
   config_path: string | null;
   executable_path: string;
   client_type: string;
+  manual_command?: string | null;
 }
 
 type McpPageTab = "setup" | "activity" | "safety";
@@ -51,6 +53,8 @@ const ClientIcon = ({
       return <WindsurfIcon size={size} className="text-white" />;
     case "antigravity":
       return <AntigravityIcon size={size} />;
+    case "codex":
+      return <OpenAIIcon size={size} className="text-[#10a37f]" />;
     default:
       return <Cpu size={size} />;
   }
@@ -122,7 +126,7 @@ export function McpPage() {
 
 function McpSetupPanel() {
   const { t } = useTranslation();
-  const { currentTheme } = useTheme();
+  const editorTheme = useEditorTheme();
   const { showAlert } = useAlert();
   const [clients, setClients] = useState<McpClientStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,10 +161,11 @@ function McpSetupPanel() {
 
   const cliCommand = useMemo(
     () =>
+      selectedClient?.manual_command ||
       `claude mcp add --scope user tabularis ${
         selectedClient?.executable_path || "tabularis"
       } -- --mcp`,
-    [selectedClient?.executable_path],
+    [selectedClient?.executable_path, selectedClient?.manual_command],
   );
 
   const loadStatus = useCallback(async () => {
@@ -293,9 +298,9 @@ function McpSetupPanel() {
                 <Editor
                   height="220px"
                   defaultLanguage="json"
-                  theme={currentTheme.id}
+                  theme={editorTheme.id}
                   value={jsonValue}
-                  beforeMount={(monaco) => loadMonacoTheme(currentTheme, monaco)}
+                  beforeMount={(monaco) => loadMonacoTheme(editorTheme, monaco)}
                   options={{
                     readOnly: true,
                     minimap: { enabled: false },

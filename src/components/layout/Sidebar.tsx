@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plug2, Settings, Cpu, PanelLeft, Layers, Star, Clock } from "lucide-react";
+import { Plug2, Settings, Cpu, PanelLeft, Layers, Star, Clock, BookOpen } from "lucide-react";
 import { DiscordIcon } from "../icons/DiscordIcon";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { DISCORD_URL } from "../../config/links";
@@ -16,6 +16,9 @@ import { ConnectionGroupItem } from "./sidebar/ConnectionGroupItem";
 import { ExplorerSidebar, type SidebarTab } from "./ExplorerSidebar";
 import { PanelDatabaseProvider } from "./PanelDatabaseProvider";
 import { DiscordCommunityCallout } from "./sidebar/DiscordCommunityCallout";
+import { QuickNavigatorModal } from "../modals/QuickNavigatorModal";
+import { GenerateSQLModal } from "../modals/GenerateSQLModal";
+import { SchemaModal } from "../modals/SchemaModal";
 
 // Hooks & Utils
 import { useSidebarResize } from "../../hooks/useSidebarResize";
@@ -39,6 +42,9 @@ export const Sidebar = () => {
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("structure");
   const [showShortcutHints, setShowShortcutHints] = useState(false);
+  const [isQuickNavigatorOpen, setIsQuickNavigatorOpen] = useState(false);
+  const [generateSQLTable, setGenerateSQLTable] = useState<string | null>(null);
+  const [inspectTable, setInspectTable] = useState<{ tableName: string; schema?: string } | null>(null);
   const { isMac } = useKeybindings();
 
   useEffect(() => {
@@ -46,6 +52,16 @@ export const Sidebar = () => {
     window.addEventListener("tabularis:toggle-sidebar", handler);
     return () => window.removeEventListener("tabularis:toggle-sidebar", handler);
   }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      if (activeConnectionId) {
+        setIsQuickNavigatorOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("tabularis:open-quick-navigator", handler);
+    return () => window.removeEventListener("tabularis:open-quick-navigator", handler);
+  }, [activeConnectionId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -330,6 +346,7 @@ export const Sidebar = () => {
             { id: "structure" as SidebarTab, icon: Layers, label: t("sidebar.structure") },
             { id: "favorites" as SidebarTab, icon: Star, label: t("sidebar.favorites") },
             { id: "history" as SidebarTab, icon: Clock, label: t("sidebar.queryHistory") },
+            { id: "notebooks" as SidebarTab, icon: BookOpen, label: t("sidebar.notebooks.tab") },
           ]).map((tab) => (
             <button
               key={tab.id}
@@ -351,6 +368,29 @@ export const Sidebar = () => {
             </button>
           ))}
         </div>
+      )}
+      {activeConnectionId && isQuickNavigatorOpen && (
+        <QuickNavigatorModal
+          isOpen={isQuickNavigatorOpen}
+          onClose={() => setIsQuickNavigatorOpen(false)}
+          onGenerateSql={(tableName) => setGenerateSQLTable(tableName)}
+          onInspect={(tableName, schema) => setInspectTable({ tableName, schema })}
+        />
+      )}
+      {generateSQLTable && (
+        <GenerateSQLModal
+          isOpen={true}
+          tableName={generateSQLTable}
+          onClose={() => setGenerateSQLTable(null)}
+        />
+      )}
+      {inspectTable && (
+        <SchemaModal
+          isOpen={true}
+          tableName={inspectTable.tableName}
+          schema={inspectTable.schema}
+          onClose={() => setInspectTable(null)}
+        />
       )}
     </div>
   );

@@ -4,12 +4,13 @@ import { useTranslation } from "react-i18next";
 import { X, Check, Copy, Cpu, Terminal } from "lucide-react";
 import { useAlert } from "../../hooks/useAlert";
 import Editor from "@monaco-editor/react";
-import { useTheme } from "../../hooks/useTheme";
+import { useEditorTheme } from "../../hooks/useEditorTheme";
 import { loadMonacoTheme } from "../../themes/themeUtils";
 import { Modal } from "../ui/Modal";
 import {
   AnthropicIcon,
   CursorIcon,
+  OpenAIIcon,
   WindsurfIcon,
   AntigravityIcon,
 } from "../icons/ClientIcons";
@@ -22,6 +23,7 @@ interface McpClientStatus {
   config_path: string | null;
   executable_path: string;
   client_type: string; // "file" | "command"
+  manual_command?: string | null;
 }
 
 interface McpModalProps {
@@ -46,6 +48,8 @@ const ClientIcon = ({
       return <WindsurfIcon size={size} className="text-white" />;
     case "antigravity":
       return <AntigravityIcon size={size} />;
+    case "codex":
+      return <OpenAIIcon size={size} className="text-[#10a37f]" />;
     default:
       return <Cpu size={size} />;
   }
@@ -53,7 +57,7 @@ const ClientIcon = ({
 
 export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
   const { t } = useTranslation();
-  const { currentTheme } = useTheme();
+  const editorTheme = useEditorTheme();
   const { showAlert } = useAlert();
   const [clients, setClients] = useState<McpClientStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,8 +84,9 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
 
   const cliCommand = useMemo(
     () =>
+      selectedClient?.manual_command ||
       `claude mcp add --scope user tabularis ${selectedClient?.executable_path || "tabularis"} -- --mcp`,
-    [selectedClient?.executable_path]
+    [selectedClient?.executable_path, selectedClient?.manual_command]
   );
 
   const loadStatus = useCallback(async () => {
@@ -242,9 +247,9 @@ export const McpModal = ({ isOpen, onClose }: McpModalProps) => {
                         <Editor
                           height="160px"
                           defaultLanguage="json"
-                          theme={currentTheme.id}
+                          theme={editorTheme.id}
                           value={jsonValue}
-                          beforeMount={(monaco) => loadMonacoTheme(currentTheme, monaco)}
+                          beforeMount={(monaco) => loadMonacoTheme(editorTheme, monaco)}
                           options={{
                             readOnly: true,
                             minimap: { enabled: false },

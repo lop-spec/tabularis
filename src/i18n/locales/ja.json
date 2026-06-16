@@ -171,7 +171,19 @@
     "dateGroupYesterday": "昨日",
     "dateGroupThisWeek": "今週",
     "dateGroupThisMonth": "今月",
-    "dateGroupOlder": "それ以前"
+    "dateGroupOlder": "それ以前",
+    "notebooks": {
+      "tab": "ノートブック",
+      "search": "ノートブックを検索",
+      "refresh": "更新",
+      "empty": "保存されたノートブックはまだありません。",
+      "noSearchResults": "一致するノートブックがありません。",
+      "open": "開く",
+      "rename": "名前を変更",
+      "delete": "削除",
+      "deleteConfirm": "ノートブック「{{title}}」を削除しますか？この操作は元に戻せません。",
+      "renamePlaceholder": "ノートブック名"
+    }
   },
   "mcp": {
     "title": "MCP サーバー連携",
@@ -568,7 +580,8 @@
       "pressKeys": "キーの組み合わせを押してください...",
       "notebookRunAll": "すべてのセルを実行",
       "categories_notebook": "ノートブック",
-      "pasteImportClipboard": "クリップボードからインポート"
+      "pasteImportClipboard": "クリップボードからインポート",
+      "quickNavigator": "クイックナビゲーター"
     },
     "aiActivity": "AI アクティビティ"
   },
@@ -631,7 +644,7 @@
     "dbNamePlaceholder": "データベース名",
     "loadDatabases": "データベースを読み込み",
     "loadingDatabases": "読み込み中...",
-    "selectDatabases": "データベースを選択",
+    "selectDatabases": "データベース",
     "appearance": "外観",
     "noDatabasesSelected": "少なくとも 1 つのデータベースを選択してください",
     "selectedDatabases": "{{count}} 個のデータベースを選択中",
@@ -670,7 +683,29 @@
       "require": "必須",
       "verify-ca": "CAを検証",
       "verify-full": "完全検証"
-    }
+    },
+    "chooseContext": "コンテキストを選択...",
+    "chooseK8s": "接続を選択...",
+    "chooseNamespace": "ネームスペースを選択...",
+    "chooseResource": "リソースを選択...",
+    "createInlineK8s": "インライン",
+    "k8sContext": "コンテキスト",
+    "k8sNamespace": "ネームスペース",
+    "k8sNotAvailable": "このドライバーでは Kubernetes を使用できません。",
+    "k8sPort": "コンテナポート",
+    "k8sResourceName": "リソース名",
+    "k8sResourceType": "リソースタイプ",
+    "k8sResourceTypePod": "Pod",
+    "k8sResourceTypeService": "Service",
+    "k8sSelectType": "タイプを選択...",
+    "manageK8s": "管理",
+    "noK8sConnections": "保存された接続がありません — 下で作成してください",
+    "noK8sContexts": "コンテキストが見つかりません（kubectl はインストールされていますか？）",
+    "selectContextFirst": "先にコンテキストを選択してください",
+    "selectK8sConnection": "K8s 接続を選択",
+    "selectTypeFirst": "先にコンテキスト/ネームスペース/タイプを選択してください",
+    "useK8s": "Kubernetes ポートフォワードを使用",
+    "useK8sConnection": "保存された接続"
   },
   "sshConnections": {
     "title": "SSH 接続",
@@ -756,6 +791,26 @@
     "auto": "自動"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "テーブル、ビュー、ルーチン、トリガーを検索...",
+      "noResults": "一致する要素が見つかりません",
+      "count_one": "1件",
+      "count_other": "{{count}}件",
+      "navigationHint": "↑↓で移動、Enterで開く",
+      "escHint": "Escで閉じる",
+      "type_table": "テーブル",
+      "type_view": "ビュー",
+      "type_routine": "ルーチン",
+      "type_trigger": "トリガー",
+      "actions": {
+        "inspect": "構造を表示",
+        "newConsole": "新規コンソール",
+        "generateSql": "SQLテンプレートを生成",
+        "countRows": "行数をカウント",
+        "query": "SELECTクエリを実行",
+        "copyName": "名前をコピー"
+      }
+    },
     "noTabs": "この接続に対して開いているタブはありません。",
     "newConsole": "新規コンソール",
     "noActiveSession": "アクティブなセッションがありません。接続を選択してください。",
@@ -890,6 +945,7 @@
     "notebook": {
       "addSqlCell": "SQL セルを追加",
       "addMarkdownCell": "Markdown セルを追加",
+      "addCell": "追加",
       "runAll": "すべて実行",
       "runAllTooltip": "上から下へすべての SQL セルを実行",
       "runCell": "セルを実行",
@@ -940,7 +996,28 @@
       "editCellName": "セル名を編集",
       "aiGenerateName": "AI で名前を生成",
       "generatingName": "名前を生成中...",
-      "aiGenerateOutlineNames": "AI で未命名セルの名前を生成"
+      "aiGenerateOutlineNames": "AI で未命名セルの名前を生成",
+      "undo": "元に戻す",
+      "redo": "やり直す",
+      "history": {
+        "title": "編集履歴",
+        "change": {
+          "initial": "初期バージョン",
+          "editCell": "セル {{n}} を編集",
+          "addSql": "SQL セル {{n}} を追加",
+          "addMarkdown": "Markdown セル {{n}} を追加",
+          "deleteCell": "セル {{n}} を削除",
+          "reorder": "セルを並べ替え",
+          "renameCell": "セル {{n}} の名前を変更",
+          "schemaCell": "データベースを変更（セル {{n}}）",
+          "chartCell": "チャートを変更（セル {{n}}）",
+          "parallelCell": "並列を切り替え（セル {{n}}）",
+          "collapse": "セルを折りたたみ/展開",
+          "params": "パラメータを変更",
+          "stopOnError": "エラー時に停止を切り替え",
+          "other": "ノートブックを編集"
+        }
+      }
     },
     "querySelection": {
       "title": "実行するクエリを選択",
@@ -1013,8 +1090,14 @@
   "generateSQL": {
     "title": "生成された SQL: {{table}}",
     "loading": "SQL を生成中...",
+    "runInConsole": "コンソールで実行",
     "copy": "SQL をコピー",
-    "copied": "コピーしました！"
+    "copied": "コピーしました！",
+    "tabCreateTable": "テーブル作成",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [フィールド]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "カラムを追加",
@@ -1459,5 +1542,25 @@
     "body": "Tabularis ユーザー専用のコミュニティを立ち上げました。質問・情報交換・ロードマップへのフィードバックをお寄せください。",
     "cta": "今すぐ参加",
     "dismiss": "閉じる"
+  },
+  "k8sConnections": {
+    "title": "Kubernetes 接続",
+    "add": "追加",
+    "empty": "保存された Kubernetes 接続がありません。「追加」をクリックして作成してください。",
+    "name": "名前",
+    "namePlaceholder": "マイ K8s クラスター",
+    "context": "コンテキスト",
+    "chooseContext": "コンテキストを選択...",
+    "namespace": "ネームスペース",
+    "chooseNamespace": "ネームスペースを選択...",
+    "resourceType": "リソースタイプ",
+    "resourceTypeService": "Service",
+    "resourceTypePod": "Pod",
+    "resourceName": "リソース名",
+    "chooseResource": "リソースを選択...",
+    "port": "コンテナポート",
+    "test": "テスト",
+    "testing": "テスト中...",
+    "validationFailed": "検証に失敗しました"
   }
 }

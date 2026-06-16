@@ -12,20 +12,7 @@ fn get_mysql_params() -> ConnectionParams {
         username: Some("root".to_string()),
         password: Some("password".to_string()),
         database: DatabaseSelection::Single("testdb".to_string()),
-        ssl_mode: None,
-        ssl_ca: None,
-        ssl_cert: None,
-        ssl_key: None,
-        ssh_enabled: None,
-        ssh_connection_id: None,
-        ssh_host: None,
-        ssh_port: None,
-        ssh_user: None,
-        ssh_password: None,
-        ssh_key_file: None,
-        ssh_key_passphrase: None,
-        save_in_keychain: None,
-        connection_id: None,
+        ..Default::default()
     }
 }
 
@@ -37,20 +24,7 @@ fn get_postgres_params() -> ConnectionParams {
         username: Some("postgres".to_string()),
         password: Some("password".to_string()),
         database: DatabaseSelection::Single("testdb".to_string()),
-        ssl_mode: None,
-        ssl_ca: None,
-        ssl_cert: None,
-        ssl_key: None,
-        ssh_enabled: None,
-        ssh_connection_id: None,
-        ssh_host: None,
-        ssh_port: None,
-        ssh_user: None,
-        ssh_password: None,
-        ssh_key_file: None,
-        ssh_key_passphrase: None,
-        save_in_keychain: None,
-        connection_id: None,
+        ..Default::default()
     }
 }
 
@@ -252,7 +226,7 @@ async fn test_mysql_batch_preserves_user_variable_and_last_insert_id() {
     .map(|s| s.to_string())
     .collect();
 
-    let results = mysql::execute_batch(&params, &queries, None, 1, None)
+    let results = mysql::execute_batch(&params, &queries, None, 1, None, None)
         .await
         .expect("batch setup should succeed");
 
@@ -326,7 +300,7 @@ async fn test_mysql_batch_preserves_transaction_atomicity() {
     .map(|s| s.to_string())
     .collect();
 
-    let results = mysql::execute_batch(&params, &queries, None, 1, None)
+    let results = mysql::execute_batch(&params, &queries, None, 1, None, None)
         .await
         .expect("batch setup should succeed");
     for (i, r) in results.iter().enumerate() {
@@ -383,7 +357,7 @@ async fn test_postgres_batch_preserves_temp_table_and_transaction() {
     .map(|s| s.to_string())
     .collect();
 
-    let results = postgres::execute_batch(&params, &queries, None, 1, None)
+    let results = postgres::execute_batch(&params, &queries, None, 1, None, None)
         .await
         .expect("batch setup should succeed");
 
@@ -446,7 +420,7 @@ async fn test_mysql_affected_rows_reported_correctly() {
     .map(|s| s.to_string())
     .collect();
 
-    let results = mysql::execute_batch(&params, &queries, None, 1, None)
+    let results = mysql::execute_batch(&params, &queries, None, 1, None, None)
         .await
         .expect("batch setup should succeed");
 
@@ -521,7 +495,7 @@ async fn test_postgres_affected_rows_reported_correctly() {
     .map(|s| s.to_string())
     .collect();
 
-    let results = postgres::execute_batch(&params, &queries, None, 1, None)
+    let results = postgres::execute_batch(&params, &queries, None, 1, None, None)
         .await
         .expect("batch setup should succeed");
 

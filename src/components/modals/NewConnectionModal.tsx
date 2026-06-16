@@ -22,6 +22,7 @@ import { AppearanceSection } from "./NewConnectionModal/AppearanceSection";
 import { open } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { SshConnectionsModal } from "./SshConnectionsModal";
+import { K8sConnectionsModal } from "./K8sConnectionsModal";
 import { Select } from "../ui/Select";
 import { SlotAnchor } from "../ui/SlotAnchor";
 import { useDrivers } from "../../hooks/useDrivers";
@@ -29,11 +30,17 @@ import { usePluginSlotRegistry } from "../../hooks/usePluginSlotRegistry";
 import { Modal } from "../ui/Modal";
 import type { PluginManifest } from "../../types/plugins";
 import { loadSshConnections, type SshConnection } from "../../utils/ssh";
+import {
+  loadK8sConnections,
+  getK8sContexts,
+  getK8sNamespaces,
+  getK8sResources,
+  type K8sConnection,
+} from "../../utils/k8s";
 import { isMultiDatabaseCapable } from "../../utils/database";
 import { fetchConnectionWithCredentials } from "../../utils/credentials";
 import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 import {
-  looksLikeConnectionString,
   parseConnectionString,
   toConnectionParams,
 } from "../../utils/connectionStringParser";
@@ -60,6 +67,14 @@ interface ConnectionParams {
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
   save_in_keychain?: boolean;
+  // K8s
+  k8s_enabled?: boolean;
+  k8s_connection_id?: string;
+  k8s_context?: string;
+  k8s_namespace?: string;
+  k8s_resource_type?: string;
+  k8s_resource_name?: string;
+  k8s_port?: number;
 }
 
 interface SavedConnection {
@@ -154,6 +169,7 @@ export const NewConnectionModal = ({
     ssl_mode: "",
     ssh_enabled: false,
     ssh_port: 22,
+    k8s_enabled: false,
   });
   const [selectedDatabasesState, setSelectedDatabasesState] = useState<
     string[]
@@ -168,14 +184,22 @@ export const NewConnectionModal = ({
   >(null);
 
   // ── tab ──
-  const [activeTab, setActiveTab] = useState<"general" | "databases" | "ssh" | "ssl" | "appearance">(
-    "general",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "general" | "databases" | "ssh" | "ssl" | "k8s" | "appearance"
+  >("general");
 
   // ── SSH ──
   const [sshConnections, setSshConnections] = useState<SshConnection[]>([]);
   const [isSshModalOpen, setIsSshModalOpen] = useState(false);
   const [sshMode, setSshMode] = useState<"existing" | "inline">("existing");
+
+  // ── K8s ──
+  const [k8sConnections, setK8sConnections] = useState<K8sConnection[]>([]);
+  const [isK8sModalOpen, setIsK8sModalOpen] = useState(false);
+  const [k8sMode, setK8sMode] = useState<"existing" | "inline">("existing");
+  const [k8sContexts, setK8sContexts] = useState<string[]>([]);
+  const [k8sNamespaces, setK8sNamespaces] = useState<string[]>([]);
+  const [k8sResources, setK8sResources] = useState<string[]>([]);
 
   // ── databases ──
   const [availableDatabases, setAvailableDatabases] = useState<string[]>([]);
@@ -300,6 +324,59 @@ export const NewConnectionModal = ({
     setSshConnections(result);
   };
 
+  const loadK8sConnectionsList = async () => {
+    const result = await loadK8sConnections();
+    setK8sConnections(result);
+  };
+
+  const loadK8sContextsList = async () => {
+    try {
+      const result = await getK8sContexts();
+      setK8sContexts(result);
+    } catch {
+      setK8sContexts([]);
+    }
+  };
+
+  const loadK8sNamespacesList = async (context: string) => {
+    try {
+      const result = await getK8sNamespaces(context);
+      setK8sNamespaces(result);
+    } catch {
+      setK8sNamespaces([]);
+    }
+  };
+
+  const loadK8sResourcesList = async (context: string, namespace: string, resourceType: string) => {
+    try {
+      const result = await getK8sResources(context, namespace, resourceType);
+      setK8sResources(result);
+    } catch {
+      setK8sResources([]);
+    }
+  };
+
+  // ── K8s cascading dropdown loading ──
+  useEffect(() => {
+    if (formData.k8s_context) {
+      loadK8sNamespacesList(formData.k8s_context);
+    } else {
+      setK8sNamespaces([]);
+    }
+  }, [formData.k8s_context]);
+
+  useEffect(() => {
+    if (formData.k8s_context && formData.k8s_namespace && formData.k8s_resource_type) {
+      loadK8sResourcesList(
+        formData.k8s_context,
+        formData.k8s_namespace,
+        formData.k8s_resource_type,
+      );
+    } else {
+      setK8sResources([]);
+    }
+  }, [formData.k8s_context, formData.k8s_namespace, formData.k8s_resource_type]);
+
   const updateField = (
     field: keyof ConnectionParams,
     value: string | number | boolean | undefined,
@@ -395,6 +472,9 @@ export const NewConnectionModal = ({
         setSshMode(
           initialConnection.params.ssh_connection_id ? "existing" : "inline",
         );
+        setK8sMode(
+          initialConnection.params.k8s_connection_id ? "existing" : "inline",
+        );
 
         let params = initialConnection.params;
         try {
@@ -431,6 +511,7 @@ export const NewConnectionModal = ({
           database: "",
           ssh_enabled: false,
           ssh_port: 22,
+          k8s_enabled: false,
         });
         setSelectedDatabasesState([]);
         setSshMode("existing");
@@ -439,6 +520,8 @@ export const NewConnectionModal = ({
       }
 
       await loadSshConnectionsList();
+      await loadK8sConnectionsList();
+      await loadK8sContextsList();
     };
     void init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -463,6 +546,13 @@ export const NewConnectionModal = ({
       ssh_key_file: undefined,
       ssh_key_passphrase: undefined,
       save_in_keychain: false,
+      k8s_enabled: false,
+      k8s_connection_id: undefined,
+      k8s_context: undefined,
+      k8s_namespace: undefined,
+      k8s_resource_type: undefined,
+      k8s_resource_name: undefined,
+      k8s_port: undefined,
     });
     setSelectedDatabasesState([]);
     setDbSearchQuery("");
@@ -635,43 +725,40 @@ export const NewConnectionModal = ({
       capabilities: item.capabilities,
     }));
 
-    if (looksLikeConnectionString(value, parserDrivers)) {
-      const result = parseConnectionString(value, parserDrivers);
-      if (result.success) {
-        const parsed = toConnectionParams(result.params);
-        const newDriver = parsed.driver || driver;
-        const parsedDriver = drivers.find((item) => item.id === newDriver);
-        const parsedIsMultiDb = isMultiDatabaseCapable(
-          parsedDriver?.capabilities,
-        );
+    const result = parseConnectionString(value, parserDrivers);
+    if (result.success) {
+      const parsed = toConnectionParams(result.params);
+      const newDriver = parsed.driver || driver;
+      const parsedDriver = drivers.find((item) => item.id === newDriver);
+      const parsedIsMultiDb = isMultiDatabaseCapable(
+        parsedDriver?.capabilities,
+      );
 
-        const parsedFields: Partial<ConnectionParams> = {
-          driver: newDriver,
-          host: parsed.host || "localhost",
-          port: parsed.port,
-          username: parsed.username || "",
-          password: parsed.password || "",
-          database: parsed.database || "",
-        };
+      const parsedFields: Partial<ConnectionParams> = {
+        driver: newDriver,
+        host: parsed.host || "localhost",
+        port: parsed.port,
+        username: parsed.username || "",
+        password: parsed.password || "",
+        database: parsed.database || "",
+      };
 
-        if (parsedIsMultiDb && parsed.database) {
-          setSelectedDatabasesState([parsed.database]);
-          setActiveTab("databases");
-        }
-
-        if (newDriver !== driver) {
-          setDriver(newDriver);
-        }
-
-        setFormData((prev) => ({
-          ...prev,
-          ...parsedFields,
-        }));
-
-        void loadDatabases(parsedFields);
-      } else {
-        setConnectionStringError(result.error);
+      if (parsedIsMultiDb && parsed.database) {
+        setSelectedDatabasesState([parsed.database]);
       }
+
+      if (newDriver !== driver) {
+        setDriver(newDriver);
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        ...parsedFields,
+      }));
+
+      void loadDatabases(parsedFields);
+    } else {
+      setConnectionStringError(result.error);
     }
   };
 
@@ -1094,7 +1181,7 @@ export const NewConnectionModal = ({
     <div className="space-y-4">
       <p className="text-xs text-muted">
         {t("newConnection.sslDescription", {
-          defaultValue: "Configure SSL/TLS certificates for secure MySQL connections (optional).",
+          defaultValue: "Configure SSL/TLS for secure database connections (optional).",
         })}
       </p>
 
@@ -1104,11 +1191,20 @@ export const NewConnectionModal = ({
           {t("newConnection.sslMode", { defaultValue: "SSL Mode" })}
         </label>
         <Select
-          value={formData.ssl_mode || (driver === "postgres" ? "prefer" : "required")}
+          value={
+            formData.ssl_mode ||
+            (driver === "postgres"
+              ? "prefer"
+              : driver === "clickhouse"
+                ? "disable"
+                : "required")
+          }
           options={
             driver === "postgres"
               ? ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
-              : ["disabled", "preferred", "required", "verify_ca", "verify_identity"]
+              : driver === "clickhouse"
+                ? ["disable", "require"]
+                : ["disabled", "preferred", "required", "verify_ca", "verify_identity"]
           }
           labels={
             driver === "postgres"
@@ -1120,13 +1216,18 @@ export const NewConnectionModal = ({
                   "verify-ca": t("newConnection.sslModes.verify-ca", { defaultValue: "Verify CA" }),
                   "verify-full": t("newConnection.sslModes.verify-full", { defaultValue: "Verify Full" }),
                 }
-              : {
-                  disabled: t("newConnection.sslModes.disabled", { defaultValue: "Disabled" }),
-                  preferred: t("newConnection.sslModes.preferred", { defaultValue: "Preferred" }),
-                  required: t("newConnection.sslModes.required", { defaultValue: "Required" }),
-                  verify_ca: t("newConnection.sslModes.verify_ca", { defaultValue: "Verify CA" }),
-                  verify_identity: t("newConnection.sslModes.verify_identity", { defaultValue: "Verify Identity" }),
-                }
+              : driver === "clickhouse"
+                ? {
+                    disable: t("newConnection.sslModes.disable", { defaultValue: "Disable" }),
+                    require: t("newConnection.sslModes.require", { defaultValue: "Require" }),
+                  }
+                : {
+                    disabled: t("newConnection.sslModes.disabled", { defaultValue: "Disabled" }),
+                    preferred: t("newConnection.sslModes.preferred", { defaultValue: "Preferred" }),
+                    required: t("newConnection.sslModes.required", { defaultValue: "Required" }),
+                    verify_ca: t("newConnection.sslModes.verify_ca", { defaultValue: "Verify CA" }),
+                    verify_identity: t("newConnection.sslModes.verify_identity", { defaultValue: "Verify Identity" }),
+                  }
           }
           onChange={(v) => updateField("ssl_mode", v)}
           searchable={false}
@@ -1279,6 +1380,10 @@ export const NewConnectionModal = ({
             const enabled = e.target.checked;
             updateField("ssh_enabled", enabled);
             if (enabled && !formData.ssh_port) updateField("ssh_port", 22);
+            // Mutual exclusion with K8s
+            if (enabled && formData.k8s_enabled) {
+              updateField("k8s_enabled", false);
+            }
           }}
           className="accent-blue-500 w-3.5 h-3.5 rounded"
         />
@@ -1329,24 +1434,23 @@ export const NewConnectionModal = ({
                 <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
                   {t("newConnection.selectSshConnection")}
                 </label>
-                <select
-                  value={formData.ssh_connection_id || ""}
-                  onChange={(e) =>
-                    updateField("ssh_connection_id", e.target.value)
-                  }
-                  className="w-full px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary focus:border-blue-500 focus:outline-none appearance-auto cursor-pointer transition-colors"
-                >
-                  <option value="">
-                    {sshConnections.length === 0
+                <Select
+                  value={formData.ssh_connection_id || null}
+                  options={sshConnections.map((conn) => conn.id)}
+                  labels={Object.fromEntries(
+                    sshConnections.map((conn) => [
+                      conn.id,
+                      `${conn.name} (${conn.user}@${conn.host}:${conn.port})`,
+                    ]),
+                  )}
+                  onChange={(val) => updateField("ssh_connection_id", val)}
+                  placeholder={
+                    sshConnections.length === 0
                       ? t("newConnection.noSshConnections")
-                      : "-- " + t("newConnection.selectSshConnection") + " --"}
-                  </option>
-                  {sshConnections.map((conn) => (
-                    <option key={conn.id} value={conn.id}>
-                      {conn.name} ({conn.user}@{conn.host}:{conn.port})
-                    </option>
-                  ))}
-                </select>
+                      : "-- " + t("newConnection.selectSshConnection") + " --"
+                  }
+                  searchable={false}
+                />
               </div>
               <button
                 type="button"
@@ -1431,6 +1535,244 @@ export const NewConnectionModal = ({
                 onChange={(v) => updateField("ssh_key_passphrase", v)}
                 type="password"
                 placeholder={t("newConnection.sshKeyPassphrasePlaceholder")}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── rendered K8s tab content ──
+  const k8sTabContent = !isNetworkDriver ? (
+    <p className="text-xs text-muted italic">
+      {t("newConnection.k8sNotAvailable", {
+        defaultValue: "Kubernetes is not available for this driver.",
+      })}
+    </p>
+  ) : (
+    <div className="space-y-4">
+      {/* Enable toggle */}
+      <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+        <input
+          type="checkbox"
+          id="k8s-toggle"
+          checked={!!formData.k8s_enabled}
+          onChange={(e) => {
+            const enabled = e.target.checked;
+            updateField("k8s_enabled", enabled);
+            // Mutual exclusion with SSH
+            if (enabled && formData.ssh_enabled) {
+              updateField("ssh_enabled", false);
+            }
+          }}
+          className="accent-blue-500 w-3.5 h-3.5 rounded"
+        />
+        <span className="text-sm font-medium text-secondary">
+          {t("newConnection.useK8s", {
+            defaultValue: "Use Kubernetes Port-Forward",
+          })}
+        </span>
+      </label>
+
+      {formData.k8s_enabled && (
+        <div className="space-y-4">
+          {/* Mode tabs */}
+          <div className="flex rounded-md border border-strong overflow-hidden w-fit">
+            {(["existing", "inline"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setK8sMode(mode);
+                  if (mode === "existing") {
+                    updateField("k8s_context", undefined);
+                    updateField("k8s_namespace", undefined);
+                    updateField("k8s_resource_type", undefined);
+                    updateField("k8s_resource_name", undefined);
+                    updateField("k8s_port", undefined);
+                  } else {
+                    updateField("k8s_connection_id", undefined);
+                  }
+                }}
+                className={clsx(
+                  "px-3 py-1.5 text-xs font-medium transition-colors",
+                  k8sMode === mode
+                    ? "bg-blue-600 text-white"
+                    : "bg-elevated text-secondary hover:text-primary",
+                )}
+              >
+                {mode === "existing"
+                  ? t("newConnection.useK8sConnection", {
+                      defaultValue: "Saved Connection",
+                    })
+                  : t("newConnection.createInlineK8s", {
+                      defaultValue: "Inline",
+                    })}
+              </button>
+            ))}
+          </div>
+
+          {/* Existing K8s connection */}
+          {k8sMode === "existing" && (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+                  {t("newConnection.selectK8sConnection", {
+                    defaultValue: "Select K8s Connection",
+                  })}
+                </label>
+                <div className="flex items-center gap-2">
+                  <Select
+                    className="flex-1"
+                    value={formData.k8s_connection_id || null}
+                    options={k8sConnections.map((conn) => conn.id)}
+                    labels={Object.fromEntries(
+                      k8sConnections.map((conn) => [
+                        conn.id,
+                        `${conn.name} (${conn.context}/${conn.namespace}/${conn.resource_name}:${conn.port})`,
+                      ]),
+                    )}
+                    onChange={(val) => updateField("k8s_connection_id", val)}
+                    placeholder={
+                      k8sConnections.length === 0
+                        ? t("newConnection.noK8sConnections", {
+                            defaultValue: "No saved connections — create one below",
+                          })
+                        : t("newConnection.chooseK8s", {
+                            defaultValue: "Choose a connection...",
+                          })
+                    }
+                    searchable={false}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsK8sModalOpen(true)}
+                    className="px-2.5 py-1.5 text-xs bg-surface-secondary hover:bg-surface-tertiary rounded-md text-secondary transition-colors"
+                  >
+                    {t("newConnection.manageK8s", {
+                      defaultValue: "Manage",
+                    })}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Inline K8s fields */}
+          {k8sMode === "inline" && (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+                  {t("newConnection.k8sContext", {
+                    defaultValue: "Context",
+                  })}
+                </label>
+                <Select
+                  value={formData.k8s_context || null}
+                  options={k8sContexts}
+                  onChange={(val) => {
+                    updateField("k8s_context", val);
+                  }}
+                  placeholder={
+                    k8sContexts.length === 0
+                      ? t("newConnection.noK8sContexts", {
+                          defaultValue: "No contexts found (is kubectl installed?)",
+                        })
+                      : t("newConnection.chooseContext", {
+                          defaultValue: "Choose a context...",
+                        })
+                  }
+                  searchable={false}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+                  {t("newConnection.k8sNamespace", {
+                    defaultValue: "Namespace",
+                  })}
+                </label>
+                <Select
+                  value={formData.k8s_namespace || null}
+                  options={k8sNamespaces}
+                  onChange={(val) => {
+                    updateField("k8s_namespace", val);
+                  }}
+                  placeholder={
+                    k8sNamespaces.length === 0
+                      ? t("newConnection.selectContextFirst", {
+                          defaultValue: "Select a context first",
+                        })
+                      : t("newConnection.chooseNamespace", {
+                          defaultValue: "Choose a namespace...",
+                        })
+                  }
+                  searchable={false}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex flex-col gap-1 flex-1">
+                  <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+                    {t("newConnection.k8sResourceType", {
+                      defaultValue: "Resource Type",
+                    })}
+                  </label>
+                  <Select
+                    value={formData.k8s_resource_type || null}
+                    options={["service", "pod"]}
+                    labels={{
+                      service: t("newConnection.k8sResourceTypeService", {
+                        defaultValue: "Service",
+                      }),
+                      pod: t("newConnection.k8sResourceTypePod", {
+                        defaultValue: "Pod",
+                      }),
+                    }}
+                    onChange={(val) => {
+                      updateField("k8s_resource_type", val);
+                    }}
+                    placeholder={t("newConnection.k8sSelectType", {
+                      defaultValue: "Select type...",
+                    })}
+                    searchable={false}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1 flex-1">
+                  <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+                    {t("newConnection.k8sResourceName", {
+                      defaultValue: "Resource Name",
+                    })}
+                  </label>
+                  <Select
+                    value={formData.k8s_resource_name || null}
+                    options={k8sResources}
+                    onChange={(val) =>
+                      updateField("k8s_resource_name", val)
+                    }
+                    placeholder={
+                      k8sResources.length === 0
+                        ? t("newConnection.selectTypeFirst", {
+                            defaultValue: "Select context/namespace/type first",
+                          })
+                        : t("newConnection.chooseResource", {
+                            defaultValue: "Choose a resource...",
+                          })
+                    }
+                    searchable={false}
+                  />
+                </div>
+              </div>
+
+              <FieldInput
+                label={t("newConnection.k8sPort", {
+                  defaultValue: "Container Port",
+                })}
+                value={formData.k8s_port ?? ""}
+                onChange={(v) => updateField("k8s_port", Number(v))}
+                placeholder="3306"
               />
             </div>
           )}
@@ -1560,17 +1902,21 @@ export const NewConnectionModal = ({
                         },
                       ]
                     : []),
-                  ...((driver === "mysql" || driver === "postgres") && isNetworkDriver
+                  ...(activeDriver?.capabilities?.supports_ssl && isNetworkDriver
                     ? [{ id: "ssl", label: "SSL" }]
                     : []),
                   ...(isNetworkDriver ? [{ id: "ssh", label: "SSH" }] : []),
+                  ...(isNetworkDriver ? [{ id: "k8s", label: "Kubernetes" }] : []),
                   {
                     id: "appearance",
                     label: t("newConnection.appearance", {
                       defaultValue: "Appearance",
                     }),
                   },
-                ] as { id: "general" | "databases" | "ssh" | "ssl" | "appearance"; label: string }[]
+                ] as {
+                  id: "general" | "databases" | "ssh" | "ssl" | "k8s" | "appearance";
+                  label: string;
+                }[]
               ).map((tab) => (
                 <button
                   key={tab.id}
@@ -1606,9 +1952,11 @@ export const NewConnectionModal = ({
                   ? databasesTabContent
                   : activeTab === "ssl"
                     ? sslTabContent
-                    : activeTab === "ssh"
-                      ? sshTabContent
-                      : appearanceTabContent}
+                    : activeTab === "k8s"
+                      ? k8sTabContent
+                      : activeTab === "ssh"
+                        ? sshTabContent
+                        : appearanceTabContent}
             </div>
           </div>
         </div>
@@ -1681,6 +2029,13 @@ export const NewConnectionModal = ({
         onClose={async () => {
           setIsSshModalOpen(false);
           await loadSshConnectionsList();
+        }}
+      />
+      <K8sConnectionsModal
+        isOpen={isK8sModalOpen}
+        onClose={async () => {
+          setIsK8sModalOpen(false);
+          await loadK8sConnectionsList();
         }}
       />
     </Modal>

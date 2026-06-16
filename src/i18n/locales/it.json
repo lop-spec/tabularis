@@ -158,7 +158,19 @@
     "dateGroupYesterday": "Ieri",
     "dateGroupThisWeek": "Questa Settimana",
     "dateGroupThisMonth": "Questo Mese",
-    "dateGroupOlder": "Precedenti"
+    "dateGroupOlder": "Precedenti",
+    "notebooks": {
+      "tab": "Notebook",
+      "search": "Cerca notebook",
+      "refresh": "Aggiorna",
+      "empty": "Nessun notebook salvato.",
+      "noSearchResults": "Nessun notebook corrisponde alla ricerca.",
+      "open": "Apri",
+      "rename": "Rinomina",
+      "delete": "Elimina",
+      "deleteConfirm": "Eliminare il notebook \"{{title}}\"? L'operazione non è reversibile.",
+      "renamePlaceholder": "Nome del notebook"
+    }
   },
   "mcp": {
     "title": "Integrazione Server MCP",
@@ -559,7 +571,8 @@
       "pressKeys": "Premi la combinazione di tasti...",
       "notebookRunAll": "Esegui Tutte le Celle",
       "categories_notebook": "Notebook",
-      "pasteImportClipboard": "Importa dagli Appunti"
+      "pasteImportClipboard": "Importa dagli Appunti",
+      "quickNavigator": "Navigatore rapido"
     },
     "aiActivity": "Attività AI"
   },
@@ -622,7 +635,7 @@
     "dbNamePlaceholder": "Nome database",
     "loadDatabases": "Carica Database",
     "loadingDatabases": "Caricamento...",
-    "selectDatabases": "Seleziona Database",
+    "selectDatabases": "Database",
     "appearance": "Aspetto",
     "noDatabasesSelected": "Seleziona almeno un database",
     "selectedDatabases": "{{count}} database selezionato/i",
@@ -661,7 +674,29 @@
       "require": "Richiesto",
       "verify-ca": "Verifica CA",
       "verify-full": "Verifica completa"
-    }
+    },
+    "chooseContext": "Scegli un contesto...",
+    "chooseK8s": "Scegli una connessione...",
+    "chooseNamespace": "Scegli un namespace...",
+    "chooseResource": "Scegli una risorsa...",
+    "createInlineK8s": "Inline",
+    "k8sContext": "Contesto",
+    "k8sNamespace": "Namespace",
+    "k8sNotAvailable": "Kubernetes non è disponibile per questo driver.",
+    "k8sPort": "Porta container",
+    "k8sResourceName": "Nome risorsa",
+    "k8sResourceType": "Tipo di risorsa",
+    "k8sResourceTypePod": "Pod",
+    "k8sResourceTypeService": "Service",
+    "k8sSelectType": "Seleziona tipo...",
+    "manageK8s": "Gestisci",
+    "noK8sConnections": "Nessuna connessione salvata — creane una qui sotto",
+    "noK8sContexts": "Nessun contesto trovato (kubectl è installato?)",
+    "selectContextFirst": "Seleziona prima un contesto",
+    "selectK8sConnection": "Seleziona connessione K8s",
+    "selectTypeFirst": "Seleziona prima contesto/namespace/tipo",
+    "useK8s": "Usa Port-Forward Kubernetes",
+    "useK8sConnection": "Connessione salvata"
   },
   "sshConnections": {
     "title": "Connessioni SSH",
@@ -791,6 +826,26 @@
       "tabs": "{{count}} tab",
       "escHint": "Esc per chiudere"
     },
+    "quickNavigator": {
+      "placeholder": "Cerca tabelle, viste, routine, trigger...",
+      "noResults": "Nessun elemento corrispondente trovato",
+      "count_one": "1 elemento",
+      "count_other": "{{count}} elementi",
+      "navigationHint": "↑↓ per navigare, Invio per aprire",
+      "escHint": "Esc per chiudere",
+      "type_table": "tabella",
+      "type_view": "vista",
+      "type_routine": "routine",
+      "type_trigger": "trigger",
+      "actions": {
+        "inspect": "Ispeziona struttura",
+        "newConsole": "Nuova console",
+        "generateSql": "Genera modelli SQL",
+        "countRows": "Conta righe",
+        "query": "Esegui query SELECT",
+        "copyName": "Copia nome"
+      }
+    },
     "submitChanges": "Invia Modifiche",
     "rollbackChanges": "Annulla Modifiche",
     "applyToAll": "Applica a tutto",
@@ -880,6 +935,7 @@
     "notebook": {
       "addSqlCell": "Aggiungi Cella SQL",
       "addMarkdownCell": "Aggiungi Cella Markdown",
+      "addCell": "Aggiungi",
       "runAll": "Esegui Tutto",
       "runAllTooltip": "Esegui tutte le celle SQL dall'alto in basso",
       "runCell": "Esegui Cella",
@@ -930,7 +986,28 @@
       "editCellName": "Modifica nome cella",
       "aiGenerateName": "Genera nome con AI",
       "generatingName": "Generazione nome...",
-      "aiGenerateOutlineNames": "Genera nomi per le celle senza nome con AI"
+      "aiGenerateOutlineNames": "Genera nomi per le celle senza nome con AI",
+      "undo": "Annulla",
+      "redo": "Ripeti",
+      "history": {
+        "title": "Cronologia modifiche",
+        "change": {
+          "initial": "Versione iniziale",
+          "editCell": "Modificata cella {{n}}",
+          "addSql": "Aggiunta cella SQL {{n}}",
+          "addMarkdown": "Aggiunta cella Markdown {{n}}",
+          "deleteCell": "Eliminata cella {{n}}",
+          "reorder": "Celle riordinate",
+          "renameCell": "Rinominata cella {{n}}",
+          "schemaCell": "Database cambiato (cella {{n}})",
+          "chartCell": "Grafico cambiato (cella {{n}})",
+          "parallelCell": "Parallelo commutato (cella {{n}})",
+          "collapse": "Celle compresse/espanse",
+          "params": "Parametri modificati",
+          "stopOnError": "Stop on error commutato",
+          "other": "Notebook modificato"
+        }
+      }
     },
     "querySelection": {
       "title": "Seleziona la query da eseguire",
@@ -1003,8 +1080,14 @@
   "generateSQL": {
     "title": "SQL Generato: {{table}}",
     "loading": "Generazione SQL in corso...",
+    "runInConsole": "Esegui nella console",
     "copy": "Copia SQL",
-    "copied": "Copiato!"
+    "copied": "Copiato!",
+    "tabCreateTable": "Crea tabella",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [campi]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "Aggiungi Colonna",
@@ -1423,5 +1506,25 @@
     "body": "Abbiamo una community Discord dedicata a Tabularis: ricevi aiuto, scambia consigli e influenza la roadmap.",
     "cta": "Entra subito",
     "dismiss": "Chiudi"
+  },
+  "k8sConnections": {
+    "title": "Connessioni Kubernetes",
+    "add": "Aggiungi",
+    "empty": "Nessuna connessione Kubernetes salvata. Clicca \"Aggiungi\" per crearne una.",
+    "name": "Nome",
+    "namePlaceholder": "Il mio cluster K8s",
+    "context": "Contesto",
+    "chooseContext": "Scegli un contesto...",
+    "namespace": "Namespace",
+    "chooseNamespace": "Scegli un namespace...",
+    "resourceType": "Tipo di risorsa",
+    "resourceTypeService": "Service",
+    "resourceTypePod": "Pod",
+    "resourceName": "Nome risorsa",
+    "chooseResource": "Scegli una risorsa...",
+    "port": "Porta container",
+    "test": "Test",
+    "testing": "Test in corso...",
+    "validationFailed": "Validazione fallita"
   }
 }

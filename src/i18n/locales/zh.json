@@ -157,7 +157,19 @@
     "dateGroupYesterday": "昨天",
     "dateGroupThisWeek": "本周",
     "dateGroupThisMonth": "本月",
-    "dateGroupOlder": "更早"
+    "dateGroupOlder": "更早",
+    "notebooks": {
+      "tab": "笔记本",
+      "search": "搜索笔记本",
+      "refresh": "刷新",
+      "empty": "暂无已保存的笔记本。",
+      "noSearchResults": "没有匹配的笔记本。",
+      "open": "打开",
+      "rename": "重命名",
+      "delete": "删除",
+      "deleteConfirm": "删除笔记本“{{title}}”？此操作无法撤销。",
+      "renamePlaceholder": "笔记本名称"
+    }
   },
   "mcp": {
     "title": "MCP 服务器集成",
@@ -522,7 +534,8 @@
       "notOverridable": "内置，不可自定义",
       "pressKeys": "按下组合键...",
       "notebookRunAll": "运行所有单元格",
-      "categories_notebook": "笔记本"
+      "categories_notebook": "笔记本",
+      "quickNavigator": "快速导航"
     },
     "aiActivity": "AI 活动"
   },
@@ -585,7 +598,7 @@
     "dbNamePlaceholder": "数据库名称",
     "loadDatabases": "加载数据库",
     "loadingDatabases": "加载中...",
-    "selectDatabases": "选择数据库",
+    "selectDatabases": "数据库",
     "appearance": "外观",
     "noDatabasesSelected": "请至少选择一个数据库",
     "selectedDatabases": "已选择 {{count}} 个数据库",
@@ -624,7 +637,29 @@
       "require": "要求",
       "verify-ca": "验证 CA",
       "verify-full": "完全验证"
-    }
+    },
+    "chooseContext": "选择上下文...",
+    "chooseK8s": "选择连接...",
+    "chooseNamespace": "选择命名空间...",
+    "chooseResource": "选择资源...",
+    "createInlineK8s": "内联",
+    "k8sContext": "上下文",
+    "k8sNamespace": "命名空间",
+    "k8sNotAvailable": "此驱动不支持 Kubernetes。",
+    "k8sPort": "容器端口",
+    "k8sResourceName": "资源名称",
+    "k8sResourceType": "资源类型",
+    "k8sResourceTypePod": "Pod",
+    "k8sResourceTypeService": "Service",
+    "k8sSelectType": "选择类型...",
+    "manageK8s": "管理",
+    "noK8sConnections": "没有已保存的连接 — 在下方创建一个",
+    "noK8sContexts": "未找到上下文（是否已安装 kubectl？）",
+    "selectContextFirst": "请先选择上下文",
+    "selectK8sConnection": "选择 K8s 连接",
+    "selectTypeFirst": "请先选择上下文/命名空间/类型",
+    "useK8s": "使用 Kubernetes 端口转发",
+    "useK8sConnection": "已保存的连接"
   },
   "sshConnections": {
     "title": "SSH 连接",
@@ -711,6 +746,26 @@
     "auto": "自动"
   },
   "editor": {
+    "quickNavigator": {
+      "placeholder": "搜索表、视图、例程、触发器...",
+      "noResults": "未找到匹配的元素",
+      "count_one": "1 个元素",
+      "count_other": "{{count}} 个元素",
+      "navigationHint": "↑↓ 导航，Enter 打开",
+      "escHint": "Esc 关闭",
+      "type_table": "表",
+      "type_view": "视图",
+      "type_routine": "例程",
+      "type_trigger": "触发器",
+      "actions": {
+        "inspect": "查看结构",
+        "newConsole": "新建控制台",
+        "generateSql": "生成 SQL 模板",
+        "countRows": "统计行数",
+        "query": "执行 SELECT 查询",
+        "copyName": "复制名称"
+      }
+    },
     "noTabs": "此连接无打开的标签。",
     "newConsole": "新建控制台",
     "noActiveSession": "无活动会话。请选择一个连接。",
@@ -844,6 +899,7 @@
     "notebook": {
       "addSqlCell": "添加 SQL 单元格",
       "addMarkdownCell": "添加 Markdown 单元格",
+      "addCell": "添加",
       "runAll": "全部运行",
       "runAllTooltip": "从上到下执行所有 SQL 单元格",
       "runCell": "运行单元格",
@@ -894,7 +950,28 @@
       "editCellName": "编辑单元格名称",
       "aiGenerateName": "使用 AI 生成名称",
       "generatingName": "正在生成名称...",
-      "aiGenerateOutlineNames": "使用 AI 为未命名单元格生成名称"
+      "aiGenerateOutlineNames": "使用 AI 为未命名单元格生成名称",
+      "undo": "撤销",
+      "redo": "重做",
+      "history": {
+        "title": "编辑历史",
+        "change": {
+          "initial": "初始版本",
+          "editCell": "编辑了单元格 {{n}}",
+          "addSql": "添加了 SQL 单元格 {{n}}",
+          "addMarkdown": "添加了 Markdown 单元格 {{n}}",
+          "deleteCell": "删除了单元格 {{n}}",
+          "reorder": "重新排序单元格",
+          "renameCell": "重命名了单元格 {{n}}",
+          "schemaCell": "更改了数据库（单元格 {{n}}）",
+          "chartCell": "更改了图表（单元格 {{n}}）",
+          "parallelCell": "切换了并行（单元格 {{n}}）",
+          "collapse": "折叠/展开单元格",
+          "params": "更改了参数",
+          "stopOnError": "切换了出错时停止",
+          "other": "编辑了笔记本"
+        }
+      }
     },
     "querySelection": {
       "title": "选择要执行的查询",
@@ -951,8 +1028,14 @@
   "generateSQL": {
     "title": "生成的 SQL：{{table}}",
     "loading": "生成 SQL 中...",
+    "runInConsole": "在控制台中运行",
     "copy": "复制 SQL",
-    "copied": "已复制！"
+    "copied": "已复制！",
+    "tabCreateTable": "创建表",
+    "tabSelectAll": "SELECT *",
+    "tabSelectFields": "SELECT [字段]",
+    "tabUpdate": "UPDATE",
+    "tabDelete": "DELETE"
   },
   "modifyColumn": {
     "titleAdd": "添加列",
@@ -1381,5 +1464,25 @@
     "body": "我们为 Tabularis 用户开设了专属社区：获取帮助、分享技巧、共建路线图。",
     "cta": "立即加入",
     "dismiss": "关闭"
+  },
+  "k8sConnections": {
+    "title": "Kubernetes 连接",
+    "add": "添加",
+    "empty": "没有已保存的 Kubernetes 连接。点击“添加”创建一个。",
+    "name": "名称",
+    "namePlaceholder": "我的 K8s 集群",
+    "context": "上下文",
+    "chooseContext": "选择上下文...",
+    "namespace": "命名空间",
+    "chooseNamespace": "选择命名空间...",
+    "resourceType": "资源类型",
+    "resourceTypeService": "Service",
+    "resourceTypePod": "Pod",
+    "resourceName": "资源名称",
+    "chooseResource": "选择资源...",
+    "port": "容器端口",
+    "test": "测试",
+    "testing": "测试中...",
+    "validationFailed": "验证失败"
   }
 }

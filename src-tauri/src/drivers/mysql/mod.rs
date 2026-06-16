@@ -1044,15 +1044,18 @@ pub async fn execute_batch(
     limit: Option<u32>,
     page: u32,
     schema: Option<&str>,
+    on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
 ) -> Result<Vec<crate::models::BatchStatementResult>, String> {
     let mut conn = acquire_mysql_conn(params, schema).await?;
     let mut results = Vec::with_capacity(queries.len());
-    for q in queries {
+    for (idx, q) in queries.iter().enumerate() {
         let start = std::time::Instant::now();
         let outcome = exec_on_mysql_conn(&mut *conn, q, limit, page).await;
-        results.push(crate::models::BatchStatementResult::from_outcome(
-            start, outcome,
-        ));
+        let res = crate::models::BatchStatementResult::from_outcome(start, outcome);
+        if let Some(cb) = on_progress {
+            cb(idx, &res);
+        }
+        results.push(res);
     }
     Ok(results)
 }
@@ -1221,6 +1224,7 @@ impl MysqlDriver {
                     manage_tables: true,
                     readonly: false,
                     triggers: true,
+                    supports_ssl: true,
                     sql_dialect: SqlDialect::Mysql,
                 },
                 is_builtin: true,
@@ -1313,8 +1317,16 @@ impl DatabaseDriver for MysqlDriver {
         let connect_timeout =
             mysql_numeric_setting("connectTimeout", DEFAULT_MYSQL_CONNECT_TIMEOUT_MS);
         let timezone = mysql_string_setting("timezone", DEFAULT_MYSQL_TIMEZONE);
+        let ssl_mode = match params.ssl_mode.as_deref() {
+            Some("disabled") | Some("disable") => "disabled",
+            Some("preferred") | Some("prefer") => "preferred",
+            Some("required") | Some("require") => "required",
+            Some("verify_ca") => "verify_ca",
+            Some("verify_identity") => "verify_identity",
+            _ => "required",
+        };
         Ok(format!(
-            "mysql://{}@{}:{}/{}?maxAllowedPacket={}&socketTimeout={}&connectTimeout={}&timezone={}",
+            "mysql://{}@{}:{}/{}?maxAllowedPacket={}&socketTimeout={}&connectTimeout={}&timezone={}&ssl-mode={}",
             credentials,
             params.host.as_deref().unwrap_or("localhost"),
             params.port.unwrap_or(3306),
@@ -1323,6 +1335,7 @@ impl DatabaseDriver for MysqlDriver {
             socket_timeout,
             connect_timeout,
             encode(&timezone),
+            ssl_mode,
         ))
     }
 
@@ -1528,8 +1541,9 @@ impl DatabaseDriver for MysqlDriver {
         limit: Option<u32>,
         page: u32,
         schema: Option<&str>,
+        on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
     ) -> Result<Vec<crate::models::BatchStatementResult>, String> {
-        execute_batch(params, queries, limit, page, schema).await
+        execute_batch(params, queries, limit, page, schema, on_progress).await
     }
 
     async fn explain_query(

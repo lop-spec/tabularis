@@ -14,6 +14,7 @@ import {
 import clsx from "clsx";
 import { SidebarColumnItem } from "./SidebarColumnItem";
 import { dragState } from "../../../utils/dragState";
+import { areTableItemPropsEqual } from "../../../utils/sidebarTableItem";
 import type { TableColumn, ForeignKey, Index } from "../../../types/schema";
 import type { ContextMenuData } from "../../../types/sidebar";
 
@@ -42,7 +43,7 @@ interface SidebarTableItemProps {
   canManage?: boolean;
 }
 
-export const SidebarTableItem = ({
+const SidebarTableItemImpl = ({
   table,
   activeTable,
   onTableClick,
@@ -147,6 +148,8 @@ export const SidebarTableItem = ({
   return (
     <div className="flex flex-col">
       <div
+        data-table-name={table.name}
+        data-schema={schema ?? ''}
         onPointerDown={(e) => {
           dragState.start(table.name);
           const ghost = document.createElement('div');
@@ -375,3 +378,15 @@ export const SidebarTableItem = ({
     </div>
   );
 };
+
+/**
+ * Memoized to avoid re-rendering every table item on each sidebar render.
+ * With hundreds of tables the parent re-renders frequently (e.g. when
+ * `activeTable` changes after selecting a Quick Navigator result), and the
+ * call sites pass freshly-created inline callbacks on every render.
+ * See `areTableItemPropsEqual` for the comparison rationale.
+ */
+export const SidebarTableItem = React.memo(
+  SidebarTableItemImpl,
+  areTableItemPropsEqual,
+);
