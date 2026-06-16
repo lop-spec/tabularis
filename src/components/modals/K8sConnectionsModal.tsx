@@ -213,9 +213,6 @@ export function K8sConnectionsModal({
       );
       return;
     }
-
-    if (effectivePort == null) return;
-
     const input: K8sConnectionInput = {
       name,
       context,
