@@ -208,19 +208,10 @@ export function K8sConnectionsModal({
       port: effectivePort,
     });
     if (!validation.isValid) {
-      setValidationError(
-        validation.error ?? t("k8sConnections.validationFailed"),
-      );
+      setValidationError(t(validation.errorKey));
       return;
     }
-    const input: K8sConnectionInput = {
-      name,
-      context,
-      namespace,
-      resource_type: resourceType,
-      resource_name: resourceName,
-      port: effectivePort,
-    };
+    const input: K8sConnectionInput = validation.value;
 
     try {
       if (isCreating) {

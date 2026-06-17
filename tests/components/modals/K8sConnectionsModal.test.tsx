@@ -12,6 +12,11 @@ interface MockSelectProps {
 }
 
 interface K8sValidationInput {
+  name?: string;
+  context?: string;
+  namespace?: string;
+  resource_type?: string;
+  resource_name?: string;
   port?: number;
 }
 
@@ -112,10 +117,20 @@ describe("K8sConnectionsModal port defaults", () => {
     k8sMocks.getK8sResources.mockResolvedValue(["mysql-svc"]);
     k8sMocks.getK8sResourcePorts.mockResolvedValue([]);
     k8sMocks.validateK8sConnection.mockImplementation(
-      ({ port }: K8sValidationInput) =>
-        port != null && port >= 1 && port <= 65535
-          ? { isValid: true }
-          : { isValid: false, error: "Port must be between 1 and 65535" },
+      (input: K8sValidationInput) =>
+        input.port != null && input.port >= 1 && input.port <= 65535
+          ? {
+              isValid: true,
+              value: {
+                name: input.name ?? "",
+                context: input.context ?? "",
+                namespace: input.namespace ?? "",
+                resource_type: input.resource_type ?? "service",
+                resource_name: input.resource_name ?? "",
+                port: input.port,
+              },
+            }
+          : { isValid: false, errorKey: "k8sConnections.errors.portInvalid" },
     );
   });
 
