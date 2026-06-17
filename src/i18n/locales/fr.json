@@ -1542,6 +1542,14 @@
     "port": "Port du conteneur",
     "test": "Tester",
     "testing": "Test en cours...",
-    "validationFailed": "Échec de la validation"
+    "validationFailed": "Échec de la validation",
+    "errors": {
+      "nameRequired": "Le nom de la connexion est requis",
+      "contextRequired": "Le contexte Kubernetes est requis",
+      "namespaceRequired": "Le namespace est requis",
+      "resourceTypeInvalid": "Le type de ressource doit être \"service\" ou \"pod\"",
+      "resourceNameRequired": "Le nom de la ressource est requis",
+      "portInvalid": "Le port doit être compris entre 1 et 65535"
+    }
   }
 }
