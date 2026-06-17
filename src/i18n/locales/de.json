@@ -1542,6 +1542,14 @@
     "port": "Container-Port",
     "test": "Testen",
     "testing": "Wird getestet...",
-    "validationFailed": "Validierung fehlgeschlagen"
+    "validationFailed": "Validierung fehlgeschlagen",
+    "errors": {
+      "nameRequired": "Der Verbindungsname ist erforderlich",
+      "contextRequired": "Der Kubernetes-Kontext ist erforderlich",
+      "namespaceRequired": "Der Namespace ist erforderlich",
+      "resourceTypeInvalid": "Der Ressourcentyp muss \"service\" oder \"pod\" sein",
+      "resourceNameRequired": "Der Ressourcenname ist erforderlich",
+      "portInvalid": "Der Port muss zwischen 1 und 65535 liegen"
+    }
   }
 }
