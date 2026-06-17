@@ -1603,6 +1603,14 @@
     "port": "Container Port",
     "test": "Test",
     "testing": "Testing...",
-    "validationFailed": "Validation failed"
+    "validationFailed": "Validation failed",
+    "errors": {
+      "nameRequired": "Connection name is required",
+      "contextRequired": "Kubernetes context is required",
+      "namespaceRequired": "Namespace is required",
+      "resourceTypeInvalid": "Resource type must be \"service\" or \"pod\"",
+      "resourceNameRequired": "Resource name is required",
+      "portInvalid": "Port must be between 1 and 65535"
+    }
   }
 }
