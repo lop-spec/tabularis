@@ -1561,6 +1561,14 @@
     "port": "コンテナポート",
     "test": "テスト",
     "testing": "テスト中...",
-    "validationFailed": "検証に失敗しました"
+    "validationFailed": "検証に失敗しました",
+    "errors": {
+      "nameRequired": "接続名は必須です",
+      "contextRequired": "Kubernetes コンテキストは必須です",
+      "namespaceRequired": "ネームスペースは必須です",
+      "resourceTypeInvalid": "リソースタイプは \"service\" または \"pod\" である必要があります",
+      "resourceNameRequired": "リソース名は必須です",
+      "portInvalid": "ポートは 1 から 65535 の範囲で指定してください"
+    }
   }
 }
