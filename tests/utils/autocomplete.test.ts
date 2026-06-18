@@ -195,6 +195,69 @@ describe('autocomplete', () => {
       expect(tableSuggestions[0]?.insertText).toBe('"AccountEventLog"');
     });
 
+    it('swallows the auto-closed quote pair when an opening quote was typed (postgres)', async () => {
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'AccountEventLog' }],
+        null,
+        'postgres',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      // `SELECT * FROM ""` — Monaco auto-closed the quote, cursor between the pair.
+      const model = createMockModel('SELECT * FROM ""');
+      model.getWordUntilPosition = vi.fn(() => ({ startColumn: 16, endColumn: 16 }));
+
+      const result = await provider.provideCompletionItems(model, {
+        lineNumber: 1,
+        column: 16,
+      });
+
+      const table = result.suggestions.find((s: { sortText?: string }) =>
+        s.sortText?.startsWith('1_'),
+      );
+      // Canonical quoted identifier, range swallows BOTH surrounding quotes so
+      // the result is exactly "AccountEventLog" (not ""AccountEventLog"").
+      expect(table?.insertText).toBe('"AccountEventLog"');
+      expect(table?.range.startColumn).toBe(15);
+      expect(table?.range.endColumn).toBe(17);
+      // Range starts at the opening quote, so filterText must also be quoted or
+      // Monaco filters every suggestion out.
+      expect(table?.filterText).toBe('"AccountEventLog"');
+    });
+
+    it('still closes the identifier when the auto-closed quote was deleted (postgres)', async () => {
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'AccountEventLog' }],
+        null,
+        'postgres',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      // `SELECT * FROM "` — user deleted the auto-closed quote, only the opening one remains.
+      const model = createMockModel('SELECT * FROM "');
+      model.getWordUntilPosition = vi.fn(() => ({ startColumn: 16, endColumn: 16 }));
+
+      const result = await provider.provideCompletionItems(model, {
+        lineNumber: 1,
+        column: 16,
+      });
+
+      const table = result.suggestions.find((s: { sortText?: string }) =>
+        s.sortText?.startsWith('1_'),
+      );
+      // Full quoted identifier replaces the lone opening quote → "AccountEventLog".
+      expect(table?.insertText).toBe('"AccountEventLog"');
+      expect(table?.range.startColumn).toBe(15);
+      expect(table?.range.endColumn).toBe(16);
+      expect(table?.filterText).toBe('"AccountEventLog"');
+    });
+
     it('does not quote plain lowercase table names for postgres', async () => {
       const monaco = createMockMonaco();
       registerSqlAutocomplete(

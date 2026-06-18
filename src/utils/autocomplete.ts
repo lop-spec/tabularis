@@ -1,7 +1,7 @@
 import type { Monaco } from "@monaco-editor/react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TableInfo } from "../contexts/DatabaseContext";
-import { formatSqlIdentifier } from "./identifiers";
+import { formatSqlIdentifier, getQuoteChar, quoteIdentifier } from "./identifiers";
 import { getCurrentStatement, parseTablesFromQuery, type ParsedTableRef } from "./sqlAnalysis";
 
 // Lightweight column cache with TTL and size limits
@@ -132,6 +132,51 @@ export const registerSqlAutocomplete = (
         endColumn: wordUntil.endColumn,
       };
 
+      // When the user has already typed an opening quote, Monaco auto-closes it
+      // so the cursor sits inside a pair (`"|"`); the user may also have deleted
+      // the closing one (`"|`). Inserting a freshly quoted identifier into the
+      // word range would then double the opening quote (`""AccountEventLog"`) or
+      // leave it dangling. So when an opening quote precedes the replacement
+      // range, expand the range to swallow it (and the closing quote if present)
+      // and emit a fully-quoted identifier — yielding a canonical result for 0, 1
+      // or 2 surrounding quotes alike.
+      const quoteChar = getQuoteChar(driver);
+      const charAt = (column: number): string =>
+        column < 1
+          ? ""
+          : model.getValueInRange({
+              startLineNumber: position.lineNumber,
+              startColumn: column,
+              endLineNumber: position.lineNumber,
+              endColumn: column + 1,
+            });
+      const buildIdentifierInsert = (
+        name: string,
+        baseRange: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number },
+      ): {
+        insertText: string;
+        range: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number };
+        filterText?: string;
+      } => {
+        if (baseRange.startColumn <= 1 || charAt(baseRange.startColumn - 1) !== quoteChar) {
+          return { insertText: formatSqlIdentifier(name, driver), range: baseRange };
+        }
+        const swallowsClosing = charAt(baseRange.endColumn) === quoteChar;
+        const insertText = quoteIdentifier(name, driver);
+        return {
+          insertText,
+          // The range now starts at the opening quote, so Monaco filters items
+          // against the leading quote; match it by giving filterText the same
+          // quoted form, otherwise every suggestion gets filtered out.
+          filterText: insertText,
+          range: {
+            ...baseRange,
+            startColumn: baseRange.startColumn - 1,
+            endColumn: swallowsClosing ? baseRange.endColumn + 1 : baseRange.endColumn,
+          },
+        };
+      };
+
       // Get text until cursor position
       const textUntilPosition = model.getValueInRange({
         startLineNumber: position.lineNumber,
@@ -198,8 +243,7 @@ export const registerSqlAutocomplete = (
               label: c.label,
               kind: monaco.languages.CompletionItemKind.Field,
               detail: c.detail,
-              insertText: formatSqlIdentifier(c.label, driver),
-              range: columnRange,
+              ...buildIdentifierInsert(c.label, columnRange),
               sortText: `0_${c.label}`,
             })),
           };
@@ -218,6 +262,7 @@ export const registerSqlAutocomplete = (
         insertText: string;
         range: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number };
         sortText: string;
+        filterText?: string;
       }> = [];
       
       if (tableAliases && tableAliases.size > 0) {
@@ -273,8 +318,7 @@ export const registerSqlAutocomplete = (
                 label: col.label,
                 kind: monaco.languages.CompletionItemKind.Field,
                 detail: `${col.detail} — ${table.name}${aliasHint}`,
-                insertText: formatSqlIdentifier(col.label, driver),
-                range,
+                ...buildIdentifierInsert(col.label, range),
                 sortText: `0_${col.label}`,
               });
             }
@@ -303,8 +347,7 @@ export const registerSqlAutocomplete = (
         label: t.name,
         kind: monaco.languages.CompletionItemKind.Class,
         detail: "Table",
-        insertText: formatSqlIdentifier(t.name, driver),
-        range,
+        ...buildIdentifierInsert(t.name, range),
         sortText: `1_${t.name}`
       }));
 
