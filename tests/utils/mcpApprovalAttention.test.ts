@@ -171,6 +171,45 @@ describe("mcpApprovalAttention", () => {
     expect(createGain).toHaveBeenCalledTimes(1);
   });
 
+  it("plays the OS notification sound on Linux instead of the autoplay-blocked web audio tone", async () => {
+    const originalPlatform = navigator.platform;
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "Linux x86_64",
+    });
+
+    vi.mocked(isPermissionGranted).mockResolvedValue(true);
+    vi.mocked(requestPermission).mockResolvedValue("granted");
+    vi.mocked(sendNotification).mockResolvedValue(undefined);
+
+    const audioContext = vi.fn();
+    Object.defineProperty(window, "AudioContext", {
+      configurable: true,
+      value: audioContext,
+    });
+
+    const attention = await import("../../src/utils/mcpApprovalAttention");
+
+    await attention.notifyApprovalRequest({
+      title: "Approval needed",
+      body: "Review pending approval",
+    });
+
+    expect(sendNotification).toHaveBeenCalledWith({
+      title: "Approval needed",
+      body: "Review pending approval",
+      sound: "message-new-instant",
+    });
+    // WebKitGTK keeps the programmatic AudioContext suspended, so on Linux we
+    // rely on the OS notification sound and never attempt the in-page tone.
+    expect(audioContext).not.toHaveBeenCalled();
+
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: originalPlatform,
+    });
+  });
+
   it("still plays the short alert sound when notification permission is denied", async () => {
     vi.mocked(isPermissionGranted).mockResolvedValue(false);
     vi.mocked(requestPermission).mockResolvedValue("denied");

@@ -187,6 +187,24 @@ export async function restoreWindowAlwaysOnTop(
   windowAttentionSnapshotApprovalId = null;
 }
 
+// XDG theme sound played through the OS notification on Linux. The file ships
+// with the freedesktop sound theme and exists on every desktop we target.
+const LINUX_NOTIFICATION_SOUND = "message-new-instant";
+
+/**
+ * On Linux the WebKitGTK autoplay policy keeps the programmatically-started
+ * AudioContext suspended, so the in-page alert tone never reaches the speakers.
+ * Returning a sound name here routes the alert through the OS notification
+ * instead. macOS/Windows return undefined and keep using the Web Audio tone,
+ * which their webviews allow without a user gesture.
+ */
+function approvalNotificationSound(): string | undefined {
+  const platform = typeof navigator !== "undefined" ? navigator.platform : "";
+  return platform.toUpperCase().includes("LINUX")
+    ? LINUX_NOTIFICATION_SOUND
+    : undefined;
+}
+
 export async function notifyApprovalRequest(
   content: ApprovalNotificationContent,
 ): Promise<void> {
@@ -196,17 +214,24 @@ export async function notifyApprovalRequest(
     permissionGranted = permission === "granted";
   }
 
+  const sound = approvalNotificationSound();
+
   if (permissionGranted) {
     sendNotification({
       title: content.title,
       body: content.body,
+      ...(sound ? { sound } : {}),
     });
   }
 
-  try {
-    playApprovalSound();
-  } catch {
-    // Keep notification failures isolated from the short alert sound.
+  // When the OS notification carries the sound (Linux) we skip the in-page tone
+  // to avoid a double alert; elsewhere the Web Audio tone is the alert.
+  if (!sound) {
+    try {
+      playApprovalSound();
+    } catch {
+      // Keep notification failures isolated from the short alert sound.
+    }
   }
 }
 
