@@ -1614,6 +1614,14 @@
     "port": "Порт контейнера",
     "test": "Проверить",
     "testing": "Проверка...",
-    "validationFailed": "Ошибка проверки"
+    "validationFailed": "Ошибка проверки",
+    "errors": {
+      "nameRequired": "Имя подключения обязательно",
+      "contextRequired": "Контекст Kubernetes обязателен",
+      "namespaceRequired": "Пространство имён обязательно",
+      "resourceTypeInvalid": "Тип ресурса должен быть \"service\" или \"pod\"",
+      "resourceNameRequired": "Имя ресурса обязательно",
+      "portInvalid": "Порт должен быть в диапазоне от 1 до 65535"
+    }
   }
 }

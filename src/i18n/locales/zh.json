@@ -1483,6 +1483,14 @@
     "port": "容器端口",
     "test": "测试",
     "testing": "测试中...",
-    "validationFailed": "验证失败"
+    "validationFailed": "验证失败",
+    "errors": {
+      "nameRequired": "连接名称为必填项",
+      "contextRequired": "Kubernetes 上下文为必填项",
+      "namespaceRequired": "命名空间为必填项",
+      "resourceTypeInvalid": "资源类型必须为 \"service\" 或 \"pod\"",
+      "resourceNameRequired": "资源名称为必填项",
+      "portInvalid": "端口必须介于 1 和 65535 之间"
+    }
   }
 }

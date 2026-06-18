@@ -1525,6 +1525,14 @@
     "port": "Porta container",
     "test": "Test",
     "testing": "Test in corso...",
-    "validationFailed": "Validazione fallita"
+    "validationFailed": "Validazione fallita",
+    "errors": {
+      "nameRequired": "Il nome della connessione è obbligatorio",
+      "contextRequired": "Il contesto Kubernetes è obbligatorio",
+      "namespaceRequired": "Il namespace è obbligatorio",
+      "resourceTypeInvalid": "Il tipo di risorsa deve essere \"service\" o \"pod\"",
+      "resourceNameRequired": "Il nome della risorsa è obbligatorio",
+      "portInvalid": "La porta deve essere compresa tra 1 e 65535"
+    }
   }
 }
