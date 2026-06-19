@@ -9,7 +9,7 @@ export interface ParsedTableRef {
 // Unquoted identifiers are normalized to lowercase.
 function stripIdentifierQuotes(token: string): string {
   const q = token[0];
-  if (q === '"' || q === '`') return token.slice(1, -1);
+  if (q === '"' || q === '`') return token.slice(1, -1).replaceAll(q + q, q);
   return token.toLowerCase();
 }
 
