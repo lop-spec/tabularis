@@ -29,6 +29,11 @@
 ![Build & Release](https://github.com/TabularisDB/tabularis/workflows/Release/badge.svg)
 [![Discord](https://img.shields.io/discord/1502944695808950282?color=5865F2&logo=discord&logoColor=white)](https://discord.com/invite/K2hmhfHRSt)
 [![Gitster](https://gitster.dev/api/repositories/badge/cmlko1jr60005ne4yh7i7oy3e)](https://gitster.dev/repo/TabularisDB/tabularis)
+<br />
+<br />
+<a href="https://vercel.com/open-source-program">
+  <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge-2026.svg" />
+</a>
 
 </p>
 
