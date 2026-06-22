@@ -314,6 +314,8 @@
     "roadmapDesc": "此项目是正在进行的工作 (WIP)。核心功能已稳定，但我们有更大的计划。",
     "support": "支持开发",
     "supportDesc": "如果您喜欢 Tabularis 并希望看到更多功能，请考虑通过贡献代码、报告错误或 Star 项目来支持该项目。",
+    "followUs": "关注我们",
+    "followUsDesc": "在您喜爱的平台上获取最新动态并与社区交流。",
     "version": "版本",
     "starOnGithub": "在 GitHub 上 Star",
     "ai": {

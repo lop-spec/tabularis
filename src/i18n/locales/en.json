@@ -362,6 +362,8 @@
     "roadmapDesc": "This project is a Work In Progress (WIP). Core features are stable, but we have big plans.",
     "support": "Support the Development",
     "supportDesc": "If you like tabularis and want to see more features, consider supporting the project by contributing code, reporting bugs, or starring the repo.",
+    "followUs": "Follow Us",
+    "followUsDesc": "Stay up to date and connect with the community on your favorite platform.",
     "version": "Version",
     "starOnGithub": "Star on GitHub",
     "ai": {
