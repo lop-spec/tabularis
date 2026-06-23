@@ -41,8 +41,10 @@ import {
   getColumnSortState,
   calculateSelectionRange,
   toggleSetValue,
+  getResultValueType,
   type MergedRow,
 } from "../../utils/dataGrid";
+import { useSettings } from "../../hooks/useSettings";
 import { isGeometricType, formatGeometricValue } from "../../utils/geometry";
 import { isBlobColumn, isBlobWireFormat } from "../../utils/blob";
 import { isJsonColumn, isJsonContent } from "../../utils/json";
@@ -149,6 +151,8 @@ export const DataGrid = React.memo(
     const { t } = useTranslation();
     const { activeSchema, connections } = useDatabase();
     const { showAlert } = useAlert();
+    const { settings } = useSettings();
+    const colorByType = settings.resultColorByType ?? false;
 
     const detectJsonInTextColumns = useMemo(() => {
       if (!connectionId) return false;
@@ -254,6 +258,19 @@ export const DataGrid = React.memo(
         columnMetadata.map((col) => [col.name, col.character_maximum_length]),
       );
     }, [columnMetadata]);
+
+    // Precompute the result-coloring class per column once (the type is fixed
+    // per column), so rows don't reclassify every cell on each render. `null`
+    // when the feature is off, which makes rows skip the wrapper entirely.
+    const resultColorClassMap = useMemo(() => {
+      if (!colorByType) return null;
+      const map = new Map<string, string>();
+      for (const colName of columns) {
+        const colType = columnTypeMap?.get(colName);
+        if (colType) map.set(colName, `rcell-${getResultValueType(undefined, colType)}`);
+      }
+      return map;
+    }, [colorByType, columns, columnTypeMap]);
 
     const isJsonCellTarget = useCallback(
       (colType: string | undefined, value: unknown): boolean => {
@@ -464,6 +481,51 @@ export const DataGrid = React.memo(
       if (mergedRow.type !== "insertion" && !pkColumn) return;
 
       const colName = columns[colIndex];
+
+      // For existing rows we must be able to build a safe UPDATE. Two guards,
+      // each running whenever the data it depends on is available, so they
+      // don't silently no-op when a driver omits result metadata:
+      //
+      // 1. The primary key must be present in the result set (needed for the
+      //    WHERE clause). Depends only on pkColumn + columns.
+      // 2. The edited column must map to a real physical column of the table
+      //    (prevents malformed UPDATEs on aliased/computed columns). Requires
+      //    columnMetadata; skipped when it's unavailable.
+      if (mergedRow.type !== "insertion") {
+        if (
+          pkColumn &&
+          !columns.some((c) => c.toLowerCase() === pkColumn.toLowerCase())
+        ) {
+          showAlert(
+            t("dataGrid.pkRequiredToEdit", {
+              pk: pkColumn,
+              defaultValue:
+                'To edit this result, include the primary key column "{{pk}}" in your SELECT.',
+            }),
+            { title: t("common.error"), kind: "warning" },
+          );
+          return;
+        }
+
+        if (columnMetadata && columnMetadata.length > 0) {
+          const realColumns = new Set(
+            columnMetadata.map((c) => c.name.toLowerCase()),
+          );
+          if (!realColumns.has(colName.toLowerCase())) {
+            showAlert(
+              t("dataGrid.columnNotEditable", {
+                column: colName,
+                table: tableName,
+                defaultValue:
+                  'Column "{{column}}" can\'t be edited — it is not a direct column of table "{{table}}" (likely an alias or computed value).',
+              }),
+              { title: t("common.error"), kind: "warning" },
+            );
+            return;
+          }
+        }
+      }
+
       const colType = columnTypeMap?.get(colName);
 
       if (
@@ -518,8 +580,11 @@ export const DataGrid = React.memo(
         columns,
         columnTypeMap,
         columnLengthMap,
+        columnMetadata,
         buildRowDataWithPending,
         openJsonViewerWindow,
+        showAlert,
+        t,
       ],
     );
 
@@ -1145,6 +1210,7 @@ export const DataGrid = React.memo(
         pendingChanges,
         columnTypeMap,
         columnLengthMap,
+        resultColorClassMap,
         isJsonCellTarget,
         fksByColumn,
         t,
@@ -1181,6 +1247,7 @@ export const DataGrid = React.memo(
         pendingChanges,
         columnTypeMap,
         columnLengthMap,
+        resultColorClassMap,
         isJsonCellTarget,
         fksByColumn,
         t,
