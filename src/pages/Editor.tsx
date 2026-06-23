@@ -328,6 +328,9 @@ export const Editor = () => {
   const [csvDelimiter, setCsvDelimiter] = useState(
     settings.csvDelimiter ?? ",",
   );
+  const [csvIncludeHeaders, setCsvIncludeHeaders] = useState(
+    settings.csvIncludeHeaders ?? true,
+  );
 
   const activeTabType = activeTab?.type;
   const activeTabQuery = activeTab?.query;
@@ -2995,6 +2998,7 @@ export const Editor = () => {
                 connectionId={activeConnectionId}
                 copyFormat={copyFormat}
                 csvDelimiter={csvDelimiter}
+                csvIncludeHeaders={csvIncludeHeaders}
                 onSelectResult={(entryId) =>
                   updateTab(activeTab.id, { activeResultId: entryId })
                 }
@@ -3312,6 +3316,24 @@ export const Editor = () => {
                           </option>
                         </select>
                       )}
+                      {copyFormat === "csv" && (
+                        <label
+                          className="flex items-center gap-1 cursor-pointer select-none text-[11px] text-secondary hover:text-primary"
+                          title={t("settings.csvIncludeHeaders")}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={csvIncludeHeaders}
+                            onChange={(e) =>
+                              setCsvIncludeHeaders(e.target.checked)
+                            }
+                            className="w-3 h-3 cursor-pointer accent-blue-500"
+                          />
+                          <span className="font-medium tracking-wide">
+                            {t("settings.csvHeaders")}
+                          </span>
+                        </label>
+                      )}
                     </div>
 
                     {/* Separator */}
@@ -3396,6 +3418,7 @@ export const Editor = () => {
                       onSelectionChange={handleSelectionChange}
                       copyFormat={copyFormat}
                       csvDelimiter={csvDelimiter}
+                      csvIncludeHeaders={csvIncludeHeaders}
                       sortClause={activeTab.sortClause}
                       onSort={
                         activeTab.type === "table" &&
