@@ -36,6 +36,7 @@ import {
   getK8sContexts,
   getK8sNamespaces,
   getK8sResources,
+  getK8sResourcePorts,
   type K8sConnection,
 } from "../../utils/k8s";
 import { isMultiDatabaseCapable } from "../../utils/database";
@@ -294,6 +295,14 @@ export const NewConnectionModal = ({
   const [k8sConnections, setK8sConnections] = useState<K8sConnection[]>([]);
   const [isK8sModalOpen, setIsK8sModalOpen] = useState(false);
   const [k8sMode, setK8sMode] = useState<"existing" | "inline">("existing");
+  const [isK8sPortOverridden, setIsK8sPortOverridden] = useState(false);
+  const [k8sAutoPort, setK8sAutoPort] = useState<{
+    context: string;
+    namespace: string;
+    resourceType: string;
+    resourceName: string;
+    port: number;
+  } | null>(null);
   const [k8sContexts, setK8sContexts] = useState<string[]>([]);
   const [k8sNamespaces, setK8sNamespaces] = useState<string[]>([]);
   const [k8sResources, setK8sResources] = useState<string[]>([]);
@@ -382,6 +391,21 @@ export const NewConnectionModal = ({
     !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
     !activeDriver?.capabilities?.folder_based;
+  const k8sDefaultPort = activeDriver?.default_port ?? undefined;
+  // Derive K8s ports instead of seeding formData so edit flows with no saved port are covered.
+  const getK8sAutoPort = (params: Partial<ConnectionParams>) =>
+    k8sAutoPort &&
+    params.k8s_context === k8sAutoPort.context &&
+    params.k8s_namespace === k8sAutoPort.namespace &&
+    params.k8s_resource_type === k8sAutoPort.resourceType &&
+    params.k8s_resource_name === k8sAutoPort.resourceName
+      ? k8sAutoPort.port
+      : undefined;
+  const resolveK8sPort = (params: Partial<ConnectionParams>) =>
+    params.k8s_enabled && k8sMode === "inline"
+      ? params.k8s_port ?? getK8sAutoPort(params) ?? k8sDefaultPort
+      : params.k8s_port;
+  const effectiveK8sPort = resolveK8sPort(formData);
   const connectionStringEnabled =
     activeDriver?.capabilities?.connection_string ??
     activeDriver?.capabilities?.connectionString ??
@@ -474,6 +498,57 @@ export const NewConnectionModal = ({
     }
   }, [formData.k8s_context, formData.k8s_namespace, formData.k8s_resource_type]);
 
+  useEffect(() => {
+    const context = formData.k8s_context;
+    const namespace = formData.k8s_namespace;
+    const resourceType = formData.k8s_resource_type;
+    const resourceName = formData.k8s_resource_name;
+    if (
+      !formData.k8s_enabled ||
+      k8sMode !== "inline" ||
+      !context ||
+      !namespace ||
+      resourceType !== "service" ||
+      !resourceName ||
+      isK8sPortOverridden
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const ports = await getK8sResourcePorts(
+          context,
+          namespace,
+          resourceType,
+          resourceName,
+        );
+        if (!cancelled) {
+          setK8sAutoPort(
+            ports.length === 1
+              ? { context, namespace, resourceType, resourceName, port: ports[0] }
+              : null,
+          );
+        }
+      } catch {
+        // Best-effort convenience only: keep the current/default port.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    formData.k8s_enabled,
+    formData.k8s_context,
+    formData.k8s_namespace,
+    formData.k8s_resource_type,
+    formData.k8s_resource_name,
+    isK8sPortOverridden,
+    k8sMode,
+  ]);
+
   const updateField = (
     field: keyof ConnectionParams,
     value: string | number | boolean | undefined,
@@ -495,7 +570,7 @@ export const NewConnectionModal = ({
     setLoadingDatabases(true);
     setDatabaseLoadError(null);
     try {
-      const listParams: Partial<ConnectionParams> = {
+      const listParamsBase: Partial<ConnectionParams> = {
         ...formData,
         ...overrides,
         driver: effectiveDriver,
@@ -505,6 +580,10 @@ export const NewConnectionModal = ({
             : formData.port != null
               ? Number(formData.port)
               : undefined,
+      };
+      const listParams: Partial<ConnectionParams> = {
+        ...listParamsBase,
+        k8s_port: resolveK8sPort(listParamsBase),
       };
       const databases = await invoke<string[]>("list_databases", {
         request: {
@@ -561,6 +640,7 @@ export const NewConnectionModal = ({
       setInstallStatus("idle");
       setInstallError(undefined);
       setStep(initialConnection ? "form" : "catalogue");
+      setIsK8sPortOverridden(false);
 
       if (initialConnection) {
         setName(initialConnection.name);
@@ -587,6 +667,7 @@ export const NewConnectionModal = ({
           // fallback: use params without secrets (backend will retrieve from keychain)
         }
 
+        setIsK8sPortOverridden(params.k8s_port != null);
         if (Array.isArray(db)) {
           setSelectedDatabasesState(db);
           setFormData({ ...params, database: db[0] ?? "" });
@@ -616,6 +697,8 @@ export const NewConnectionModal = ({
         });
         setSelectedDatabasesState([]);
         setSshMode("existing");
+        setK8sMode("existing");
+        setIsK8sPortOverridden(false);
         setDetectJsonInTextColumns(false);
         setAppearance({});
       }
@@ -655,6 +738,7 @@ export const NewConnectionModal = ({
       k8s_resource_name: undefined,
       k8s_port: undefined,
     });
+    setIsK8sPortOverridden(false);
     setSelectedDatabasesState([]);
     setDbSearchQuery("");
     setAvailableDatabases([]);
@@ -714,6 +798,7 @@ export const NewConnectionModal = ({
         driver,
         ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
+        k8s_port: effectiveK8sPort,
         database: isMultiDb
           ? (selectedDatabasesState[0] ??
             (typeof formData.database === "string" ? formData.database : ""))
@@ -797,6 +882,7 @@ export const NewConnectionModal = ({
         driver,
         ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
+        k8s_port: effectiveK8sPort,
         database: isMultiDb
           ? selectedDatabasesState.length === 1
             ? selectedDatabasesState[0]
@@ -1752,6 +1838,7 @@ export const NewConnectionModal = ({
                     updateField("k8s_resource_type", undefined);
                     updateField("k8s_resource_name", undefined);
                     updateField("k8s_port", undefined);
+                    setIsK8sPortOverridden(false);
                   } else {
                     updateField("k8s_connection_id", undefined);
                   }
@@ -1795,6 +1882,8 @@ export const NewConnectionModal = ({
                       ]),
                     )}
                     onChange={(val) => updateField("k8s_connection_id", val)}
+                    searchPlaceholder={t("common.search")}
+                    noResultsLabel={t("common.noResults")}
                     placeholder={
                       k8sConnections.length === 0
                         ? t("newConnection.noK8sConnections", {
@@ -1804,7 +1893,6 @@ export const NewConnectionModal = ({
                             defaultValue: "Choose a connection...",
                           })
                     }
-                    searchable={false}
                   />
                   <button
                     type="button"
@@ -1835,6 +1923,8 @@ export const NewConnectionModal = ({
                   onChange={(val) => {
                     updateField("k8s_context", val);
                   }}
+                  searchPlaceholder={t("common.search")}
+                  noResultsLabel={t("common.noResults")}
                   placeholder={
                     k8sContexts.length === 0
                       ? t("newConnection.noK8sContexts", {
@@ -1844,7 +1934,6 @@ export const NewConnectionModal = ({
                           defaultValue: "Choose a context...",
                         })
                   }
-                  searchable={false}
                 />
               </div>
 
@@ -1860,6 +1949,8 @@ export const NewConnectionModal = ({
                   onChange={(val) => {
                     updateField("k8s_namespace", val);
                   }}
+                  searchPlaceholder={t("common.search")}
+                  noResultsLabel={t("common.noResults")}
                   placeholder={
                     k8sNamespaces.length === 0
                       ? t("newConnection.selectContextFirst", {
@@ -1869,7 +1960,6 @@ export const NewConnectionModal = ({
                           defaultValue: "Choose a namespace...",
                         })
                   }
-                  searchable={false}
                 />
               </div>
 
@@ -1913,6 +2003,8 @@ export const NewConnectionModal = ({
                     onChange={(val) =>
                       updateField("k8s_resource_name", val)
                     }
+                    searchPlaceholder={t("common.search")}
+                    noResultsLabel={t("common.noResults")}
                     placeholder={
                       k8sResources.length === 0
                         ? t("newConnection.selectTypeFirst", {
@@ -1922,7 +2014,6 @@ export const NewConnectionModal = ({
                             defaultValue: "Choose a resource...",
                           })
                     }
-                    searchable={false}
                   />
                 </div>
               </div>
@@ -1931,9 +2022,13 @@ export const NewConnectionModal = ({
                 label={t("newConnection.k8sPort", {
                   defaultValue: "Container Port",
                 })}
-                value={formData.k8s_port ?? ""}
-                onChange={(v) => updateField("k8s_port", Number(v))}
-                placeholder="3306"
+                value={effectiveK8sPort ?? ""}
+                type="number"
+                onChange={(v) => {
+                  setIsK8sPortOverridden(v !== "");
+                  updateField("k8s_port", v === "" ? undefined : Number(v));
+                }}
+                placeholder={k8sDefaultPort != null ? String(k8sDefaultPort) : undefined}
               />
             </div>
           )}
@@ -2287,6 +2382,7 @@ export const NewConnectionModal = ({
           setIsK8sModalOpen(false);
           await loadK8sConnectionsList();
         }}
+        defaultPort={k8sDefaultPort}
       />
     </Modal>
   );

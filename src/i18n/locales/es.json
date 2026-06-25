@@ -1515,6 +1515,14 @@
     "port": "Puerto del contenedor",
     "test": "Probar",
     "testing": "Probando...",
-    "validationFailed": "Error de validación"
+    "validationFailed": "Error de validación",
+    "errors": {
+      "nameRequired": "El nombre de la conexión es obligatorio",
+      "contextRequired": "El contexto de Kubernetes es obligatorio",
+      "namespaceRequired": "El namespace es obligatorio",
+      "resourceTypeInvalid": "El tipo de recurso debe ser \"service\" o \"pod\"",
+      "resourceNameRequired": "El nombre del recurso es obligatorio",
+      "portInvalid": "El puerto debe estar entre 1 y 65535"
+    }
   }
 }

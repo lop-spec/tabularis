@@ -46,4 +46,6 @@ export const versionLinks: Record<string, string> = {
     "https://tabularis.dev/blog/v0130-kubernetes-tunnels-quick-navigator-dml-tabs",
   "0.13.1":
     "https://tabularis.dev/blog/v0131-signed-macos-postgres-explain-offset-pagination",
+  "0.13.2":
+    "https://tabularis.dev/blog/v0132-managed-notebooks-live-query-progress-faster-grid",
 };
