@@ -116,42 +116,9 @@ The app UI is available in English, Italian, Spanish, Chinese (Simplified), Fren
 
 ### Database support
 
-PostgreSQL, MySQL/MariaDB and SQLite ship built in. Everything else is a plugin — here's where each integration stands today, mirroring the [driver & plugin coverage](https://tabularis.dev/#driver-coverage) on the website.
+PostgreSQL, MySQL/MariaDB and SQLite ship built in. Everything else is a plugin — current coverage (mirroring the [driver & plugin coverage](https://tabularis.dev/#driver-coverage) on the website):
 
-| Database | Status |
-|---|---|
-| ClickHouse | Shipped |
-| Cloudflare D1 | Shipped |
-| DuckDB | Shipped |
-| Firestore | Shipped |
-| IBM Db2 | Shipped |
-| IBM Informix | Shipped |
-| MySQL / MariaDB | Shipped |
-| PostgreSQL | Shipped |
-| Redis | Shipped |
-| SQLite | Shipped |
-| CSV Folder | Shipped |
-| Google Sheets | Shipped |
-| HackerNews | Shipped |
-| Google BigQuery | Claimed |
-| LibSQL / Turso | Claimed |
-| Meilisearch | Claimed |
-| MongoDB | Claimed |
-| Oracle | Claimed |
-| SQL Server | Claimed |
-| Amazon Redshift | Scoped |
-| CockroachDB | Scoped |
-| TiDB | Scoped |
-| DynamoDB | Coming Soon |
-| Snowflake | Coming Soon |
-| Cassandra | Open |
-| Elasticsearch | Open |
-| Etcd | Open |
-| Firebird | Open |
-| ScyllaDB | Open |
-| SQL Anywhere | Open |
-| SurrealDB | Open |
-| Trino / Presto | Open |
+ClickHouse (shipped), Cloudflare D1 (shipped), DuckDB (shipped), Firestore (shipped), IBM Db2 (shipped), IBM Informix (shipped), Redis (shipped), CSV Folder (shipped), Google Sheets (shipped), HackerNews (shipped), Google BigQuery (claimed), LibSQL / Turso (claimed), Meilisearch (claimed), MongoDB (claimed), Oracle (claimed), SQL Server (claimed), Amazon Redshift (scoped), CockroachDB (scoped), TiDB (scoped), DynamoDB (coming soon), Snowflake (coming soon), Cassandra (open), Elasticsearch (open), Etcd (open), Firebird (open), ScyllaDB (open), SQL Anywhere (open), SurrealDB (open), Trino / Presto (open).
 
 > **Shipped** drivers are installable from the [plugin registry](https://tabularis.dev/plugins). Everything else is on the [bounty board](https://tabularis.dev/plugins/bounties) — claim one, sponsor one, or [request a database](https://github.com/TabularisDB/tabularis/discussions).
 
@@ -195,17 +162,12 @@ brew install --cask tabularis
 
 #### Direct Download
 
-When you install tabularis on macOS, you need to allow accessibility access (Privacy & Security) to the tabularis app.
+Builds from **v0.13.1** onward are signed and notarized by Apple, so they open without any extra steps.
 
-If you are upgrading and you already have tabularis on the allowed list you will need to manually remove them before accessibility access can be granted to the new version.
+The notes below only apply to **older releases (before v0.13.1)** downloaded directly:
 
-macOS users who download directly from releases may need to run:
-
-```bash
-xattr -c /Applications/tabularis.app
-```
-
-after copying the app to the Applications directory.
+- You need to allow accessibility access (Privacy & Security) to the tabularis app. If you are upgrading and already have tabularis on the allowed list, remove it manually before accessibility access can be granted to the new version.
+- You may need to run `xattr -c /Applications/tabularis.app` after copying the app to the Applications directory.
 
 ### Linux (Snap)
 

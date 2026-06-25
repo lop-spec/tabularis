@@ -79,40 +79,7 @@ sudo snap install tabularis                                      # Linux
 
 PostgreSQL、MySQL/MariaDB、SQLite は標準搭載されています。それ以外はすべてプラグインです。ここでは各インテグレーションの現状を、ウェブサイトの[ドライバー＆プラグイン対応状況](https://tabularis.dev/#driver-coverage)に合わせて示します。
 
-| データベース | ステータス |
-|---|---|
-| ClickHouse | 提供中 |
-| Cloudflare D1 | 提供中 |
-| DuckDB | 提供中 |
-| Firestore | 提供中 |
-| IBM Db2 | 提供中 |
-| IBM Informix | 提供中 |
-| MySQL / MariaDB | 提供中 |
-| PostgreSQL | 提供中 |
-| Redis | 提供中 |
-| SQLite | 提供中 |
-| CSV Folder | 提供中 |
-| Google Sheets | 提供中 |
-| HackerNews | 提供中 |
-| Google BigQuery | 担当者決定 |
-| LibSQL / Turso | 担当者決定 |
-| Meilisearch | 担当者決定 |
-| MongoDB | 担当者決定 |
-| Oracle | 担当者決定 |
-| SQL Server | 担当者決定 |
-| Amazon Redshift | 計画策定済み |
-| CockroachDB | 計画策定済み |
-| TiDB | 計画策定済み |
-| DynamoDB | 近日対応 |
-| Snowflake | 近日対応 |
-| Cassandra | 募集中 |
-| Elasticsearch | 募集中 |
-| Etcd | 募集中 |
-| Firebird | 募集中 |
-| ScyllaDB | 募集中 |
-| SQL Anywhere | 募集中 |
-| SurrealDB | 募集中 |
-| Trino / Presto | 募集中 |
+ClickHouse（提供中）、Cloudflare D1（提供中）、DuckDB（提供中）、Firestore（提供中）、IBM Db2（提供中）、IBM Informix（提供中）、Redis（提供中）、CSV Folder（提供中）、Google Sheets（提供中）、HackerNews（提供中）、Google BigQuery（担当者決定）、LibSQL / Turso（担当者決定）、Meilisearch（担当者決定）、MongoDB（担当者決定）、Oracle（担当者決定）、SQL Server（担当者決定）、Amazon Redshift（計画策定済み）、CockroachDB（計画策定済み）、TiDB（計画策定済み）、DynamoDB（近日対応）、Snowflake（近日対応）、Cassandra（募集中）、Elasticsearch（募集中）、Etcd（募集中）、Firebird（募集中）、ScyllaDB（募集中）、SQL Anywhere（募集中）、SurrealDB（募集中）、Trino / Presto（募集中）。
 
 > **提供中**のドライバーは[プラグインレジストリ](https://tabularis.dev/plugins)からインストールできます。それ以外は[バウンティボード](https://tabularis.dev/plugins/bounties)に掲載されています。担当する、スポンサーになる、または[データベースをリクエスト](https://github.com/TabularisDB/tabularis/discussions)してください。
 
@@ -133,11 +100,12 @@ brew tap TabularisDB/tabularis
 brew install --cask tabularis
 ```
 
-Release から直接インストールした場合は、次のコマンドが必要になることがあります。
+v0.13.1 以降のビルドは Apple による署名と公証（notarization）が行われているため、追加の手順なしでそのまま開けます。
 
-```bash
-xattr -c /Applications/tabularis.app
-```
+以下の手順は、v0.13.1 より前の古いリリースを直接ダウンロードした場合にのみ必要です。
+
+- tabularis アプリにアクセシビリティアクセス（プライバシーとセキュリティ）を許可する必要があります。アップグレードする際に、すでに tabularis が許可リストに登録されている場合は、新しいバージョンにアクセシビリティアクセスを許可する前に手動で削除してください。
+- アプリを Applications ディレクトリにコピーした後、次のコマンドの実行が必要になる場合があります: `xattr -c /Applications/tabularis.app`
 
 ### Linux
 

@@ -79,40 +79,7 @@ sudo snap install tabularis                                      # Linux
 
 PostgreSQL、MySQL/MariaDB 和 SQLite 为内置支持。其余均为插件——下面列出每个集成当前的状态，与网站上的[驱动与插件覆盖](https://tabularis.dev/#driver-coverage)保持一致。
 
-| 数据库 | 状态 |
-|---|---|
-| ClickHouse | 已发布 |
-| Cloudflare D1 | 已发布 |
-| DuckDB | 已发布 |
-| Firestore | 已发布 |
-| IBM Db2 | 已发布 |
-| IBM Informix | 已发布 |
-| MySQL / MariaDB | 已发布 |
-| PostgreSQL | 已发布 |
-| Redis | 已发布 |
-| SQLite | 已发布 |
-| CSV Folder | 已发布 |
-| Google Sheets | 已发布 |
-| HackerNews | 已发布 |
-| Google BigQuery | 已认领 |
-| LibSQL / Turso | 已认领 |
-| Meilisearch | 已认领 |
-| MongoDB | 已认领 |
-| Oracle | 已认领 |
-| SQL Server | 已认领 |
-| Amazon Redshift | 已规划 |
-| CockroachDB | 已规划 |
-| TiDB | 已规划 |
-| DynamoDB | 即将推出 |
-| Snowflake | 即将推出 |
-| Cassandra | 开放中 |
-| Elasticsearch | 开放中 |
-| Etcd | 开放中 |
-| Firebird | 开放中 |
-| ScyllaDB | 开放中 |
-| SQL Anywhere | 开放中 |
-| SurrealDB | 开放中 |
-| Trino / Presto | 开放中 |
+ClickHouse（已发布）、Cloudflare D1（已发布）、DuckDB（已发布）、Firestore（已发布）、IBM Db2（已发布）、IBM Informix（已发布）、Redis（已发布）、CSV Folder（已发布）、Google Sheets（已发布）、HackerNews（已发布）、Google BigQuery（已认领）、LibSQL / Turso（已认领）、Meilisearch（已认领）、MongoDB（已认领）、Oracle（已认领）、SQL Server（已认领）、Amazon Redshift（已规划）、CockroachDB（已规划）、TiDB（已规划）、DynamoDB（即将推出）、Snowflake（即将推出）、Cassandra（开放中）、Elasticsearch（开放中）、Etcd（开放中）、Firebird（开放中）、ScyllaDB（开放中）、SQL Anywhere（开放中）、SurrealDB（开放中）、Trino / Presto（开放中）。
 
 > 标记为**已发布**的驱动可从[插件注册表](https://tabularis.dev/plugins)安装。其余均在[悬赏看板](https://tabularis.dev/plugins/bounties)上——你可以认领、赞助，或[申请新数据库](https://github.com/TabularisDB/tabularis/discussions)。
 
@@ -133,11 +100,16 @@ brew tap TabularisDB/tabularis
 brew install --cask tabularis
 ```
 
-如果你从 release 直接安装，可能还需要执行：
+从 **v0.13.1** 起，构建版本已由 Apple 签名并公证，直接打开即可，无需任何额外步骤。
 
-```bash
-xattr -c /Applications/tabularis.app
-```
+以下说明仅适用于直接下载的旧版本（v0.13.1 之前）：
+
+- 你需要在“隐私与安全性”中授予 tabularis 应用辅助功能（Accessibility）访问权限。如果你是升级安装，并且 tabularis 已在允许列表中，请先手动将其移除，然后才能为新版本授予辅助功能访问权限。
+- 将应用复制到“应用程序”目录后，可能还需要执行：
+
+  ```bash
+  xattr -c /Applications/tabularis.app
+  ```
 
 ### Linux
 

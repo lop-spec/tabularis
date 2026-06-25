@@ -79,40 +79,7 @@ L’interfaccia dell’app è disponibile in inglese, italiano, spagnolo, cinese
 
 PostgreSQL, MySQL/MariaDB e SQLite sono integrati nativamente. Tutto il resto è un plugin — ecco a che punto è oggi ogni integrazione, rispecchiando la [copertura driver & plugin](https://tabularis.dev/#driver-coverage) sul sito.
 
-| Database | Stato |
-|---|---|
-| ClickHouse | Disponibile |
-| Cloudflare D1 | Disponibile |
-| DuckDB | Disponibile |
-| Firestore | Disponibile |
-| IBM Db2 | Disponibile |
-| IBM Informix | Disponibile |
-| MySQL / MariaDB | Disponibile |
-| PostgreSQL | Disponibile |
-| Redis | Disponibile |
-| SQLite | Disponibile |
-| CSV Folder | Disponibile |
-| Google Sheets | Disponibile |
-| HackerNews | Disponibile |
-| Google BigQuery | Assegnato |
-| LibSQL / Turso | Assegnato |
-| Meilisearch | Assegnato |
-| MongoDB | Assegnato |
-| Oracle | Assegnato |
-| SQL Server | Assegnato |
-| Amazon Redshift | Definito |
-| CockroachDB | Definito |
-| TiDB | Definito |
-| DynamoDB | In arrivo |
-| Snowflake | In arrivo |
-| Cassandra | Aperto |
-| Elasticsearch | Aperto |
-| Etcd | Aperto |
-| Firebird | Aperto |
-| ScyllaDB | Aperto |
-| SQL Anywhere | Aperto |
-| SurrealDB | Aperto |
-| Trino / Presto | Aperto |
+ClickHouse (disponibile), Cloudflare D1 (disponibile), DuckDB (disponibile), Firestore (disponibile), IBM Db2 (disponibile), IBM Informix (disponibile), Redis (disponibile), CSV Folder (disponibile), Google Sheets (disponibile), HackerNews (disponibile), Google BigQuery (assegnato), LibSQL / Turso (assegnato), Meilisearch (assegnato), MongoDB (assegnato), Oracle (assegnato), SQL Server (assegnato), Amazon Redshift (definito), CockroachDB (definito), TiDB (definito), DynamoDB (in arrivo), Snowflake (in arrivo), Cassandra (aperto), Elasticsearch (aperto), Etcd (aperto), Firebird (aperto), ScyllaDB (aperto), SQL Anywhere (aperto), SurrealDB (aperto), Trino / Presto (aperto).
 
 > I driver **Disponibili** sono installabili dal [registro dei plugin](https://tabularis.dev/plugins). Tutto il resto è sulla [bacheca delle taglie](https://tabularis.dev/plugins/bounties) — prendine una in carico, sponsorizzala o [richiedi un database](https://github.com/TabularisDB/tabularis/discussions).
 
@@ -133,7 +100,12 @@ brew tap TabularisDB/tabularis
 brew install --cask tabularis
 ```
 
-Se installi da release diretta, potrebbe essere necessario eseguire:
+Le build dalla **v0.13.1** in poi sono firmate e autenticate (notarized) da Apple, quindi si aprono senza passaggi aggiuntivi.
+
+Le note seguenti valgono solo per le release più vecchie (precedenti alla v0.13.1) scaricate direttamente:
+
+- Su macOS devi concedere l’accesso all’accessibilità (Privacy e sicurezza) all’app tabularis. Se stai aggiornando e tabularis è già nell’elenco delle app consentite, dovrai rimuoverla manualmente prima di poter concedere l’accesso alla nuova versione.
+- Potrebbe essere necessario eseguire:
 
 ```bash
 xattr -c /Applications/tabularis.app

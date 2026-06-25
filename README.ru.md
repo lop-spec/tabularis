@@ -79,40 +79,7 @@ sudo snap install tabularis                                      # Linux
 
 PostgreSQL, MySQL/MariaDB и SQLite встроены изначально. Всё остальное — это плагины; ниже показано, на какой стадии находится каждая интеграция сегодня, в соответствии с [покрытием драйверов и плагинов](https://tabularis.dev/#driver-coverage) на сайте.
 
-| База данных | Статус |
-|---|---|
-| ClickHouse | Выпущено |
-| Cloudflare D1 | Выпущено |
-| DuckDB | Выпущено |
-| Firestore | Выпущено |
-| IBM Db2 | Выпущено |
-| IBM Informix | Выпущено |
-| MySQL / MariaDB | Выпущено |
-| PostgreSQL | Выпущено |
-| Redis | Выпущено |
-| SQLite | Выпущено |
-| CSV Folder | Выпущено |
-| Google Sheets | Выпущено |
-| HackerNews | Выпущено |
-| Google BigQuery | Закреплено |
-| LibSQL / Turso | Закреплено |
-| Meilisearch | Закреплено |
-| MongoDB | Закреплено |
-| Oracle | Закреплено |
-| SQL Server | Закреплено |
-| Amazon Redshift | Запланировано |
-| CockroachDB | Запланировано |
-| TiDB | Запланировано |
-| DynamoDB | Скоро |
-| Snowflake | Скоро |
-| Cassandra | Открыто |
-| Elasticsearch | Открыто |
-| Etcd | Открыто |
-| Firebird | Открыто |
-| ScyllaDB | Открыто |
-| SQL Anywhere | Открыто |
-| SurrealDB | Открыто |
-| Trino / Presto | Открыто |
+ClickHouse (выпущено), Cloudflare D1 (выпущено), DuckDB (выпущено), Firestore (выпущено), IBM Db2 (выпущено), IBM Informix (выпущено), Redis (выпущено), CSV Folder (выпущено), Google Sheets (выпущено), HackerNews (выпущено), Google BigQuery (закреплено), LibSQL / Turso (закреплено), Meilisearch (закреплено), MongoDB (закреплено), Oracle (закреплено), SQL Server (закреплено), Amazon Redshift (запланировано), CockroachDB (запланировано), TiDB (запланировано), DynamoDB (скоро), Snowflake (скоро), Cassandra (открыто), Elasticsearch (открыто), Etcd (открыто), Firebird (открыто), ScyllaDB (открыто), SQL Anywhere (открыто), SurrealDB (открыто), Trino / Presto (открыто).
 
 > Драйверы со статусом **Выпущено** можно установить из [реестра плагинов](https://tabularis.dev/plugins). Всё остальное находится на [доске задач](https://tabularis.dev/plugins/bounties) — возьмите задачу, спонсируйте её или [запросите базу данных](https://github.com/TabularisDB/tabularis/discussions).
 
@@ -133,7 +100,12 @@ brew tap TabularisDB/tabularis
 brew install --cask tabularis
 ```
 
-При установке напрямую из релиза может потребоваться выполнить:
+Сборки, начиная с **v0.13.1**, подписаны и нотаризованы Apple, поэтому открываются без дополнительных действий.
+
+Приведённые ниже примечания относятся только к более старым релизам (до v0.13.1), скачанным напрямую:
+
+- При установке tabularis на macOS может потребоваться предоставить доступ к специальным возможностям (Конфиденциальность и безопасность). При обновлении, если предыдущая версия уже добавлена в список разрешённых, её нужно удалить вручную, прежде чем доступ можно будет предоставить новой версии.
+- Может потребоваться выполнить:
 
 ```bash
 xattr -c /Applications/tabularis.app
