@@ -45,7 +45,7 @@ function scaffoldOne(kind: "network" | "file", withUi: boolean): void {
   }
 
   if (withUi) {
-    for (const expected of ["ui/package.json", "ui/vite.config.ts", "ui/src/index.tsx"]) {
+    for (const expected of ["ui/package.json", "ui/vite.config.ts", "ui/src/index.tsx", "locales/en.json"]) {
       const p = join(target, expected);
       if (!existsSync(p) || statSync(p).size === 0) {
         throw new Error(`missing or empty: ${p}`);
