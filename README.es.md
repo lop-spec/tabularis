@@ -5,8 +5,8 @@
 # tabularis
 
 <p align="center">
-  <strong>Un cliente de bases de datos open source para PostgreSQL, MySQL/MariaDB y SQLite.<br />
-  Notebooks SQL, EXPLAIN visual, IA y MCP integrados. Los plugins añaden todo lo demás.</strong>
+  <strong>Tabularis es un espacio de trabajo SQL de escritorio open source para PostgreSQL, MySQL/MariaDB, SQLite y más de 12 bases de datos adicionales como DuckDB, ClickHouse, Redis y Firestore.<br />
+  Su servidor MCP integrado permite que Claude, Cursor y Devin (antes Windsurf) lean tu esquema y ejecuten consultas en la misma app que ya usas.</strong>
 </p>
 
 <p align="center">
@@ -71,9 +71,50 @@ La interfaz de la aplicación está disponible en inglés, italiano, español, c
 | Plugins en **cualquier lenguaje** (JSON-RPC sobre stdio) | ✅ | Plugins Java/Eclipse | Plugins JavaScript | ❌ |
 | Text-to-SQL con IA usando **modelos locales** (Ollama) | ✅ | Asistente de IA en la nube | ❌ | ❌ |
 | EXPLAIN visual con grafos de plan interactivos | ✅ | ✅ | ❌ | ❌ |
-| Bases de datos soportadas de serie | 3 (+ cualquiera vía plugins) | 100+ | 20+ | ~10 |
+| Bases de datos soportadas de serie | 3 integradas + 12 plugins oficiales | 100+ | 20+ | ~10 |
 
 > Comparativa a junio de 2026; las funcionalidades de las otras herramientas pueden haber cambiado desde entonces. Si necesitas decenas de drivers, usa DBeaver — tabularis se centra en hacer bien unas pocas bases de datos.
+
+### Bases de datos soportadas
+
+PostgreSQL, MySQL/MariaDB y SQLite vienen integradas. Todo lo demás es un plugin — aquí está el estado actual de cada integración, reflejando la [cobertura de drivers y plugins](https://tabularis.dev/#driver-coverage) del sitio web.
+
+| Base de datos | Estado |
+|---|---|
+| ClickHouse | Disponible |
+| Cloudflare D1 | Disponible |
+| DuckDB | Disponible |
+| Firestore | Disponible |
+| IBM Db2 | Disponible |
+| IBM Informix | Disponible |
+| MySQL / MariaDB | Disponible |
+| PostgreSQL | Disponible |
+| Redis | Disponible |
+| SQLite | Disponible |
+| CSV Folder | Disponible |
+| Google Sheets | Disponible |
+| HackerNews | Disponible |
+| Google BigQuery | Reclamado |
+| LibSQL / Turso | Reclamado |
+| Meilisearch | Reclamado |
+| MongoDB | Reclamado |
+| Oracle | Reclamado |
+| SQL Server | Reclamado |
+| Amazon Redshift | Planificado |
+| CockroachDB | Planificado |
+| TiDB | Planificado |
+| DynamoDB | Próximamente |
+| Snowflake | Próximamente |
+| Cassandra | Abierto |
+| Elasticsearch | Abierto |
+| Etcd | Abierto |
+| Firebird | Abierto |
+| ScyllaDB | Abierto |
+| SQL Anywhere | Abierto |
+| SurrealDB | Abierto |
+| Trino / Presto | Abierto |
+
+> Los drivers **disponibles** se instalan desde el [registro de plugins](https://tabularis.dev/plugins). Todo lo demás está en el [tablón de recompensas](https://tabularis.dev/plugins/bounties) — reclama uno, patrocina uno o [solicita una base de datos](https://github.com/TabularisDB/tabularis/discussions).
 
 ## Instalación
 

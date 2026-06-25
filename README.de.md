@@ -5,8 +5,8 @@
 # tabularis
 
 <p align="center">
-  <strong>Ein Open-Source-Datenbank-Client für PostgreSQL, MySQL/MariaDB und SQLite.<br />
-  SQL-Notebooks, Visual EXPLAIN, KI und MCP sind eingebaut. Alles Weitere kommt per Plugin dazu.</strong>
+  <strong>Tabularis ist ein quelloffener Desktop-SQL-Workspace für PostgreSQL, MySQL/MariaDB, SQLite und über 12 weitere Datenbanken wie DuckDB, ClickHouse, Redis und Firestore.<br />
+  Dank des integrierten MCP-Servers können Claude, Cursor und Devin (vormals Windsurf) dein Schema lesen und Abfragen ausführen — direkt in der App, die du ohnehin schon nutzt.</strong>
 </p>
 
 <p align="center">
@@ -71,9 +71,50 @@ Die Benutzeroberfläche der App ist auf Englisch, Italienisch, Spanisch, Chinesi
 | Plugins in **jeder Sprache** (JSON-RPC über stdio) | ✅ | Java-/Eclipse-Plugins | JavaScript-Plugins | ❌ |
 | KI-Text-to-SQL mit **lokalen Modellen** (Ollama) | ✅ | Cloud-basierter KI-Assistent | ❌ | ❌ |
 | Visual EXPLAIN mit interaktiven Plan-Graphen | ✅ | ✅ | ❌ | ❌ |
-| Datenbanken ab Werk | 3 (+ beliebige per Plugins) | 100+ | 20+ | ~10 |
+| Datenbanken ab Werk | 3 integriert + 12 offizielle Plugins | 100+ | 20+ | ~10 |
 
 > Vergleich mit Stand Juni 2026; die Funktionen anderer Tools können sich seitdem geändert haben. Wer Dutzende Treiber braucht, ist mit DBeaver besser bedient — tabularis konzentriert sich darauf, wenige Datenbanken gut zu unterstützen.
+
+### Datenbankunterstützung
+
+PostgreSQL, MySQL/MariaDB und SQLite sind integriert. Alles andere ist ein Plugin — hier siehst du, wo jede Integration heute steht; dies entspricht der [Treiber- & Plugin-Abdeckung](https://tabularis.dev/#driver-coverage) auf der Website.
+
+| Datenbank | Status |
+|---|---|
+| ClickHouse | Veröffentlicht |
+| Cloudflare D1 | Veröffentlicht |
+| DuckDB | Veröffentlicht |
+| Firestore | Veröffentlicht |
+| IBM Db2 | Veröffentlicht |
+| IBM Informix | Veröffentlicht |
+| MySQL / MariaDB | Veröffentlicht |
+| PostgreSQL | Veröffentlicht |
+| Redis | Veröffentlicht |
+| SQLite | Veröffentlicht |
+| CSV Folder | Veröffentlicht |
+| Google Sheets | Veröffentlicht |
+| HackerNews | Veröffentlicht |
+| Google BigQuery | Übernommen |
+| LibSQL / Turso | Übernommen |
+| Meilisearch | Übernommen |
+| MongoDB | Übernommen |
+| Oracle | Übernommen |
+| SQL Server | Übernommen |
+| Amazon Redshift | Spezifiziert |
+| CockroachDB | Spezifiziert |
+| TiDB | Spezifiziert |
+| DynamoDB | Demnächst |
+| Snowflake | Demnächst |
+| Cassandra | Offen |
+| Elasticsearch | Offen |
+| Etcd | Offen |
+| Firebird | Offen |
+| ScyllaDB | Offen |
+| SQL Anywhere | Offen |
+| SurrealDB | Offen |
+| Trino / Presto | Offen |
+
+> **Veröffentlichte** Treiber lassen sich aus der [Plugin-Registry](https://tabularis.dev/plugins) installieren. Alles andere steht auf dem [Bounty-Board](https://tabularis.dev/plugins/bounties) — übernimm eines, sponsere eines oder [fordere eine Datenbank an](https://github.com/TabularisDB/tabularis/discussions).
 
 ## Installation
 

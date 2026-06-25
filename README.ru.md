@@ -5,8 +5,8 @@
 # tabularis
 
 <p align="center">
-  <strong>Клиент баз данных с открытым исходным кодом для PostgreSQL, MySQL/MariaDB и SQLite.<br />
-  SQL-блокноты, Visual EXPLAIN, AI и MCP уже встроены. Всё остальное добавляют плагины.</strong>
+  <strong>Tabularis — настольная среда для работы с SQL с открытым исходным кодом для PostgreSQL, MySQL/MariaDB, SQLite и ещё 12+ баз данных, таких как DuckDB, ClickHouse, Redis и Firestore.<br />
+  Встроенный MCP-сервер позволяет Claude, Cursor и Devin (ранее Windsurf) читать вашу схему и выполнять запросы прямо в том приложении, которым вы уже пользуетесь.</strong>
 </p>
 
 <p align="center">
@@ -71,9 +71,50 @@ sudo snap install tabularis                                      # Linux
 | Плагины на **любом языке** (JSON-RPC через stdio) | ✅ | Плагины Java/Eclipse | Плагины JavaScript | ❌ |
 | AI text-to-SQL с **локальными моделями** (Ollama) | ✅ | Облачный AI-ассистент | ❌ | ❌ |
 | Visual EXPLAIN с интерактивными графами планов | ✅ | ✅ | ❌ | ❌ |
-| Баз данных «из коробки» | 3 (+ любые через плагины) | 100+ | 20+ | ~10 |
+| Баз данных «из коробки» | 3 встроенных + 12 официальных плагинов | 100+ | 20+ | ~10 |
 
 > Сравнение по состоянию на июнь 2026 года; возможности других инструментов с тех пор могли измениться. Если вам нужны десятки драйверов, используйте DBeaver — tabularis сосредоточен на том, чтобы хорошо поддерживать несколько баз данных.
+
+### Поддержка баз данных
+
+PostgreSQL, MySQL/MariaDB и SQLite встроены изначально. Всё остальное — это плагины; ниже показано, на какой стадии находится каждая интеграция сегодня, в соответствии с [покрытием драйверов и плагинов](https://tabularis.dev/#driver-coverage) на сайте.
+
+| База данных | Статус |
+|---|---|
+| ClickHouse | Выпущено |
+| Cloudflare D1 | Выпущено |
+| DuckDB | Выпущено |
+| Firestore | Выпущено |
+| IBM Db2 | Выпущено |
+| IBM Informix | Выпущено |
+| MySQL / MariaDB | Выпущено |
+| PostgreSQL | Выпущено |
+| Redis | Выпущено |
+| SQLite | Выпущено |
+| CSV Folder | Выпущено |
+| Google Sheets | Выпущено |
+| HackerNews | Выпущено |
+| Google BigQuery | Закреплено |
+| LibSQL / Turso | Закреплено |
+| Meilisearch | Закреплено |
+| MongoDB | Закреплено |
+| Oracle | Закреплено |
+| SQL Server | Закреплено |
+| Amazon Redshift | Запланировано |
+| CockroachDB | Запланировано |
+| TiDB | Запланировано |
+| DynamoDB | Скоро |
+| Snowflake | Скоро |
+| Cassandra | Открыто |
+| Elasticsearch | Открыто |
+| Etcd | Открыто |
+| Firebird | Открыто |
+| ScyllaDB | Открыто |
+| SQL Anywhere | Открыто |
+| SurrealDB | Открыто |
+| Trino / Presto | Открыто |
+
+> Драйверы со статусом **Выпущено** можно установить из [реестра плагинов](https://tabularis.dev/plugins). Всё остальное находится на [доске задач](https://tabularis.dev/plugins/bounties) — возьмите задачу, спонсируйте её или [запросите базу данных](https://github.com/TabularisDB/tabularis/discussions).
 
 ## Установка
 
