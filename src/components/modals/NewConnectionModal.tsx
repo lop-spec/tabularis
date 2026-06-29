@@ -417,6 +417,9 @@ export const NewConnectionModal = ({
       defaultValue: "e.g. mysql://user:pass@localhost:3306/db",
     });
   const isMultiDb = isMultiDatabaseCapable(activeDriver?.capabilities);
+  // Flat single-database store (e.g. Meilisearch): no database to select or name.
+  const singleDatabase =
+    activeDriver?.capabilities?.single_database === true;
 
   // ── plugin slot: connection-modal.connection_content ──
   const slotRegistry = usePluginSlotRegistry();
@@ -866,6 +869,7 @@ export const NewConnectionModal = ({
       }
     } else if (
       !noConnectionRequired &&
+      !singleDatabase &&
       (!formData.database ||
         (typeof formData.database === "string" && !formData.database.trim()))
     ) {
@@ -887,7 +891,11 @@ export const NewConnectionModal = ({
           ? selectedDatabasesState.length === 1
             ? selectedDatabasesState[0]
             : selectedDatabasesState
-          : formData.database,
+          : singleDatabase
+            ? typeof formData.database === "string" && formData.database.trim()
+              ? formData.database
+              : driver
+            : formData.database,
       };
       const appearancePayload =
         appearance.icon || appearance.accentColor ? appearance : undefined;
@@ -1177,7 +1185,7 @@ export const NewConnectionModal = ({
           </div>
 
           {/* Database (single) — only shown for non-multi-db drivers */}
-          {!isMultiDb && (
+          {!isMultiDb && !singleDatabase && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">

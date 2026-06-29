@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   toCatalogueDriver,
   builtinToCatalogueDriver,
+  localPluginToCatalogueDriver,
   groupByEngine,
   paradigmFacets,
   filterCatalogue,
@@ -79,6 +80,47 @@ describe('connectionCatalogue', () => {
         isBuiltin: true,
         platformSupported: true,
       });
+    });
+  });
+
+  describe('localPluginToCatalogueDriver', () => {
+    it('maps a locally-installed plugin as installed, unverified, non-builtin', () => {
+      const manifest = {
+        id: 'meilisearch',
+        name: 'Meilisearch',
+        version: '0.1.0',
+        description: '',
+        default_port: 7700,
+        is_builtin: false,
+        engine: 'meilisearch',
+        paradigms: ['search', 'document', 'vector'],
+        capabilities: {} as PluginManifest['capabilities'],
+      } as PluginManifest;
+      const d = localPluginToCatalogueDriver(manifest);
+      expect(d).toMatchObject({
+        slug: 'meilisearch',
+        engine: 'meilisearch',
+        paradigms: ['search', 'document', 'vector'],
+        verified: false,
+        installed: true,
+        isBuiltin: false,
+        installedVersion: '0.1.0',
+      });
+      // It groups under its primary paradigm ('search'), not 'other'.
+      expect(groupByEngine([d])[0].primaryParadigm).toBe('search');
+    });
+
+    it('falls back to the plugin id when engine is absent', () => {
+      const manifest = {
+        id: 'acme',
+        name: 'Acme',
+        version: '0.1.0',
+        description: '',
+        default_port: null,
+        is_builtin: false,
+        capabilities: {} as PluginManifest['capabilities'],
+      } as PluginManifest;
+      expect(localPluginToCatalogueDriver(manifest).engine).toBe('acme');
     });
   });
 

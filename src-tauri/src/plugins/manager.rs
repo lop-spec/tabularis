@@ -52,6 +52,13 @@ pub struct ConfigManifest {
     pub color: String,
     #[serde(default)]
     pub icon: String,
+    /// Registry manifest `engine` — surfaced so the connection catalogue can
+    /// group locally-installed plugins.
+    #[serde(default)]
+    pub engine: Option<String>,
+    /// Registry manifest `paradigms`, primary first.
+    #[serde(default)]
+    pub paradigms: Vec<String>,
     #[serde(default)]
     pub interpreter: Option<String>,
     #[serde(default)]
@@ -171,6 +178,8 @@ pub async fn load_plugin_from_dir(
         default_port: config.default_port,
         capabilities: config.capabilities,
         is_builtin: false,
+        engine: config.engine,
+        paradigms: config.paradigms,
         default_username: config.default_username.unwrap_or_default(),
         color: config.color,
         icon: config.icon,

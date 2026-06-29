@@ -38,6 +38,32 @@ export function toCatalogueDriver(p: RegistryPluginWithStatus): CatalogueDriver 
   };
 }
 
+/**
+ * Build a catalogue entry for a locally-installed plugin driver that the
+ * registry doesn't know about (e.g. a `just dev-install`ed plugin). These would
+ * otherwise be invisible in the picker even though the driver is loaded.
+ */
+export function localPluginToCatalogueDriver(manifest: PluginManifest): CatalogueDriver {
+  const engine =
+    manifest.engine && manifest.engine.length > 0 ? manifest.engine : manifest.id;
+  return {
+    slug: manifest.id,
+    name: manifest.name,
+    engine,
+    paradigms: manifest.paradigms ?? [],
+    verified: false,
+    installed: true,
+    installedVersion: manifest.version,
+    latestVersion: manifest.version,
+    isBuiltin: false,
+    platformSupported: true,
+    downloads: null,
+    updateAvailable: false,
+    icon: manifest.icon ?? null,
+    color: manifest.color ?? null,
+  };
+}
+
 export function builtinToCatalogueDriver(
   manifest: PluginManifest,
   engine: string,

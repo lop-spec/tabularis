@@ -6,6 +6,9 @@ export interface DriverCapabilities {
   routines: boolean;
   file_based: boolean;
   folder_based: boolean;
+  /** The driver exposes a single implicit database (e.g. a flat search/document
+   * store like Meilisearch). Skips the database tab + database-name field. */
+  single_database?: boolean;
   /** Optional flag to enable/disable connection string import UI for network drivers. Defaults to true when omitted. */
   connection_string?: boolean;
   /** CamelCase alias accepted for plugin compatibility. */
@@ -63,6 +66,11 @@ export interface PluginManifest {
   capabilities: DriverCapabilities;
   /** true for built-in drivers (postgres, mysql, sqlite); false/absent for external plugins */
   is_builtin?: boolean;
+  /** Concrete database engine (registry manifest `engine`). Lets the connection
+   * catalogue place locally-installed, not-yet-published plugins. */
+  engine?: string | null;
+  /** Data-model families, primary first (registry manifest `paradigms`). */
+  paradigms?: string[];
   /** Default username pre-filled in the connection modal (e.g. "postgres", "root") */
   default_username?: string;
   /** CSS hex color for UI accents (e.g. "#f97316"). Undefined falls back to a neutral color. */

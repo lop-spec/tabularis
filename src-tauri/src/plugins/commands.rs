@@ -296,6 +296,8 @@ pub async fn get_plugin_manifest(plugin_id: String) -> Result<PluginManifest, St
         default_port: config.default_port,
         capabilities: config.capabilities,
         is_builtin: false,
+        engine: config.engine,
+        paradigms: config.paradigms,
         default_username: config.default_username.unwrap_or_default(),
         color: config.color,
         icon: config.icon,

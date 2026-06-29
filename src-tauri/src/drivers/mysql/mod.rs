@@ -1207,6 +1207,7 @@ impl MysqlDriver {
                 default_port: Some(3306),
                 capabilities: DriverCapabilities {
                     schemas: false,
+                    single_database: false,
                     views: true,
                     routines: true,
                     file_based: false,
@@ -1228,6 +1229,8 @@ impl MysqlDriver {
                     sql_dialect: SqlDialect::Mysql,
                 },
                 is_builtin: true,
+                engine: Some("mysql".to_string()),
+                paradigms: vec!["sql".to_string()],
                 default_username: "root".to_string(),
                 color: "#f97316".to_string(),
                 icon: "mysql".to_string(),
