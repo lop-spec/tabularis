@@ -691,6 +691,9 @@
       "verify-ca": "Verificar CA",
       "verify-full": "Verificación completa"
     },
+    "advanced": "Avanzado",
+    "pipesAsConcat": "Establecer sql_mode PIPES_AS_CONCAT al conectar",
+    "pipesAsConcatHint": "Déjalo activado: Tabularis lo omite automáticamente en servidores que lo rechazan (Vitess/PlanetScale).",
     "chooseContext": "Elige un contexto...",
     "chooseK8s": "Elige una conexión...",
     "chooseNamespace": "Elige un namespace...",
