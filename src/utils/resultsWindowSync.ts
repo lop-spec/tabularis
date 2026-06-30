@@ -136,7 +136,7 @@ export function singleResultToEntry(
     isLoading: payload.isLoading,
     page: payload.result?.pagination?.page ?? 1,
     activeTable: payload.activeTable,
-    pkColumn: null,
+    pkColumns: null,
   };
 }
 
