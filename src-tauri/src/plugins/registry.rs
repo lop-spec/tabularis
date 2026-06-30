@@ -183,10 +183,14 @@ pub async fn fetch_tabularium_registry(base_url: &str) -> Result<PluginRegistry,
     let list = tabularium::fetch_plugin_list(base_url).await?;
 
     // Fetch every plugin's detail concurrently instead of N sequential
-    // round-trips. A failed detail call degrades to the list item (entry
+    // round-trips, but cap in-flight requests so a large registry can't fire
+    // hundreds of simultaneous GETs. `buffered` (not `buffer_unordered`)
+    // preserves the list-endpoint order, which surfaces directly to the
+    // frontend cards. A failed detail call degrades to the list item (entry
     // visible but not installable — matches "platform unsupported" UX).
-    let plugins: Vec<RegistryPlugin> =
-        futures::future::join_all(list.into_iter().map(|item| async move {
+    use futures::stream::{self, StreamExt};
+    let plugins: Vec<RegistryPlugin> = stream::iter(list)
+        .map(|item| async move {
             let slug = item.id.clone();
             match tabularium::fetch_plugin_detail(base_url, &slug).await {
                 Ok(detail) => detail,
@@ -199,7 +203,9 @@ pub async fn fetch_tabularium_registry(base_url: &str) -> Result<PluginRegistry,
                     item
                 }
             }
-        }))
+        })
+        .buffered(8)
+        .collect::<Vec<_>>()
         .await;
 
     Ok(PluginRegistry {

@@ -6,7 +6,7 @@ import type { EngineGroup, ParadigmFacet } from '../../../src/utils/connectionCa
 const mk = (engine: string, name: string, paradigm: string, verified = false): EngineGroup => ({
   engine, displayName: name, primaryParadigm: paradigm, secondaryParadigms: [],
   drivers: [{ slug: engine, name, engine, paradigms: [paradigm], verified, installed: false, installedVersion: null, latestVersion: '1', isBuiltin: false, platformSupported: true, downloads: 1, updateAvailable: false, icon: null, color: null }],
-  installed: false, verified, downloads: 1,
+  installed: false, verified, platformSupported: true, downloads: 1,
 });
 
 const groups = [mk('postgres', 'PostgreSQL', 'sql', true), mk('qdrant', 'Qdrant', 'vector')];

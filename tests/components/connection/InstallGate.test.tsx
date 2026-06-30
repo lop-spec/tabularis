@@ -26,7 +26,7 @@ describe("InstallGate", () => {
     render(
       <InstallGate driver={driver()} status="idle" onInstall={vi.fn()} onBack={vi.fn()} />,
     );
-    expect(screen.getByRole("button", { name: /install v0\.3\.6/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /connectionCatalogue\.installVersion/i })).toBeInTheDocument();
   });
 
   it("calls onInstall with slug + latest version", () => {
@@ -34,7 +34,7 @@ describe("InstallGate", () => {
     render(
       <InstallGate driver={driver()} status="idle" onInstall={onInstall} onBack={vi.fn()} />,
     );
-    screen.getByRole("button", { name: /install v0\.3\.6/i }).click();
+    screen.getByRole("button", { name: /connectionCatalogue\.installVersion/i }).click();
     expect(onInstall).toHaveBeenCalledWith("firestore", "0.3.6");
   });
 
@@ -47,8 +47,8 @@ describe("InstallGate", () => {
         onBack={vi.fn()}
       />,
     );
-    expect(screen.getByText(/no installable release for your platform/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /install/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/connectionCatalogue\.noReleaseTitle/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /installVersion/i })).not.toBeInTheDocument();
   });
 
   it("shows a retry label on error", () => {
@@ -62,6 +62,6 @@ describe("InstallGate", () => {
       />,
     );
     expect(screen.getByText(/no 0\.3\.6 release exists/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /retry install/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /connectionCatalogue\.retryInstall/i })).toBeInTheDocument();
   });
 });

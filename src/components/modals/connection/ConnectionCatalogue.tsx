@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { Search, ShieldCheck, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { filterCatalogue, type EngineGroup, type ParadigmFacet } from "../../../utils/connectionCatalogue";
 import { EngineCard } from "./EngineCard";
@@ -27,6 +28,7 @@ export function ConnectionCatalogue({
   registryOffline,
   onSelect,
 }: ConnectionCatalogueProps) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [selectedParadigms, setSelectedParadigms] = useState<string[]>([]);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
@@ -75,14 +77,14 @@ export function ConnectionCatalogue({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search databases…"
+            placeholder={t("connectionCatalogue.searchPlaceholder", { defaultValue: "Search databases…" })}
             className="w-full rounded-lg border border-default bg-surface-secondary py-2.5 pl-9 pr-9 text-sm text-primary outline-none transition-colors focus:border-blue-500 focus:bg-base"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              aria-label="Clear search"
+              aria-label={t("connectionCatalogue.clearSearch", { defaultValue: "Clear search" })}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer rounded p-0.5 text-muted hover:text-primary"
             >
               <X size={14} />
@@ -123,7 +125,7 @@ export function ConnectionCatalogue({
                 : "border-default text-secondary hover:text-primary",
             )}
           >
-            <ShieldCheck size={12} /> Verified
+            <ShieldCheck size={12} /> {t("connectionCatalogue.verified", { defaultValue: "Verified" })}
           </button>
           <button
             type="button"
@@ -135,7 +137,7 @@ export function ConnectionCatalogue({
                 : "border-default text-secondary hover:text-primary",
             )}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-current" /> Installed
+            <span className="h-1.5 w-1.5 rounded-full bg-current" /> {t("connectionCatalogue.installed", { defaultValue: "Installed" })}
           </button>
 
           {hasFilters && (
@@ -144,7 +146,7 @@ export function ConnectionCatalogue({
               onClick={clearFilters}
               className="ml-auto cursor-pointer text-xs text-muted hover:text-primary"
             >
-              Clear
+              {t("connectionCatalogue.clear", { defaultValue: "Clear" })}
             </button>
           )}
         </div>
@@ -154,7 +156,9 @@ export function ConnectionCatalogue({
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {registryOffline && (
           <p className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-            Registry unreachable — showing installed and built-in drivers only.
+            {t("connectionCatalogue.registryOffline", {
+              defaultValue: "Registry unreachable — showing installed and built-in drivers only.",
+            })}
           </p>
         )}
 
@@ -167,14 +171,16 @@ export function ConnectionCatalogue({
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <Search size={28} className="text-muted/50" />
-            <p className="text-sm text-muted">No databases match your filters.</p>
+            <p className="text-sm text-muted">
+              {t("connectionCatalogue.noMatches", { defaultValue: "No databases match your filters." })}
+            </p>
             {hasFilters && (
               <button
                 type="button"
                 onClick={clearFilters}
                 className="cursor-pointer text-xs font-medium text-blue-400 hover:text-blue-300"
               >
-                Clear filters
+                {t("connectionCatalogue.clearFilters", { defaultValue: "Clear filters" })}
               </button>
             )}
           </div>

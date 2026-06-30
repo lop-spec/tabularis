@@ -162,15 +162,19 @@ pub fn run() {
     tauri::Builder::default()
         // Singleton: a second launch (typically a `tabularis://...` URL
         // clicked while the app is already running) hands its argv to the
-        // first instance and exits. With `features = ["deep-link"]`, the
-        // plugin auto-routes those URLs through `on_open_url` — no manual
-        // argv parsing needed on our side; the empty callback exists only
-        // to satisfy the plugin signature.
+        // first instance and exits. With `features = ["deep-link"]` the plugin
+        // usually auto-routes those URLs through `on_open_url`, but on
+        // Linux/Windows the URL arrives as a plain argv entry on warm launch.
+        // We scan argv for it defensively and dispatch ourselves so the
+        // install modal fires even when auto-routing doesn't.
         //
         // Order matters: must be the FIRST plugin in the chain so it can
         // intercept duplicate launches before any heavy initialisation.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             log::info!("Duplicate launch detected — forwarded to existing instance");
+            if let Some(url) = argv.iter().find(|a| a.starts_with("tabularis:")) {
+                crate::plugins::deep_link::handle_url(app, url);
+            }
             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
                 let _ = win.unminimize();
                 let _ = win.set_focus();

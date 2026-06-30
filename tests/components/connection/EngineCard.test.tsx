@@ -14,6 +14,7 @@ const group: EngineGroup = {
   ],
   installed: true,
   verified: true,
+  platformSupported: true,
   downloads: 1230,
 };
 
@@ -21,9 +22,17 @@ describe('EngineCard', () => {
   it('renders name, verified badge, installed badge, multi-driver count', () => {
     render(<EngineCard group={group} onSelect={vi.fn()} />);
     expect(screen.getByText('Firestore')).toBeInTheDocument();
-    expect(screen.getByText(/verified/i)).toBeInTheDocument();
-    expect(screen.getByText(/installed/i)).toBeInTheDocument();
-    expect(screen.getByText(/2 drivers/i)).toBeInTheDocument();
+    // i18n is mocked to echo the key, so assert on keys (count interpolation is
+    // resolved by real i18next at runtime, not by the test mock).
+    expect(screen.getByText(/connectionCatalogue\.verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/connectionCatalogue\.installed/i)).toBeInTheDocument();
+    expect(screen.getByText(/connectionCatalogue\.driverCount/i)).toBeInTheDocument();
+  });
+
+  it('marks a group with no platform build as unavailable', () => {
+    render(<EngineCard group={{ ...group, installed: false, platformSupported: false }} onSelect={vi.fn()} />);
+    expect(screen.getByText(/connectionCatalogue\.unavailableOnPlatform/i)).toBeInTheDocument();
+    expect(screen.queryByText(/connectionCatalogue\.install$/i)).not.toBeInTheDocument();
   });
 
   it('calls onSelect with the group when clicked', () => {

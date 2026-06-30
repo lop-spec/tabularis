@@ -35,8 +35,10 @@ export function useConnectionCatalogue(): ConnectionCatalogue {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     void (async () => {
+      // setLoading lives inside the async IIFE (not the synchronous effect body)
+      // to avoid a cascading render on refresh() per .rules/react.md #2.
+      setLoading(true);
       try {
         const drivers = await invoke<PluginManifest[]>('get_registered_drivers');
         if (!cancelled) setRegistered(drivers);

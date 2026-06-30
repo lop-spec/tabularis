@@ -709,7 +709,8 @@
     "selectK8sConnection": "K8s-Verbindung auswählen",
     "selectTypeFirst": "Zuerst Kontext/Namespace/Typ auswählen",
     "useK8s": "Kubernetes-Port-Forward verwenden",
-    "useK8sConnection": "Gespeicherte Verbindung"
+    "useK8sConnection": "Gespeicherte Verbindung",
+    "changeDatabase": "Datenbank ändern"
   },
   "sshConnections": {
     "title": "SSH-Verbindungen",
@@ -1569,5 +1570,30 @@
       "resourceNameRequired": "Der Ressourcenname ist erforderlich",
       "portInvalid": "Der Port muss zwischen 1 und 65535 liegen"
     }
+  },
+  "connectionCatalogue": {
+    "searchPlaceholder": "Datenbanken suchen…",
+    "clearSearch": "Suche löschen",
+    "verified": "Verifiziert",
+    "installed": "Installiert",
+    "install": "Installieren",
+    "clear": "Zurücksetzen",
+    "registryOffline": "Registry nicht erreichbar — es werden nur installierte und integrierte Treiber angezeigt.",
+    "noMatches": "Keine Datenbanken entsprechen deinen Filtern.",
+    "clearFilters": "Filter zurücksetzen",
+    "driverCount_one": "{{count}} Treiber",
+    "driverCount_other": "{{count}} Treiber",
+    "connectTo": "Mit {{name}} verbinden",
+    "unavailableOnPlatform": "Auf deiner Plattform nicht verfügbar",
+    "backToCatalogue": "Zurück zum Katalog",
+    "pickDriver": "Mehrere Treiber verbinden sich mit {{name}}. Wähle einen:",
+    "latestVersion": "Neueste v{{version}}",
+    "continue": "Weiter",
+    "noReleaseTitle": "Noch kein installierbares Release für deine Plattform.",
+    "noReleaseBody": "Für diesen Treiber gibt es keinen herunterladbaren Build für dein Betriebssystem/deine Architektur. Prüfe die Registry auf ein aktualisiertes Release.",
+    "notInstalled": "Dieser Treiber ist noch nicht installiert. Installiere ihn, um eine Verbindung einzurichten.",
+    "installVersion": "v{{version}} installieren",
+    "installingVersion": "v{{version}} wird installiert…",
+    "retryInstall": "Installation wiederholen"
   }
 }

@@ -11,7 +11,9 @@
     "loadingPreview": "Caricamento dettagli…",
     "usingConfigured": "registro configurato",
     "mismatchTitle": "Registro diverso da quello configurato",
-    "mismatchBody": "Il tuo registro configurato è {{configured}}. Il link punta altrove — controlla prima di continuare."
+    "mismatchBody": "Il tuo registro configurato è {{configured}}. Il link punta altrove — controlla prima di continuare.",
+    "updateConfirm": "Aggiorna a v{{version}}",
+    "alreadyInstalled": "La versione {{version}} è già installata."
   },
   "toolbar": {
     "filters": "Filtri",
@@ -712,7 +714,8 @@
     "selectK8sConnection": "Seleziona connessione K8s",
     "selectTypeFirst": "Seleziona prima contesto/namespace/tipo",
     "useK8s": "Usa Port-Forward Kubernetes",
-    "useK8sConnection": "Connessione salvata"
+    "useK8sConnection": "Connessione salvata",
+    "changeDatabase": "Cambia database"
   },
   "sshConnections": {
     "title": "Connessioni SSH",
@@ -1550,5 +1553,30 @@
       "resourceNameRequired": "Il nome della risorsa è obbligatorio",
       "portInvalid": "La porta deve essere compresa tra 1 e 65535"
     }
+  },
+  "connectionCatalogue": {
+    "searchPlaceholder": "Cerca database…",
+    "clearSearch": "Cancella ricerca",
+    "verified": "Verificato",
+    "installed": "Installato",
+    "install": "Installa",
+    "clear": "Cancella",
+    "registryOffline": "Registro non raggiungibile — vengono mostrati solo i driver installati e integrati.",
+    "noMatches": "Nessun database corrisponde ai tuoi filtri.",
+    "clearFilters": "Cancella filtri",
+    "driverCount_one": "{{count}} driver",
+    "driverCount_other": "{{count}} driver",
+    "connectTo": "Connetti a {{name}}",
+    "unavailableOnPlatform": "Non disponibile sulla tua piattaforma",
+    "backToCatalogue": "Torna al catalogo",
+    "pickDriver": "Più driver si connettono a {{name}}. Scegline uno:",
+    "latestVersion": "Ultima v{{version}}",
+    "continue": "Continua",
+    "noReleaseTitle": "Ancora nessuna versione installabile per la tua piattaforma.",
+    "noReleaseBody": "Questo driver non ha una build scaricabile per il tuo SO/architettura. Controlla il registro per una versione aggiornata.",
+    "notInstalled": "Questo driver non è ancora installato. Installalo per configurare una connessione.",
+    "installVersion": "Installa v{{version}}",
+    "installingVersion": "Installazione di v{{version}}…",
+    "retryInstall": "Riprova installazione"
   }
 }

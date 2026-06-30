@@ -1,6 +1,7 @@
 import clsx from "clsx";
-import { Database, Download, ShieldCheck } from "lucide-react";
+import { Database, Download, MonitorOff, ShieldCheck } from "lucide-react";
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { PluginManifest } from "../../../types/plugins";
 import type { CatalogueDriver, EngineGroup } from "../../../utils/connectionCatalogue";
@@ -46,14 +47,19 @@ function formatCount(n: number): string {
 }
 
 export function EngineCard({ group, onSelect }: EngineCardProps) {
+  const { t } = useTranslation();
   const rep = group.drivers.find((d) => d.isBuiltin) ?? group.drivers[0];
   const accent = accentFor(group, rep);
   const driverCount = group.drivers.length;
+  const unsupported = !group.platformSupported;
 
   return (
     <button
       type="button"
-      aria-label={`Connect to ${group.engine}`}
+      aria-label={t("connectionCatalogue.connectTo", {
+        name: group.displayName,
+        defaultValue: "Connect to {{name}}",
+      })}
       onClick={() => onSelect(group)}
       style={{ "--accent": accent } as CSSProperties}
       className={clsx(
@@ -61,6 +67,7 @@ export function EngineCard({ group, onSelect }: EngineCardProps) {
         "border-default bg-surface-secondary transition-all duration-150",
         "hover:-translate-y-px hover:border-[var(--accent)] hover:bg-surface hover:shadow-md hover:shadow-black/5",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50",
+        unsupported && "opacity-60",
       )}
     >
       {/* accent rail */}
@@ -83,9 +90,12 @@ export function EngineCard({ group, onSelect }: EngineCardProps) {
         <span className="flex items-center gap-1.5">
           <span className="truncate font-semibold text-primary capitalize">{group.displayName}</span>
           {group.verified && (
-            <span className="inline-flex shrink-0 items-center text-blue-400" title="Verified">
+            <span
+              className="inline-flex shrink-0 items-center text-blue-400"
+              title={t("connectionCatalogue.verified", { defaultValue: "Verified" })}
+            >
               <ShieldCheck size={13} aria-hidden />
-              <span className="sr-only">Verified</span>
+              <span className="sr-only">{t("connectionCatalogue.verified", { defaultValue: "Verified" })}</span>
             </span>
           )}
         </span>
@@ -94,7 +104,11 @@ export function EngineCard({ group, onSelect }: EngineCardProps) {
           {group.secondaryParadigms.length > 0 && (
             <span className="text-muted/70">· +{group.secondaryParadigms.length}</span>
           )}
-          {driverCount > 1 && <span className="text-muted/70">· {driverCount} drivers</span>}
+          {driverCount > 1 && (
+            <span className="text-muted/70">
+              · {t("connectionCatalogue.driverCount", { count: driverCount, defaultValue: "{{count}} drivers" })}
+            </span>
+          )}
         </span>
       </span>
 
@@ -103,11 +117,19 @@ export function EngineCard({ group, onSelect }: EngineCardProps) {
         {group.installed ? (
           <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            Installed
+            {t("connectionCatalogue.installed", { defaultValue: "Installed" })}
+          </span>
+        ) : unsupported ? (
+          <span
+            className="flex items-center gap-1 rounded-full border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-400"
+            title={t("connectionCatalogue.unavailableOnPlatform", { defaultValue: "Unavailable on your platform" })}
+          >
+            <MonitorOff size={10} aria-hidden />
+            {t("connectionCatalogue.unavailableOnPlatform", { defaultValue: "Unavailable on your platform" })}
           </span>
         ) : (
           <span className="rounded-full border border-default px-2 py-0.5 text-[10px] font-medium text-muted opacity-0 transition-opacity group-hover:opacity-100">
-            Install
+            {t("connectionCatalogue.install", { defaultValue: "Install" })}
           </span>
         )}
         {group.downloads != null && (

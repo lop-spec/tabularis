@@ -11,7 +11,9 @@
     "loadingPreview": "Cargando detalles…",
     "usingConfigured": "registro configurado",
     "mismatchTitle": "Registro distinto al configurado",
-    "mismatchBody": "Tu registro configurado es {{configured}}. El enlace apunta a otro — revisa antes de continuar."
+    "mismatchBody": "Tu registro configurado es {{configured}}. El enlace apunta a otro — revisa antes de continuar.",
+    "updateConfirm": "Actualizar a v{{version}}",
+    "alreadyInstalled": "La versión {{version}} ya está instalada."
   },
   "toolbar": {
     "filters": "Filtros",
@@ -712,7 +714,8 @@
     "selectK8sConnection": "Selecciona conexión de K8s",
     "selectTypeFirst": "Selecciona primero contexto/namespace/tipo",
     "useK8s": "Usar Port-Forward de Kubernetes",
-    "useK8sConnection": "Conexión guardada"
+    "useK8sConnection": "Conexión guardada",
+    "changeDatabase": "Cambiar base de datos"
   },
   "sshConnections": {
     "title": "Conexiones SSH",
@@ -1524,5 +1527,30 @@
       "resourceNameRequired": "El nombre del recurso es obligatorio",
       "portInvalid": "El puerto debe estar entre 1 y 65535"
     }
+  },
+  "connectionCatalogue": {
+    "searchPlaceholder": "Buscar bases de datos…",
+    "clearSearch": "Borrar búsqueda",
+    "verified": "Verificado",
+    "installed": "Instalado",
+    "install": "Instalar",
+    "clear": "Limpiar",
+    "registryOffline": "Registro no disponible: mostrando solo controladores instalados e integrados.",
+    "noMatches": "Ninguna base de datos coincide con tus filtros.",
+    "clearFilters": "Limpiar filtros",
+    "driverCount_one": "{{count}} controlador",
+    "driverCount_other": "{{count}} controladores",
+    "connectTo": "Conectar a {{name}}",
+    "unavailableOnPlatform": "No disponible en tu plataforma",
+    "backToCatalogue": "Volver al catálogo",
+    "pickDriver": "Varios controladores se conectan a {{name}}. Elige uno:",
+    "latestVersion": "Última v{{version}}",
+    "continue": "Continuar",
+    "noReleaseTitle": "Aún no hay una versión instalable para tu plataforma.",
+    "noReleaseBody": "Este controlador no tiene una compilación descargable para tu SO/arquitectura. Consulta el registro para una versión actualizada.",
+    "notInstalled": "Este controlador aún no está instalado. Instálalo para configurar una conexión.",
+    "installVersion": "Instalar v{{version}}",
+    "installingVersion": "Instalando v{{version}}…",
+    "retryInstall": "Reintentar instalación"
   }
 }

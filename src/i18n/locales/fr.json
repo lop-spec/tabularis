@@ -11,7 +11,9 @@
     "loadingPreview": "Chargement des détails…",
     "usingConfigured": "registre configuré",
     "mismatchTitle": "Registre différent de celui configuré",
-    "mismatchBody": "Votre registre configuré est {{configured}}. Le lien pointe ailleurs — vérifiez avant de continuer."
+    "mismatchBody": "Votre registre configuré est {{configured}}. Le lien pointe ailleurs — vérifiez avant de continuer.",
+    "updateConfirm": "Mettre à jour vers v{{version}}",
+    "alreadyInstalled": "La version {{version}} est déjà installée."
   },
   "toolbar": {
     "filters": "Filtres",
@@ -707,7 +709,8 @@
     "selectK8sConnection": "Sélectionner une connexion K8s",
     "selectTypeFirst": "Sélectionnez d'abord contexte/namespace/type",
     "useK8s": "Utiliser le Port-Forward Kubernetes",
-    "useK8sConnection": "Connexion enregistrée"
+    "useK8sConnection": "Connexion enregistrée",
+    "changeDatabase": "Changer de base de données"
   },
   "sshConnections": {
     "title": "Connexions SSH",
@@ -1567,5 +1570,30 @@
       "resourceNameRequired": "Le nom de la ressource est requis",
       "portInvalid": "Le port doit être compris entre 1 et 65535"
     }
+  },
+  "connectionCatalogue": {
+    "searchPlaceholder": "Rechercher des bases de données…",
+    "clearSearch": "Effacer la recherche",
+    "verified": "Vérifié",
+    "installed": "Installé",
+    "install": "Installer",
+    "clear": "Effacer",
+    "registryOffline": "Registre inaccessible — affichage des pilotes installés et intégrés uniquement.",
+    "noMatches": "Aucune base de données ne correspond à vos filtres.",
+    "clearFilters": "Effacer les filtres",
+    "driverCount_one": "{{count}} pilote",
+    "driverCount_other": "{{count}} pilotes",
+    "connectTo": "Se connecter à {{name}}",
+    "unavailableOnPlatform": "Indisponible sur votre plateforme",
+    "backToCatalogue": "Retour au catalogue",
+    "pickDriver": "Plusieurs pilotes se connectent à {{name}}. Choisissez-en un :",
+    "latestVersion": "Dernière v{{version}}",
+    "continue": "Continuer",
+    "noReleaseTitle": "Pas encore de version installable pour votre plateforme.",
+    "noReleaseBody": "Ce pilote n'a pas de build téléchargeable pour votre SE/architecture. Consultez le registre pour une version mise à jour.",
+    "notInstalled": "Ce pilote n'est pas encore installé. Installez-le pour configurer une connexion.",
+    "installVersion": "Installer v{{version}}",
+    "installingVersion": "Installation de v{{version}}…",
+    "retryInstall": "Réessayer l'installation"
   }
 }

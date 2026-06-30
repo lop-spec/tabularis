@@ -95,15 +95,21 @@ pub fn parse_install_url(raw: &str) -> Option<PluginInstallRequest> {
     }
 
     // Fall back to path segments after the action if no `?slug=` was given.
+    // For the `//` forms the URL is a base and `path_segments()` works; for the
+    // no-`//` form (`tabularis:install/<slug>`) the URL is cannot-be-a-base,
+    // so `path_segments()` returns `None` and we split `path()` by hand.
     let slug = query_slug.or_else(|| {
-        let mut segments = url
-            .path_segments()
-            .map(|s| s.collect::<Vec<_>>())
-            .unwrap_or_default();
+        let mut segments: Vec<&str> = match url.path_segments() {
+            Some(s) => s.collect(),
+            None => url.path().trim_start_matches('/').split('/').collect(),
+        };
         if host.is_none() && segments.first().copied() == Some("install") {
             segments.remove(0);
         }
-        segments.into_iter().next().map(|s| s.to_string())
+        segments
+            .into_iter()
+            .find(|s| !s.is_empty())
+            .map(|s| s.to_string())
     })?;
     if !is_valid_slug(&slug) {
         log::warn!("Rejected tabularis:// URL — bad slug: {:?}", slug);
@@ -232,5 +238,22 @@ mod tests {
     fn rejects_missing_slug() {
         assert!(parse_install_url("tabularis://install/").is_none());
         assert!(parse_install_url("tabularis://install").is_none());
+    }
+
+    #[test]
+    fn parses_no_double_slash_form() {
+        // Some launchers strip the `//`, leaving a cannot-be-a-base URL.
+        let req = parse_install_url("tabularis:install/duckdb").expect("valid URL");
+        assert_eq!(req.slug, "duckdb");
+        assert!(req.version.is_none());
+
+        let req = parse_install_url("tabularis:install/duckdb?version=1.2.3").expect("valid URL");
+        assert_eq!(req.slug, "duckdb");
+        assert_eq!(req.version.as_deref(), Some("1.2.3"));
+    }
+
+    #[test]
+    fn rejects_bad_slug_in_no_double_slash_form() {
+        assert!(parse_install_url("tabularis:install/../etc").is_none());
     }
 }

@@ -1631,5 +1631,30 @@
       "resourceNameRequired": "Resource name is required",
       "portInvalid": "Port must be between 1 and 65535"
     }
+  },
+  "connectionCatalogue": {
+    "searchPlaceholder": "Search databases…",
+    "clearSearch": "Clear search",
+    "verified": "Verified",
+    "installed": "Installed",
+    "install": "Install",
+    "clear": "Clear",
+    "registryOffline": "Registry unreachable — showing installed and built-in drivers only.",
+    "noMatches": "No databases match your filters.",
+    "clearFilters": "Clear filters",
+    "driverCount_one": "{{count}} driver",
+    "driverCount_other": "{{count}} drivers",
+    "connectTo": "Connect to {{name}}",
+    "unavailableOnPlatform": "Unavailable on your platform",
+    "backToCatalogue": "Back to catalogue",
+    "pickDriver": "Multiple drivers connect to {{name}}. Pick one:",
+    "latestVersion": "Latest v{{version}}",
+    "continue": "Continue",
+    "noReleaseTitle": "No installable release for your platform yet.",
+    "noReleaseBody": "This driver has no downloadable build for your OS/architecture. Check the registry for an updated release.",
+    "notInstalled": "This driver isn't installed yet. Install it to configure a connection.",
+    "installVersion": "Install v{{version}}",
+    "installingVersion": "Installing v{{version}}…",
+    "retryInstall": "Retry install"
   }
 }

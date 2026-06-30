@@ -1,8 +1,10 @@
 import { AlertTriangle, Database, Loader2 } from "lucide-react";
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { CatalogueDriver } from "../../../utils/connectionCatalogue";
-import type { InstallStatus } from "./InstallBanner";
+
+export type InstallStatus = "idle" | "installing" | "error";
 
 interface InstallGateProps {
   driver: CatalogueDriver;
@@ -35,6 +37,7 @@ function renderIcon(driver: CatalogueDriver) {
 }
 
 export function InstallGate({ driver, status, error, onInstall, onBack }: InstallGateProps) {
+  const { t } = useTranslation();
   const accent = accentFor(driver);
   const unsupported = !driver.platformSupported;
   const installing = status === "installing";
@@ -59,16 +62,25 @@ export function InstallGate({ driver, status, error, onInstall, onBack }: Instal
         <div className="flex max-w-sm flex-col items-center gap-2">
           <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-400">
             <AlertTriangle size={15} className="shrink-0" />
-            <span>No installable release for your platform yet.</span>
+            <span>
+              {t("connectionCatalogue.noReleaseTitle", {
+                defaultValue: "No installable release for your platform yet.",
+              })}
+            </span>
           </div>
           <p className="text-xs text-muted">
-            This driver has no downloadable build for your OS/architecture. Check the registry for an updated release.
+            {t("connectionCatalogue.noReleaseBody", {
+              defaultValue:
+                "This driver has no downloadable build for your OS/architecture. Check the registry for an updated release.",
+            })}
           </p>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-2">
           <p className="max-w-sm text-sm text-secondary">
-            This driver isn&apos;t installed yet. Install it to configure a connection.
+            {t("connectionCatalogue.notInstalled", {
+              defaultValue: "This driver isn't installed yet. Install it to configure a connection.",
+            })}
           </p>
           {status === "error" && error && (
             <p className="max-w-sm break-words text-xs text-red-400">{error}</p>
@@ -81,10 +93,16 @@ export function InstallGate({ driver, status, error, onInstall, onBack }: Instal
           >
             {installing && <Loader2 size={14} className="animate-spin" />}
             {installing
-              ? `Installing v${driver.latestVersion}…`
+              ? t("connectionCatalogue.installingVersion", {
+                  version: driver.latestVersion,
+                  defaultValue: "Installing v{{version}}…",
+                })
               : status === "error"
-                ? "Retry install"
-                : `Install v${driver.latestVersion}`}
+                ? t("connectionCatalogue.retryInstall", { defaultValue: "Retry install" })
+                : t("connectionCatalogue.installVersion", {
+                    version: driver.latestVersion,
+                    defaultValue: "Install v{{version}}",
+                  })}
           </button>
         </div>
       )}
@@ -94,7 +112,7 @@ export function InstallGate({ driver, status, error, onInstall, onBack }: Instal
         onClick={onBack}
         className="mt-1 cursor-pointer text-xs text-muted hover:text-primary"
       >
-        ← Change database
+        ← {t("newConnection.changeDatabase", { defaultValue: "Change database" })}
       </button>
     </div>
   );

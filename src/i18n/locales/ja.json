@@ -11,7 +11,9 @@
     "loadingPreview": "詳細を読み込み中…",
     "usingConfigured": "設定済みレジストリ",
     "mismatchTitle": "設定とは異なるレジストリ",
-    "mismatchBody": "設定済みのレジストリは {{configured}} です。リンクは別の場所を指しています — 続行前にご確認ください。"
+    "mismatchBody": "設定済みのレジストリは {{configured}} です。リンクは別の場所を指しています — 続行前にご確認ください。",
+    "updateConfirm": "v{{version}} に更新",
+    "alreadyInstalled": "バージョン {{version}} は既にインストールされています。"
   },
   "toolbar": {
     "filters": "フィルター",
@@ -721,7 +723,8 @@
     "selectK8sConnection": "K8s 接続を選択",
     "selectTypeFirst": "先にコンテキスト/ネームスペース/タイプを選択してください",
     "useK8s": "Kubernetes ポートフォワードを使用",
-    "useK8sConnection": "保存された接続"
+    "useK8sConnection": "保存された接続",
+    "changeDatabase": "データベースを変更"
   },
   "sshConnections": {
     "title": "SSH 接続",
@@ -1586,5 +1589,30 @@
       "resourceNameRequired": "リソース名は必須です",
       "portInvalid": "ポートは 1 から 65535 の範囲で指定してください"
     }
+  },
+  "connectionCatalogue": {
+    "searchPlaceholder": "データベースを検索…",
+    "clearSearch": "検索をクリア",
+    "verified": "検証済み",
+    "installed": "インストール済み",
+    "install": "インストール",
+    "clear": "クリア",
+    "registryOffline": "レジストリに接続できません — インストール済みおよび組み込みドライバーのみ表示しています。",
+    "noMatches": "フィルターに一致するデータベースがありません。",
+    "clearFilters": "フィルターをクリア",
+    "driverCount_one": "{{count}} 個のドライバー",
+    "driverCount_other": "{{count}} 個のドライバー",
+    "connectTo": "{{name}} に接続",
+    "unavailableOnPlatform": "お使いのプラットフォームでは利用できません",
+    "backToCatalogue": "カタログに戻る",
+    "pickDriver": "複数のドライバーが {{name}} に接続します。1つ選択してください：",
+    "latestVersion": "最新 v{{version}}",
+    "continue": "続行",
+    "noReleaseTitle": "お使いのプラットフォーム向けのインストール可能なリリースはまだありません。",
+    "noReleaseBody": "このドライバーには、お使いのOS/アーキテクチャ向けのダウンロード可能なビルドがありません。更新されたリリースについてはレジストリを確認してください。",
+    "notInstalled": "このドライバーはまだインストールされていません。接続を設定するにはインストールしてください。",
+    "installVersion": "v{{version}} をインストール",
+    "installingVersion": "v{{version}} をインストール中…",
+    "retryInstall": "インストールを再試行"
   }
 }

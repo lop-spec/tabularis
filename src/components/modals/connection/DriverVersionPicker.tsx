@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
 import type { CatalogueDriver, EngineGroup } from '../../../utils/connectionCatalogue';
 
 interface DriverVersionPickerProps {
@@ -8,6 +10,7 @@ interface DriverVersionPickerProps {
 }
 
 export function DriverVersionPicker({ group, onChoose, onBack }: DriverVersionPickerProps) {
+  const { t } = useTranslation();
   const [selectedSlug, setSelectedSlug] = useState(group.drivers[0]?.slug ?? '');
   const selected = group.drivers.find((d) => d.slug === selectedSlug) ?? group.drivers[0];
 
@@ -18,10 +21,13 @@ export function DriverVersionPicker({ group, onChoose, onBack }: DriverVersionPi
         onClick={onBack}
         className="flex cursor-pointer items-center gap-1 self-start text-xs text-muted hover:text-primary"
       >
-        ← Back to catalogue
+        ← {t('connectionCatalogue.backToCatalogue', { defaultValue: 'Back to catalogue' })}
       </button>
       <p className="text-sm text-secondary">
-        Multiple drivers connect to <span className="font-medium text-primary capitalize">{group.displayName}</span>. Pick one:
+        {t('connectionCatalogue.pickDriver', {
+          name: group.displayName,
+          defaultValue: 'Multiple drivers connect to {{name}}. Pick one:',
+        })}
       </p>
       <ul className="flex flex-col gap-2">
         {group.drivers.map((d) => (
@@ -38,8 +44,16 @@ export function DriverVersionPicker({ group, onChoose, onBack }: DriverVersionPi
             >
               <span className="flex items-center gap-2">
                 <span className="font-medium text-primary">{d.name}</span>
-                {d.verified && <span className="text-[10px] text-blue-400">✓ Verified</span>}
-                {d.installed && <span className="text-[10px] text-emerald-400">● Installed</span>}
+                {d.verified && (
+                  <span className="text-[10px] text-blue-400">
+                    ✓ {t('connectionCatalogue.verified', { defaultValue: 'Verified' })}
+                  </span>
+                )}
+                {d.installed && (
+                  <span className="text-[10px] text-emerald-400">
+                    ● {t('connectionCatalogue.installed', { defaultValue: 'Installed' })}
+                  </span>
+                )}
               </span>
               <span className="text-xs text-muted">
                 {d.downloads != null ? `${d.downloads} ↓ · ` : ''}v{d.latestVersion}
@@ -49,13 +63,18 @@ export function DriverVersionPicker({ group, onChoose, onBack }: DriverVersionPi
         ))}
       </ul>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted">Latest v{selected?.latestVersion ?? ""}</span>
+        <span className="text-xs text-muted">
+          {t('connectionCatalogue.latestVersion', {
+            version: selected?.latestVersion ?? '',
+            defaultValue: 'Latest v{{version}}',
+          })}
+        </span>
         <button
           type="button"
           onClick={() => selected && onChoose(selected, selected.latestVersion)}
           className="ml-auto cursor-pointer rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
         >
-          Continue
+          {t('connectionCatalogue.continue', { defaultValue: 'Continue' })}
         </button>
       </div>
     </div>

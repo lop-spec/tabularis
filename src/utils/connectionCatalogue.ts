@@ -95,6 +95,8 @@ export interface EngineGroup {
   drivers: CatalogueDriver[];
   installed: boolean;
   verified: boolean;
+  /** false when no driver in the group has an installable build for the current platform. */
+  platformSupported: boolean;
   downloads: number | null;
 }
 
@@ -142,6 +144,7 @@ export function groupByEngine(drivers: CatalogueDriver[]): EngineGroup[] {
       drivers: list,
       installed: list.some((d) => d.installed),
       verified: list.some((d) => d.verified),
+      platformSupported: list.some((d) => d.platformSupported),
       downloads,
     });
   }
