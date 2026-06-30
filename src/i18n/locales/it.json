@@ -832,6 +832,15 @@
     "loadRowCount": "Carica conteggio righe",
     "executePrompt": "Esegui una query per vedere i risultati",
     "tableRunPrompt": "Premi Esegui (Ctrl/Command+F5) per caricare i dati della tabella",
+    "results": {
+      "minimize": "Riduci a icona",
+      "maximize": "Massimizza (nascondi editor)",
+      "restore": "Ripristina editor",
+      "close": "Chiudi",
+      "detach": "Sgancia in una finestra separata",
+      "detached": "Risultati sganciati in una finestra separata",
+      "reattach": "Riaggancia"
+    },
     "closeTab": "Chiudi scheda",
     "closeOthers": "Chiudi altre schede",
     "closeRight": "Chiudi schede a destra",

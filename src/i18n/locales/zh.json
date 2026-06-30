@@ -816,6 +816,15 @@
     "jumpToPage": "点击跳转到页面",
     "loadRowCount": "加载行数",
     "executePrompt": "执行查询以查看结果",
+    "results": {
+      "minimize": "最小化",
+      "maximize": "最大化（隐藏编辑器）",
+      "restore": "恢复编辑器",
+      "close": "关闭",
+      "detach": "分离到独立窗口",
+      "detached": "结果已分离到独立窗口",
+      "reattach": "重新附加"
+    },
     "tableRunPrompt": "按运行（Ctrl/Command+F5）加载表数据",
     "closeTab": "关闭标签",
     "closeOthers": "关闭其他标签",
