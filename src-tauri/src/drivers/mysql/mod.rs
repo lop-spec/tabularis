@@ -932,7 +932,6 @@ pub async fn create_view(
     definition: &str,
 ) -> Result<(), String> {
     let pool = get_mysql_pool(params).await?;
-    let text = resolve_text_proto(&pool, params).await?;
     let escaped_name = escape_identifier(view_name);
     let query = format!("CREATE VIEW `{}` AS {}", escaped_name, definition);
     sqlx::raw_sql(&query)
@@ -948,7 +947,6 @@ pub async fn alter_view(
     definition: &str,
 ) -> Result<(), String> {
     let pool = get_mysql_pool(params).await?;
-    let text = resolve_text_proto(&pool, params).await?;
     let escaped_name = escape_identifier(view_name);
     let query = format!("ALTER VIEW `{}` AS {}", escaped_name, definition);
     // `ALTER VIEW` is not supported by MySQL's prepared-statement protocol
@@ -963,7 +961,6 @@ pub async fn alter_view(
 
 pub async fn drop_view(params: &ConnectionParams, view_name: &str) -> Result<(), String> {
     let pool = get_mysql_pool(params).await?;
-    let text = resolve_text_proto(&pool, params).await?;
     let escaped_name = escape_identifier(view_name);
     let query = format!("DROP VIEW IF EXISTS `{}`", escaped_name);
     // Routed through `raw_sql()` (text protocol) for consistency with

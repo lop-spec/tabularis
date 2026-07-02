@@ -2,7 +2,6 @@ use super::build_mysql_pk_where;
 use super::explain::{parse_analyze_actual, parse_mysql_analyze_text, parse_mysql_query_block};
 use super::{is_text_protocol_stmt, MysqlDriver};
 use super::helpers::{inline_str_placeholders, mysql_bytes_literal, mysql_string_literal};
-use super::MysqlDriver;
 use crate::drivers::driver_trait::DatabaseDriver;
 use crate::models::ExplainNode;
 use crate::models::{ConnectionParams, DatabaseSelection};
