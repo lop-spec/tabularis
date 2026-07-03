@@ -1,0 +1,42 @@
+name: Nightly
+
+# Daily signed build of main, published to a single rolling `nightly` prerelease
+# that is deleted + recreated each run, so the releases page never accumulates.
+# The prerelease flag keeps it out of AUR/Snap/Winget (those gate on !prerelease).
+# Signed PR previews are handled elsewhere: unsigned via preview.yml (artifacts),
+# or on-demand signed via release.yml's workflow_dispatch(pr_number).
+on:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC daily
+  workflow_dispatch: {} # manual "build a nightly now"
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Drop the previous nightly release + tag so the build recreates it fresh.
+      # `|| true` — nothing to delete on the very first run.
+      - name: Delete previous nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release delete nightly --yes --cleanup-tag || true
+
+  build:
+    needs: cleanup
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      ref: main
+      tag: nightly
+      release_name: "Nightly (v__VERSION__)"
+      prerelease: true
+      draft: false

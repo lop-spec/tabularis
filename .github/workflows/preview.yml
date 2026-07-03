@@ -1,0 +1,222 @@
+name: PR Preview
+
+# Unsigned preview builds for pull requests (incl. forks). No secrets, no GitHub
+# Release, no tag — just Actions artifacts, so it is safe to run untrusted fork
+# code and it works for fork PRs automatically.
+#
+# Triggered two ways:
+#   * maintainer adds the `preview` label (pull_request), or
+#   * anyone with write access OR the PR author comments `/preview` (issue_comment).
+# A sticky bot comment reports status + a download link back on the PR.
+#
+# Download: the run's Artifacts. NOTE: downloading an Actions artifact needs a
+# logged-in GitHub account even on a public repo (github.com/actions/upload-artifact/issues/51).
+# Front it with nightly.link if un-authenticated downloads are ever needed.
+#
+# Security:
+#   * `build` runs fork code with `contents: read` and NO secrets — worst case is
+#     wasted runner minutes, never secret/token theft.
+#   * `comment` needs write, so it runs in a separate job that never checks out
+#     fork code. On fork PRs the plain `pull_request` token is read-only, so the
+#     bot comment only works via the `/preview` (issue_comment) path — the label
+#     path still builds, it just can't self-comment on forks.
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: preview-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  authorize:
+    # Only spin up for a labeled/updated PR, or a `/preview` comment on a PR.
+    # comment.body is read ONLY inside this GitHub expression, never in a shell.
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/preview'))
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+      pr: ${{ steps.check.outputs.pr }}
+      ref: ${{ steps.check.outputs.ref }}
+      canwrite: ${{ steps.check.outputs.canwrite }}
+    steps:
+      - name: Decide + authorize
+        id: check
+        env:
+          EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          # pull_request path
+          PR_NUM: ${{ github.event.pull_request.number }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'preview') }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          # issue_comment path
+          IC_NUM: ${{ github.event.issue.number }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+          ASSOC: ${{ github.event.comment.author_association }}
+        run: |
+          set -euo pipefail
+          build=false; pr=""; canwrite=false
+
+          if [ "$EVENT" = "pull_request" ]; then
+            # Auto-build only labeled, non-draft PRs.
+            if [ "$HAS_LABEL" = "true" ] && [ "$PR_DRAFT" = "false" ]; then
+              build=true; pr="$PR_NUM"
+              # Fork PRs get a read-only token -> can't comment. Same-repo can.
+              if [ "$IS_FORK" = "false" ]; then canwrite=true; fi
+            fi
+
+          elif [ "$EVENT" = "issue_comment" ]; then
+            # Self-serve: PR author OR anyone with write access may run /preview.
+            author=$(gh pr view "$IC_NUM" --json author -q .author.login)
+            ok=false
+            case "$ASSOC" in
+              OWNER|MEMBER|COLLABORATOR) ok=true ;;
+              *) if [ "$COMMENTER" = "$author" ]; then ok=true; fi ;;
+            esac
+            if [ "$ok" = "true" ]; then
+              build=true; pr="$IC_NUM"
+              # issue_comment runs in the base-repo context -> write is available.
+              canwrite=true
+            fi
+          fi
+
+          {
+            echo "build=$build"
+            echo "pr=$pr"
+            echo "ref=refs/pull/$pr/head"
+            echo "canwrite=$canwrite"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: authorize
+    if: needs.authorize.outputs.build == 'true'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # Arm64
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-15-intel" # Intel
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-24.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # refs/pull/<N>/head resolves for fork PRs too (GitHub mirrors PR heads
+          # into the base repo). No secrets in this job, so building it is safe.
+          ref: ${{ needs.authorize.outputs.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: "pnpm"
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-15-intel' && 'x86_64-apple-darwin' || '' }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-24.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libfuse2 \
+            libsoup-3.0-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf \
+            xdg-utils \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-bad \
+            fonts-noto-color-emoji \
+            pkg-config \
+            unzip
+
+      - name: install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2.9.1
+        with:
+          workspaces: src-tauri
+
+      - name: Build (unsigned, no release)
+        uses: tauri-apps/tauri-action@v0.6.1
+        env:
+          # Ad-hoc sign on macOS ("-" needs no cert/secret) so Gatekeeper doesn't
+          # flag the download as "damaged". Testers still right-click -> Open.
+          APPLE_SIGNING_IDENTITY: "-"
+        with:
+          # No tagName/releaseId -> tauri-action only builds, creates no Release.
+          tauriScript: pnpm tauri
+          args: ${{ matrix.args }}
+
+      - name: Upload preview artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabularis-preview-pr${{ needs.authorize.outputs.pr }}-${{ matrix.platform }}
+          # `**` covers both target/release/bundle (linux/windows) and
+          # target/<triple>/release/bundle (macos cross-target builds).
+          path: |
+            src-tauri/target/**/release/bundle/**
+            src-tauri/target/**/release/tabularis.exe
+          retention-days: 14
+          if-no-files-found: error
+
+  comment:
+    needs: [authorize, build]
+    # Post the result whether the build passed or failed, but only when a write
+    # token is actually available (skips the fork label path — see header).
+    if: always() && needs.authorize.outputs.build == 'true' && needs.authorize.outputs.canwrite == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Compose message
+        id: msg
+        env:
+          RESULT: ${{ needs.build.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            body="✅ **Preview build ready** — [Download artifacts]($RUN_URL) (GitHub login required). Unsigned: macOS right-click → Open, Windows \"Run anyway\"."
+          else
+            body="❌ **Preview build $RESULT** — [see logs]($RUN_URL)."
+          fi
+          echo "body=$body" >> "$GITHUB_OUTPUT"
+
+      - name: Sticky bot comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: preview
+          number: ${{ needs.authorize.outputs.pr }}
+          message: ${{ steps.msg.outputs.body }}
