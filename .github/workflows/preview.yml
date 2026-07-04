@@ -41,7 +41,8 @@ jobs:
        startsWith(github.event.comment.body, '/preview'))
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: read
+      # write (not read) so we can drop a 👀 reaction on the /preview comment.
+      pull-requests: write
     outputs:
       build: ${{ steps.check.outputs.build }}
       pr: ${{ steps.check.outputs.pr }}
@@ -63,6 +64,7 @@ jobs:
           IC_NUM: ${{ github.event.issue.number }}
           COMMENTER: ${{ github.event.comment.user.login }}
           ASSOC: ${{ github.event.comment.author_association }}
+          CID: ${{ github.event.comment.id }}
         run: |
           set -euo pipefail
           build=false; pr=""; canwrite=false
@@ -87,6 +89,11 @@ jobs:
               build=true; pr="$IC_NUM"
               # issue_comment runs in the base-repo context -> write is available.
               canwrite=true
+              # Instant 👀 ack so the commenter sees /preview was accepted, before
+              # the multi-minute build even starts. CID is an int -> safe to use.
+              gh api --method POST \
+                "repos/$GH_REPO/issues/comments/$CID/reactions" \
+                -f content=eyes >/dev/null 2>&1 || true
             fi
           fi
 
