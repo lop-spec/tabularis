@@ -9,9 +9,9 @@ name: PR Preview
 #   * anyone with write access OR the PR author comments `/preview` (issue_comment).
 # A sticky bot comment reports status + a download link back on the PR.
 #
-# Download: the run's Artifacts. NOTE: downloading an Actions artifact needs a
-# logged-in GitHub account even on a public repo (github.com/actions/upload-artifact/issues/51).
-# Front it with nightly.link if un-authenticated downloads are ever needed.
+# Download: the bot comment links each platform's artifact via nightly.link, which
+# redirects to a login-free URL. (A raw Actions artifact needs a logged-in GitHub
+# account even on a public repo: github.com/actions/upload-artifact/issues/51.)
 #
 # Security:
 #   * `build` runs fork code with `contents: read` and NO secrets — worst case is
@@ -220,13 +220,27 @@ jobs:
         env:
           RESULT: ${{ needs.build.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # nightly.link brokers login-free download URLs for the run's artifacts
+          # (a raw Actions artifact needs a logged-in account, even on a public repo).
+          NL: https://nightly.link/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR: ${{ needs.authorize.outputs.pr }}
         run: |
           if [ "$RESULT" = "success" ]; then
-            body="✅ **Preview build ready** — [Download artifacts]($RUN_URL) (GitHub login required). Unsigned: macOS right-click → Open, Windows \"Run anyway\"."
+            {
+              echo "body<<MSG"
+              echo "✅ **Preview build ready** — login-free downloads (unsigned):"
+              echo ""
+              echo "- 🪟 [Windows]($NL/tabularis-preview-pr$PR-windows-latest.zip)"
+              echo "- 🍎 [macOS · Apple Silicon]($NL/tabularis-preview-pr$PR-macos-latest.zip)"
+              echo "- 🍎 [macOS · Intel]($NL/tabularis-preview-pr$PR-macos-15-intel.zip)"
+              echo "- 🐧 [Linux]($NL/tabularis-preview-pr$PR-ubuntu-24.04.zip)"
+              echo ""
+              echo "macOS: right-click → Open · Windows: \"Run anyway\". [Build logs]($RUN_URL)."
+              echo "MSG"
+            } >> "$GITHUB_OUTPUT"
           else
-            body="❌ **Preview build $RESULT** — [see logs]($RUN_URL)."
+            echo "body=❌ **Preview build $RESULT** — [see logs]($RUN_URL)." >> "$GITHUB_OUTPUT"
           fi
-          echo "body=$body" >> "$GITHUB_OUTPUT"
 
       - name: Sticky bot comment
         uses: marocchino/sticky-pull-request-comment@v2
