@@ -41,10 +41,10 @@ jobs:
        startsWith(github.event.comment.body, '/preview'))
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: read
-      # A PR conversation comment is an *issue* comment, so reacting 👀 to it
-      # needs issues:write (pull-requests:write does NOT cover reactions).
-      issues: write
+      # write (not read) to drop a 👀 reaction on the /preview comment. A PR
+      # conversation comment is an issue comment, but the PR-scoped token still
+      # covers reacting to it — verified; issues:write does NOT.
+      pull-requests: write
     outputs:
       build: ${{ steps.check.outputs.build }}
       pr: ${{ steps.check.outputs.pr }}
