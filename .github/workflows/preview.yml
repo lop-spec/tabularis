@@ -187,8 +187,12 @@ jobs:
           APPLE_SIGNING_IDENTITY: "-"
         with:
           # No tagName/releaseId -> tauri-action only builds, creates no Release.
+          # Override createUpdaterArtifacts=false: the config ships an updater
+          # pubkey, which otherwise makes `tauri build` demand TAURI_SIGNING_PRIVATE_KEY
+          # (a secret we deliberately don't expose to fork PRs). Previews don't
+          # need the self-update bundle anyway.
           tauriScript: pnpm tauri
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} --config {"bundle":{"createUpdaterArtifacts":false}}
 
       - name: Upload preview artifacts
         uses: actions/upload-artifact@v4
