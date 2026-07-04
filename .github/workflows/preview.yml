@@ -41,8 +41,10 @@ jobs:
        startsWith(github.event.comment.body, '/preview'))
     runs-on: ubuntu-latest
     permissions:
-      # write (not read) so we can drop a 👀 reaction on the /preview comment.
-      pull-requests: write
+      pull-requests: read
+      # A PR conversation comment is an *issue* comment, so reacting 👀 to it
+      # needs issues:write (pull-requests:write does NOT cover reactions).
+      issues: write
     outputs:
       build: ${{ steps.check.outputs.build }}
       pr: ${{ steps.check.outputs.pr }}
@@ -93,7 +95,8 @@ jobs:
               # the multi-minute build even starts. CID is an int -> safe to use.
               gh api --method POST \
                 "repos/$GH_REPO/issues/comments/$CID/reactions" \
-                -f content=eyes >/dev/null 2>&1 || true
+                -f content=eyes >/dev/null \
+                || echo "::warning::could not add 👀 reaction (non-fatal)"
             fi
           fi
 
