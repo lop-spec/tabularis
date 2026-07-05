@@ -190,14 +190,6 @@ impl SshTunnel {
 
         args.push("-o".to_string());
         args.push("StrictHostKeyChecking=accept-new".to_string());
-        // Keepalives make ssh exit when the server goes away (e.g. a reboot);
-        // without them the process can hold the local port forever.
-        args.push("-o".to_string());
-        args.push("ServerAliveInterval=15".to_string());
-        args.push("-o".to_string());
-        args.push("ServerAliveCountMax=3".to_string());
-        args.push("-o".to_string());
-        args.push("ExitOnForwardFailure=yes".to_string());
         args.push("-o".to_string());
         if ssh_allow_passphrase_prompt {
             args.push("BatchMode=no".to_string());
@@ -461,15 +453,6 @@ impl SshTunnel {
 
                 println!("[SSH Tunnel] Starting tunnel forwarding loop");
                 while running_clone.load(Ordering::Relaxed) {
-                    // If the SSH session died (e.g. the server rebooted), mark
-                    // the tunnel as dead and release the local port so a
-                    // reconnect can create a fresh tunnel.
-                    if handle.lock().await.is_closed() {
-                        eprintln!("[SSH Tunnel Error] SSH session closed unexpectedly; shutting down tunnel");
-                        running_clone.store(false, Ordering::Relaxed);
-                        break;
-                    }
-
                     let accept = tokio::time::timeout(
                         Duration::from_millis(SSH_ACCEPT_POLL_MS),
                         listener.accept(),
@@ -548,19 +531,6 @@ impl SshTunnel {
                     let _ = c.kill();
                 }
             }
-        }
-    }
-
-    /// Whether the tunnel is still operational. A tunnel dies when the SSH
-    /// session drops (russh forwarding loop exits) or the system ssh process
-    /// terminates (e.g. after the remote server reboots).
-    pub fn is_alive(&self) -> bool {
-        match &self.backend {
-            TunnelBackend::Russh(running) => running.load(Ordering::Relaxed),
-            TunnelBackend::SystemSsh(child) => match child.lock() {
-                Ok(mut c) => matches!(c.try_wait(), Ok(None)),
-                Err(_) => false,
-            },
         }
     }
 }
@@ -881,41 +851,6 @@ mod tests {
         #[test]
         fn test_password_with_spaces_uses_russh() {
             assert!(!should_use_system_ssh(Some("my password")));
-        }
-    }
-
-    mod is_alive_tests {
-        use super::*;
-
-        #[test]
-        fn test_russh_tunnel_alive_while_running() {
-            let tunnel = SshTunnel {
-                local_port: 0,
-                backend: TunnelBackend::Russh(Arc::new(AtomicBool::new(true))),
-            };
-            assert!(tunnel.is_alive());
-        }
-
-        #[test]
-        fn test_russh_tunnel_dead_after_session_close() {
-            let running = Arc::new(AtomicBool::new(true));
-            let tunnel = SshTunnel {
-                local_port: 0,
-                backend: TunnelBackend::Russh(running.clone()),
-            };
-            // Simulates the forwarding loop detecting a closed SSH session.
-            running.store(false, Ordering::Relaxed);
-            assert!(!tunnel.is_alive());
-        }
-
-        #[test]
-        fn test_russh_tunnel_dead_after_stop() {
-            let tunnel = SshTunnel {
-                local_port: 0,
-                backend: TunnelBackend::Russh(Arc::new(AtomicBool::new(true))),
-            };
-            tunnel.stop();
-            assert!(!tunnel.is_alive());
         }
     }
 

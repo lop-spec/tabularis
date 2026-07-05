@@ -220,38 +220,6 @@ fn build_tunnel_map_key(
     crate::ssh_tunnel::build_tunnel_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port)
 }
 
-/// Remove the cached SSH tunnel for these params if it is no longer alive
-/// (e.g. the remote server rebooted), so the next resolve creates a fresh one.
-/// Returns true if a dead tunnel was evicted.
-pub fn evict_dead_ssh_tunnel(params: &ConnectionParams) -> bool {
-    if !params.ssh_enabled.unwrap_or(false) {
-        return false;
-    }
-    let (Some(ssh_host), Some(ssh_user)) = (params.ssh_host.as_deref(), params.ssh_user.as_deref())
-    else {
-        return false;
-    };
-    let map_key = build_tunnel_map_key(
-        ssh_user,
-        ssh_host,
-        params.ssh_port.unwrap_or(22),
-        params.host.as_deref().unwrap_or("localhost"),
-        params.port.unwrap_or(DEFAULT_MYSQL_PORT),
-    );
-
-    let mut tunnels = get_tunnels().lock().unwrap();
-    match tunnels.get(&map_key) {
-        Some(tunnel) if !tunnel.is_alive() => {
-            log::warn!("SSH tunnel {} is no longer alive, removing it", map_key);
-            if let Some(dead) = tunnels.remove(&map_key) {
-                dead.stop();
-            }
-            true
-        }
-        _ => false,
-    }
-}
-
 /// Resolve K8s tunnel params synchronously (no saved-connection lookup; uses inline fields only).
 fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
     let context = params
@@ -342,10 +310,6 @@ pub fn resolve_connection_params(params: &ConnectionParams) -> Result<Connection
     let remote_port = params.port.unwrap_or(DEFAULT_MYSQL_PORT);
 
     let map_key = build_tunnel_map_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port);
-
-    // A dead cached tunnel (server rebooted, ssh process exited) is evicted
-    // so a fresh one gets created below.
-    evict_dead_ssh_tunnel(params);
 
     // Check for existing tunnel
     {
@@ -2377,26 +2341,6 @@ mod tests {
             let result = resolve_connection_params(&params);
             assert!(result.is_err());
             assert!(result.unwrap_err().contains("SSH User"));
-        }
-
-        #[test]
-        fn test_evict_dead_ssh_tunnel_noop_when_ssh_disabled() {
-            let params = base_params();
-            assert!(!evict_dead_ssh_tunnel(&params));
-        }
-
-        #[test]
-        fn test_evict_dead_ssh_tunnel_noop_without_ssh_fields() {
-            let mut params = create_ssh_params("jump.server", 22, "admin", "db.internal", 3306);
-            params.ssh_user = None;
-            assert!(!evict_dead_ssh_tunnel(&params));
-        }
-
-        #[test]
-        fn test_evict_dead_ssh_tunnel_noop_without_cached_tunnel() {
-            let params =
-                create_ssh_params("no-such-tunnel.host", 22, "admin", "db.internal", 3306);
-            assert!(!evict_dead_ssh_tunnel(&params));
         }
     }
 
