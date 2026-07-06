@@ -87,6 +87,7 @@
     "modifyColumn": "修改列",
     "copyName": "复制名称",
     "openInEditor": "在编辑器中打开",
+    "openInNewWindow": "在新窗口中打开",
     "closePanel": "关闭面板",
     "setAsActive": "设为激活",
     "deleteTable": "删除表",

@@ -88,6 +88,7 @@
     "modifyColumn": "Изменить столбец",
     "copyName": "Копировать имя",
     "openInEditor": "Открыть в редакторе",
+    "openInNewWindow": "Открыть в новом окне",
     "closePanel": "Закрыть панель",
     "setAsActive": "Сделать активным",
     "deleteTable": "Удалить таблицу",

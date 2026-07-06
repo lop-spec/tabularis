@@ -88,6 +88,7 @@
     "modifyColumn": "Modifica colonna",
     "copyName": "Copia nome",
     "openInEditor": "Apri nell'editor",
+    "openInNewWindow": "Apri in una nuova finestra",
     "closePanel": "Chiudi pannello",
     "setAsActive": "Imposta come attiva",
     "deleteTable": "Elimina tabella",

@@ -88,6 +88,7 @@
     "modifyColumn": "カラムを変更",
     "copyName": "名前をコピー",
     "openInEditor": "エディタで開く",
+    "openInNewWindow": "新しいウィンドウで開く",
     "closePanel": "パネルを閉じる",
     "setAsActive": "アクティブに設定",
     "deleteTable": "テーブルを削除",
