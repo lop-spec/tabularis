@@ -10,7 +10,9 @@
 //! Endpoints used:
 //! * `list_plugins`          — paginated catalogue
 //! * `get_plugin`            — detail + releases (each with per-asset metadata)
-//! * `get_release_integrity` — JWS / sha256 envelope (used in installer)
+//! * `get_release_integrity` — JWS / sha256 envelope; verified in
+//!   `resolve_expected_sha` (see `integrity` module) so the installer enforces
+//!   the SIGNED asset hash, not the unsigned envelope.
 
 use std::collections::HashMap;
 
@@ -111,8 +113,9 @@ pub fn tracked_latest_download_url(base_url: &str, slug: &str, platform: &str) -
 }
 
 /// Per-platform asset resolution for installation. Returns the download URL
-/// plus the SHA-256 the registry expects (when published — `None` for legacy
-/// releases pre-Phase-2 integrity backfill).
+/// plus the SHA-256 the installer must match. When the release is signed, this
+/// SHA comes from *inside* the verified JWS payload — never the unsigned
+/// envelope. `None` only for legacy releases that carry no hash at all.
 pub struct AssetResolution {
     pub download_url: String,
     pub expected_sha256: Option<String>,
@@ -156,15 +159,143 @@ pub async fn resolve_asset(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .ok_or_else(|| format!("Tabularium asset for '{}' is missing 'url'", slug))?;
-    let sha = entry
+    // The forge filename — the key the signed integrity payload uses to name
+    // this asset (e.g. `firestore-plugin-linux-x64.zip`).
+    let asset_name = url.rsplit('/').next().unwrap_or(&url).to_string();
+    let envelope_sha = entry
         .get("sha256")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    let expected_sha256 =
+        resolve_expected_sha(base_url, slug, version, &asset_name, envelope_sha).await?;
+
     Ok(AssetResolution {
         download_url: url,
-        expected_sha256: sha,
+        expected_sha256,
     })
+}
+
+/// Resolve the SHA-256 the installer must enforce, preferring the
+/// signature-verified value from the release's integrity JWS.
+///
+/// * signed release  → verify the JWS and return the SIGNED per-asset hash;
+///   any verification failure is fatal (fail closed — never silently fall back
+///   to the unsigned envelope hash).
+/// * unsigned release → return the envelope hash and warn; the installer still
+///   hash-checks, but that only guards forge-side corruption, not a hostile
+///   registry.
+/// * integrity endpoint unreachable → degrade to the envelope hash so a
+///   transient outage doesn't block installs.
+async fn resolve_expected_sha(
+    base_url: &str,
+    slug: &str,
+    version: &str,
+    asset_name: &str,
+    envelope_sha: Option<String>,
+) -> Result<Option<String>, String> {
+    use tabularium_sdk::types::GetReleaseIntegrityResponse as Integ;
+
+    let client = make_client(base_url);
+    let integ = match client
+        .get_release_integrity()
+        .slug(slug)
+        .version(version)
+        .send()
+        .await
+    {
+        Ok(resp) => resp.into_inner(),
+        Err(e) => {
+            log::warn!(
+                "Integrity endpoint failed for {}@{}: {} — using unsigned envelope hash",
+                slug,
+                version,
+                e
+            );
+            return Ok(envelope_sha);
+        }
+    };
+
+    match integ {
+        Integ::Variant0 { jws, .. } => {
+            // We fetch the JWKS fresh per install, so it already carries the
+            // current + previous keys — no stale-cache re-fetch dance needed.
+            let jwks = crate::plugins::integrity::fetch_jwks(base_url).await?;
+            let payload =
+                crate::plugins::integrity::verify_jws(&jws, &jwks, slug, version, base_url)?;
+            let sha = payload.sha256_for(asset_name).ok_or_else(|| {
+                format!(
+                    "Release {}@{} is signed but asset '{}' is not covered by the signature",
+                    slug, version, asset_name
+                )
+            })?;
+            log::info!(
+                "Verified registry signature for {}@{} ({})",
+                slug,
+                version,
+                asset_name
+            );
+            Ok(Some(sha.to_string()))
+        }
+        Integ::Variant1 { .. } => {
+            // ponytail: unsigned legacy release. Hash-check still runs, but the
+            // hash is registry-supplied and unsigned. Tighten to refuse (or gate
+            // behind a trust-policy setting) once the registry backfills JWS
+            // signatures across releases.
+            log::warn!(
+                "Release {}@{} is unsigned (no JWS) — installing with an unverified hash",
+                slug,
+                version
+            );
+            Ok(envelope_sha)
+        }
+    }
+}
+
+/// Probe a release's integrity signature for the install UI — verifies the JWS
+/// (identity guards included) without needing a specific asset. Never errors:
+/// every failure maps to a [`SignatureStatus`] the modal can badge.
+pub async fn check_release_signature(
+    base_url: &str,
+    slug: &str,
+    version: &str,
+) -> crate::plugins::registry::SignatureStatus {
+    use crate::plugins::registry::SignatureStatus;
+    use tabularium_sdk::types::GetReleaseIntegrityResponse as Integ;
+
+    let client = make_client(base_url);
+    let integ = match client
+        .get_release_integrity()
+        .slug(slug)
+        .version(version)
+        .send()
+        .await
+    {
+        Ok(resp) => resp.into_inner(),
+        Err(e) => {
+            log::warn!("Integrity probe failed for {}@{}: {}", slug, version, e);
+            return SignatureStatus::Unknown;
+        }
+    };
+
+    match integ {
+        Integ::Variant0 { jws, .. } => match crate::plugins::integrity::fetch_jwks(base_url).await {
+            Ok(jwks) => {
+                match crate::plugins::integrity::verify_jws(&jws, &jwks, slug, version, base_url) {
+                    Ok(_) => SignatureStatus::Verified,
+                    Err(e) => {
+                        log::error!("Signature INVALID for {}@{}: {}", slug, version, e);
+                        SignatureStatus::Invalid
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("JWKS fetch failed while probing {}@{}: {}", slug, version, e);
+                SignatureStatus::Unknown
+            }
+        },
+        Integ::Variant1 { .. } => SignatureStatus::Unsigned,
+    }
 }
 
 /// Picks the JSON object describing the asset for the requested platform.

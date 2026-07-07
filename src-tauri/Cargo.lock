@@ -6406,6 +6406,7 @@ dependencies = [
  "csv",
  "deadpool-postgres",
  "directories",
+ "ed25519-dalek",
  "filetime",
  "futures",
  "gtk",

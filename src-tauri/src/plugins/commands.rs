@@ -105,6 +105,7 @@ fn to_plugin_with_status(
         paradigms: plugin.paradigms,
         verified: plugin.verified,
         install_action: None,
+        signature: None,
     }
 }
 
@@ -364,6 +365,10 @@ pub async fn fetch_tabularium_plugin_preview(
 
     let mut with_status = to_plugin_with_status(plugin, installed_version, &platform);
     with_status.install_action = Some(action);
+    // Probe the target release's signature so the confirm modal can badge it
+    // (verified / unsigned / invalid) before the user commits to installing.
+    with_status.signature =
+        Some(crate::plugins::tabularium::check_release_signature(&base, &slug, &target).await);
     Ok(with_status)
 }
 

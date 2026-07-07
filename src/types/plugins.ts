@@ -127,6 +127,12 @@ export interface RegistryPluginWithStatus {
   verified?: boolean;
   /** Deeplink-only: resolved action for the confirmation modal. */
   install_action?: "install" | "update" | "up_to_date" | null;
+  /**
+   * Release-integrity signature state for the target version (preview path).
+   * Distinct from `verified` (admin moderation) — this is the cryptographic
+   * signature over the release's asset hashes.
+   */
+  signature?: "verified" | "unsigned" | "invalid" | "unknown" | null;
 }
 
 export interface InstalledPluginInfo {

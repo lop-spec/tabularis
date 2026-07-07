@@ -10,6 +10,9 @@ import {
   Boxes,
   Home,
   CheckCircle2,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Modal } from "../ui/Modal";
@@ -103,6 +106,12 @@ export const PluginInstallConfirmModal = ({
   const action = preview?.install_action ?? "install";
   const isUpToDate = action === "up_to_date";
   const isUpdate = action === "update";
+
+  // Release-integrity signature (distinct from the admin `verified` flag). An
+  // `invalid` signature blocks the install — a valid signature over a tampered
+  // or wrong release is exactly the attack the check exists to stop.
+  const signature = preview?.signature ?? null;
+  const signatureInvalid = signature === "invalid";
 
   const displayName = preview?.name ?? request.slug;
   const description = preview?.description ?? null;
@@ -256,6 +265,7 @@ export const PluginInstallConfirmModal = ({
           </div>
 
           {/* Banners */}
+          <SignatureBanner status={signature} loading={previewLoading} t={t} />
           {showsRegistryMismatch && (
             <Banner tone="amber" icon={<AlertTriangle size={13} />}>
               <p className="font-medium mb-0.5">
@@ -306,8 +316,15 @@ export const PluginInstallConfirmModal = ({
           {!isUpToDate && (
             <button
               onClick={onConfirm}
-              disabled={busy}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 flex items-center gap-2 cursor-pointer"
+              disabled={busy || signatureInvalid}
+              title={
+                signatureInvalid
+                  ? t("deepLink.signatureInvalidTitle", {
+                      defaultValue: "Blocked: the release signature is invalid",
+                    })
+                  : undefined
+              }
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
             >
               {busy ? (
                 <>
@@ -338,6 +355,75 @@ export const PluginInstallConfirmModal = ({
 
 function stripSlash(s: string): string {
   return s.replace(/\/+$/, "").toLowerCase();
+}
+
+/**
+ * Release-integrity signature badge. Renders nothing until the preview resolves
+ * (so we don't flash "unsigned" before the probe returns). `invalid` is the one
+ * that also disables the install button in the footer.
+ */
+function SignatureBanner({
+  status,
+  loading,
+  t,
+}: {
+  status: "verified" | "unsigned" | "invalid" | "unknown" | null;
+  loading: boolean;
+  t: (key: string, opts?: { defaultValue: string }) => string;
+}) {
+  if (loading || !status) return null;
+
+  switch (status) {
+    case "verified":
+      return (
+        <Banner tone="green" icon={<ShieldCheck size={13} />}>
+          <p className="font-medium">
+            {t("deepLink.signatureVerified", {
+              defaultValue:
+                "Signature verified — the release's asset hashes are signed by the author.",
+            })}
+          </p>
+        </Banner>
+      );
+    case "invalid":
+      return (
+        <Banner tone="red" icon={<ShieldAlert size={13} />}>
+          <p className="font-medium mb-0.5">
+            {t("deepLink.signatureInvalidTitle", {
+              defaultValue: "Signature invalid",
+            })}
+          </p>
+          <p>
+            {t("deepLink.signatureInvalidBody", {
+              defaultValue:
+                "This release failed signature verification and cannot be installed.",
+            })}
+          </p>
+        </Banner>
+      );
+    case "unsigned":
+      return (
+        <Banner tone="amber" icon={<ShieldAlert size={13} />}>
+          <p>
+            {t("deepLink.signatureUnsigned", {
+              defaultValue:
+                "Unsigned release — the download hash is not cryptographically signed. Install only from a source you trust.",
+            })}
+          </p>
+        </Banner>
+      );
+    case "unknown":
+      return (
+        <Banner tone="neutral" icon={<ShieldQuestion size={13} />}>
+          <p>
+            {t("deepLink.signatureUnknown", {
+              defaultValue:
+                "Couldn't verify the release signature (registry unreachable).",
+            })}
+          </p>
+        </Banner>
+      );
+  }
 }
 
 /** Square plugin logo or a deterministic letter fallback. */
@@ -380,14 +466,16 @@ function Banner({
   icon,
   children,
 }: {
-  tone: "amber" | "red";
+  tone: "amber" | "red" | "green" | "neutral";
   icon: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const cls =
-    tone === "amber"
-      ? "bg-amber-900/20 border-amber-700/40 text-amber-300"
-      : "bg-red-900/20 border-red-700/40 text-red-300";
+  const cls = {
+    amber: "bg-amber-900/20 border-amber-700/40 text-amber-300",
+    red: "bg-red-900/20 border-red-700/40 text-red-300",
+    green: "bg-emerald-900/20 border-emerald-700/40 text-emerald-300",
+    neutral: "bg-base border-default text-secondary",
+  }[tone];
   return (
     <div className={`rounded-lg border p-3 flex gap-2 text-xs ${cls}`}>
       <span className="shrink-0 mt-0.5">{icon}</span>

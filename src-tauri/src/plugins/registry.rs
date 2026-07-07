@@ -21,6 +21,22 @@ pub enum InstallAction {
     UpToDate,
 }
 
+/// Release-integrity signature state, surfaced to the install UI so the user
+/// sees whether the release they're about to install is cryptographically
+/// verified. Distinct from the admin-moderation `verified` flag.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SignatureStatus {
+    /// JWS present, signature + release-identity guards verified.
+    Verified,
+    /// Legacy release with no JWS — hash is registry-supplied, not signed.
+    Unsigned,
+    /// JWS present but verification or an identity guard FAILED — do not trust.
+    Invalid,
+    /// Couldn't reach the integrity endpoint to decide.
+    Unknown,
+}
+
 /// SemVer-aware classification. The registry requires semver-formatted
 /// versions; if either side fails to parse we degrade to string comparison
 /// (equal => up-to-date, else => update) and log, rather than crash callers.
@@ -159,6 +175,11 @@ pub struct RegistryPluginWithStatus {
     /// confirmation modal. `None` outside the deeplink preview path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub install_action: Option<InstallAction>,
+    /// Release-integrity signature state for the target version. Set by the
+    /// preview path so the modal can badge verified / unsigned; `None` on the
+    /// plain catalogue path where we don't probe per-release integrity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<SignatureStatus>,
 }
 
 pub fn get_current_platform() -> String {
