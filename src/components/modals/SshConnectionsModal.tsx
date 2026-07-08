@@ -23,6 +23,7 @@ import {
 } from "../../utils/ssh";
 import { toErrorMessage } from "../../utils/errors";
 import { Modal } from "../ui/Modal";
+import { ConfirmModal } from "./ConfirmModal";
 import { Select } from "../ui/Select";
 import clsx from "clsx";
 
@@ -42,6 +43,7 @@ interface SshInputProps {
   type?: string;
   placeholder?: string;
   error?: React.ReactNode;
+  autoFocus?: boolean;
 }
 
 function SshInput({
@@ -51,6 +53,7 @@ function SshInput({
   type = "text",
   placeholder,
   error,
+  autoFocus,
 }: SshInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === "password";
@@ -65,6 +68,7 @@ function SshInput({
           onChange={(e) => onChange(e.target.value)}
           className={clsx(InputClass, isPassword && "pr-10")}
           placeholder={placeholder}
+          autoFocus={autoFocus}
         />
         {isPassword && (
           <button
@@ -107,6 +111,7 @@ export function SshConnectionsModal({
   >({});
   const [passwordDirty, setPasswordDirty] = useState(false);
   const [passphraseDirty, setPassphraseDirty] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const loadConnections = useCallback(async () => {
     const result = await loadSshConnections();
@@ -269,10 +274,7 @@ export function SshConnectionsModal({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t("sshConnections.confirmDelete"))) {
-      return;
-    }
-
+    setDeleteTargetId(null);
     try {
       await deleteSshConnection(id);
       await loadConnections();
@@ -406,7 +408,7 @@ export function SshConnectionsModal({
                           <Edit2 size={16} />
                         </button>
                         <button
-                          onClick={() => handleDelete(conn.id)}
+                          onClick={() => setDeleteTargetId(conn.id)}
                           className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                           title={t("sshConnections.delete")}
                         >
@@ -425,6 +427,7 @@ export function SshConnectionsModal({
                 value={formData.name}
                 onChange={(val) => updateField("name", val)}
                 placeholder={t("sshConnections.namePlaceholder")}
+                autoFocus
               />
 
               <div className="grid grid-cols-2 gap-4">
@@ -626,6 +629,15 @@ export function SshConnectionsModal({
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={deleteTargetId !== null}
+        onClose={() => setDeleteTargetId(null)}
+        title={t("sshConnections.delete")}
+        message={t("sshConnections.confirmDelete")}
+        onConfirm={() => deleteTargetId && handleDelete(deleteTargetId)}
+        overlayClassName="fixed inset-0 bg-black/50 flex items-center justify-center z-[120] backdrop-blur-sm"
+      />
     </Modal>
   );
 }
