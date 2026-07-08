@@ -750,7 +750,10 @@
     "keyFile": "Fichier de clé",
     "quickTest": "Test rapide de connexion",
     "testFailed": "Échec du test de connexion",
-    "savedInKeychain": "Mot de passe enregistré dans le trousseau système"
+    "savedInKeychain": "Mot de passe enregistré dans le trousseau système",
+    "manageDesc": "Tunnels SSH réutilisables pour vos connexions aux bases de données. Les mots de passe et phrases secrètes sont stockés dans le trousseau du système.",
+    "deleteInUse_one": "Elle est utilisée par {{count}} connexion enregistrée, qui ne passera plus par ce tunnel.",
+    "deleteInUse_other": "Elle est utilisée par {{count}} connexions enregistrées, qui ne passeront plus par ce tunnel."
   },
   "sshAskpass": {
     "title": "Authentification SSH",

@@ -784,7 +784,10 @@
     "keyFile": "Key file",
     "quickTest": "Quick connection test",
     "testFailed": "Connection test failed",
-    "savedInKeychain": "Password saved in system keychain"
+    "savedInKeychain": "Password saved in system keychain",
+    "manageDesc": "Reusable SSH tunnels for your database connections. Passwords and passphrases are stored in the system keychain.",
+    "deleteInUse_one": "It is used by {{count}} saved database connection, which will no longer connect through this tunnel.",
+    "deleteInUse_other": "It is used by {{count}} saved database connections, which will no longer connect through this tunnel."
   },
   "sshAskpass": {
     "title": "SSH Authentication",

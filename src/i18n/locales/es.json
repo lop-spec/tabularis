@@ -755,7 +755,10 @@
     "keyFile": "Archivo de clave",
     "quickTest": "Prueba rápida de conexión",
     "testFailed": "La prueba de conexión falló",
-    "savedInKeychain": "Contraseña guardada en el llavero del sistema"
+    "savedInKeychain": "Contraseña guardada en el llavero del sistema",
+    "manageDesc": "Túneles SSH reutilizables para tus conexiones de base de datos. Las contraseñas y frases de acceso se guardan en el llavero del sistema.",
+    "deleteInUse_one": "La usa {{count}} conexión guardada, que dejará de conectarse a través de este túnel.",
+    "deleteInUse_other": "La usan {{count}} conexiones guardadas, que dejarán de conectarse a través de este túnel."
   },
   "sshAskpass": {
     "title": "Autenticación SSH",

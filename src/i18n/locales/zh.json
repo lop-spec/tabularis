@@ -718,7 +718,9 @@
     "keyFile": "密钥文件",
     "quickTest": "快速连接测试",
     "testFailed": "连接测试失败",
-    "savedInKeychain": "密码已保存到系统密钥链"
+    "savedInKeychain": "密码已保存到系统密钥链",
+    "manageDesc": "可在数据库连接中复用的 SSH 隧道。密码和口令保存在系统钥匙串中。",
+    "deleteInUse_other": "有 {{count}} 个已保存的数据库连接正在使用它，删除后这些连接将不再通过此隧道连接。"
   },
   "sshAskpass": {
     "title": "SSH 身份验证",
