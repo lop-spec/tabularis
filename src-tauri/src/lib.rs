@@ -38,6 +38,8 @@ pub mod export;
 #[cfg(test)]
 pub mod export_import_tests;
 pub mod health_check;
+#[cfg(test)]
+pub mod group_tree_tests;
 pub mod heartbeat;
 #[cfg(test)]
 pub mod heartbeat_tests;
@@ -315,7 +317,9 @@ pub fn run() {
             commands::get_connection_groups,
             commands::get_connections_with_groups,
             commands::create_connection_group,
+            commands::create_group_path,
             commands::update_connection_group,
+            commands::move_group_to_parent,
             commands::delete_connection_group,
             commands::move_connection_to_group,
             commands::reorder_groups,
