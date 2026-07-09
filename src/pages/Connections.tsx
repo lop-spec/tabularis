@@ -33,6 +33,7 @@ import { ContextMenu } from "../components/ui/ContextMenu";
 import type { SavedConnection } from "../contexts/DatabaseContext";
 import { flattenGroupTree } from "../utils/groupTree";
 import { toErrorMessage } from "../utils/errors";
+import { fuzzyFilter } from "../utils/fuzzy";
 import { useOpenConnectionInNewWindow } from "../hooks/useOpenConnectionInNewWindow";
 import { GroupHeader } from "../components/connections/GroupHeader";
 import { ConnectionCard } from "../components/connections/ConnectionCard";
@@ -472,10 +473,10 @@ export const Connections = () => {
     if (!search.trim()) return groupedConnections;
     const result: Record<string, SavedConnection[]> = {};
     for (const groupId in groupedConnections) {
-      const filteredConns = groupedConnections[groupId].filter(
-        (c) =>
-          c.name.toLowerCase().includes(search.toLowerCase()) ||
-          c.params.driver.toLowerCase().includes(search.toLowerCase()),
+      const filteredConns = fuzzyFilter(
+        groupedConnections[groupId],
+        search,
+        (c) => `${c.name} ${c.params.driver}`,
       );
       if (filteredConns.length > 0) {
         result[groupId] = filteredConns;
@@ -485,11 +486,10 @@ export const Connections = () => {
   }, [groupedConnections, search]);
 
   const filteredUngroupedConnections = useMemo(() => {
-    if (!search.trim()) return ungroupedConnections;
-    return ungroupedConnections.filter(
-      (c) =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.params.driver.toLowerCase().includes(search.toLowerCase()),
+    return fuzzyFilter(
+      ungroupedConnections,
+      search,
+      (c) => `${c.name} ${c.params.driver}`,
     );
   }, [ungroupedConnections, search]);
 
