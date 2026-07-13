@@ -127,6 +127,9 @@ export const Connections = () => {
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const isRenameCancelledRef = useRef(false);
+  // Multi-select for bulk actions (delete / move to group)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMoveMenu, setBulkMoveMenu] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     void loadConnections();
@@ -370,6 +373,57 @@ export const Connections = () => {
     }
   };
 
+  // ── Multi-select bulk actions ────────────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkDelete = () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setConfirmModal({
+      title: t("connections.deleteSelectedTitle"),
+      message: t("connections.confirmDeleteSelected", { count: ids.length }),
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          for (const id of ids) {
+            if (isConnectionOpenAnywhere(id)) await disconnect(id);
+            await invoke("delete_connection", { id });
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          clearSelection();
+          void loadConnections();
+        }
+      },
+    });
+  };
+
+  const handleBulkMoveToGroup = async (groupId: string | null) => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      for (const id of ids) {
+        await moveConnectionToGroup(id, groupId);
+      }
+      await loadConnections();
+    } catch (e) {
+      console.error("Failed to move connections:", e);
+      setError(t("groups.moveError", { defaultValue: "Failed to move connection" }) + `: ${toErrorMessage(e)}`);
+    } finally {
+      clearSelection();
+    }
+  };
+
   useEffect(() => {
     if ((location.state as { openNew?: boolean } | null)?.openNew) {
       setEditingConnection(null);
@@ -523,6 +577,9 @@ export const Connections = () => {
       handleConnContextMenu(e, conn),
     onMouseDown: (e: React.MouseEvent<HTMLDivElement>) =>
       handleConnectionMouseDown(e, conn.id, conn.group_id),
+    selected: selectedIds.has(conn.id),
+    selectionActive: selectedIds.size > 0,
+    onToggleSelect: () => toggleSelect(conn.id),
   });
 
   const handleConnectionMouseDown = (e: React.MouseEvent, connId: string, currentGroupId: string | undefined) => {
@@ -882,6 +939,40 @@ export const Connections = () => {
           message={error}
           onClose={() => setError(null)}
         />
+      )}
+
+      {/* ── Selection bar (bulk actions) ──────────────────────────────────── */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-2.5 px-6 py-2.5 bg-elevated border-b border-blue-500/40 shadow-sm shrink-0">
+          <span className="text-sm font-semibold text-blue-300">
+            {t("connections.selectedCount", { count: selectedIds.size })}
+          </span>
+          <div className="flex-1" />
+          <button
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setBulkMoveMenu({ x: r.left, y: r.bottom + 4 });
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-base border border-strong text-sm text-secondary hover:text-amber-400 hover:border-amber-500/50 transition-colors"
+          >
+            <FolderInput size={14} />
+            {t("connections.moveSelected")}
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            <Trash2 size={14} />
+            {t("connections.deleteSelected")}
+          </button>
+          <button
+            onClick={clearSelection}
+            className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-surface-secondary transition-colors"
+            title={t("connections.deselectAll")}
+          >
+            <X size={14} />
+          </button>
+        </div>
       )}
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
@@ -1265,6 +1356,31 @@ export const Connections = () => {
             />
           );
         })()}
+
+      {/* Bulk "move selected to group" menu */}
+      {bulkMoveMenu && (
+        <ContextMenu
+          x={bulkMoveMenu.x}
+          y={bulkMoveMenu.y}
+          items={[
+            {
+              label: t("groups.ungrouped"),
+              icon: X,
+              action: () => void handleBulkMoveToGroup(null),
+            },
+            ...(connectionGroups.length > 0
+              ? [{ separator: true as const }]
+              : []),
+            ...flattenGroupTree(connectionGroups).map(({ group, depth }) => ({
+              label: group.name,
+              icon: Folder,
+              indent: depth,
+              action: () => void handleBulkMoveToGroup(group.id),
+            })),
+          ]}
+          onClose={() => setBulkMoveMenu(null)}
+        />
+      )}
     </div>
   );
 };
