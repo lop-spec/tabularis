@@ -4,6 +4,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { NewConnectionModal } from "../components/modals/NewConnectionModal";
 import { ConfirmModal } from "../components/modals/ConfirmModal";
+import {
+  ExportConnectionsModal,
+  type ExportMode,
+} from "../components/modals/ExportConnectionsModal";
 import { ImportFromAppModal } from "../components/modals/ImportFromAppModal";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -119,6 +123,7 @@ export const Connections = () => {
     variant?: "danger" | "warning" | "info";
     onConfirm: () => void;
   } | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const isRenameCancelledRef = useRef(false);
@@ -300,29 +305,26 @@ export const Connections = () => {
     await toggleGroupCollapsed(groupId);
   };
 
-  const handleExport = async () => {
-    setConfirmModal({
-      title: t("connections.exportTitle"),
-      message: t("connections.exportWarning"),
-      confirmLabel: t("common.save"),
-      variant: "warning",
-      confirmClassName: "px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors",
-      onConfirm: async () => {
-        try {
-          const payload = await invoke("export_connections_payload");
-          const path = await save({
-            defaultPath: "tabularis-connections.json",
-            filters: [{ name: "JSON", extensions: ["json"] }],
-          });
-          if (path) {
-            await writeTextFile(path, JSON.stringify(payload, null, 2));
-          }
-        } catch (e) {
-          console.error("Export failed:", e);
-          setError(toErrorMessage(e));
-        }
-      },
-    });
+  const handleExport = async (mode: ExportMode, password?: string) => {
+    try {
+      const payload = await invoke("export_connections_payload", {
+        includeSecrets: mode !== "noSecrets",
+      });
+      const fileContent =
+        mode === "encrypted"
+          ? await invoke("encrypt_export_payload", { payload, password })
+          : payload;
+      const path = await save({
+        defaultPath: "tabularis-connections.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (path) {
+        await writeTextFile(path, JSON.stringify(fileContent, null, 2));
+      }
+    } catch (e) {
+      console.error("Export failed:", e);
+      setError(toErrorMessage(e));
+    }
   };
 
   const handleRenameGroup = async (groupId: string) => {
@@ -1001,7 +1003,7 @@ export const Connections = () => {
               {/* Export button (import lives in the New Connection dropup) */}
               <div className="flex items-center gap-1.5 px-1 py-1 bg-elevated border border-strong rounded-xl shrink-0">
                 <button
-                  onClick={handleExport}
+                  onClick={() => setIsExportModalOpen(true)}
                   className="p-1.5 rounded-lg text-muted hover:text-blue-400 hover:bg-blue-500/10 transition-all duration-150"
                   title={t("connections.export")}
                 >
@@ -1133,6 +1135,11 @@ export const Connections = () => {
         }}
         onSave={handleSave}
         initialConnection={editingConnection}
+      />
+      <ExportConnectionsModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={handleExport}
       />
       <ImportFromAppModal
         isOpen={isImportAppModalOpen}
