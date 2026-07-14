@@ -845,6 +845,7 @@
     "updateFailed": "Ошибка обновления: ",
     "deleteFailed": "Не удалось удалить строку: ",
     "null": "null",
+    "emptySet": "(пустой набор)",
     "sortByAsc": "Сортировать по {{col}} ASC",
     "sortByDesc": "Сортировать по {{col}} DESC",
     "clearSort": "Сбросить сортировку",

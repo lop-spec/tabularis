@@ -872,6 +872,7 @@
     "updateFailed": "Aggiornamento fallito: ",
     "deleteFailed": "Eliminazione riga fallita: ",
     "null": "null",
+    "emptySet": "(insieme vuoto)",
     "sortByAsc": "Ordina per {{col}} ASC",
     "sortByDesc": "Ordina per {{col}} DESC",
     "clearSort": "Rimuovi ordinamento",

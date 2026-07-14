@@ -859,6 +859,7 @@
     "updateFailed": "更新に失敗しました: ",
     "deleteFailed": "行の削除に失敗しました: ",
     "null": "null",
+    "emptySet": "（空のセット）",
     "sortByAsc": "{{col}} を昇順で並べ替え",
     "sortByDesc": "{{col}} を降順で並べ替え",
     "clearSort": "並べ替えを解除",

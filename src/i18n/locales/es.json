@@ -872,6 +872,7 @@
     "updateFailed": "Error en la actualización: ",
     "deleteFailed": "Error al eliminar la fila: ",
     "null": "null",
+    "emptySet": "(conjunto vacío)",
     "sortByAsc": "Ordenar por {{col}} ASC",
     "sortByDesc": "Ordenar por {{col}} DESC",
     "clearSort": "Quitar ordenamiento",

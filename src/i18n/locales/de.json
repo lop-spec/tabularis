@@ -847,6 +847,7 @@
     "updateFailed": "Aktualisierung fehlgeschlagen: ",
     "deleteFailed": "Löschen der Zeile fehlgeschlagen: ",
     "null": "null",
+    "emptySet": "(leere Menge)",
     "sortByAsc": "Nach {{col}} ASC sortieren",
     "sortByDesc": "Nach {{col}} DESC sortieren",
     "clearSort": "Sortierung löschen",
