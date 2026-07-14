@@ -60,6 +60,7 @@ export interface K8sPathOverrides {
     kind: K8sPathValidationKind,
   ) => Promise<K8sPathValidationResult>;
   ensureApplied: () => Promise<K8sPathEnsureAppliedResult>;
+  cancelPending: () => void;
   initialize: (options?: K8sCommandOptions) => void;
   reset: (options?: K8sCommandOptions) => void;
 }
@@ -130,6 +131,7 @@ export function useK8sPathOverrides(
     Partial<Record<K8sPathValidationKind, PendingValidation>>
   >({});
   const applySuspensionRef = useRef(0);
+  const operationVersionRef = useRef(0);
   const onAppliedRef = useRef(onApplied);
   const onDraftChangedRef = useRef(onDraftChanged);
 
@@ -137,6 +139,15 @@ export function useK8sPathOverrides(
     onAppliedRef.current = onApplied;
     onDraftChangedRef.current = onDraftChanged;
   }, [onApplied, onDraftChanged]);
+
+  const cancelPending = useCallback(() => {
+    operationVersionRef.current += 1;
+    applySuspensionRef.current = 0;
+    pathKinds.forEach((kind) => {
+      invalidate(validationKey(kind));
+    });
+    pendingRef.current = {};
+  }, [invalidate]);
 
   const setValidation = useCallback(
     (kind: K8sPathValidationKind, validation: K8sPathValidationState) => {
@@ -149,15 +160,11 @@ export function useK8sPathOverrides(
 
   const canApplyCurrentDrafts = useCallback((): boolean => {
     const candidate = toCommandOptions(draftsRef.current);
-    const applied = appliedOptionsRef.current;
 
     return pathKinds.every((kind) => {
       const optionKey = `${kind}_path` as const;
       const candidatePath = candidate[optionKey];
-      const appliedPath = applied[optionKey];
-
       return (
-        candidatePath === appliedPath ||
         candidatePath === undefined ||
         validationsRef.current[kind].status === "valid"
       );
@@ -188,6 +195,8 @@ export function useK8sPathOverrides(
       if (draftsRef.current[kind] === value) return;
 
       onDraftChangedRef.current?.();
+      operationVersionRef.current += 1;
+      applySuspensionRef.current = 0;
       invalidate(validationKey(kind));
       delete pendingRef.current[kind];
       const next = { ...draftsRef.current, [kind]: value };
@@ -251,10 +260,7 @@ export function useK8sPathOverrides(
 
   const initialize = useCallback(
     (nextOptions: K8sCommandOptions = {}) => {
-      pathKinds.forEach((kind) => {
-        invalidate(validationKey(kind));
-      });
-      pendingRef.current = {};
+      cancelPending();
 
       const nextAppliedOptions = toCommandOptions(toDrafts(nextOptions));
       const nextDrafts = toDrafts(nextAppliedOptions);
@@ -266,7 +272,7 @@ export function useK8sPathOverrides(
       setAppliedOptions(nextAppliedOptions);
       setValidations(nextValidations);
     },
-    [invalidate],
+    [cancelPending],
   );
 
   const reset = useCallback(
@@ -277,6 +283,7 @@ export function useK8sPathOverrides(
   );
 
   const ensureApplied = useCallback(async (): Promise<K8sPathEnsureAppliedResult> => {
+    const startingVersion = operationVersionRef.current;
     const startingOptions = toCommandOptions(draftsRef.current);
     const wasAlreadyApplied = optionsEqual(
       startingOptions,
@@ -304,11 +311,14 @@ export function useK8sPathOverrides(
         }),
       );
     } finally {
-      applySuspensionRef.current -= 1;
+      if (operationVersionRef.current === startingVersion) {
+        applySuspensionRef.current -= 1;
+      }
     }
 
     const currentOptions = toCommandOptions(draftsRef.current);
     if (
+      operationVersionRef.current !== startingVersion ||
       !optionsEqual(currentOptions, startingOptions) ||
       results.some((result) => result.status !== "valid")
     ) {
@@ -344,6 +354,7 @@ export function useK8sPathOverrides(
     setPath,
     validatePath,
     ensureApplied,
+    cancelPending,
     initialize,
     reset,
   };

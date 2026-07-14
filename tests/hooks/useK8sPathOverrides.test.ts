@@ -71,6 +71,64 @@ describe("useK8sPathOverrides", () => {
     expect(onApplied).not.toHaveBeenCalled();
   });
 
+  it("cancels in-flight validation without applying its draft", async () => {
+    const validation = createDeferred<void>();
+    k8sMocks.validateK8sPath.mockReturnValue(validation.promise);
+    const onApplied = vi.fn();
+    const { result } = renderHook(() => useK8sPathOverrides({ onApplied }));
+
+    act(() => {
+      result.current.setPath("kubectl", "/late/kubectl");
+    });
+    const pending = result.current.validatePath("kubectl");
+    act(() => {
+      result.current.cancelPending();
+    });
+    await act(async () => {
+      validation.resolve();
+    });
+
+    await expect(pending).resolves.toEqual({ status: "stale" });
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(result.current.appliedOptions).toEqual({});
+  });
+
+  it("allows new blur application while a cancelled preflight is unresolved", async () => {
+    const oldValidation = createDeferred<void>();
+    k8sMocks.validateK8sPath.mockImplementation((path: string) =>
+      path === "/old/kubectl"
+        ? oldValidation.promise
+        : Promise.resolve(undefined),
+    );
+    const onApplied = vi.fn();
+    const { result } = renderHook(() => useK8sPathOverrides({ onApplied }));
+
+    act(() => {
+      result.current.setPath("kubectl", "/old/kubectl");
+    });
+    const cancelledPreflight = result.current.ensureApplied();
+    act(() => {
+      result.current.reset();
+      result.current.setPath("kubectl", "/new/kubectl");
+    });
+    await act(async () => {
+      await result.current.validatePath("kubectl");
+    });
+
+    expect(onApplied).toHaveBeenCalledTimes(1);
+    expect(onApplied).toHaveBeenCalledWith({
+      kubectl_path: "/new/kubectl",
+      kubeconfig_path: undefined,
+    });
+
+    let cancelledResult: Awaited<typeof cancelledPreflight>;
+    await act(async () => {
+      oldValidation.resolve();
+      cancelledResult = await cancelledPreflight;
+    });
+    expect(cancelledResult!).toEqual({ status: "invalid" });
+  });
+
   it("keeps invalid validation details and blocks application", async () => {
     k8sMocks.validateK8sPath.mockRejectedValue(new Error("not executable"));
     const { result } = renderHook(() => useK8sPathOverrides());
@@ -133,6 +191,39 @@ describe("useK8sPathOverrides", () => {
       "/tmp/kubeconfig",
       "kubeconfig",
     );
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it("does not blur-apply a changed path before its persisted sibling validates", async () => {
+    k8sMocks.validateK8sPath.mockImplementation(
+      (_path: string, kind: "kubectl" | "kubeconfig") =>
+        kind === "kubectl"
+          ? Promise.resolve(undefined)
+          : Promise.reject(new Error("missing kubeconfig")),
+    );
+    const onApplied = vi.fn();
+    const { result } = renderHook(() => useK8sPathOverrides({ onApplied }));
+
+    act(() => {
+      result.current.initialize({ kubeconfig_path: "/missing/config" });
+      result.current.setPath("kubectl", "/opt/kubectl");
+    });
+    await act(async () => {
+      await result.current.validatePath("kubectl");
+    });
+
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(result.current.appliedOptions).toEqual({
+      kubectl_path: undefined,
+      kubeconfig_path: "/missing/config",
+    });
+    expect(result.current.kubeconfigValidation).toEqual({ status: "idle" });
+
+    let ensured: Awaited<ReturnType<typeof result.current.ensureApplied>>;
+    await act(async () => {
+      ensured = await result.current.ensureApplied();
+    });
+    expect(ensured!).toEqual({ status: "invalid" });
     expect(onApplied).not.toHaveBeenCalled();
   });
 
@@ -241,6 +332,110 @@ describe("useK8sPathOverrides", () => {
       });
     },
   );
+
+  it("applies a full pair once when blur validation overlaps preflight", async () => {
+    const kubectlValidation = createDeferred<void>();
+    const kubeconfigValidation = createDeferred<void>();
+    k8sMocks.validateK8sPath.mockImplementation(
+      (_path: string, kind: "kubectl" | "kubeconfig") =>
+        kind === "kubectl"
+          ? kubectlValidation.promise
+          : kubeconfigValidation.promise,
+    );
+    const onApplied = vi.fn();
+    const { result } = renderHook(() => useK8sPathOverrides({ onApplied }));
+
+    act(() => {
+      result.current.setPath("kubectl", "/opt/kubectl");
+      result.current.setPath("kubeconfig", "/tmp/kubeconfig");
+    });
+    const blur = result.current.validatePath("kubectl");
+    const preflight = result.current.ensureApplied();
+
+    await act(async () => {
+      kubeconfigValidation.resolve();
+    });
+    expect(onApplied).not.toHaveBeenCalled();
+
+    let results: [
+      Awaited<typeof blur>,
+      Awaited<typeof preflight>,
+    ];
+    await act(async () => {
+      kubectlValidation.resolve();
+      results = await Promise.all([blur, preflight]);
+    });
+
+    expect(results!).toEqual([
+      { status: "valid" },
+      {
+        status: "applied",
+        options: {
+          kubectl_path: "/opt/kubectl",
+          kubeconfig_path: "/tmp/kubeconfig",
+        },
+      },
+    ]);
+    expect(onApplied).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies once when concurrent preflights share validation", async () => {
+    const validation = createDeferred<void>();
+    k8sMocks.validateK8sPath.mockReturnValue(validation.promise);
+    const onApplied = vi.fn();
+    const { result } = renderHook(() => useK8sPathOverrides({ onApplied }));
+
+    act(() => {
+      result.current.setPath("kubectl", "/opt/kubectl");
+    });
+    const first = result.current.ensureApplied();
+    const second = result.current.ensureApplied();
+
+    let results: [Awaited<typeof first>, Awaited<typeof second>];
+    await act(async () => {
+      validation.resolve();
+      results = await Promise.all([first, second]);
+    });
+
+    expect(results!).toEqual([
+      {
+        status: "applied",
+        options: { kubectl_path: "/opt/kubectl", kubeconfig_path: undefined },
+      },
+      {
+        status: "applied",
+        options: { kubectl_path: "/opt/kubectl", kubeconfig_path: undefined },
+      },
+    ]);
+    expect(k8sMocks.validateK8sPath).toHaveBeenCalledTimes(1);
+    expect(onApplied).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a preflight when drafts change away and back", async () => {
+    const validation = createDeferred<void>();
+    k8sMocks.validateK8sPath.mockReturnValue(validation.promise);
+    const onApplied = vi.fn();
+    const { result } = renderHook(() => useK8sPathOverrides({ onApplied }));
+
+    act(() => {
+      result.current.setPath("kubectl", "/opt/kubectl");
+    });
+    const preflight = result.current.ensureApplied();
+    act(() => {
+      result.current.setPath("kubectl", "/other/kubectl");
+      result.current.setPath("kubectl", "/opt/kubectl");
+    });
+
+    let ensured: Awaited<typeof preflight>;
+    await act(async () => {
+      validation.resolve();
+      ensured = await preflight;
+    });
+
+    expect(ensured!).toEqual({ status: "invalid" });
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(result.current.appliedOptions).toEqual({});
+  });
 
   it("initializes and resets both draft and applied paths", () => {
     const { result } = renderHook(() => useK8sPathOverrides());
