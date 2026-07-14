@@ -136,6 +136,34 @@ describe("useK8sPathOverrides", () => {
     expect(onApplied).not.toHaveBeenCalled();
   });
 
+  it("does not apply a changed pair when persisted preflight validation fails", async () => {
+    k8sMocks.validateK8sPath.mockImplementation(
+      (_path: string, kind: "kubectl" | "kubeconfig") =>
+        kind === "kubectl"
+          ? Promise.resolve(undefined)
+          : Promise.reject(new Error("missing kubeconfig")),
+    );
+    const onApplied = vi.fn();
+    const { result } = renderHook(() => useK8sPathOverrides({ onApplied }));
+
+    act(() => {
+      result.current.initialize({ kubeconfig_path: "/missing/config" });
+      result.current.setPath("kubectl", "/opt/kubectl");
+    });
+
+    let ensured: Awaited<ReturnType<typeof result.current.ensureApplied>>;
+    await act(async () => {
+      ensured = await result.current.ensureApplied();
+    });
+
+    expect(ensured!).toEqual({ status: "invalid" });
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(result.current.appliedOptions).toEqual({
+      kubectl_path: undefined,
+      kubeconfig_path: "/missing/config",
+    });
+  });
+
   it("validates and applies trimmed draft paths through ensureApplied", async () => {
     k8sMocks.validateK8sPath.mockResolvedValue(undefined);
     const onApplied = vi.fn();

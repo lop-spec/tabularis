@@ -129,6 +129,7 @@ export function useK8sPathOverrides(
   const pendingRef = useRef<
     Partial<Record<K8sPathValidationKind, PendingValidation>>
   >({});
+  const applySuspensionRef = useRef(0);
   const onAppliedRef = useRef(onApplied);
   const onDraftChangedRef = useRef(onDraftChanged);
 
@@ -163,20 +164,24 @@ export function useK8sPathOverrides(
     });
   }, []);
 
-  const applyCurrentDrafts = useCallback((): K8sCommandOptions | null => {
-    const candidate = toCommandOptions(draftsRef.current);
-    if (
-      optionsEqual(candidate, appliedOptionsRef.current) ||
-      !canApplyCurrentDrafts()
-    ) {
-      return null;
-    }
+  const applyCurrentDrafts = useCallback(
+    (ignoreSuspension = false): K8sCommandOptions | null => {
+      const candidate = toCommandOptions(draftsRef.current);
+      if (
+        (!ignoreSuspension && applySuspensionRef.current > 0) ||
+        optionsEqual(candidate, appliedOptionsRef.current) ||
+        !canApplyCurrentDrafts()
+      ) {
+        return null;
+      }
 
-    appliedOptionsRef.current = candidate;
-    setAppliedOptions(candidate);
-    onAppliedRef.current?.(candidate);
-    return candidate;
-  }, [canApplyCurrentDrafts]);
+      appliedOptionsRef.current = candidate;
+      setAppliedOptions(candidate);
+      onAppliedRef.current?.(candidate);
+      return candidate;
+    },
+    [canApplyCurrentDrafts],
+  );
 
   const setPath = useCallback(
     (kind: K8sPathValidationKind, value: string) => {
@@ -278,21 +283,29 @@ export function useK8sPathOverrides(
       appliedOptionsRef.current,
     );
 
-    const results = await Promise.all(
-      pathKinds.map((kind) => {
-        const optionKey = `${kind}_path` as const;
-        const candidatePath = startingOptions[optionKey];
+    applySuspensionRef.current += 1;
+    let results: K8sPathValidationResult[];
+    try {
+      results = await Promise.all(
+        pathKinds.map((kind) => {
+          const optionKey = `${kind}_path` as const;
+          const candidatePath = startingOptions[optionKey];
 
-        if (
-          candidatePath === undefined ||
-          validationsRef.current[kind].status === "valid"
-        ) {
-          return Promise.resolve<K8sPathValidationResult>({ status: "valid" });
-        }
+          if (
+            candidatePath === undefined ||
+            validationsRef.current[kind].status === "valid"
+          ) {
+            return Promise.resolve<K8sPathValidationResult>({
+              status: "valid",
+            });
+          }
 
-        return validatePath(kind);
-      }),
-    );
+          return validatePath(kind);
+        }),
+      );
+    } finally {
+      applySuspensionRef.current -= 1;
+    }
 
     const currentOptions = toCommandOptions(draftsRef.current);
     if (
@@ -310,7 +323,7 @@ export function useK8sPathOverrides(
       return { status: "invalid" };
     }
 
-    const applied = applyCurrentDrafts();
+    const applied = applyCurrentDrafts(true);
     return applied
       ? { status: "applied", options: applied }
       : { status: "applied", options: currentOptions };
