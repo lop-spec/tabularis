@@ -479,15 +479,6 @@ export const NewConnectionModal = ({
       isOpen && formData.k8s_enabled === true && k8sMode === "inline";
   }, [formData.k8s_enabled, isOpen, k8sMode]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      invalidateK8sDiscovery();
-      invalidateK8sAsync("new-k8s-test");
-      inlineK8sTestSequenceRef.current += 1;
-      inlineK8sTestActiveRef.current = false;
-    }
-  }, [invalidateK8sAsync, invalidateK8sDiscovery, isOpen]);
-
   const loadK8sContextsList = useCallback(
     async (options: K8sCommandOptions) => {
       const result = await runK8sAsync("new-k8s-contexts", () =>
@@ -623,9 +614,28 @@ export const NewConnectionModal = ({
   const {
     appliedOptions: appliedK8sOptions,
     ensureApplied: ensureK8sPathsApplied,
+    cancelPending: cancelK8sPathValidation,
     initialize: initializeK8sPathOverrides,
     reset: resetK8sPathOverrides,
   } = pathOverrides;
+
+  const cancelInlineK8sWork = useCallback(() => {
+    invalidateK8sDiscovery();
+    invalidateK8sAsync("new-k8s-test");
+    inlineK8sTestSequenceRef.current += 1;
+    inlineK8sTestActiveRef.current = false;
+    cancelK8sPathValidation();
+  }, [cancelK8sPathValidation, invalidateK8sAsync, invalidateK8sDiscovery]);
+
+  useEffect(() => {
+    if (!isOpen) cancelInlineK8sWork();
+  }, [cancelInlineK8sWork, isOpen]);
+
+  const handleClose = useCallback(() => {
+    cancelInlineK8sWork();
+    resetK8sPathOverrides();
+    onClose();
+  }, [cancelInlineK8sWork, onClose, resetK8sPathOverrides]);
 
   const ensureInlineK8sPaths = useCallback(async (): Promise<InlineK8sPathCheck> => {
     if (k8sMode !== "inline") {
@@ -2666,7 +2676,7 @@ export const NewConnectionModal = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       overlayClassName="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm"
     >
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[760px] max-h-[88vh] flex flex-col overflow-hidden">

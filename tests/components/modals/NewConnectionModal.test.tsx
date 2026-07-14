@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -30,8 +30,21 @@ const sshMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../src/components/ui/Modal", () => ({
-  Modal: ({ isOpen, children }: { isOpen: boolean; children: ReactNode }) =>
-    isOpen ? <div data-testid="modal">{children}</div> : null,
+  Modal: ({
+    isOpen,
+    onClose,
+    children,
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+    children: ReactNode;
+  }) =>
+    isOpen ? (
+      <div data-testid="modal">
+        <button type="button" aria-label="modal-close" onClick={onClose} />
+        {children}
+      </div>
+    ) : null,
 }));
 
 vi.mock("../../../src/components/ui/Select", () => ({
@@ -154,8 +167,29 @@ function renderModal(initialConnection?: InitialConnection) {
   );
 }
 
+function ClosableModalHarness({
+  initialConnection,
+}: {
+  initialConnection: InitialConnection;
+}) {
+  const [isOpen, setIsOpen] = useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setIsOpen(true)}>
+        reopen
+      </button>
+      <NewConnectionModal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        onSave={vi.fn()}
+        initialConnection={initialConnection}
+      />
+    </>
+  );
+}
+
 async function openInlineK8s() {
-  renderModal();
+  const view = renderModal();
   fireEvent.click(screen.getByText("Kubernetes"));
   fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
   fireEvent.click(screen.getByText("newConnection.createInlineK8s"));
@@ -163,6 +197,7 @@ async function openInlineK8s() {
   await waitFor(() => {
     expect(screen.getByRole("option", { name: "ctx" })).toBeInTheDocument();
   });
+  return view;
 }
 
 function openAdvancedSettings(): HTMLInputElement {
@@ -426,6 +461,53 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
     expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
   });
 
+  it("cancels pending path validation when closed before reopening", async () => {
+    const validation = createDeferred<void>();
+    const reopenedCredentials = createDeferred<unknown>();
+    let credentialRequests = 0;
+    k8sMocks.validateK8sPath.mockReturnValue(validation.promise);
+    vi.mocked(invoke).mockImplementation((command) => {
+      if (command !== "get_connection_by_id") return Promise.resolve("ok");
+      credentialRequests += 1;
+      return credentialRequests === 1
+        ? Promise.reject(new Error("use initial params"))
+        : reopenedCredentials.promise;
+    });
+    const initialConnection = createInitialConnection({
+      k8s_enabled: true,
+      k8s_context: "ctx",
+      k8s_namespace: "db",
+      k8s_resource_type: "service",
+      k8s_resource_name: "mysql-svc",
+      k8s_port: 6543,
+    });
+    render(<ClosableModalHarness initialConnection={initialConnection} />);
+
+    fireEvent.click(screen.getByText("Kubernetes"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("newConnection.useK8s")).toBeChecked();
+    });
+    const kubectlInput = openAdvancedSettings();
+    fireEvent.change(kubectlInput, { target: { value: "/late/kubectl" } });
+    fireEvent.blur(kubectlInput);
+    fireEvent.click(screen.getByLabelText("modal-close"));
+
+    await act(async () => {
+      validation.resolve();
+    });
+    fireEvent.click(screen.getByText("reopen"));
+    fireEvent.click(screen.getByText("Kubernetes"));
+    const reopenedKubectlInput = openAdvancedSettings();
+    expect(reopenedKubectlInput).toHaveValue("");
+    expect(k8sMocks.getK8sContexts).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kubectl_path: "/late/kubectl" }),
+    );
+
+    await act(async () => {
+      reopenedCredentials.reject(new Error("finish reopening"));
+    });
+  });
+
   it("suppresses a saved K8s test result after switching connections", async () => {
     const testResult = createDeferred<string>();
     vi.mocked(invoke).mockImplementation((command) =>
@@ -606,8 +688,8 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
     expect(invoke).not.toHaveBeenCalledWith("save_connection", expect.anything());
   });
 
-  it("preserves applied inline paths when Kubernetes is temporarily disabled", async () => {
-    await openInlineK8s();
+  it("preserves applied inline paths when Kubernetes is disabled and reopened", async () => {
+    const view = await openInlineK8s();
     const kubectlInput = openAdvancedSettings();
     fireEvent.change(kubectlInput, { target: { value: "/opt/kubectl" } });
     fireEvent.blur(kubectlInput);
@@ -632,6 +714,28 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
         }),
       );
     });
+
+    view.unmount();
+    vi.mocked(invoke).mockImplementation((command) =>
+      command === "get_connection_by_id"
+        ? Promise.reject(new Error("use initial params"))
+        : Promise.resolve("ok"),
+    );
+    k8sMocks.loadK8sConnections.mockClear();
+    renderModal(
+      createInitialConnection({
+        k8s_enabled: false,
+        k8s_kubectl_path: "/opt/kubectl",
+      }),
+    );
+    await waitFor(() => {
+      expect(k8sMocks.loadK8sConnections).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByText("Kubernetes"));
+    fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
+    const reopenedKubectlInput = openAdvancedSettings();
+    expect(reopenedKubectlInput).toHaveValue("/opt/kubectl");
   });
 
   it("does not clear an unrelated name validation error after a valid path blur", async () => {

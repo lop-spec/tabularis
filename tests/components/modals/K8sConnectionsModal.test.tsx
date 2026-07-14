@@ -337,6 +337,55 @@ describe("K8sConnectionsModal advanced paths", () => {
     });
   });
 
+  it("does not apply an edited path while a persisted sibling is invalid", async () => {
+    k8sMocks.loadK8sConnections.mockResolvedValue([
+      {
+        id: "saved",
+        name: "Saved cluster",
+        context: "ctx",
+        namespace: "db",
+        resource_type: "service",
+        resource_name: "mysql-svc",
+        port: 6543,
+        kubeconfig_path: "/missing/kubeconfig",
+      },
+    ]);
+    k8sMocks.validateK8sPath.mockImplementation(
+      (_path: string, kind: "kubectl" | "kubeconfig") =>
+        kind === "kubectl"
+          ? Promise.resolve(undefined)
+          : Promise.reject(new Error("missing kubeconfig")),
+    );
+    renderModal(15432);
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved cluster")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText("common.edit"));
+    const kubectlInput = openAdvancedSettings();
+    fireEvent.change(kubectlInput, { target: { value: "/opt/kubectl" } });
+    fireEvent.blur(kubectlInput);
+
+    await waitFor(() => {
+      expect(k8sMocks.validateK8sPath).toHaveBeenCalledWith(
+        "/opt/kubectl",
+        "kubectl",
+      );
+    });
+    expect(screen.getByLabelText("k8sConnections.chooseContext")).toHaveValue(
+      "ctx",
+    );
+
+    fireEvent.click(screen.getByText("common.save"));
+    await waitFor(() => {
+      expect(screen.getByText("missing kubeconfig")).toBeInTheDocument();
+      expect(
+        screen.getByText("k8sConnections.pathValidationFailed"),
+      ).toBeInTheDocument();
+    });
+    expect(k8sMocks.updateK8sConnection).not.toHaveBeenCalled();
+  });
+
   it("suppresses stale namespace and resource discovery results", async () => {
     const firstNamespaces = createDeferred<string[]>();
     const secondNamespaces = createDeferred<string[]>();

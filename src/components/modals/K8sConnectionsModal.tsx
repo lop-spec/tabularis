@@ -231,6 +231,7 @@ export function K8sConnectionsModal({
   const {
     appliedOptions,
     ensureApplied,
+    cancelPending: cancelPathValidation,
     initialize: initializePathOverrides,
     reset: resetPathOverrides,
   } = pathOverrides;
@@ -238,11 +239,12 @@ export function K8sConnectionsModal({
   useEffect(() => {
     if (!isOpen) {
       invalidate("k8s-connections");
+      cancelPathValidation();
       return;
     }
 
     void Promise.resolve().then(loadConnections);
-  }, [invalidate, isOpen, loadConnections]);
+  }, [cancelPathValidation, invalidate, isOpen, loadConnections]);
 
   const resetForm = useCallback(
     (options: K8sCommandOptions = {}) => {
