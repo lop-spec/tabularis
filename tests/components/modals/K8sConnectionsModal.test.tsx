@@ -260,6 +260,62 @@ describe("K8sConnectionsModal advanced paths", () => {
     );
   });
 
+  it("hydrates saved edit discovery and retains its path overrides", async () => {
+    k8sMocks.loadK8sConnections.mockResolvedValue([
+      {
+        id: "saved",
+        name: "Saved cluster",
+        context: "ctx",
+        namespace: "db",
+        resource_type: "service",
+        resource_name: "mysql-svc",
+        port: 6543,
+        kubectl_path: "/opt/kubectl",
+        kubeconfig_path: "/tmp/kubeconfig",
+      },
+    ]);
+    renderModal(15432);
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved cluster")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText("common.edit"));
+
+    await waitFor(() => {
+      expect(k8sMocks.getK8sNamespaces).toHaveBeenCalledWith(
+        "ctx",
+        expect.objectContaining({ kubectl_path: "/opt/kubectl" }),
+      );
+      expect(k8sMocks.getK8sResources).toHaveBeenCalledWith(
+        "ctx",
+        "db",
+        "service",
+        expect.objectContaining({ kubeconfig_path: "/tmp/kubeconfig" }),
+      );
+      expect(screen.getByRole("option", { name: "db" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "mysql-svc" }),
+      ).toBeInTheDocument();
+    });
+
+    const kubectlInput = openAdvancedSettings();
+    expect(kubectlInput).toHaveValue("/opt/kubectl");
+    expect(screen.getByLabelText("k8sConnections.kubeconfigPath")).toHaveValue(
+      "/tmp/kubeconfig",
+    );
+
+    fireEvent.click(screen.getByText("common.save"));
+    await waitFor(() => {
+      expect(k8sMocks.updateK8sConnection).toHaveBeenCalledWith(
+        "saved",
+        expect.objectContaining({
+          kubectl_path: "/opt/kubectl",
+          kubeconfig_path: "/tmp/kubeconfig",
+        }),
+      );
+    });
+  });
+
   it("suppresses stale namespace and resource discovery results", async () => {
     const firstNamespaces = createDeferred<string[]>();
     const secondNamespaces = createDeferred<string[]>();
@@ -345,6 +401,27 @@ describe("K8sConnectionsModal advanced paths", () => {
     fireEvent.change(screen.getByLabelText("k8sConnections.chooseContext"), {
       target: { value: "" },
     });
+    await act(async () => {
+      testResult.resolve("obsolete success");
+    });
+
+    expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
+  });
+
+  it("suppresses a test result after an unblurred path draft edit", async () => {
+    const testResult = createDeferred<string>();
+    k8sMocks.testK8sConnection.mockReturnValue(testResult.promise);
+    renderModal(15432);
+
+    fireEvent.click(screen.getByText("k8sConnections.add"));
+    await fillRequiredFields();
+    fireEvent.click(screen.getByText("k8sConnections.test"));
+    await waitFor(() => {
+      expect(k8sMocks.testK8sConnection).toHaveBeenCalled();
+    });
+
+    const kubectlInput = openAdvancedSettings();
+    fireEvent.change(kubectlInput, { target: { value: "/new/kubectl" } });
     await act(async () => {
       testResult.resolve("obsolete success");
     });

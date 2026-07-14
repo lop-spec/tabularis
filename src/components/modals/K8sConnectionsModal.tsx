@@ -108,6 +108,12 @@ export function K8sConnectionsModal({
     invalidate("k8s-test");
   }, [invalidate]);
 
+  const invalidateConnectionTest = useCallback(() => {
+    invalidate("k8s-test");
+    setTestStatus("idle");
+    setTestMessage("");
+  }, [invalidate]);
+
   const loadConnections = useCallback(async () => {
     const result = await run("k8s-connections", () => loadK8sConnections());
     if (result.status === "success") {
@@ -220,6 +226,7 @@ export function K8sConnectionsModal({
 
   const pathOverrides = useK8sPathOverrides({
     onApplied: handlePathsApplied,
+    onDraftChanged: invalidateConnectionTest,
   });
   const {
     appliedOptions,
@@ -293,8 +300,21 @@ export function K8sConnectionsModal({
       setValidationError(null);
       setPathActionError(null);
       void loadContexts(options);
+      void loadNamespaces(connection.context, options);
+      void loadResources(
+        connection.context,
+        connection.namespace,
+        connection.resource_type,
+        options,
+      );
     },
-    [initializePathOverrides, invalidateFormRequests, loadContexts],
+    [
+      initializePathOverrides,
+      invalidateFormRequests,
+      loadContexts,
+      loadNamespaces,
+      loadResources,
+    ],
   );
 
   const handleCancel = useCallback(() => {
@@ -311,12 +331,6 @@ export function K8sConnectionsModal({
   const resetPortSelection = useCallback(() => {
     if (!isPortOverridden) setPort(undefined);
   }, [isPortOverridden]);
-
-  const invalidateConnectionTest = useCallback(() => {
-    invalidate("k8s-test");
-    setTestStatus("idle");
-    setTestMessage("");
-  }, [invalidate]);
 
   const handleContextChange = useCallback(
     (value: string) => {
@@ -620,12 +634,14 @@ export function K8sConnectionsModal({
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => handleEdit(connection)}
+                    aria-label={t("common.edit")}
                     className="p-1.5 text-muted hover:text-primary hover:bg-surface-secondary rounded transition-colors"
                   >
                     <Edit2 size={14} />
                   </button>
                   <button
                     onClick={() => handleDelete(connection.id)}
+                    aria-label={t("common.delete")}
                     className="p-1.5 text-muted hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                   >
                     <Trash2 size={14} />
