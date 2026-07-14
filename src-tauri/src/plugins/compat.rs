@@ -67,10 +67,10 @@ pub async fn resolve_registry(base_url: &str, legacy_url: &str) -> Result<Plugin
     let legacy = fetch_legacy_registry(legacy_url).await;
 
     match (api, legacy) {
-        (Ok(api), Ok(legacy)) => Ok(merge_registries(api, legacy)),
+        (Ok(api), Ok(legacy)) => Ok(merge_registries(stamp_api_source(api, base_url), legacy)),
         (Ok(api), Err(e)) => {
             log::warn!("Legacy registry merge skipped ({}): {}", legacy_url, e);
-            Ok(api)
+            Ok(stamp_api_source(api, base_url))
         }
         (Err(e), Ok(legacy)) => {
             log::warn!(
@@ -82,6 +82,18 @@ pub async fn resolve_registry(base_url: &str, legacy_url: &str) -> Result<Plugin
         }
         (Err(api_err), Err(_)) => Err(api_err),
     }
+}
+
+/// Records which registry served these plugins. Only API entries are stamped:
+/// the merge below drops the distinction, and a legacy plugin has no detail
+/// page on the API — stamping it would make the frontend link to a
+/// `<base>/plugins/<id>` that 404s instead of falling back to its homepage.
+fn stamp_api_source(mut api: PluginRegistry, base_url: &str) -> PluginRegistry {
+    let base = base_url.trim_end_matches('/').to_string();
+    for plugin in &mut api.plugins {
+        plugin.registry_base_url = Some(base.clone());
+    }
+    api
 }
 
 /// Union two registries, preferring `api` entries on id conflict. Plugins that
@@ -315,6 +327,39 @@ mod tests {
         assert_eq!(ids, vec!["firestore", "duckdb", "csv"]); // API firestore first, legacy-only appended
         let fs = merged.plugins.iter().find(|p| p.id == "firestore").unwrap();
         assert_eq!(fs.latest_version, "0.5.0", "API entry must win on id conflict");
+    }
+
+    // Regression: a plugin that only exists in the legacy registry (e.g. redis,
+    // not yet migrated) must not be stamped with the API base — the frontend
+    // would link to `<base>/plugins/redis`, which 404s, instead of falling back
+    // to the plugin's own homepage.
+    #[test]
+    fn only_api_plugins_carry_the_registry_base_url() {
+        let api = PluginRegistry {
+            schema_version: 1,
+            plugins: vec![RegistryPlugin {
+                id: "firestore".to_string(),
+                ..Default::default()
+            }],
+        };
+        let legacy = registry_with_ids(&["redis"]);
+        let merged = merge_registries(
+            stamp_api_source(api, "https://registry.tabularis.dev/"),
+            legacy,
+        );
+
+        let api_plugin = merged.plugins.iter().find(|p| p.id == "firestore").unwrap();
+        assert_eq!(
+            api_plugin.registry_base_url.as_deref(),
+            Some("https://registry.tabularis.dev"),
+            "API plugin keeps the serving registry (trailing slash trimmed)"
+        );
+
+        let legacy_plugin = merged.plugins.iter().find(|p| p.id == "redis").unwrap();
+        assert_eq!(
+            legacy_plugin.registry_base_url, None,
+            "legacy-only plugin must stay unstamped so the UI uses its homepage"
+        );
     }
 
     #[test]
