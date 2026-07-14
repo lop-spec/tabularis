@@ -560,12 +560,7 @@ export function K8sConnectionsModal({
 
     try {
       const paths = await ensureApplied();
-      if (
-        activeActionRef.current !== actionId ||
-        actionSnapshotRef.current !== startingSnapshot
-      ) {
-        return;
-      }
+      if (activeActionRef.current !== actionId) return;
       if (paths.status === "invalid") {
         setPathActionError(t("k8sConnections.pathValidationFailed"));
         return;
@@ -574,6 +569,7 @@ export function K8sConnectionsModal({
         setPathActionError(t("k8sConnections.pathSelectionReset"));
         return;
       }
+      if (actionSnapshotRef.current !== startingSnapshot) return;
       setPathActionError(null);
 
       const validation = validateK8sConnection({
@@ -642,12 +638,7 @@ export function K8sConnectionsModal({
 
     try {
       const paths = await ensureApplied();
-      if (
-        activeActionRef.current !== actionId ||
-        actionSnapshotRef.current !== startingSnapshot
-      ) {
-        return;
-      }
+      if (activeActionRef.current !== actionId) return;
       if (paths.status === "invalid") {
         setPathActionError(t("k8sConnections.pathValidationFailed"));
         return;
@@ -656,6 +647,7 @@ export function K8sConnectionsModal({
         setPathActionError(t("k8sConnections.pathSelectionReset"));
         return;
       }
+      if (actionSnapshotRef.current !== startingSnapshot) return;
       setPathActionError(null);
       if (!context || !namespace) return;
 

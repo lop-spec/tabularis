@@ -121,7 +121,7 @@ type K8sDiscoverySource = keyof K8sDiscoveryErrors;
 
 type InlineK8sPathCheck =
   | { allowed: true; options?: K8sCommandOptions }
-  | { allowed: false };
+  | { allowed: false; reason: "invalid" | "applied" };
 
 function hasK8sCommandOverrides(options: K8sCommandOptions): boolean {
   return (
@@ -709,22 +709,18 @@ export const NewConnectionModal = ({
 
     const result = await ensureK8sPathsApplied();
     if (result.status === "invalid") {
-      setK8sPathActionError(t("k8sConnections.pathValidationFailed"));
-      return { allowed: false };
+      return { allowed: false, reason: "invalid" };
     }
     if (result.status === "applied") {
-      setK8sPathActionError(t("k8sConnections.pathSelectionReset"));
-      return { allowed: false };
+      return { allowed: false, reason: "applied" };
     }
 
-    setK8sPathActionError(null);
     return { allowed: true, options: result.options };
   }, [
     appliedK8sOptions,
     ensureK8sPathsApplied,
     formData.k8s_enabled,
     k8sMode,
-    t,
   ]);
 
   const preflightFormAction = useCallback(async () => {
@@ -734,21 +730,33 @@ export const NewConnectionModal = ({
 
     try {
       const inlinePaths = await ensureInlineK8sPaths();
-      if (
-        !inlinePaths.allowed ||
-        activeActionRef.current !== actionId ||
-        actionSnapshotRef.current !== startingSnapshot
-      ) {
+      if (activeActionRef.current !== actionId) {
+        finishFormAction(actionId);
+        return null;
+      }
+      if (!inlinePaths.allowed) {
+        setK8sPathActionError(
+          t(
+            inlinePaths.reason === "applied"
+              ? "k8sConnections.pathSelectionReset"
+              : "k8sConnections.pathValidationFailed",
+          ),
+        );
+        finishFormAction(actionId);
+        return null;
+      }
+      if (actionSnapshotRef.current !== startingSnapshot) {
         finishFormAction(actionId);
         return null;
       }
 
+      setK8sPathActionError(null);
       return { actionId, startingSnapshot, inlinePaths };
     } catch (error) {
       finishFormAction(actionId);
       throw error;
     }
-  }, [beginFormAction, ensureInlineK8sPaths, finishFormAction]);
+  }, [beginFormAction, ensureInlineK8sPaths, finishFormAction, t]);
 
   const withInlineK8sPaths = useCallback(
     (
