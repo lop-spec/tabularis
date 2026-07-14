@@ -39,9 +39,14 @@ import {
   getK8sNamespaces,
   getK8sResources,
   getK8sResourcePorts,
+  type K8sCommandOptions,
   type K8sConnection,
 } from "../../utils/k8s";
+import { useK8sPathOverrides } from "../../hooks/useK8sPathOverrides";
+import { useLatestAsync } from "../../hooks/useLatestAsync";
+import { K8sAdvancedSettings } from "../ui/K8sAdvancedSettings";
 import { isMultiDatabaseCapable } from "../../utils/database";
+import { toErrorMessage } from "../../utils/errors";
 import { fetchConnectionWithCredentials } from "../../utils/credentials";
 import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 import {
@@ -85,6 +90,8 @@ interface ConnectionParams {
   k8s_resource_type?: string;
   k8s_resource_name?: string;
   k8s_port?: number;
+  k8s_kubectl_path?: string;
+  k8s_kubeconfig_path?: string;
   // SQL run on every new connection (e.g. SET / set_config)
   startup_script?: string;
 }
@@ -102,6 +109,24 @@ interface NewConnectionModalProps {
   onClose: () => void;
   onSave?: () => void;
   initialConnection?: SavedConnection | null;
+}
+
+interface K8sDiscoveryErrors {
+  contexts: string | null;
+  namespaces: string | null;
+  resources: string | null;
+}
+
+type K8sDiscoverySource = keyof K8sDiscoveryErrors;
+
+type InlineK8sPathCheck =
+  | { allowed: true; options?: K8sCommandOptions }
+  | { allowed: false };
+
+function hasK8sCommandOverrides(options: K8sCommandOptions): boolean {
+  return (
+    options.kubectl_path !== undefined || options.kubeconfig_path !== undefined
+  );
 }
 
 const FieldInput = ({
@@ -168,6 +193,7 @@ export const NewConnectionModal = ({
 }: NewConnectionModalProps) => {
   const { t } = useTranslation();
   const { drivers } = useDrivers();
+  const { invalidate: invalidateK8sAsync, run: runK8sAsync } = useLatestAsync();
 
   // ── form state ──
   const [driver, setDriver] = useState<string>("mysql");
@@ -252,7 +278,6 @@ export const NewConnectionModal = ({
   const [k8sConnections, setK8sConnections] = useState<K8sConnection[]>([]);
   const [isK8sModalOpen, setIsK8sModalOpen] = useState(false);
   const [k8sMode, setK8sMode] = useState<"existing" | "inline">("existing");
-  const [isK8sPortOverridden, setIsK8sPortOverridden] = useState(false);
   const [k8sAutoPort, setK8sAutoPort] = useState<{
     context: string;
     namespace: string;
@@ -263,6 +288,18 @@ export const NewConnectionModal = ({
   const [k8sContexts, setK8sContexts] = useState<string[]>([]);
   const [k8sNamespaces, setK8sNamespaces] = useState<string[]>([]);
   const [k8sResources, setK8sResources] = useState<string[]>([]);
+  const [k8sDiscoveryErrors, setK8sDiscoveryErrors] =
+    useState<K8sDiscoveryErrors>({
+      contexts: null,
+      namespaces: null,
+      resources: null,
+    });
+  const [k8sPathActionError, setK8sPathActionError] = useState<string | null>(
+    null,
+  );
+  const inlineK8sActiveRef = useRef(false);
+  const inlineK8sTestActiveRef = useRef(false);
+  const inlineK8sTestSequenceRef = useRef(0);
 
   // ── databases ──
   const [availableDatabases, setAvailableDatabases] = useState<string[]>([]);
@@ -407,104 +444,471 @@ export const NewConnectionModal = ({
     setK8sConnections(result);
   };
 
-  const loadK8sContextsList = async () => {
-    try {
-      const result = await getK8sContexts();
-      setK8sContexts(result);
-    } catch {
-      setK8sContexts([]);
-    }
-  };
-
-  const loadK8sNamespacesList = async (context: string) => {
-    try {
-      const result = await getK8sNamespaces(context);
-      setK8sNamespaces(result);
-    } catch {
-      setK8sNamespaces([]);
-    }
-  };
-
-  const loadK8sResourcesList = async (context: string, namespace: string, resourceType: string) => {
-    try {
-      const result = await getK8sResources(context, namespace, resourceType);
-      setK8sResources(result);
-    } catch {
-      setK8sResources([]);
-    }
-  };
-
-  // ── K8s cascading dropdown loading ──
-  useEffect(() => {
-    if (formData.k8s_context) {
-      loadK8sNamespacesList(formData.k8s_context);
-    } else {
-      setK8sNamespaces([]);
-    }
-  }, [formData.k8s_context]);
-
-  useEffect(() => {
-    if (formData.k8s_context && formData.k8s_namespace && formData.k8s_resource_type) {
-      loadK8sResourcesList(
-        formData.k8s_context,
-        formData.k8s_namespace,
-        formData.k8s_resource_type,
+  const setK8sDiscoveryError = useCallback(
+    (source: K8sDiscoverySource, error: string | null) => {
+      setK8sDiscoveryErrors((previous) =>
+        previous[source] === error ? previous : { ...previous, [source]: error },
       );
-    } else {
-      setK8sResources([]);
-    }
-  }, [formData.k8s_context, formData.k8s_namespace, formData.k8s_resource_type]);
+    },
+    [],
+  );
+
+  const invalidateK8sDiscovery = useCallback(() => {
+    invalidateK8sAsync("new-k8s-contexts");
+    invalidateK8sAsync("new-k8s-namespaces");
+    invalidateK8sAsync("new-k8s-resources");
+    invalidateK8sAsync("new-k8s-ports");
+  }, [invalidateK8sAsync]);
+
+  const invalidateInlineK8sTest = useCallback(() => {
+    invalidateK8sAsync("new-k8s-test");
+    inlineK8sTestSequenceRef.current += 1;
+    if (!inlineK8sTestActiveRef.current) return;
+
+    inlineK8sTestActiveRef.current = false;
+    setStatus("idle");
+    setMessage("");
+    setTestResult(null);
+  }, [invalidateK8sAsync]);
 
   useEffect(() => {
-    const context = formData.k8s_context;
-    const namespace = formData.k8s_namespace;
-    const resourceType = formData.k8s_resource_type;
-    const resourceName = formData.k8s_resource_name;
-    if (
-      !formData.k8s_enabled ||
-      k8sMode !== "inline" ||
-      !context ||
-      !namespace ||
-      resourceType !== "service" ||
-      !resourceName ||
-      isK8sPortOverridden
-    ) {
-      return;
+    inlineK8sActiveRef.current =
+      isOpen && formData.k8s_enabled === true && k8sMode === "inline";
+  }, [formData.k8s_enabled, isOpen, k8sMode]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      invalidateK8sDiscovery();
+      invalidateK8sAsync("new-k8s-test");
+      inlineK8sTestSequenceRef.current += 1;
+      inlineK8sTestActiveRef.current = false;
+    }
+  }, [invalidateK8sAsync, invalidateK8sDiscovery, isOpen]);
+
+  const loadK8sContextsList = useCallback(
+    async (options: K8sCommandOptions) => {
+      const result = await runK8sAsync("new-k8s-contexts", () =>
+        hasK8sCommandOverrides(options)
+          ? getK8sContexts(options)
+          : getK8sContexts(),
+      );
+      if (result.status === "success") {
+        setK8sContexts(result.value);
+        setK8sDiscoveryError("contexts", null);
+      } else if (result.status === "error") {
+        setK8sContexts([]);
+        setK8sDiscoveryError("contexts", toErrorMessage(result.error));
+      }
+    },
+    [runK8sAsync, setK8sDiscoveryError],
+  );
+
+  const loadK8sNamespacesList = useCallback(
+    async (context: string, options: K8sCommandOptions) => {
+      const result = await runK8sAsync("new-k8s-namespaces", () =>
+        hasK8sCommandOverrides(options)
+          ? getK8sNamespaces(context, options)
+          : getK8sNamespaces(context),
+      );
+      if (result.status === "success") {
+        setK8sNamespaces(result.value);
+        setK8sDiscoveryError("namespaces", null);
+      } else if (result.status === "error") {
+        setK8sNamespaces([]);
+        setK8sDiscoveryError("namespaces", toErrorMessage(result.error));
+      }
+    },
+    [runK8sAsync, setK8sDiscoveryError],
+  );
+
+  const loadK8sResourcesList = useCallback(
+    async (
+      context: string,
+      namespace: string,
+      resourceType: string,
+      options: K8sCommandOptions,
+    ) => {
+      const result = await runK8sAsync("new-k8s-resources", () =>
+        hasK8sCommandOverrides(options)
+          ? getK8sResources(context, namespace, resourceType, options)
+          : getK8sResources(context, namespace, resourceType),
+      );
+      if (result.status === "success") {
+        setK8sResources(result.value);
+        setK8sDiscoveryError("resources", null);
+      } else if (result.status === "error") {
+        setK8sResources([]);
+        setK8sDiscoveryError("resources", toErrorMessage(result.error));
+      }
+    },
+    [runK8sAsync, setK8sDiscoveryError],
+  );
+
+  const loadK8sResourcePorts = useCallback(
+    async (
+      context: string,
+      namespace: string,
+      resourceType: string,
+      resourceName: string,
+      options: K8sCommandOptions,
+    ) => {
+      const result = await runK8sAsync("new-k8s-ports", () =>
+        hasK8sCommandOverrides(options)
+          ? getK8sResourcePorts(
+              context,
+              namespace,
+              resourceType,
+              resourceName,
+              options,
+            )
+          : getK8sResourcePorts(
+              context,
+              namespace,
+              resourceType,
+              resourceName,
+            ),
+      );
+      if (result.status === "success") {
+        setK8sAutoPort(
+          result.value.length === 1
+            ? {
+                context,
+                namespace,
+                resourceType,
+                resourceName,
+                port: result.value[0],
+              }
+            : null,
+        );
+      }
+    },
+    [runK8sAsync],
+  );
+
+  const handleInlinePathsApplied = useCallback(
+    (options: K8sCommandOptions) => {
+      invalidateK8sDiscovery();
+      invalidateInlineK8sTest();
+      setFormData((previous) => ({
+        ...previous,
+        k8s_kubectl_path: options.kubectl_path,
+        k8s_kubeconfig_path: options.kubeconfig_path,
+        k8s_context: undefined,
+        k8s_namespace: undefined,
+        k8s_resource_type: undefined,
+        k8s_resource_name: undefined,
+        k8s_port: undefined,
+      }));
+      setK8sAutoPort(null);
+      setK8sContexts([]);
+      setK8sNamespaces([]);
+      setK8sResources([]);
+      setK8sDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
+      setK8sPathActionError(null);
+      if (inlineK8sActiveRef.current) {
+        void loadK8sContextsList(options);
+      }
+    },
+    [invalidateInlineK8sTest, invalidateK8sDiscovery, loadK8sContextsList],
+  );
+
+  const pathOverrides = useK8sPathOverrides({
+    onApplied: handleInlinePathsApplied,
+  });
+  const {
+    appliedOptions: appliedK8sOptions,
+    ensureApplied: ensureK8sPathsApplied,
+    initialize: initializeK8sPathOverrides,
+    reset: resetK8sPathOverrides,
+  } = pathOverrides;
+
+  const ensureInlineK8sPaths = useCallback(async (): Promise<InlineK8sPathCheck> => {
+    if (!formData.k8s_enabled || k8sMode !== "inline") {
+      return { allowed: true };
     }
 
-    let cancelled = false;
-    void (async () => {
-      try {
-        const ports = await getK8sResourcePorts(
-          context,
-          namespace,
-          resourceType,
-          resourceName,
-        );
-        if (!cancelled) {
-          setK8sAutoPort(
-            ports.length === 1
-              ? { context, namespace, resourceType, resourceName, port: ports[0] }
-              : null,
-          );
-        }
-      } catch {
-        // Best-effort convenience only: keep the current/default port.
-      }
-    })();
+    const result = await ensureK8sPathsApplied();
+    if (result.status === "invalid") {
+      setK8sPathActionError(t("k8sConnections.pathValidationFailed"));
+      return { allowed: false };
+    }
+    if (result.status === "applied") {
+      setK8sPathActionError(t("k8sConnections.pathSelectionReset"));
+      return { allowed: false };
+    }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    formData.k8s_enabled,
-    formData.k8s_context,
-    formData.k8s_namespace,
-    formData.k8s_resource_type,
-    formData.k8s_resource_name,
-    isK8sPortOverridden,
-    k8sMode,
-  ]);
+    setK8sPathActionError(null);
+    return { allowed: true, options: result.options };
+  }, [ensureK8sPathsApplied, formData.k8s_enabled, k8sMode, t]);
+
+  const withInlineK8sPaths = useCallback(
+    (
+      params: Partial<ConnectionParams>,
+      options?: K8sCommandOptions,
+    ): Partial<ConnectionParams> => {
+      const next = { ...params };
+      if (next.k8s_enabled && k8sMode === "inline") {
+        next.k8s_kubectl_path = options?.kubectl_path;
+        next.k8s_kubeconfig_path = options?.kubeconfig_path;
+      } else {
+        delete next.k8s_kubectl_path;
+        delete next.k8s_kubeconfig_path;
+      }
+      return next;
+    },
+    [k8sMode],
+  );
+
+  const handleInlineContextChange = useCallback(
+    (value: string) => {
+      invalidateK8sAsync("new-k8s-namespaces");
+      invalidateK8sAsync("new-k8s-resources");
+      invalidateK8sAsync("new-k8s-ports");
+      invalidateInlineK8sTest();
+      setFormData((previous) => ({
+        ...previous,
+        k8s_context: value || undefined,
+        k8s_namespace: undefined,
+        k8s_resource_name: undefined,
+      }));
+      setK8sNamespaces([]);
+      setK8sResources([]);
+      setK8sAutoPort(null);
+      setK8sDiscoveryError("namespaces", null);
+      setK8sDiscoveryError("resources", null);
+      setK8sPathActionError(null);
+      if (value) {
+        void loadK8sNamespacesList(value, appliedK8sOptions);
+      }
+    },
+    [
+      appliedK8sOptions,
+      invalidateInlineK8sTest,
+      invalidateK8sAsync,
+      loadK8sNamespacesList,
+      setK8sDiscoveryError,
+    ],
+  );
+
+  const handleInlineNamespaceChange = useCallback(
+    (value: string) => {
+      invalidateK8sAsync("new-k8s-resources");
+      invalidateK8sAsync("new-k8s-ports");
+      invalidateInlineK8sTest();
+      setFormData((previous) => ({
+        ...previous,
+        k8s_namespace: value || undefined,
+        k8s_resource_name: undefined,
+      }));
+      setK8sResources([]);
+      setK8sAutoPort(null);
+      setK8sDiscoveryError("resources", null);
+      if (formData.k8s_context && value && formData.k8s_resource_type) {
+        void loadK8sResourcesList(
+          formData.k8s_context,
+          value,
+          formData.k8s_resource_type,
+          appliedK8sOptions,
+        );
+      }
+    },
+    [
+      appliedK8sOptions,
+      formData.k8s_context,
+      formData.k8s_resource_type,
+      invalidateInlineK8sTest,
+      invalidateK8sAsync,
+      loadK8sResourcesList,
+      setK8sDiscoveryError,
+    ],
+  );
+
+  const handleInlineResourceTypeChange = useCallback(
+    (value: string) => {
+      invalidateK8sAsync("new-k8s-resources");
+      invalidateK8sAsync("new-k8s-ports");
+      invalidateInlineK8sTest();
+      setFormData((previous) => ({
+        ...previous,
+        k8s_resource_type: value || undefined,
+        k8s_resource_name: undefined,
+      }));
+      setK8sResources([]);
+      setK8sAutoPort(null);
+      setK8sDiscoveryError("resources", null);
+      if (formData.k8s_context && formData.k8s_namespace && value) {
+        void loadK8sResourcesList(
+          formData.k8s_context,
+          formData.k8s_namespace,
+          value,
+          appliedK8sOptions,
+        );
+      }
+    },
+    [
+      appliedK8sOptions,
+      formData.k8s_context,
+      formData.k8s_namespace,
+      invalidateInlineK8sTest,
+      invalidateK8sAsync,
+      loadK8sResourcesList,
+      setK8sDiscoveryError,
+    ],
+  );
+
+  const handleInlineResourceNameChange = useCallback(
+    (value: string) => {
+      invalidateK8sAsync("new-k8s-ports");
+      invalidateInlineK8sTest();
+      setFormData((previous) => ({
+        ...previous,
+        k8s_resource_name: value || undefined,
+      }));
+      setK8sAutoPort(null);
+      if (
+        formData.k8s_context &&
+        formData.k8s_namespace &&
+        formData.k8s_resource_type === "service" &&
+        value &&
+        formData.k8s_port == null
+      ) {
+        void loadK8sResourcePorts(
+          formData.k8s_context,
+          formData.k8s_namespace,
+          formData.k8s_resource_type,
+          value,
+          appliedK8sOptions,
+        );
+      }
+    },
+    [
+      appliedK8sOptions,
+      formData.k8s_context,
+      formData.k8s_namespace,
+      formData.k8s_port,
+      formData.k8s_resource_type,
+      invalidateInlineK8sTest,
+      invalidateK8sAsync,
+      loadK8sResourcePorts,
+    ],
+  );
+
+  const handleInlinePortChange = useCallback(
+    (value: string) => {
+      invalidateK8sAsync("new-k8s-ports");
+      invalidateInlineK8sTest();
+      const isManual = value !== "";
+      setFormData((previous) => ({
+        ...previous,
+        k8s_port: isManual ? Number(value) : undefined,
+      }));
+      setK8sAutoPort(null);
+      if (
+        !isManual &&
+        formData.k8s_context &&
+        formData.k8s_namespace &&
+        formData.k8s_resource_type === "service" &&
+        formData.k8s_resource_name
+      ) {
+        void loadK8sResourcePorts(
+          formData.k8s_context,
+          formData.k8s_namespace,
+          formData.k8s_resource_type,
+          formData.k8s_resource_name,
+          appliedK8sOptions,
+        );
+      }
+    },
+    [
+      appliedK8sOptions,
+      formData.k8s_context,
+      formData.k8s_namespace,
+      formData.k8s_resource_name,
+      formData.k8s_resource_type,
+      invalidateInlineK8sTest,
+      invalidateK8sAsync,
+      loadK8sResourcePorts,
+    ],
+  );
+
+  const handleK8sModeChange = useCallback(
+    (mode: "existing" | "inline") => {
+      invalidateK8sDiscovery();
+      invalidateInlineK8sTest();
+      setK8sMode(mode);
+      setK8sContexts([]);
+      setK8sNamespaces([]);
+      setK8sResources([]);
+      setK8sAutoPort(null);
+      setK8sDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
+      setK8sPathActionError(null);
+
+      if (mode === "existing") {
+        resetK8sPathOverrides();
+        setFormData((previous) => ({
+          ...previous,
+          k8s_context: undefined,
+          k8s_namespace: undefined,
+          k8s_resource_type: undefined,
+          k8s_resource_name: undefined,
+          k8s_port: undefined,
+          k8s_kubectl_path: undefined,
+          k8s_kubeconfig_path: undefined,
+        }));
+        return;
+      }
+
+      const options: K8sCommandOptions = {
+        kubectl_path: formData.k8s_kubectl_path,
+        kubeconfig_path: formData.k8s_kubeconfig_path,
+      };
+      initializeK8sPathOverrides(options);
+      setFormData((previous) => ({
+        ...previous,
+        k8s_connection_id: undefined,
+      }));
+      if (isOpen && formData.k8s_enabled) {
+        void loadK8sContextsList(options);
+      }
+    },
+    [
+      formData.k8s_enabled,
+      formData.k8s_kubeconfig_path,
+      formData.k8s_kubectl_path,
+      initializeK8sPathOverrides,
+      invalidateInlineK8sTest,
+      invalidateK8sDiscovery,
+      isOpen,
+      loadK8sContextsList,
+      resetK8sPathOverrides,
+    ],
+  );
+
+  const handleK8sEnabledChange = useCallback(
+    (enabled: boolean) => {
+      setFormData((previous) => ({
+        ...previous,
+        k8s_enabled: enabled,
+        ssh_enabled: enabled ? false : previous.ssh_enabled,
+      }));
+      if (!enabled) {
+        invalidateK8sDiscovery();
+        invalidateInlineK8sTest();
+        return;
+      }
+      if (isOpen && k8sMode === "inline") {
+        void loadK8sContextsList(appliedK8sOptions);
+      }
+    },
+    [
+      appliedK8sOptions,
+      invalidateInlineK8sTest,
+      invalidateK8sDiscovery,
+      isOpen,
+      k8sMode,
+      loadK8sContextsList,
+    ],
+  );
 
   const updateField = (
     field: keyof ConnectionParams,
@@ -593,7 +997,16 @@ export const NewConnectionModal = ({
       setConnectionStringError(null);
       setNameError(false);
       setDatabasesTabError(false);
-      setIsK8sPortOverridden(false);
+      invalidateK8sDiscovery();
+      invalidateK8sAsync("new-k8s-test");
+      inlineK8sTestSequenceRef.current += 1;
+      inlineK8sTestActiveRef.current = false;
+      setK8sAutoPort(null);
+      setK8sContexts([]);
+      setK8sNamespaces([]);
+      setK8sResources([]);
+      setK8sDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
+      setK8sPathActionError(null);
 
       if (initialConnection) {
         setName(initialConnection.name);
@@ -606,10 +1019,6 @@ export const NewConnectionModal = ({
         setSshMode(
           initialConnection.params.ssh_connection_id ? "existing" : "inline",
         );
-        setK8sMode(
-          initialConnection.params.k8s_connection_id ? "existing" : "inline",
-        );
-
         let params = initialConnection.params;
         try {
           const fullConn = await fetchConnectionWithCredentials(
@@ -620,13 +1029,63 @@ export const NewConnectionModal = ({
           // fallback: use params without secrets (backend will retrieve from keychain)
         }
 
-        setIsK8sPortOverridden(params.k8s_port != null);
+        const isInlineK8s = !params.k8s_connection_id;
+        const pathOptions: K8sCommandOptions = isInlineK8s
+          ? {
+              kubectl_path: params.k8s_kubectl_path,
+              kubeconfig_path: params.k8s_kubeconfig_path,
+            }
+          : {};
+        const hasK8sPortOverride = params.k8s_port != null;
+        const paramsForForm = isInlineK8s
+          ? params
+          : {
+              ...params,
+              k8s_kubectl_path: undefined,
+              k8s_kubeconfig_path: undefined,
+            };
+        setK8sMode(isInlineK8s ? "inline" : "existing");
+        initializeK8sPathOverrides(pathOptions);
         if (Array.isArray(db)) {
           setSelectedDatabasesState(db);
-          setFormData({ ...params, database: db[0] ?? "" });
+          setFormData({ ...paramsForForm, database: db[0] ?? "" });
         } else {
           setSelectedDatabasesState([]);
-          setFormData({ ...params });
+          setFormData({ ...paramsForForm });
+        }
+
+        if (params.k8s_enabled && isInlineK8s) {
+          void loadK8sContextsList(pathOptions);
+          if (params.k8s_context) {
+            void loadK8sNamespacesList(params.k8s_context, pathOptions);
+          }
+          if (
+            params.k8s_context &&
+            params.k8s_namespace &&
+            params.k8s_resource_type
+          ) {
+            void loadK8sResourcesList(
+              params.k8s_context,
+              params.k8s_namespace,
+              params.k8s_resource_type,
+              pathOptions,
+            );
+          }
+          if (
+            !hasK8sPortOverride &&
+            params.k8s_context &&
+            params.k8s_namespace &&
+            params.k8s_resource_type === "service" &&
+            params.k8s_resource_name
+          ) {
+            void loadK8sResourcePorts(
+              params.k8s_context,
+              params.k8s_namespace,
+              params.k8s_resource_type,
+              params.k8s_resource_name,
+              pathOptions,
+            );
+          }
         }
 
         // Auto-load available databases when editing a multi-db connection
@@ -651,14 +1110,13 @@ export const NewConnectionModal = ({
         setSelectedDatabasesState([]);
         setSshMode("existing");
         setK8sMode("existing");
-        setIsK8sPortOverridden(false);
+        resetK8sPathOverrides();
         setDetectJsonInTextColumns(false);
         setAppearance({});
       }
 
       await loadSshConnectionsList();
       await loadK8sConnectionsList();
-      await loadK8sContextsList();
     };
     void init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -690,8 +1148,18 @@ export const NewConnectionModal = ({
       k8s_resource_type: undefined,
       k8s_resource_name: undefined,
       k8s_port: undefined,
+      k8s_kubectl_path: undefined,
+      k8s_kubeconfig_path: undefined,
     });
-    setIsK8sPortOverridden(false);
+    invalidateK8sDiscovery();
+    invalidateInlineK8sTest();
+    resetK8sPathOverrides();
+    setK8sAutoPort(null);
+    setK8sContexts([]);
+    setK8sNamespaces([]);
+    setK8sResources([]);
+    setK8sDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
+    setK8sPathActionError(null);
     setSelectedDatabasesState([]);
     setDbSearchQuery("");
     setAvailableDatabases([]);
@@ -706,11 +1174,21 @@ export const NewConnectionModal = ({
   };
 
   const testConnection = async () => {
+    const inlinePaths = await ensureInlineK8sPaths();
+    if (!inlinePaths.allowed) return false;
+
+    const usesInlineK8s =
+      formData.k8s_enabled === true && k8sMode === "inline";
+    const inlineTestSequence = usesInlineK8s
+      ? ++inlineK8sTestSequenceRef.current
+      : undefined;
+    inlineK8sTestActiveRef.current = usesInlineK8s;
+
     setStatus("testing");
     setMessage("");
     setTestResult(null);
     try {
-      const testParams: Partial<ConnectionParams> = {
+      const testParamsBase: Partial<ConnectionParams> = {
         driver,
         ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
@@ -720,16 +1198,39 @@ export const NewConnectionModal = ({
             (typeof formData.database === "string" ? formData.database : ""))
           : formData.database,
       };
-      const result = await invoke<string>("test_connection", {
-        request: {
-          params: { ...testParams },
-          connection_id: initialConnection?.id,
-        },
-      });
+      const testParams = withInlineK8sPaths(
+        testParamsBase,
+        inlinePaths.options,
+      );
+      const invokeTest = () =>
+        invoke<string>("test_connection", {
+          request: {
+            params: { ...testParams },
+            connection_id: initialConnection?.id,
+          },
+        });
+
+      let result: string;
+      if (usesInlineK8s) {
+        const latestResult = await runK8sAsync("new-k8s-test", invokeTest);
+        if (latestResult.status === "stale") return false;
+        if (latestResult.status === "error") throw latestResult.error;
+        result = latestResult.value;
+      } else {
+        result = await invokeTest();
+      }
+
       setStatus("success");
       setMessage(result);
       setTestResult("success");
       setTimeout(() => {
+        if (
+          inlineTestSequence !== undefined &&
+          inlineK8sTestSequenceRef.current !== inlineTestSequence
+        ) {
+          return;
+        }
+        inlineK8sTestActiveRef.current = false;
         setTestResult(null);
         setStatus("idle");
         setMessage("");
@@ -746,6 +1247,13 @@ export const NewConnectionModal = ({
       setMessage(msg);
       setTestResult("error");
       setTimeout(() => {
+        if (
+          inlineTestSequence !== undefined &&
+          inlineK8sTestSequenceRef.current !== inlineTestSequence
+        ) {
+          return;
+        }
+        inlineK8sTestActiveRef.current = false;
         setTestResult(null);
         setStatus("idle");
       }, 3000);
@@ -754,6 +1262,13 @@ export const NewConnectionModal = ({
   };
 
   const saveConnection = async () => {
+    const inlinePaths = await ensureInlineK8sPaths();
+    if (!inlinePaths.allowed) return;
+
+    invalidateK8sAsync("new-k8s-test");
+    inlineK8sTestSequenceRef.current += 1;
+    inlineK8sTestActiveRef.current = false;
+
     if (!name.trim()) {
       setStatus("error");
       setMessage(t("newConnection.nameRequired"));
@@ -785,7 +1300,7 @@ export const NewConnectionModal = ({
     setMessage("");
     setTestResult(null);
     try {
-      const params: Partial<ConnectionParams> = {
+      const paramsBase: Partial<ConnectionParams> = {
         driver,
         ...formData,
         port: formData.port != null ? Number(formData.port) : undefined,
@@ -796,6 +1311,7 @@ export const NewConnectionModal = ({
             : selectedDatabasesState
           : formData.database,
       };
+      const params = withInlineK8sPaths(paramsBase, inlinePaths.options);
       const appearancePayload =
         appearance.icon || appearance.accentColor ? appearance : undefined;
 
@@ -1633,13 +2149,21 @@ export const NewConnectionModal = ({
           type="checkbox"
           id="ssh-toggle"
           checked={!!formData.ssh_enabled}
-          onChange={(e) => {
-            const enabled = e.target.checked;
-            updateField("ssh_enabled", enabled);
-            if (enabled && !formData.ssh_port) updateField("ssh_port", 22);
-            // Mutual exclusion with K8s
+          onChange={(event) => {
+            const enabled = event.target.checked;
+            setFormData((previous) => ({
+              ...previous,
+              ssh_enabled: enabled,
+              ssh_port:
+                enabled && !previous.ssh_port ? 22 : previous.ssh_port,
+              k8s_enabled:
+                enabled && previous.k8s_enabled
+                  ? false
+                  : previous.k8s_enabled,
+            }));
             if (enabled && formData.k8s_enabled) {
-              updateField("k8s_enabled", false);
+              invalidateK8sDiscovery();
+              invalidateInlineK8sTest();
             }
           }}
           className="accent-blue-500 w-3.5 h-3.5 rounded"
@@ -1832,14 +2356,7 @@ export const NewConnectionModal = ({
           type="checkbox"
           id="k8s-toggle"
           checked={!!formData.k8s_enabled}
-          onChange={(e) => {
-            const enabled = e.target.checked;
-            updateField("k8s_enabled", enabled);
-            // Mutual exclusion with SSH
-            if (enabled && formData.ssh_enabled) {
-              updateField("ssh_enabled", false);
-            }
-          }}
+          onChange={(event) => handleK8sEnabledChange(event.target.checked)}
           className="accent-blue-500 w-3.5 h-3.5 rounded"
         />
         <span className="text-sm font-medium text-secondary">
@@ -1857,19 +2374,7 @@ export const NewConnectionModal = ({
               <button
                 key={mode}
                 type="button"
-                onClick={() => {
-                  setK8sMode(mode);
-                  if (mode === "existing") {
-                    updateField("k8s_context", undefined);
-                    updateField("k8s_namespace", undefined);
-                    updateField("k8s_resource_type", undefined);
-                    updateField("k8s_resource_name", undefined);
-                    updateField("k8s_port", undefined);
-                    setIsK8sPortOverridden(false);
-                  } else {
-                    updateField("k8s_connection_id", undefined);
-                  }
-                }}
+                onClick={() => handleK8sModeChange(mode)}
                 className={clsx(
                   "px-3 py-1.5 text-xs font-medium transition-colors",
                   k8sMode === mode
@@ -1938,6 +2443,13 @@ export const NewConnectionModal = ({
           {/* Inline K8s fields */}
           {k8sMode === "inline" && (
             <div className="space-y-3">
+              <K8sAdvancedSettings pathOverrides={pathOverrides} />
+              {k8sPathActionError && (
+                <p role="alert" className="text-xs text-red-400">
+                  {k8sPathActionError}
+                </p>
+              )}
+
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
                   {t("newConnection.k8sContext", {
@@ -1947,21 +2459,22 @@ export const NewConnectionModal = ({
                 <Select
                   value={formData.k8s_context || null}
                   options={k8sContexts}
-                  onChange={(val) => {
-                    updateField("k8s_context", val);
-                  }}
+                  onChange={handleInlineContextChange}
                   searchPlaceholder={t("common.search")}
                   noResultsLabel={t("common.noResults")}
                   placeholder={
                     k8sContexts.length === 0
-                      ? t("newConnection.noK8sContexts", {
-                          defaultValue: "No contexts found (is kubectl installed?)",
-                        })
+                      ? t("k8sConnections.noContexts")
                       : t("newConnection.chooseContext", {
                           defaultValue: "Choose a context...",
                         })
                   }
                 />
+                {k8sDiscoveryErrors.contexts && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {k8sDiscoveryErrors.contexts}
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col gap-1">
@@ -1973,21 +2486,22 @@ export const NewConnectionModal = ({
                 <Select
                   value={formData.k8s_namespace || null}
                   options={k8sNamespaces}
-                  onChange={(val) => {
-                    updateField("k8s_namespace", val);
-                  }}
+                  onChange={handleInlineNamespaceChange}
                   searchPlaceholder={t("common.search")}
                   noResultsLabel={t("common.noResults")}
                   placeholder={
                     k8sNamespaces.length === 0
-                      ? t("newConnection.selectContextFirst", {
-                          defaultValue: "Select a context first",
-                        })
+                      ? t("k8sConnections.noNamespaces")
                       : t("newConnection.chooseNamespace", {
                           defaultValue: "Choose a namespace...",
                         })
                   }
                 />
+                {k8sDiscoveryErrors.namespaces && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {k8sDiscoveryErrors.namespaces}
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-3">
@@ -2008,9 +2522,7 @@ export const NewConnectionModal = ({
                         defaultValue: "Pod",
                       }),
                     }}
-                    onChange={(val) => {
-                      updateField("k8s_resource_type", val);
-                    }}
+                    onChange={handleInlineResourceTypeChange}
                     placeholder={t("newConnection.k8sSelectType", {
                       defaultValue: "Select type...",
                     })}
@@ -2027,21 +2539,22 @@ export const NewConnectionModal = ({
                   <Select
                     value={formData.k8s_resource_name || null}
                     options={k8sResources}
-                    onChange={(val) =>
-                      updateField("k8s_resource_name", val)
-                    }
+                    onChange={handleInlineResourceNameChange}
                     searchPlaceholder={t("common.search")}
                     noResultsLabel={t("common.noResults")}
                     placeholder={
                       k8sResources.length === 0
-                        ? t("newConnection.selectTypeFirst", {
-                            defaultValue: "Select context/namespace/type first",
-                          })
+                        ? t("k8sConnections.noResources")
                         : t("newConnection.chooseResource", {
                             defaultValue: "Choose a resource...",
                           })
                     }
                   />
+                  {k8sDiscoveryErrors.resources && (
+                    <p role="alert" className="text-xs text-red-400">
+                      {k8sDiscoveryErrors.resources}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -2051,11 +2564,10 @@ export const NewConnectionModal = ({
                 })}
                 value={effectiveK8sPort ?? ""}
                 type="number"
-                onChange={(v) => {
-                  setIsK8sPortOverridden(v !== "");
-                  updateField("k8s_port", v === "" ? undefined : Number(v));
-                }}
-                placeholder={k8sDefaultPort != null ? String(k8sDefaultPort) : undefined}
+                onChange={handleInlinePortChange}
+                placeholder={
+                  k8sDefaultPort != null ? String(k8sDefaultPort) : undefined
+                }
               />
             </div>
           )}
