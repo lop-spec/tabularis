@@ -319,6 +319,24 @@ export const NewConnectionModal = ({
   const [testResult, setTestResult] = useState<"success" | "error" | null>(
     null,
   );
+  const [isActionPending, setIsActionPending] = useState(false);
+  const actionSequenceRef = useRef(0);
+  const activeActionRef = useRef<number | null>(null);
+
+  const beginFormAction = useCallback((): number | null => {
+    if (activeActionRef.current !== null) return null;
+
+    const actionId = ++actionSequenceRef.current;
+    activeActionRef.current = actionId;
+    setIsActionPending(true);
+    return actionId;
+  }, []);
+
+  const finishFormAction = useCallback((actionId: number) => {
+    if (activeActionRef.current !== actionId) return;
+    activeActionRef.current = null;
+    setIsActionPending(false);
+  }, []);
 
   // ── validation errors ──
   const [nameError, setNameError] = useState(false);
@@ -619,11 +637,52 @@ export const NewConnectionModal = ({
     reset: resetK8sPathOverrides,
   } = pathOverrides;
 
+  const actionSnapshot = useMemo(
+    () => ({
+      driver,
+      name,
+      formData,
+      selectedDatabasesState,
+      detectJsonInTextColumns,
+      appearance,
+      sshMode,
+      k8sMode,
+      effectiveK8sPort,
+      isMultiDb,
+      noConnectionRequired,
+      initialConnectionId: initialConnection?.id,
+      kubectlPath: pathOverrides.kubectlPath,
+      kubeconfigPath: pathOverrides.kubeconfigPath,
+      appliedK8sOptions,
+    }),
+    [
+      appearance,
+      appliedK8sOptions,
+      detectJsonInTextColumns,
+      driver,
+      effectiveK8sPort,
+      formData,
+      initialConnection?.id,
+      isMultiDb,
+      k8sMode,
+      name,
+      noConnectionRequired,
+      pathOverrides.kubeconfigPath,
+      pathOverrides.kubectlPath,
+      selectedDatabasesState,
+      sshMode,
+    ],
+  );
+  const actionSnapshotRef = useRef(actionSnapshot);
+  actionSnapshotRef.current = actionSnapshot;
+
   const cancelInlineK8sWork = useCallback(() => {
     invalidateK8sDiscovery();
     invalidateK8sAsync("new-k8s-test");
     inlineK8sTestSequenceRef.current += 1;
     inlineK8sTestActiveRef.current = false;
+    actionSequenceRef.current += 1;
+    activeActionRef.current = null;
     cancelK8sPathValidation();
   }, [cancelK8sPathValidation, invalidateK8sAsync, invalidateK8sDiscovery]);
 
@@ -633,6 +692,7 @@ export const NewConnectionModal = ({
 
   const handleClose = useCallback(() => {
     cancelInlineK8sWork();
+    setIsActionPending(false);
     resetK8sPathOverrides();
     onClose();
   }, [cancelInlineK8sWork, onClose, resetK8sPathOverrides]);
@@ -664,6 +724,29 @@ export const NewConnectionModal = ({
     k8sMode,
     t,
   ]);
+
+  const preflightFormAction = useCallback(async () => {
+    const actionId = beginFormAction();
+    if (actionId === null) return null;
+    const startingSnapshot = actionSnapshotRef.current;
+
+    try {
+      const inlinePaths = await ensureInlineK8sPaths();
+      if (
+        !inlinePaths.allowed ||
+        activeActionRef.current !== actionId ||
+        actionSnapshotRef.current !== startingSnapshot
+      ) {
+        finishFormAction(actionId);
+        return null;
+      }
+
+      return { actionId, startingSnapshot, inlinePaths };
+    } catch (error) {
+      finishFormAction(actionId);
+      throw error;
+    }
+  }, [beginFormAction, ensureInlineK8sPaths, finishFormAction]);
 
   const withInlineK8sPaths = useCallback(
     (
@@ -1264,198 +1347,232 @@ export const NewConnectionModal = ({
   };
 
   const testConnection = async () => {
-    const inlinePaths = await ensureInlineK8sPaths();
-    if (!inlinePaths.allowed) return false;
-    if (!validateInlineK8sSelection()) return false;
+    const preflight = await preflightFormAction();
+    if (!preflight) return false;
+    const { actionId, startingSnapshot, inlinePaths } = preflight;
 
-    const usesK8s = formData.k8s_enabled === true;
-    const k8sTestSequence = usesK8s
-      ? ++inlineK8sTestSequenceRef.current
-      : undefined;
-    inlineK8sTestActiveRef.current = usesK8s;
-
-    setStatus("testing");
-    setMessage("");
-    setTestResult(null);
     try {
-      const testParamsBase: Partial<ConnectionParams> = {
-        driver,
-        ...formData,
-        port: formData.port != null ? Number(formData.port) : undefined,
-        k8s_port: effectiveK8sPort,
-        database: isMultiDb
-          ? (selectedDatabasesState[0] ??
-            (typeof formData.database === "string" ? formData.database : ""))
-          : formData.database,
-      };
-      const testParams = withInlineK8sPaths(
-        testParamsBase,
-        inlinePaths.options,
-      );
-      const invokeTest = () =>
-        invoke<string>("test_connection", {
-          request: {
-            params: { ...testParams },
-            connection_id: initialConnection?.id,
-          },
-        });
+      if (!validateInlineK8sSelection()) return false;
 
-      let result: string;
-      if (usesK8s) {
-        const latestResult = await runK8sAsync("new-k8s-test", invokeTest);
-        if (latestResult.status === "stale") return false;
-        if (latestResult.status === "error") throw latestResult.error;
-        result = latestResult.value;
-      } else {
-        result = await invokeTest();
+      const usesK8s = formData.k8s_enabled === true;
+      const k8sTestSequence = usesK8s
+        ? ++inlineK8sTestSequenceRef.current
+        : undefined;
+      inlineK8sTestActiveRef.current = usesK8s;
+
+      setStatus("testing");
+      setMessage("");
+      setTestResult(null);
+      try {
+        const testParamsBase: Partial<ConnectionParams> = {
+          driver,
+          ...formData,
+          port: formData.port != null ? Number(formData.port) : undefined,
+          k8s_port: effectiveK8sPort,
+          database: isMultiDb
+            ? (selectedDatabasesState[0] ??
+              (typeof formData.database === "string" ? formData.database : ""))
+            : formData.database,
+        };
+        const testParams = withInlineK8sPaths(
+          testParamsBase,
+          inlinePaths.options,
+        );
+        const invokeTest = () =>
+          invoke<string>("test_connection", {
+            request: {
+              params: { ...testParams },
+              connection_id: initialConnection?.id,
+            },
+          });
+
+        let result: string;
+        if (usesK8s) {
+          const latestResult = await runK8sAsync("new-k8s-test", invokeTest);
+          if (latestResult.status === "stale") return false;
+          if (latestResult.status === "error") throw latestResult.error;
+          result = latestResult.value;
+        } else {
+          result = await invokeTest();
+        }
+
+        if (
+          activeActionRef.current !== actionId ||
+          actionSnapshotRef.current !== startingSnapshot
+        ) {
+          return false;
+        }
+        setStatus("success");
+        setMessage(result);
+        setTestResult("success");
+        setTimeout(() => {
+          if (
+            k8sTestSequence !== undefined &&
+            inlineK8sTestSequenceRef.current !== k8sTestSequence
+          ) {
+            return;
+          }
+          inlineK8sTestActiveRef.current = false;
+          setTestResult(null);
+          setStatus("idle");
+          setMessage("");
+        }, 3000);
+        return true;
+      } catch (err) {
+        if (
+          activeActionRef.current !== actionId ||
+          actionSnapshotRef.current !== startingSnapshot
+        ) {
+          return false;
+        }
+        setStatus("error");
+        const msg =
+          typeof err === "string"
+            ? err
+            : err instanceof Error
+              ? err.message
+              : JSON.stringify(err);
+        setMessage(msg);
+        setTestResult("error");
+        setTimeout(() => {
+          if (
+            k8sTestSequence !== undefined &&
+            inlineK8sTestSequenceRef.current !== k8sTestSequence
+          ) {
+            return;
+          }
+          inlineK8sTestActiveRef.current = false;
+          setTestResult(null);
+          setStatus("idle");
+        }, 3000);
+        return false;
       }
-
-      setStatus("success");
-      setMessage(result);
-      setTestResult("success");
-      setTimeout(() => {
-        if (
-          k8sTestSequence !== undefined &&
-          inlineK8sTestSequenceRef.current !== k8sTestSequence
-        ) {
-          return;
-        }
-        inlineK8sTestActiveRef.current = false;
-        setTestResult(null);
-        setStatus("idle");
-        setMessage("");
-      }, 3000);
-      return true;
-    } catch (err) {
-      setStatus("error");
-      const msg =
-        typeof err === "string"
-          ? err
-          : err instanceof Error
-            ? err.message
-            : JSON.stringify(err);
-      setMessage(msg);
-      setTestResult("error");
-      setTimeout(() => {
-        if (
-          k8sTestSequence !== undefined &&
-          inlineK8sTestSequenceRef.current !== k8sTestSequence
-        ) {
-          return;
-        }
-        inlineK8sTestActiveRef.current = false;
-        setTestResult(null);
-        setStatus("idle");
-      }, 3000);
-      return false;
+    } finally {
+      finishFormAction(actionId);
     }
   };
 
   const saveConnection = async () => {
-    const inlinePaths = await ensureInlineK8sPaths();
-    if (!inlinePaths.allowed) return;
+    const preflight = await preflightFormAction();
+    if (!preflight) return;
+    const { actionId, inlinePaths } = preflight;
 
-    invalidateK8sAsync("new-k8s-test");
-    inlineK8sTestSequenceRef.current += 1;
-    inlineK8sTestActiveRef.current = false;
+    try {
+      invalidateK8sAsync("new-k8s-test");
+      inlineK8sTestSequenceRef.current += 1;
+      inlineK8sTestActiveRef.current = false;
 
-    if (!name.trim()) {
-      setStatus("error");
-      setMessage(t("newConnection.nameRequired"));
-      setTestResult("error");
-      setNameError(true);
-      nameInputRef.current?.focus();
-      return;
-    }
-    if (isMultiDb) {
-      if (selectedDatabasesState.length === 0) {
+      if (!name.trim()) {
         setStatus("error");
-        setMessage(t("newConnection.noDatabasesSelected"));
+        setMessage(t("newConnection.nameRequired"));
         setTestResult("error");
-        setActiveTab("databases");
-        setDatabasesTabError(true);
+        setNameError(true);
+        nameInputRef.current?.focus();
         return;
       }
-    } else if (
-      !noConnectionRequired &&
-      (!formData.database ||
-        (typeof formData.database === "string" && !formData.database.trim()))
-    ) {
-      setStatus("error");
-      setMessage(t("newConnection.dbNameRequired"));
-      setTestResult("error");
-      return;
-    }
-    if (!validateInlineK8sSelection()) return;
-
-    setStatus("saving");
-    setMessage("");
-    setTestResult(null);
-    try {
-      const paramsBase: Partial<ConnectionParams> = {
-        driver,
-        ...formData,
-        port: formData.port != null ? Number(formData.port) : undefined,
-        k8s_port: effectiveK8sPort,
-        database: isMultiDb
-          ? selectedDatabasesState.length === 1
-            ? selectedDatabasesState[0]
-            : selectedDatabasesState
-          : formData.database,
-      };
-      const params = withInlineK8sPaths(paramsBase, inlinePaths.options);
-      const appearancePayload =
-        appearance.icon || appearance.accentColor ? appearance : undefined;
-
-      if (initialConnection) {
-        if (!params.password?.trim()) delete params.password;
-        if (!params.ssh_password?.trim()) delete params.ssh_password;
-        await invoke("update_connection", {
-          id: initialConnection.id,
-          name,
-          params,
-          detectJsonInTextColumns: detectJsonInTextColumns ? true : null,
-        });
-        await invoke("set_connection_appearance", {
-          id: initialConnection.id,
-          appearance: appearancePayload ?? null,
-        });
-      } else {
-        const saved = await invoke<{ id: string }>("save_connection", {
-          name,
-          params,
-          detectJsonInTextColumns: detectJsonInTextColumns ? true : null,
-        });
-        if (appearancePayload) {
-          await invoke("set_connection_appearance", {
-            id: saved.id,
-            appearance: appearancePayload,
-          });
+      if (isMultiDb) {
+        if (selectedDatabasesState.length === 0) {
+          setStatus("error");
+          setMessage(t("newConnection.noDatabasesSelected"));
+          setTestResult("error");
+          setActiveTab("databases");
+          setDatabasesTabError(true);
+          return;
         }
+      } else if (
+        !noConnectionRequired &&
+        (!formData.database ||
+          (typeof formData.database === "string" && !formData.database.trim()))
+      ) {
+        setStatus("error");
+        setMessage(t("newConnection.dbNameRequired"));
+        setTestResult("error");
+        return;
       }
-      if (onSave) onSave();
-      wasSavedRef.current = true;
+      if (!validateInlineK8sSelection()) return;
 
-      // On save: delete every uploaded path EXCEPT the one currently set on the connection,
-      // and also delete the original image if the user replaced it.
-      const finalImagePath = appearanceRef.current.icon?.type === "image"
-        ? appearanceRef.current.icon.path
-        : null;
-      const toDelete = uploadedPathsRef.current.filter(p => p !== finalImagePath);
-      const original = originalImagePath.current;
-      if (original && original !== finalImagePath && !toDelete.includes(original)) {
-        toDelete.push(original);
+      setStatus("saving");
+      setMessage("");
+      setTestResult(null);
+      try {
+        const paramsBase: Partial<ConnectionParams> = {
+          driver,
+          ...formData,
+          port: formData.port != null ? Number(formData.port) : undefined,
+          k8s_port: effectiveK8sPort,
+          database: isMultiDb
+            ? selectedDatabasesState.length === 1
+              ? selectedDatabasesState[0]
+              : selectedDatabasesState
+            : formData.database,
+        };
+        const params = withInlineK8sPaths(paramsBase, inlinePaths.options);
+        const appearancePayload =
+          appearance.icon || appearance.accentColor ? appearance : undefined;
+
+        if (initialConnection) {
+          if (!params.password?.trim()) delete params.password;
+          if (!params.ssh_password?.trim()) delete params.ssh_password;
+          await invoke("update_connection", {
+            id: initialConnection.id,
+            name,
+            params,
+            detectJsonInTextColumns: detectJsonInTextColumns ? true : null,
+          });
+          await invoke("set_connection_appearance", {
+            id: initialConnection.id,
+            appearance: appearancePayload ?? null,
+          });
+        } else {
+          const saved = await invoke<{ id: string }>("save_connection", {
+            name,
+            params,
+            detectJsonInTextColumns: detectJsonInTextColumns ? true : null,
+          });
+          if (appearancePayload) {
+            await invoke("set_connection_appearance", {
+              id: saved.id,
+              appearance: appearancePayload,
+            });
+          }
+        }
+        if (onSave) onSave();
+        wasSavedRef.current = true;
+
+        // On save: delete every uploaded path EXCEPT the one currently set on the connection,
+        // and also delete the original image if the user replaced it.
+        const finalImagePath = appearanceRef.current.icon?.type === "image"
+          ? appearanceRef.current.icon.path
+          : null;
+        const toDelete = uploadedPathsRef.current.filter(
+          (path) => path !== finalImagePath,
+        );
+        const original = originalImagePath.current;
+        if (
+          original &&
+          original !== finalImagePath &&
+          !toDelete.includes(original)
+        ) {
+          toDelete.push(original);
+        }
+        await Promise.all(
+          toDelete.map((path) =>
+            invoke("delete_connection_icon", { relativePath: path }).catch(
+              () => {},
+            ),
+          ),
+        );
+        uploadedPathsRef.current = [];
+
+        handleClose();
+      } catch (err) {
+        if (activeActionRef.current !== actionId) return;
+        setStatus("error");
+        setMessage(typeof err === "string" ? err : t("newConnection.failSave"));
+        setTestResult("error");
       }
-      await Promise.all(toDelete.map(p =>
-        invoke("delete_connection_icon", { relativePath: p }).catch(() => {})
-      ));
-      uploadedPathsRef.current = [];
-
-      onClose();
-    } catch (err) {
-      setStatus("error");
-      setMessage(typeof err === "string" ? err : t("newConnection.failSave"));
-      setTestResult("error");
+    } finally {
+      finishFormAction(actionId);
     }
   };
 
@@ -2711,7 +2828,7 @@ export const NewConnectionModal = ({
             {activeDriver?.name ?? driver}
           </span>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 text-muted hover:text-primary hover:bg-surface-secondary rounded-md transition-colors"
           >
             <X size={16} />
@@ -2910,7 +3027,9 @@ export const NewConnectionModal = ({
           {/* Test button */}
           <button
             onClick={testConnection}
-            disabled={status === "testing" || status === "saving"}
+            disabled={
+              isActionPending || status === "testing" || status === "saving"
+            }
             className={clsx(
               "flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm font-medium transition-colors disabled:opacity-50",
               testResult === "success"
@@ -2947,14 +3066,14 @@ export const NewConnectionModal = ({
           {/* Cancel + Save */}
           <div className="flex items-center gap-2">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-3 py-1.5 text-sm text-secondary hover:text-primary hover:bg-surface-secondary rounded-md border border-strong transition-colors"
             >
               {t("common.cancel")}
             </button>
             <button
               onClick={saveConnection}
-              disabled={status === "saving"}
+              disabled={isActionPending || status === "saving"}
               className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
             >
               {status === "saving" && (

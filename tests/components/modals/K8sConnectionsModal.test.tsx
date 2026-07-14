@@ -386,6 +386,64 @@ describe("K8sConnectionsModal advanced paths", () => {
     expect(k8sMocks.updateK8sConnection).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { actionLabel: "k8sConnections.test", action: "test" },
+    { actionLabel: "common.save", action: "save" },
+  ] as const)(
+    "aborts $action preflight when the selected context changes",
+    async ({ actionLabel, action }) => {
+      const validation = createDeferred<void>();
+      k8sMocks.validateK8sPath.mockReturnValue(validation.promise);
+      k8sMocks.getK8sContexts.mockResolvedValue(["ctx", "ctx-next"]);
+      k8sMocks.loadK8sConnections.mockResolvedValue([
+        {
+          id: "saved",
+          name: "Saved cluster",
+          context: "ctx",
+          namespace: "db",
+          resource_type: "service",
+          resource_name: "mysql-svc",
+          port: 6543,
+          kubectl_path: "/opt/kubectl",
+        },
+      ]);
+      renderModal(15432);
+
+      await waitFor(() => {
+        expect(screen.getByText("Saved cluster")).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByLabelText("common.edit"));
+      await waitFor(() => {
+        expect(screen.getByRole("option", { name: "ctx-next" })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText(actionLabel));
+      await waitFor(() => {
+        expect(k8sMocks.validateK8sPath).toHaveBeenCalledWith(
+          "/opt/kubectl",
+          "kubectl",
+        );
+      });
+      expect(screen.getByText("k8sConnections.test")).toBeDisabled();
+      expect(screen.getByText("common.save")).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText("k8sConnections.chooseContext"), {
+        target: { value: "ctx-next" },
+      });
+      await act(async () => {
+        validation.resolve();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("common.save")).not.toBeDisabled();
+      });
+      if (action === "test") {
+        expect(k8sMocks.testK8sConnection).not.toHaveBeenCalled();
+      } else {
+        expect(k8sMocks.updateK8sConnection).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it("suppresses stale namespace and resource discovery results", async () => {
     const firstNamespaces = createDeferred<string[]>();
     const secondNamespaces = createDeferred<string[]>();

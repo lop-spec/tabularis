@@ -591,6 +591,63 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
     });
   });
 
+  it.each([
+    {
+      actionLabel: "newConnection.testConnection",
+      command: "test_connection",
+    },
+    { actionLabel: "newConnection.save", command: "update_connection" },
+  ] as const)(
+    "aborts $actionLabel when inline selections change during path preflight",
+    async ({ actionLabel, command }) => {
+      const validation = createDeferred<void>();
+      k8sMocks.validateK8sPath.mockReturnValue(validation.promise);
+      k8sMocks.getK8sContexts.mockResolvedValue(["ctx", "ctx-next"]);
+      vi.mocked(invoke).mockImplementation((invokedCommand) =>
+        invokedCommand === "get_connection_by_id"
+          ? Promise.reject(new Error("use initial params"))
+          : Promise.resolve("ok"),
+      );
+      renderModal(
+        createInitialConnection({
+          k8s_enabled: true,
+          k8s_context: "ctx",
+          k8s_namespace: "db",
+          k8s_resource_type: "service",
+          k8s_resource_name: "mysql-svc",
+          k8s_port: 6543,
+          k8s_kubectl_path: "/opt/kubectl",
+        }),
+      );
+
+      fireEvent.click(screen.getByText("Kubernetes"));
+      await waitFor(() => {
+        expect(screen.getByRole("option", { name: "ctx-next" })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText(actionLabel));
+      await waitFor(() => {
+        expect(k8sMocks.validateK8sPath).toHaveBeenCalledWith(
+          "/opt/kubectl",
+          "kubectl",
+        );
+      });
+      expect(screen.getByText("newConnection.testConnection")).toBeDisabled();
+      expect(screen.getByText("newConnection.save")).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText("newConnection.chooseContext"), {
+        target: { value: "ctx-next" },
+      });
+      await act(async () => {
+        validation.resolve();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(actionLabel)).not.toBeDisabled();
+      });
+      expect(invoke).not.toHaveBeenCalledWith(command, expect.anything());
+    },
+  );
+
   it("applies paths once, resets inline selections and propagates overrides", async () => {
     await openInlineK8s();
     await chooseServiceResource();

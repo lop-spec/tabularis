@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   X,
@@ -90,6 +90,30 @@ export function K8sConnectionsModal({
   const [testMessage, setTestMessage] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [pathActionError, setPathActionError] = useState<string | null>(null);
+  const [isActionPending, setIsActionPending] = useState(false);
+  const actionSequenceRef = useRef(0);
+  const activeActionRef = useRef<number | null>(null);
+
+  const beginFormAction = useCallback((): number | null => {
+    if (activeActionRef.current !== null) return null;
+
+    const actionId = ++actionSequenceRef.current;
+    activeActionRef.current = actionId;
+    setIsActionPending(true);
+    return actionId;
+  }, []);
+
+  const finishFormAction = useCallback((actionId: number) => {
+    if (activeActionRef.current !== actionId) return;
+    activeActionRef.current = null;
+    setIsActionPending(false);
+  }, []);
+
+  const cancelFormAction = useCallback(() => {
+    actionSequenceRef.current += 1;
+    activeActionRef.current = null;
+    setIsActionPending(false);
+  }, []);
 
   const setDiscoveryError = useCallback(
     (source: DiscoverySource, error: string | null) => {
@@ -236,6 +260,41 @@ export function K8sConnectionsModal({
     reset: resetPathOverrides,
   } = pathOverrides;
 
+  const actionSnapshot = useMemo(
+    () => ({
+      name,
+      context,
+      namespace,
+      resourceType,
+      resourceName,
+      port,
+      effectivePort,
+      isPortOverridden,
+      editingId,
+      isCreating,
+      kubectlPath: pathOverrides.kubectlPath,
+      kubeconfigPath: pathOverrides.kubeconfigPath,
+      appliedOptions,
+    }),
+    [
+      appliedOptions,
+      context,
+      editingId,
+      effectivePort,
+      isCreating,
+      isPortOverridden,
+      name,
+      namespace,
+      pathOverrides.kubeconfigPath,
+      pathOverrides.kubectlPath,
+      port,
+      resourceName,
+      resourceType,
+    ],
+  );
+  const actionSnapshotRef = useRef(actionSnapshot);
+  actionSnapshotRef.current = actionSnapshot;
+
   useEffect(() => {
     if (!isOpen) {
       invalidate("k8s-connections");
@@ -248,6 +307,7 @@ export function K8sConnectionsModal({
 
   const resetForm = useCallback(
     (options: K8sCommandOptions = {}) => {
+      cancelFormAction();
       invalidateFormRequests();
       resetPathOverrides(options);
       setName("");
@@ -266,7 +326,7 @@ export function K8sConnectionsModal({
       setValidationError(null);
       setPathActionError(null);
     },
-    [invalidateFormRequests, resetPathOverrides],
+    [cancelFormAction, invalidateFormRequests, resetPathOverrides],
   );
 
   const handleCreate = useCallback(() => {
@@ -278,6 +338,7 @@ export function K8sConnectionsModal({
 
   const handleEdit = useCallback(
     (connection: K8sConnection) => {
+      cancelFormAction();
       const options: K8sCommandOptions = {
         kubectl_path: connection.kubectl_path,
         kubeconfig_path: connection.kubeconfig_path,
@@ -311,6 +372,7 @@ export function K8sConnectionsModal({
       );
     },
     [
+      cancelFormAction,
       initializePathOverrides,
       invalidateFormRequests,
       loadContexts,
@@ -483,48 +545,64 @@ export function K8sConnectionsModal({
   );
 
   const handleSave = useCallback(async () => {
-    const paths = await ensureApplied();
-    if (paths.status === "invalid") {
-      setPathActionError(t("k8sConnections.pathValidationFailed"));
-      return;
-    }
-    if (paths.status === "applied") {
-      setPathActionError(t("k8sConnections.pathSelectionReset"));
-      return;
-    }
-    setPathActionError(null);
-
-    const validation = validateK8sConnection({
-      name,
-      context,
-      namespace,
-      resource_type: resourceType,
-      resource_name: resourceName,
-      port: effectivePort,
-      ...paths.options,
-    });
-    if (!validation.isValid) {
-      setValidationError(t(validation.errorKey));
-      return;
-    }
-    const input: K8sConnectionInput = validation.value;
+    const actionId = beginFormAction();
+    if (actionId === null) return;
+    const startingSnapshot = actionSnapshotRef.current;
 
     try {
-      if (isCreating) {
-        await saveK8sConnection(input);
-      } else if (editingId) {
-        await updateK8sConnection(editingId, input);
+      const paths = await ensureApplied();
+      if (
+        activeActionRef.current !== actionId ||
+        actionSnapshotRef.current !== startingSnapshot
+      ) {
+        return;
       }
-      await loadConnections();
-      handleCancel();
-    } catch (error) {
-      setValidationError(toErrorMessage(error));
+      if (paths.status === "invalid") {
+        setPathActionError(t("k8sConnections.pathValidationFailed"));
+        return;
+      }
+      if (paths.status === "applied") {
+        setPathActionError(t("k8sConnections.pathSelectionReset"));
+        return;
+      }
+      setPathActionError(null);
+
+      const validation = validateK8sConnection({
+        name,
+        context,
+        namespace,
+        resource_type: resourceType,
+        resource_name: resourceName,
+        port: effectivePort,
+        ...paths.options,
+      });
+      if (!validation.isValid) {
+        setValidationError(t(validation.errorKey));
+        return;
+      }
+      const input: K8sConnectionInput = validation.value;
+
+      try {
+        if (isCreating) {
+          await saveK8sConnection(input);
+        } else if (editingId) {
+          await updateK8sConnection(editingId, input);
+        }
+        await loadConnections();
+        handleCancel();
+      } catch (error) {
+        setValidationError(toErrorMessage(error));
+      }
+    } finally {
+      finishFormAction(actionId);
     }
   }, [
+    beginFormAction,
     context,
     editingId,
     effectivePort,
     ensureApplied,
+    finishFormAction,
     handleCancel,
     isCreating,
     loadConnections,
@@ -549,31 +627,59 @@ export function K8sConnectionsModal({
   );
 
   const handleTest = useCallback(async () => {
-    const paths = await ensureApplied();
-    if (paths.status === "invalid") {
-      setPathActionError(t("k8sConnections.pathValidationFailed"));
-      return;
-    }
-    if (paths.status === "applied") {
-      setPathActionError(t("k8sConnections.pathSelectionReset"));
-      return;
-    }
-    setPathActionError(null);
-    if (!context || !namespace) return;
+    const actionId = beginFormAction();
+    if (actionId === null) return;
+    const startingSnapshot = actionSnapshotRef.current;
 
-    setTestStatus("testing");
-    setTestMessage("");
-    const result = await run("k8s-test", () =>
-      testK8sConnection(context, namespace, paths.options),
-    );
-    if (result.status === "success") {
-      setTestStatus("success");
-      setTestMessage(result.value);
-    } else if (result.status === "error") {
-      setTestStatus("error");
-      setTestMessage(toErrorMessage(result.error));
+    try {
+      const paths = await ensureApplied();
+      if (
+        activeActionRef.current !== actionId ||
+        actionSnapshotRef.current !== startingSnapshot
+      ) {
+        return;
+      }
+      if (paths.status === "invalid") {
+        setPathActionError(t("k8sConnections.pathValidationFailed"));
+        return;
+      }
+      if (paths.status === "applied") {
+        setPathActionError(t("k8sConnections.pathSelectionReset"));
+        return;
+      }
+      setPathActionError(null);
+      if (!context || !namespace) return;
+
+      setTestStatus("testing");
+      setTestMessage("");
+      const result = await run("k8s-test", () =>
+        testK8sConnection(context, namespace, paths.options),
+      );
+      if (
+        activeActionRef.current !== actionId ||
+        actionSnapshotRef.current !== startingSnapshot
+      ) {
+        return;
+      }
+      if (result.status === "success") {
+        setTestStatus("success");
+        setTestMessage(result.value);
+      } else if (result.status === "error") {
+        setTestStatus("error");
+        setTestMessage(toErrorMessage(result.error));
+      }
+    } finally {
+      finishFormAction(actionId);
     }
-  }, [context, ensureApplied, namespace, run, t]);
+  }, [
+    beginFormAction,
+    context,
+    ensureApplied,
+    finishFormAction,
+    namespace,
+    run,
+    t,
+  ]);
 
   const editFormProps = {
     name,
@@ -598,6 +704,7 @@ export function K8sConnectionsModal({
     pathActionError,
     testStatus,
     testMessage,
+    isActionPending,
     onTest: handleTest,
     onSave: handleSave,
     onCancel: handleCancel,
@@ -720,6 +827,7 @@ interface EditFormProps {
   pathActionError: string | null;
   testStatus: "idle" | "testing" | "success" | "error";
   testMessage: string;
+  isActionPending: boolean;
   onTest: () => void;
   onSave: () => void;
   onCancel: () => void;
@@ -748,6 +856,7 @@ function EditForm({
   pathActionError,
   testStatus,
   testMessage,
+  isActionPending,
   onTest,
   onSave,
   onCancel,
@@ -907,7 +1016,7 @@ function EditForm({
       <div className="flex items-center gap-2 pt-1">
         <button
           onClick={onTest}
-          disabled={!context || !namespace}
+          disabled={!context || !namespace || isActionPending}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface-secondary hover:bg-surface-tertiary text-secondary rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {testStatus === "testing" ? (
@@ -919,7 +1028,8 @@ function EditForm({
         </button>
         <button
           onClick={onSave}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors"
+          disabled={isActionPending}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-md transition-colors"
         >
           <Check size={12} />
           {t("common.save")}
