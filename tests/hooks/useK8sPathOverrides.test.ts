@@ -101,6 +101,41 @@ describe("useK8sPathOverrides", () => {
     expect(k8sMocks.validateK8sPath).not.toHaveBeenCalled();
   });
 
+  it("validates initialized path overrides before reporting them ready", async () => {
+    k8sMocks.validateK8sPath.mockResolvedValue(undefined);
+    const onApplied = vi.fn();
+    const { result } = renderHook(() => useK8sPathOverrides({ onApplied }));
+
+    act(() => {
+      result.current.initialize({
+        kubectl_path: "/opt/kubectl",
+        kubeconfig_path: "/tmp/kubeconfig",
+      });
+    });
+
+    let ensured: Awaited<ReturnType<typeof result.current.ensureApplied>>;
+    await act(async () => {
+      ensured = await result.current.ensureApplied();
+    });
+
+    expect(ensured!).toEqual({
+      status: "ready",
+      options: {
+        kubectl_path: "/opt/kubectl",
+        kubeconfig_path: "/tmp/kubeconfig",
+      },
+    });
+    expect(k8sMocks.validateK8sPath).toHaveBeenCalledWith(
+      "/opt/kubectl",
+      "kubectl",
+    );
+    expect(k8sMocks.validateK8sPath).toHaveBeenCalledWith(
+      "/tmp/kubeconfig",
+      "kubeconfig",
+    );
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
   it("validates and applies trimmed draft paths through ensureApplied", async () => {
     k8sMocks.validateK8sPath.mockResolvedValue(undefined);
     const onApplied = vi.fn();

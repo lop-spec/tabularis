@@ -273,21 +273,20 @@ export function useK8sPathOverrides(
 
   const ensureApplied = useCallback(async (): Promise<K8sPathEnsureAppliedResult> => {
     const startingOptions = toCommandOptions(draftsRef.current);
-    if (optionsEqual(startingOptions, appliedOptionsRef.current)) {
-      return { status: "ready", options: startingOptions };
-    }
+    const wasAlreadyApplied = optionsEqual(
+      startingOptions,
+      appliedOptionsRef.current,
+    );
 
     const results = await Promise.all(
       pathKinds.map((kind) => {
         const optionKey = `${kind}_path` as const;
         const candidatePath = startingOptions[optionKey];
-        const appliedPath = appliedOptionsRef.current[optionKey];
 
-        if (candidatePath === appliedPath || candidatePath === undefined) {
-          return Promise.resolve<K8sPathValidationResult>({ status: "valid" });
-        }
-
-        if (validationsRef.current[kind].status === "valid") {
+        if (
+          candidatePath === undefined ||
+          validationsRef.current[kind].status === "valid"
+        ) {
           return Promise.resolve<K8sPathValidationResult>({ status: "valid" });
         }
 
@@ -298,9 +297,16 @@ export function useK8sPathOverrides(
     const currentOptions = toCommandOptions(draftsRef.current);
     if (
       !optionsEqual(currentOptions, startingOptions) ||
-      results.some((result) => result.status !== "valid") ||
-      !canApplyCurrentDrafts()
+      results.some((result) => result.status !== "valid")
     ) {
+      return { status: "invalid" };
+    }
+
+    if (wasAlreadyApplied) {
+      return { status: "ready", options: currentOptions };
+    }
+
+    if (!canApplyCurrentDrafts()) {
       return { status: "invalid" };
     }
 
