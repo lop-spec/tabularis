@@ -220,7 +220,9 @@ describe("NewConnectionModal K8s port defaults", () => {
   });
 
   it("uses the active driver default as the effective inline K8s port", async () => {
+    k8sMocks.getK8sResourcePorts.mockResolvedValue([]);
     await openInlineK8s();
+    await chooseServiceResource();
 
     const portInput = screen.getByPlaceholderText("15432");
     expect(portInput).toHaveAttribute("type", "number");
@@ -571,6 +573,65 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
       ).toBeInTheDocument();
     });
     expect(invoke).not.toHaveBeenCalledWith("test_connection", expect.anything());
+
+    fireEvent.click(screen.getByText("newConnection.testConnection"));
+    await waitFor(() => {
+      expect(
+        screen.getByText("k8sConnections.errors.contextRequired"),
+      ).toBeInTheDocument();
+    });
+    expect(invoke).not.toHaveBeenCalledWith("test_connection", expect.anything());
+  });
+
+  it("blocks Save after blur-applied paths until selections are remade", async () => {
+    await openInlineK8s();
+    await chooseServiceResource();
+    const kubectlInput = openAdvancedSettings();
+    fireEvent.change(kubectlInput, { target: { value: "/opt/kubectl" } });
+    fireEvent.blur(kubectlInput);
+
+    await waitFor(() => {
+      expect(k8sMocks.getK8sContexts).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kubectl_path: "/opt/kubectl" }),
+      );
+    });
+    fillSaveFields();
+    fireEvent.click(screen.getByText("newConnection.save"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("k8sConnections.errors.contextRequired"),
+      ).toBeInTheDocument();
+    });
+    expect(invoke).not.toHaveBeenCalledWith("save_connection", expect.anything());
+  });
+
+  it("preserves applied inline paths when Kubernetes is temporarily disabled", async () => {
+    await openInlineK8s();
+    const kubectlInput = openAdvancedSettings();
+    fireEvent.change(kubectlInput, { target: { value: "/opt/kubectl" } });
+    fireEvent.blur(kubectlInput);
+
+    await waitFor(() => {
+      expect(k8sMocks.getK8sContexts).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kubectl_path: "/opt/kubectl" }),
+      );
+    });
+    fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
+    fillSaveFields();
+    fireEvent.click(screen.getByText("newConnection.save"));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "save_connection",
+        expect.objectContaining({
+          params: expect.objectContaining({
+            k8s_enabled: false,
+            k8s_kubectl_path: "/opt/kubectl",
+          }),
+        }),
+      );
+    });
   });
 
   it("does not clear an unrelated name validation error after a valid path blur", async () => {

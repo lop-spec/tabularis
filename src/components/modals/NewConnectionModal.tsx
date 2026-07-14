@@ -297,6 +297,9 @@ export const NewConnectionModal = ({
   const [k8sPathActionError, setK8sPathActionError] = useState<string | null>(
     null,
   );
+  const [k8sSelectionError, setK8sSelectionError] = useState<string | null>(
+    null,
+  );
   const inlineK8sActiveRef = useRef(false);
   const inlineK8sTestActiveRef = useRef(false);
   const inlineK8sTestSequenceRef = useRef(0);
@@ -605,6 +608,7 @@ export const NewConnectionModal = ({
       setK8sResources([]);
       setK8sDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
       setK8sPathActionError(null);
+      setK8sSelectionError(null);
       if (inlineK8sActiveRef.current) {
         void loadK8sContextsList(options);
       }
@@ -624,8 +628,11 @@ export const NewConnectionModal = ({
   } = pathOverrides;
 
   const ensureInlineK8sPaths = useCallback(async (): Promise<InlineK8sPathCheck> => {
-    if (!formData.k8s_enabled || k8sMode !== "inline") {
+    if (k8sMode !== "inline") {
       return { allowed: true };
+    }
+    if (!formData.k8s_enabled) {
+      return { allowed: true, options: appliedK8sOptions };
     }
 
     const result = await ensureK8sPathsApplied();
@@ -640,7 +647,13 @@ export const NewConnectionModal = ({
 
     setK8sPathActionError(null);
     return { allowed: true, options: result.options };
-  }, [ensureK8sPathsApplied, formData.k8s_enabled, k8sMode, t]);
+  }, [
+    appliedK8sOptions,
+    ensureK8sPathsApplied,
+    formData.k8s_enabled,
+    k8sMode,
+    t,
+  ]);
 
   const withInlineK8sPaths = useCallback(
     (
@@ -648,7 +661,7 @@ export const NewConnectionModal = ({
       options?: K8sCommandOptions,
     ): Partial<ConnectionParams> => {
       const next = { ...params };
-      if (next.k8s_enabled && k8sMode === "inline") {
+      if (k8sMode === "inline") {
         next.k8s_kubectl_path = options?.kubectl_path;
         next.k8s_kubeconfig_path = options?.kubeconfig_path;
       } else {
@@ -660,12 +673,59 @@ export const NewConnectionModal = ({
     [k8sMode],
   );
 
+  const validateInlineK8sSelection = useCallback((): boolean => {
+    if (!formData.k8s_enabled || k8sMode !== "inline") {
+      setK8sSelectionError(null);
+      return true;
+    }
+
+    let errorKey: string | null = null;
+    if (!formData.k8s_context) {
+      errorKey = "k8sConnections.errors.contextRequired";
+    } else if (!formData.k8s_namespace) {
+      errorKey = "k8sConnections.errors.namespaceRequired";
+    } else if (
+      formData.k8s_resource_type !== "service" &&
+      formData.k8s_resource_type !== "pod"
+    ) {
+      errorKey = "k8sConnections.errors.resourceTypeInvalid";
+    } else if (!formData.k8s_resource_name) {
+      errorKey = "k8sConnections.errors.resourceNameRequired";
+    } else if (
+      effectiveK8sPort == null ||
+      !Number.isInteger(effectiveK8sPort) ||
+      effectiveK8sPort < 1 ||
+      effectiveK8sPort > 65535
+    ) {
+      errorKey = "k8sConnections.errors.portInvalid";
+    }
+
+    if (errorKey) {
+      setK8sSelectionError(t(errorKey));
+      setActiveTab("k8s");
+      return false;
+    }
+
+    setK8sSelectionError(null);
+    return true;
+  }, [
+    effectiveK8sPort,
+    formData.k8s_context,
+    formData.k8s_enabled,
+    formData.k8s_namespace,
+    formData.k8s_resource_name,
+    formData.k8s_resource_type,
+    k8sMode,
+    t,
+  ]);
+
   const handleInlineContextChange = useCallback(
     (value: string) => {
       invalidateK8sAsync("new-k8s-namespaces");
       invalidateK8sAsync("new-k8s-resources");
       invalidateK8sAsync("new-k8s-ports");
       invalidateInlineK8sTest();
+      setK8sSelectionError(null);
       setFormData((previous) => ({
         ...previous,
         k8s_context: value || undefined,
@@ -696,6 +756,7 @@ export const NewConnectionModal = ({
       invalidateK8sAsync("new-k8s-resources");
       invalidateK8sAsync("new-k8s-ports");
       invalidateInlineK8sTest();
+      setK8sSelectionError(null);
       setFormData((previous) => ({
         ...previous,
         k8s_namespace: value || undefined,
@@ -729,6 +790,7 @@ export const NewConnectionModal = ({
       invalidateK8sAsync("new-k8s-resources");
       invalidateK8sAsync("new-k8s-ports");
       invalidateInlineK8sTest();
+      setK8sSelectionError(null);
       setFormData((previous) => ({
         ...previous,
         k8s_resource_type: value || undefined,
@@ -761,6 +823,7 @@ export const NewConnectionModal = ({
     (value: string) => {
       invalidateK8sAsync("new-k8s-ports");
       invalidateInlineK8sTest();
+      setK8sSelectionError(null);
       setFormData((previous) => ({
         ...previous,
         k8s_resource_name: value || undefined,
@@ -798,6 +861,7 @@ export const NewConnectionModal = ({
     (value: string) => {
       invalidateK8sAsync("new-k8s-ports");
       invalidateInlineK8sTest();
+      setK8sSelectionError(null);
       const isManual = value !== "";
       setFormData((previous) => ({
         ...previous,
@@ -843,6 +907,7 @@ export const NewConnectionModal = ({
       setK8sAutoPort(null);
       setK8sDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
       setK8sPathActionError(null);
+      setK8sSelectionError(null);
 
       if (mode === "existing") {
         resetK8sPathOverrides();
@@ -887,6 +952,7 @@ export const NewConnectionModal = ({
 
   const handleK8sEnabledChange = useCallback(
     (enabled: boolean) => {
+      setK8sSelectionError(null);
       setFormData((previous) => ({
         ...previous,
         k8s_enabled: enabled,
@@ -1019,6 +1085,7 @@ export const NewConnectionModal = ({
       setK8sResources([]);
       setK8sDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
       setK8sPathActionError(null);
+      setK8sSelectionError(null);
 
       if (initialConnection) {
         setName(initialConnection.name);
@@ -1172,6 +1239,7 @@ export const NewConnectionModal = ({
     setK8sResources([]);
     setK8sDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
     setK8sPathActionError(null);
+    setK8sSelectionError(null);
     setSelectedDatabasesState([]);
     setDbSearchQuery("");
     setAvailableDatabases([]);
@@ -1188,6 +1256,7 @@ export const NewConnectionModal = ({
   const testConnection = async () => {
     const inlinePaths = await ensureInlineK8sPaths();
     if (!inlinePaths.allowed) return false;
+    if (!validateInlineK8sSelection()) return false;
 
     const usesK8s = formData.k8s_enabled === true;
     const k8sTestSequence = usesK8s
@@ -1307,6 +1376,8 @@ export const NewConnectionModal = ({
       setTestResult("error");
       return;
     }
+    if (!validateInlineK8sSelection()) return;
+
     setStatus("saving");
     setMessage("");
     setTestResult(null);
@@ -2458,6 +2529,11 @@ export const NewConnectionModal = ({
               {k8sPathActionError && (
                 <p role="alert" className="text-xs text-red-400">
                   {k8sPathActionError}
+                </p>
+              )}
+              {k8sSelectionError && (
+                <p role="alert" className="text-xs text-red-400">
+                  {k8sSelectionError}
                 </p>
               )}
 
