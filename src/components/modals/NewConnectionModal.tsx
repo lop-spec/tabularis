@@ -320,11 +320,19 @@ export const NewConnectionModal = ({
     null,
   );
   const [isActionPending, setIsActionPending] = useState(false);
+  const [isPersistencePending, setIsPersistencePending] = useState(false);
   const actionSequenceRef = useRef(0);
   const activeActionRef = useRef<number | null>(null);
+  const persistenceActionRef = useRef<number | null>(null);
+  const initSequenceRef = useRef(0);
 
   const beginFormAction = useCallback((): number | null => {
-    if (activeActionRef.current !== null) return null;
+    if (
+      activeActionRef.current !== null ||
+      persistenceActionRef.current !== null
+    ) {
+      return null;
+    }
 
     const actionId = ++actionSequenceRef.current;
     activeActionRef.current = actionId;
@@ -387,7 +395,12 @@ export const NewConnectionModal = ({
         : null;
 
     return () => {
-      if (wasSavedRef.current) return;
+      if (
+        wasSavedRef.current ||
+        persistenceActionRef.current !== null
+      ) {
+        return;
+      }
       // On cancel: delete EVERY path uploaded this session except the original
       // (the one the modal opened with). Handles "pick A then B then C then cancel".
       const original = originalImagePath.current;
@@ -650,7 +663,7 @@ export const NewConnectionModal = ({
       effectiveK8sPort,
       isMultiDb,
       noConnectionRequired,
-      initialConnectionId: initialConnection?.id,
+      initialConnection,
       kubectlPath: pathOverrides.kubectlPath,
       kubeconfigPath: pathOverrides.kubeconfigPath,
       appliedK8sOptions,
@@ -662,7 +675,7 @@ export const NewConnectionModal = ({
       driver,
       effectiveK8sPort,
       formData,
-      initialConnection?.id,
+      initialConnection,
       isMultiDb,
       k8sMode,
       name,
@@ -685,14 +698,27 @@ export const NewConnectionModal = ({
     inlineK8sTestActiveRef.current = false;
     actionSequenceRef.current += 1;
     activeActionRef.current = null;
+    initSequenceRef.current += 1;
     cancelK8sPathValidation();
   }, [cancelK8sPathValidation, invalidateK8sAsync, invalidateK8sDiscovery]);
 
   useEffect(() => {
-    if (!isOpen) cancelInlineK8sWork();
+    if (!isOpen) {
+      cancelInlineK8sWork();
+      queueMicrotask(() => {
+        setIsActionPending(false);
+        if (persistenceActionRef.current === null) {
+          setIsPersistencePending(false);
+        }
+        setStatus("idle");
+        setMessage("");
+        setTestResult(null);
+      });
+    }
   }, [cancelInlineK8sWork, isOpen]);
 
   const handleClose = useCallback(() => {
+    if (persistenceActionRef.current !== null) return;
     cancelInlineK8sWork();
     setIsActionPending(false);
     resetK8sPathOverrides();
@@ -734,18 +760,17 @@ export const NewConnectionModal = ({
         finishFormAction(actionId);
         return null;
       }
-      if (!inlinePaths.allowed) {
-        setK8sPathActionError(
-          t(
-            inlinePaths.reason === "applied"
-              ? "k8sConnections.pathSelectionReset"
-              : "k8sConnections.pathValidationFailed",
-          ),
-        );
+      if (!inlinePaths.allowed && inlinePaths.reason === "applied") {
+        setK8sPathActionError(t("k8sConnections.pathSelectionReset"));
         finishFormAction(actionId);
         return null;
       }
       if (actionSnapshotRef.current !== startingSnapshot) {
+        finishFormAction(actionId);
+        return null;
+      }
+      if (!inlinePaths.allowed) {
+        setK8sPathActionError(t("k8sConnections.pathValidationFailed"));
         finishFormAction(actionId);
         return null;
       }
@@ -1098,7 +1123,10 @@ export const NewConnectionModal = ({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const loadDatabases = async (overrides?: Partial<ConnectionParams>) => {
+  const loadDatabases = async (
+    overrides?: Partial<ConnectionParams>,
+    shouldApply: () => boolean = () => true,
+  ) => {
     const effectiveDriver = overrides?.driver ?? driver;
     const targetDriver = drivers.find((d) => d.id === effectiveDriver);
 
@@ -1133,6 +1161,7 @@ export const NewConnectionModal = ({
           connection_id: initialConnection?.id,
         },
       });
+      if (!shouldApply()) return;
       setAvailableDatabases(databases);
       if (initialConnection) {
         // Pre-select databases already associated with the connection
@@ -1147,6 +1176,7 @@ export const NewConnectionModal = ({
         });
       }
     } catch (err) {
+      if (!shouldApply()) return;
       const errorMsg =
         typeof err === "string"
           ? err
@@ -1156,13 +1186,21 @@ export const NewConnectionModal = ({
       setDatabaseLoadError(errorMsg);
       setAvailableDatabases([]);
     } finally {
-      setLoadingDatabases(false);
+      if (shouldApply()) setLoadingDatabases(false);
     }
   };
 
   // ── init form on open ──
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initSequenceRef.current += 1;
+      return;
+    }
+    const initSequence = ++initSequenceRef.current;
+    const isCurrentInit = () => initSequenceRef.current === initSequence;
+    queueMicrotask(() => {
+      if (isCurrentInit()) setLoadingDatabases(false);
+    });
     const init = async () => {
       // Reset common state first so it's always clean even if async calls below fail
       setStatus("idle");
@@ -1210,6 +1248,7 @@ export const NewConnectionModal = ({
         } catch {
           // fallback: use params without secrets (backend will retrieve from keychain)
         }
+        if (!isCurrentInit()) return;
 
         const isInlineK8s = !params.k8s_connection_id;
         const pathOptions: K8sCommandOptions = isInlineK8s
@@ -1275,7 +1314,7 @@ export const NewConnectionModal = ({
           (d) => d.id === initialConnection.params.driver,
         );
         if (isMultiDatabaseCapable(editDriver?.capabilities)) {
-          loadDatabases(params);
+          void loadDatabases(params, isCurrentInit);
         }
       } else {
         setName("");
@@ -1297,8 +1336,13 @@ export const NewConnectionModal = ({
         setAppearance({});
       }
 
-      await loadSshConnectionsList();
-      await loadK8sConnectionsList();
+      const nextSshConnections = await loadSshConnections();
+      if (!isCurrentInit()) return;
+      setSshConnections(nextSshConnections);
+
+      const nextK8sConnections = await loadK8sConnections();
+      if (!isCurrentInit()) return;
+      setK8sConnections(nextK8sConnections);
     };
     void init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1477,7 +1521,7 @@ export const NewConnectionModal = ({
   const saveConnection = async () => {
     const preflight = await preflightFormAction();
     if (!preflight) return;
-    const { actionId, inlinePaths } = preflight;
+    const { actionId, startingSnapshot, inlinePaths } = preflight;
 
     try {
       invalidateK8sAsync("new-k8s-test");
@@ -1513,25 +1557,37 @@ export const NewConnectionModal = ({
       }
       if (!validateInlineK8sSelection()) return;
 
+      const paramsBase: Partial<ConnectionParams> = {
+        driver,
+        ...formData,
+        port: formData.port != null ? Number(formData.port) : undefined,
+        k8s_port: effectiveK8sPort,
+        database: isMultiDb
+          ? selectedDatabasesState.length === 1
+            ? selectedDatabasesState[0]
+            : selectedDatabasesState
+          : formData.database,
+      };
+      const params = withInlineK8sPaths(paramsBase, inlinePaths.options);
+      const appearancePayload =
+        appearance.icon || appearance.accentColor ? appearance : undefined;
+      const finalImagePath =
+        appearance.icon?.type === "image" ? appearance.icon.path : null;
+      const uploadedPathsForAction = [...uploadedPathsRef.current];
+      const originalImagePathForAction = originalImagePath.current;
+
+      if (
+        activeActionRef.current !== actionId ||
+        actionSnapshotRef.current !== startingSnapshot
+      ) {
+        return;
+      }
+      persistenceActionRef.current = actionId;
+      setIsPersistencePending(true);
       setStatus("saving");
       setMessage("");
       setTestResult(null);
       try {
-        const paramsBase: Partial<ConnectionParams> = {
-          driver,
-          ...formData,
-          port: formData.port != null ? Number(formData.port) : undefined,
-          k8s_port: effectiveK8sPort,
-          database: isMultiDb
-            ? selectedDatabasesState.length === 1
-              ? selectedDatabasesState[0]
-              : selectedDatabasesState
-            : formData.database,
-        };
-        const params = withInlineK8sPaths(paramsBase, inlinePaths.options);
-        const appearancePayload =
-          appearance.icon || appearance.accentColor ? appearance : undefined;
-
         if (initialConnection) {
           if (!params.password?.trim()) delete params.password;
           if (!params.ssh_password?.trim()) delete params.ssh_password;
@@ -1558,24 +1614,33 @@ export const NewConnectionModal = ({
             });
           }
         }
+
+        if (
+          activeActionRef.current !== actionId ||
+          actionSnapshotRef.current !== startingSnapshot
+        ) {
+          if (activeActionRef.current === actionId) {
+            setStatus("idle");
+            setMessage("");
+            setTestResult(null);
+          }
+          return;
+        }
+
         if (onSave) onSave();
         wasSavedRef.current = true;
 
-        // On save: delete every uploaded path EXCEPT the one currently set on the connection,
-        // and also delete the original image if the user replaced it.
-        const finalImagePath = appearanceRef.current.icon?.type === "image"
-          ? appearanceRef.current.icon.path
-          : null;
-        const toDelete = uploadedPathsRef.current.filter(
+        // Delete only paths owned by this save attempt. Paths uploaded by a
+        // superseding session remain tracked for that session's own cleanup.
+        const toDelete = uploadedPathsForAction.filter(
           (path) => path !== finalImagePath,
         );
-        const original = originalImagePath.current;
         if (
-          original &&
-          original !== finalImagePath &&
-          !toDelete.includes(original)
+          originalImagePathForAction &&
+          originalImagePathForAction !== finalImagePath &&
+          !toDelete.includes(originalImagePathForAction)
         ) {
-          toDelete.push(original);
+          toDelete.push(originalImagePathForAction);
         }
         await Promise.all(
           toDelete.map((path) =>
@@ -1584,16 +1649,35 @@ export const NewConnectionModal = ({
             ),
           ),
         );
-        uploadedPathsRef.current = [];
+        const handledUploads = new Set(uploadedPathsForAction);
+        uploadedPathsRef.current = uploadedPathsRef.current.filter(
+          (path) => !handledUploads.has(path),
+        );
 
+        persistenceActionRef.current = null;
+        setIsPersistencePending(false);
         handleClose();
       } catch (err) {
-        if (activeActionRef.current !== actionId) return;
-        setStatus("error");
-        setMessage(typeof err === "string" ? err : t("newConnection.failSave"));
-        setTestResult("error");
+        if (
+          activeActionRef.current === actionId &&
+          actionSnapshotRef.current === startingSnapshot
+        ) {
+          setStatus("error");
+          setMessage(
+            typeof err === "string" ? err : t("newConnection.failSave"),
+          );
+          setTestResult("error");
+        } else if (activeActionRef.current === actionId) {
+          setStatus("idle");
+          setMessage("");
+          setTestResult(null);
+        }
       }
     } finally {
+      if (persistenceActionRef.current === actionId) {
+        persistenceActionRef.current = null;
+        setIsPersistencePending(false);
+      }
       finishFormAction(actionId);
     }
   };
@@ -2818,7 +2902,14 @@ export const NewConnectionModal = ({
       onClose={handleClose}
       overlayClassName="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm"
     >
-      <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[760px] max-h-[88vh] flex flex-col overflow-hidden">
+      <fieldset
+        disabled={isPersistencePending}
+        aria-busy={isPersistencePending}
+        className={clsx(
+          "bg-elevated border border-strong rounded-xl shadow-2xl w-[760px] max-h-[88vh] flex flex-col overflow-hidden p-0 m-0 min-w-0",
+          isPersistencePending && "pointer-events-none",
+        )}
+      >
         {/* ── Top bar: name + close ── */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-default bg-base">
           <div
@@ -3105,7 +3196,7 @@ export const NewConnectionModal = ({
             </button>
           </div>
         </div>
-      </div>
+      </fieldset>
 
       {/* SSH Management Modal */}
       <SshConnectionsModal

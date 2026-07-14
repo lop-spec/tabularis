@@ -307,12 +307,26 @@ export function K8sConnectionsModal({
   useEffect(() => {
     if (!isOpen) {
       invalidate("k8s-connections");
+      invalidateFormRequests();
       cancelPathValidation();
+      actionSequenceRef.current += 1;
+      activeActionRef.current = null;
+      queueMicrotask(() => {
+        setIsActionPending(false);
+        setTestStatus("idle");
+        setTestMessage("");
+      });
       return;
     }
 
     void Promise.resolve().then(loadConnections);
-  }, [cancelPathValidation, invalidate, isOpen, loadConnections]);
+  }, [
+    cancelPathValidation,
+    invalidate,
+    invalidateFormRequests,
+    isOpen,
+    loadConnections,
+  ]);
 
   const resetForm = useCallback(
     (options: K8sCommandOptions = {}) => {
@@ -561,15 +575,15 @@ export function K8sConnectionsModal({
     try {
       const paths = await ensureApplied();
       if (activeActionRef.current !== actionId) return;
-      if (paths.status === "invalid") {
-        setPathActionError(t("k8sConnections.pathValidationFailed"));
-        return;
-      }
       if (paths.status === "applied") {
         setPathActionError(t("k8sConnections.pathSelectionReset"));
         return;
       }
       if (actionSnapshotRef.current !== startingSnapshot) return;
+      if (paths.status === "invalid") {
+        setPathActionError(t("k8sConnections.pathValidationFailed"));
+        return;
+      }
       setPathActionError(null);
 
       const validation = validateK8sConnection({
@@ -588,15 +602,32 @@ export function K8sConnectionsModal({
       const input: K8sConnectionInput = validation.value;
 
       try {
+        if (
+          activeActionRef.current !== actionId ||
+          actionSnapshotRef.current !== startingSnapshot
+        ) {
+          return;
+        }
         if (isCreating) {
           await saveK8sConnection(input);
         } else if (editingId) {
           await updateK8sConnection(editingId, input);
         }
         await loadConnections();
+        if (
+          activeActionRef.current !== actionId ||
+          actionSnapshotRef.current !== startingSnapshot
+        ) {
+          return;
+        }
         handleCancel();
       } catch (error) {
-        setValidationError(toErrorMessage(error));
+        if (
+          activeActionRef.current === actionId &&
+          actionSnapshotRef.current === startingSnapshot
+        ) {
+          setValidationError(toErrorMessage(error));
+        }
       }
     } finally {
       finishFormAction(actionId);
@@ -639,15 +670,15 @@ export function K8sConnectionsModal({
     try {
       const paths = await ensureApplied();
       if (activeActionRef.current !== actionId) return;
-      if (paths.status === "invalid") {
-        setPathActionError(t("k8sConnections.pathValidationFailed"));
-        return;
-      }
       if (paths.status === "applied") {
         setPathActionError(t("k8sConnections.pathSelectionReset"));
         return;
       }
       if (actionSnapshotRef.current !== startingSnapshot) return;
+      if (paths.status === "invalid") {
+        setPathActionError(t("k8sConnections.pathValidationFailed"));
+        return;
+      }
       setPathActionError(null);
       if (!context || !namespace) return;
 

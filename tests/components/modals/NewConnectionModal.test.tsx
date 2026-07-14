@@ -188,6 +188,36 @@ function ClosableModalHarness({
   );
 }
 
+function SwitchingModalHarness({
+  initialConnection,
+}: {
+  initialConnection: InitialConnection;
+}) {
+  const [isOpen, setIsOpen] = useState(true);
+  const [currentConnection, setCurrentConnection] = useState<
+    InitialConnection | undefined
+  >(initialConnection);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setCurrentConnection(undefined);
+          setIsOpen(true);
+        }}
+      >
+        open-new
+      </button>
+      <NewConnectionModal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        onSave={vi.fn()}
+        initialConnection={currentConnection}
+      />
+    </>
+  );
+}
+
 async function openInlineK8s() {
   const view = renderModal();
   fireEvent.click(screen.getByText("Kubernetes"));
@@ -536,6 +566,54 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
     });
   });
 
+  it("does not let a closed edit initialization overwrite a new form", async () => {
+    const credentials = createDeferred<InitialConnection>();
+    const initialConnection = createInitialConnection({
+      k8s_enabled: true,
+      k8s_context: "ctx",
+      k8s_namespace: "db",
+      k8s_resource_type: "service",
+      k8s_resource_name: "mysql-svc",
+      k8s_port: 6543,
+    });
+    vi.mocked(invoke).mockImplementation((command) =>
+      command === "get_connection_by_id"
+        ? credentials.promise
+        : Promise.resolve("ok"),
+    );
+    render(<SwitchingModalHarness initialConnection={initialConnection} />);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("get_connection_by_id", {
+        id: initialConnection.id,
+      });
+    });
+    fireEvent.click(screen.getByLabelText("modal-close"));
+    fireEvent.click(screen.getByText("open-new"));
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText("newConnection.namePlaceholder"),
+      ).toHaveValue("");
+    });
+
+    await act(async () => {
+      credentials.resolve(
+        createInitialConnection({
+          k8s_enabled: true,
+          k8s_context: "ctx",
+          k8s_namespace: "db",
+          k8s_resource_type: "service",
+          k8s_resource_name: "mysql-svc",
+          k8s_port: 6543,
+          k8s_kubectl_path: "/stale/kubectl",
+        }),
+      );
+    });
+    fireEvent.click(screen.getByText("Kubernetes"));
+
+    expect(screen.getByLabelText("newConnection.useK8s")).not.toBeChecked();
+  });
+
   it("suppresses a saved K8s test result after switching connections", async () => {
     const testResult = createDeferred<string>();
     vi.mocked(invoke).mockImplementation((command) =>
@@ -821,6 +899,44 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
     fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
     const reopenedKubectlInput = openAdvancedSettings();
     expect(reopenedKubectlInput).toHaveValue("/opt/kubectl");
+  });
+
+  it("locks the current session until persistence completes", async () => {
+    const save = createDeferred<{ id: string }>();
+    const onClose = vi.fn();
+    const onSave = vi.fn();
+    vi.mocked(invoke).mockImplementation((command) =>
+      command === "save_connection" ? save.promise : Promise.resolve("ok"),
+    );
+    render(
+      <NewConnectionModal
+        isOpen={true}
+        onClose={onClose}
+        onSave={onSave}
+      />,
+    );
+    fillSaveFields();
+
+    fireEvent.click(screen.getByText("newConnection.save"));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "save_connection",
+        expect.anything(),
+      );
+    });
+    expect(
+      screen.getByPlaceholderText("newConnection.namePlaceholder"),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("modal-close"));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => {
+      save.resolve({ id: "saved-connection" });
+    });
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("does not clear an unrelated name validation error after a valid path blur", async () => {

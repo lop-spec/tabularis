@@ -386,6 +386,56 @@ describe("K8sConnectionsModal advanced paths", () => {
     expect(k8sMocks.updateK8sConnection).not.toHaveBeenCalled();
   });
 
+  it("does not report a stale invalid preflight after a replacement path applies", async () => {
+    const staleValidation = createDeferred<void>();
+    k8sMocks.validateK8sPath.mockImplementation((path: string) =>
+      path === "/old/kubectl"
+        ? staleValidation.promise
+        : Promise.resolve(undefined),
+    );
+    k8sMocks.loadK8sConnections.mockResolvedValue([
+      {
+        id: "saved",
+        name: "Saved cluster",
+        context: "ctx",
+        namespace: "db",
+        resource_type: "service",
+        resource_name: "mysql-svc",
+        port: 6543,
+        kubectl_path: "/old/kubectl",
+      },
+    ]);
+    renderModal(15432);
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved cluster")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText("common.edit"));
+    const kubectlInput = openAdvancedSettings();
+    fireEvent.click(screen.getByText("k8sConnections.test"));
+    await waitFor(() => {
+      expect(k8sMocks.validateK8sPath).toHaveBeenCalledWith(
+        "/old/kubectl",
+        "kubectl",
+      );
+    });
+
+    fireEvent.change(kubectlInput, { target: { value: "/new/kubectl" } });
+    fireEvent.blur(kubectlInput);
+    await waitFor(() => {
+      expect(k8sMocks.getK8sContexts).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kubectl_path: "/new/kubectl" }),
+      );
+    });
+    await act(async () => {
+      staleValidation.resolve();
+    });
+
+    expect(
+      screen.queryByText("k8sConnections.pathValidationFailed"),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     { actionLabel: "k8sConnections.test", action: "test" },
     { actionLabel: "common.save", action: "save" },
@@ -443,6 +493,46 @@ describe("K8sConnectionsModal advanced paths", () => {
       }
     },
   );
+
+  it("does not reset a superseding form when an older save completes", async () => {
+    const update = createDeferred<void>();
+    k8sMocks.updateK8sConnection.mockReturnValue(update.promise);
+    k8sMocks.loadK8sConnections.mockResolvedValue([
+      {
+        id: "saved",
+        name: "Saved cluster",
+        context: "ctx",
+        namespace: "db",
+        resource_type: "service",
+        resource_name: "mysql-svc",
+        port: 6543,
+      },
+    ]);
+    renderModal(15432);
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved cluster")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText("common.edit"));
+    fireEvent.click(screen.getByText("common.save"));
+    await waitFor(() => {
+      expect(k8sMocks.updateK8sConnection).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByText("k8sConnections.add"));
+    expect(
+      screen.getByPlaceholderText("k8sConnections.namePlaceholder"),
+    ).toHaveValue("");
+    await act(async () => {
+      update.resolve();
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText("k8sConnections.namePlaceholder"),
+      ).toHaveValue("");
+    });
+  });
 
   it("suppresses stale namespace and resource discovery results", async () => {
     const firstNamespaces = createDeferred<string[]>();
