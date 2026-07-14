@@ -6,7 +6,19 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 const DEFAULT_KUBECTL: &str = "kubectl";
-const DEFAULT_KUBECONFIG_LABEL: &str = "<kubectl default>";
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) enum KubectlSelection {
+    Default,
+    Explicit(OsString),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) enum KubeconfigSelection {
+    Default,
+    Inherited(OsString),
+    Explicit(OsString),
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct K8sCommandOptions {
@@ -33,6 +45,13 @@ impl K8sCommandOptions {
         self.kubectl_program().to_string_lossy().into_owned()
     }
 
+    pub(super) fn kubectl_selection(&self) -> KubectlSelection {
+        self.kubectl_path
+            .as_ref()
+            .map(|path| KubectlSelection::Explicit(path.as_os_str().to_os_string()))
+            .unwrap_or(KubectlSelection::Default)
+    }
+
     pub(super) fn explicit_kubectl_path(&self) -> Option<&Path> {
         self.kubectl_path.as_deref()
     }
@@ -41,22 +60,26 @@ impl K8sCommandOptions {
         self.kubeconfig_path.as_deref()
     }
 
-    pub(super) fn effective_kubeconfig_label(&self) -> String {
-        self.effective_kubeconfig_label_with(env::var_os("KUBECONFIG"))
+    pub(super) fn kubeconfig_selection(&self) -> KubeconfigSelection {
+        self.kubeconfig_selection_with(env::var_os("KUBECONFIG"))
     }
 
-    fn effective_kubeconfig_label_with(&self, inherited: Option<OsString>) -> String {
-        self.kubeconfig_path
-            .as_ref()
-            .map(|path| path.as_os_str().to_os_string())
-            .or(inherited)
-            .map(|value| value.to_string_lossy().into_owned())
-            .unwrap_or_else(|| DEFAULT_KUBECONFIG_LABEL.to_string())
+    fn kubeconfig_selection_with(&self, inherited: Option<OsString>) -> KubeconfigSelection {
+        if let Some(path) = &self.kubeconfig_path {
+            return KubeconfigSelection::Explicit(path.as_os_str().to_os_string());
+        }
+
+        inherited
+            .map(KubeconfigSelection::Inherited)
+            .unwrap_or(KubeconfigSelection::Default)
     }
 
     #[cfg(test)]
-    pub(super) fn inherited_kubeconfig_label_for_test(&self, value: OsString) -> String {
-        self.effective_kubeconfig_label_with(Some(value))
+    pub(super) fn inherited_kubeconfig_selection_for_test(
+        &self,
+        value: OsString,
+    ) -> KubeconfigSelection {
+        self.kubeconfig_selection_with(Some(value))
     }
 }
 

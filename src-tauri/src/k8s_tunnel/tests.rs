@@ -1,4 +1,4 @@
-use super::command::{kubectl_command, run_kubectl};
+use super::command::{kubectl_command, run_kubectl, KubeconfigSelection, KubectlSelection};
 use super::*;
 use crate::models::{ConnectionParams, K8sConnection};
 use std::ffi::{OsStr, OsString};
@@ -8,73 +8,120 @@ mod build_tunnel_key_tests {
     use super::*;
 
     #[test]
-    fn test_default_key_format() {
-        let options = K8sCommandOptions::default();
-        let key = build_tunnel_key("my-cluster", "default", "service", "my-db", 3306, &options);
-        let kubeconfig = std::env::var_os("KUBECONFIG")
-            .map(|value| value.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "<kubectl default>".to_string());
-        assert_eq!(
-            key,
-            format!(
-                "my-cluster:default:service/my-db:3306:kubectl=kubectl:kubeconfig={}",
-                kubeconfig
-            )
+    fn test_default_key_preserves_tunnel_fields() {
+        let key = build_tunnel_key(
+            "my-cluster",
+            "default",
+            "service",
+            "my-db",
+            3306,
+            &K8sCommandOptions::default(),
         );
+
+        assert_eq!(key.context, "my-cluster");
+        assert_eq!(key.namespace, "default");
+        assert_eq!(key.resource_type, "service");
+        assert_eq!(key.resource_name, "my-db");
+        assert_eq!(key.port, 3306);
+        assert_eq!(key.kubectl, KubectlSelection::Default);
     }
 
     #[test]
-    fn test_key_includes_explicit_overrides() {
+    fn test_key_preserves_explicit_override_identity() {
         let options = K8sCommandOptions::new(
             Some(" custom-kubectl ".to_string()),
             Some(" custom-kubeconfig ".to_string()),
         );
         let key = build_tunnel_key("prod", "database", "pod", "mysql-0", 5432, &options);
+
         assert_eq!(
-            key,
-            "prod:database:pod/mysql-0:5432:kubectl=custom-kubectl:kubeconfig=custom-kubeconfig"
+            key.kubectl,
+            KubectlSelection::Explicit(OsString::from("custom-kubectl"))
+        );
+        assert_eq!(
+            key.kubeconfig,
+            KubeconfigSelection::Explicit(OsString::from("custom-kubeconfig"))
         );
     }
 
     #[test]
-    fn test_inherited_kubeconfig_is_part_of_effective_selection() {
+    fn test_inherited_kubeconfig_has_a_distinct_source() {
         let options = K8sCommandOptions::default();
         assert_eq!(
-            options.inherited_kubeconfig_label_for_test(OsString::from("inherited-config")),
-            "inherited-config"
+            options.inherited_kubeconfig_selection_for_test(OsString::from("inherited-config")),
+            KubeconfigSelection::Inherited(OsString::from("inherited-config"))
         );
     }
 
     #[test]
-    fn test_pod_resource_type() {
-        let options = K8sCommandOptions::default();
-        let key = build_tunnel_key("prod-cluster", "database", "pod", "mysql-0", 5432, &options);
-        assert!(
-            key.starts_with("prod-cluster:database:pod/mysql-0:5432:kubectl=kubectl:kubeconfig=")
-        );
-    }
-
-    #[test]
-    fn test_special_characters() {
-        let options = K8sCommandOptions::default();
-        let key = build_tunnel_key(
-            "gke_project_us-central1_cluster",
-            "my-namespace",
+    fn test_explicit_default_labels_do_not_alias_defaults() {
+        let default_key = build_tunnel_key(
+            "ctx",
+            "ns",
             "service",
-            "my-db-svc",
+            "db",
             3306,
-            &options,
+            &K8sCommandOptions::default(),
         );
-        assert!(key.starts_with(
-            "gke_project_us-central1_cluster:my-namespace:service/my-db-svc:3306:kubectl=kubectl:kubeconfig="
-        ));
+        let explicit_key = build_tunnel_key(
+            "ctx",
+            "ns",
+            "service",
+            "db",
+            3306,
+            &K8sCommandOptions::new(
+                Some("kubectl".to_string()),
+                Some("<kubectl default>".to_string()),
+            ),
+        );
+
+        assert_ne!(default_key, explicit_key);
     }
 
     #[test]
-    fn test_empty_context() {
+    fn test_delimiter_containing_overrides_cannot_collide() {
+        let first = build_tunnel_key(
+            "ctx",
+            "ns",
+            "service",
+            "db",
+            3306,
+            &K8sCommandOptions::new(Some("a:kubeconfig=b".to_string()), Some("c".to_string())),
+        );
+        let second = build_tunnel_key(
+            "ctx",
+            "ns",
+            "service",
+            "db",
+            3306,
+            &K8sCommandOptions::new(Some("a".to_string()), Some("b:kubeconfig=c".to_string())),
+        );
+
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn test_resource_fields_remain_structurally_distinct() {
         let options = K8sCommandOptions::default();
-        let key = build_tunnel_key("", "default", "service", "db", 80, &options);
-        assert!(key.starts_with(":default:service/db:80:kubectl=kubectl:kubeconfig="));
+        let first = build_tunnel_key("a:b", "c", "service", "db", 80, &options);
+        let second = build_tunnel_key("a", "b:c", "service", "db", 80, &options);
+
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn test_empty_context_is_preserved() {
+        let key = build_tunnel_key(
+            "",
+            "default",
+            "service",
+            "db",
+            80,
+            &K8sCommandOptions::default(),
+        );
+
+        assert!(key.context.is_empty());
+        assert_eq!(key.namespace, "default");
     }
 }
 

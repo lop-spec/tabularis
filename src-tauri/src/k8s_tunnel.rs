@@ -21,9 +21,20 @@ pub struct K8sTunnel {
     child: Arc<Mutex<Child>>,
 }
 
-pub static TUNNELS: OnceLock<Mutex<HashMap<String, K8sTunnel>>> = OnceLock::new();
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct K8sTunnelKey {
+    context: String,
+    namespace: String,
+    resource_type: String,
+    resource_name: String,
+    port: u16,
+    kubectl: command::KubectlSelection,
+    kubeconfig: command::KubeconfigSelection,
+}
 
-pub fn get_tunnels() -> &'static Mutex<HashMap<String, K8sTunnel>> {
+pub static TUNNELS: OnceLock<Mutex<HashMap<K8sTunnelKey, K8sTunnel>>> = OnceLock::new();
+
+pub fn get_tunnels() -> &'static Mutex<HashMap<K8sTunnelKey, K8sTunnel>> {
     TUNNELS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -201,7 +212,8 @@ impl K8sTunnel {
     }
 }
 
-/// Build a deterministic tunnel map key from K8s parameters and command options.
+/// Build a deterministic, collision-safe tunnel map key from K8s parameters
+/// and the effective command selections.
 #[inline]
 pub fn build_tunnel_key(
     context: &str,
@@ -210,17 +222,16 @@ pub fn build_tunnel_key(
     resource_name: &str,
     port: u16,
     options: &K8sCommandOptions,
-) -> String {
-    format!(
-        "{}:{}:{}/{}:{}:kubectl={}:kubeconfig={}",
-        context,
-        namespace,
-        resource_type,
-        resource_name,
+) -> K8sTunnelKey {
+    K8sTunnelKey {
+        context: context.to_string(),
+        namespace: namespace.to_string(),
+        resource_type: resource_type.to_string(),
+        resource_name: resource_name.to_string(),
         port,
-        options.kubectl_label(),
-        options.effective_kubeconfig_label()
-    )
+        kubectl: options.kubectl_selection(),
+        kubeconfig: options.kubeconfig_selection(),
+    }
 }
 
 /// Test a K8s connection by verifying context and namespace reachability.
