@@ -141,12 +141,23 @@ export function useK8sPathOverrides(
   }, [onApplied, onDraftChanged]);
 
   const cancelPending = useCallback(() => {
-    operationVersionRef.current += 1;
+    const cancellationVersion = ++operationVersionRef.current;
     applySuspensionRef.current = 0;
     pathKinds.forEach((kind) => {
       invalidate(validationKey(kind));
     });
     pendingRef.current = {};
+
+    const nextValidations = emptyValidationStates();
+    validationsRef.current = nextValidations;
+    queueMicrotask(() => {
+      if (
+        operationVersionRef.current === cancellationVersion &&
+        validationsRef.current === nextValidations
+      ) {
+        setValidations(nextValidations);
+      }
+    });
   }, [invalidate]);
 
   const setValidation = useCallback(

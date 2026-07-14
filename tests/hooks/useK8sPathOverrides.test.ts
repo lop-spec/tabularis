@@ -91,6 +91,7 @@ describe("useK8sPathOverrides", () => {
     await expect(pending).resolves.toEqual({ status: "stale" });
     expect(onApplied).not.toHaveBeenCalled();
     expect(result.current.appliedOptions).toEqual({});
+    expect(result.current.kubectlValidation).toEqual({ status: "idle" });
   });
 
   it("allows new blur application while a cancelled preflight is unresolved", async () => {
