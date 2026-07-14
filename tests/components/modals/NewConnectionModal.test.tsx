@@ -437,6 +437,34 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
     expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
   });
 
+  it("suppresses an inline test result after the connection name changes", async () => {
+    const testResult = createDeferred<string>();
+    vi.mocked(invoke).mockImplementation((command) =>
+      command === "test_connection" ? testResult.promise : Promise.resolve("ok"),
+    );
+    await openInlineK8s();
+    await chooseServiceResource();
+
+    fireEvent.click(screen.getByText("newConnection.testConnection"));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "test_connection",
+        expect.anything(),
+      );
+    });
+    fireEvent.change(screen.getByPlaceholderText("newConnection.namePlaceholder"), {
+      target: { value: "Changed while testing" },
+    });
+    await act(async () => {
+      testResult.resolve("obsolete success");
+    });
+
+    expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("newConnection.testConnection")).not.toBeDisabled();
+    });
+  });
+
   it("suppresses an inline test result after an unblurred path edit", async () => {
     const testResult = createDeferred<string>();
     vi.mocked(invoke).mockImplementation((command) =>

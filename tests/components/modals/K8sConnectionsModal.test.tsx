@@ -536,6 +536,28 @@ describe("K8sConnectionsModal advanced paths", () => {
     expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
   });
 
+  it("suppresses a test result after the connection name changes", async () => {
+    const testResult = createDeferred<string>();
+    k8sMocks.testK8sConnection.mockReturnValue(testResult.promise);
+    renderModal(15432);
+
+    fireEvent.click(screen.getByText("k8sConnections.add"));
+    await fillRequiredFields();
+    fireEvent.click(screen.getByText("k8sConnections.test"));
+    await waitFor(() => {
+      expect(k8sMocks.testK8sConnection).toHaveBeenCalled();
+    });
+    fireEvent.change(screen.getByPlaceholderText("k8sConnections.namePlaceholder"), {
+      target: { value: "Changed while testing" },
+    });
+    await act(async () => {
+      testResult.resolve("obsolete success");
+    });
+
+    expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
+    expect(screen.queryByText("k8sConnections.testing")).not.toBeInTheDocument();
+  });
+
   it("suppresses a test result after an unblurred path draft edit", async () => {
     const testResult = createDeferred<string>();
     k8sMocks.testK8sConnection.mockReturnValue(testResult.promise);

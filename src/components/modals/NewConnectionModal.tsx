@@ -674,7 +674,9 @@ export const NewConnectionModal = ({
     ],
   );
   const actionSnapshotRef = useRef(actionSnapshot);
-  actionSnapshotRef.current = actionSnapshot;
+  useLayoutEffect(() => {
+    actionSnapshotRef.current = actionSnapshot;
+  }, [actionSnapshot]);
 
   const cancelInlineK8sWork = useCallback(() => {
     invalidateK8sDiscovery();
@@ -1400,6 +1402,12 @@ export const NewConnectionModal = ({
           activeActionRef.current !== actionId ||
           actionSnapshotRef.current !== startingSnapshot
         ) {
+          if (activeActionRef.current === actionId) {
+            inlineK8sTestActiveRef.current = false;
+            setStatus("idle");
+            setMessage("");
+            setTestResult(null);
+          }
           return false;
         }
         setStatus("success");
@@ -1423,6 +1431,12 @@ export const NewConnectionModal = ({
           activeActionRef.current !== actionId ||
           actionSnapshotRef.current !== startingSnapshot
         ) {
+          if (activeActionRef.current === actionId) {
+            inlineK8sTestActiveRef.current = false;
+            setStatus("idle");
+            setMessage("");
+            setTestResult(null);
+          }
           return false;
         }
         setStatus("error");

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   X,
@@ -293,7 +300,9 @@ export function K8sConnectionsModal({
     ],
   );
   const actionSnapshotRef = useRef(actionSnapshot);
-  actionSnapshotRef.current = actionSnapshot;
+  useLayoutEffect(() => {
+    actionSnapshotRef.current = actionSnapshot;
+  }, [actionSnapshot]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -659,6 +668,10 @@ export function K8sConnectionsModal({
         activeActionRef.current !== actionId ||
         actionSnapshotRef.current !== startingSnapshot
       ) {
+        if (activeActionRef.current === actionId) {
+          setTestStatus("idle");
+          setTestMessage("");
+        }
         return;
       }
       if (result.status === "success") {
