@@ -85,12 +85,12 @@ export const FieldEditor = ({
     !isBlob && !isGeometric && !isJson && !dateMode && type
       ? isEnumType(type)
       : false;
-  const enumValues = isEnum ? parseEnumValues(type) : [];
+  const enumValues = isEnum && type ? parseEnumValues(type) : [];
   const isSet =
     !isBlob && !isGeometric && !isJson && !dateMode && !isEnum && type
       ? isSetType(type)
       : false;
-  const setValues = isSet ? parseSetValues(type) : [];
+  const setValues = isSet && type ? parseSetValues(type) : [];
   const isLongText =
     !isBlob &&
     !isGeometric &&
