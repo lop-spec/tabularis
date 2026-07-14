@@ -375,7 +375,7 @@ pub fn get_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     }
-    Ok(config_dir.join("connections.json"))
+    Ok(crate::paths::resolve_connections_path(&config_dir))
 }
 
 pub fn get_ssh_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
