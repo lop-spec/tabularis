@@ -209,6 +209,27 @@ describe("K8sConnectionsModal port defaults", () => {
     });
   });
 
+  it("restarts single-port discovery after clearing a manual port", async () => {
+    k8sMocks.getK8sResourcePorts.mockResolvedValue([6543]);
+    renderModal(15432);
+
+    fireEvent.click(screen.getByText("k8sConnections.add"));
+    await fillRequiredFields();
+
+    const portInput = screen.getByRole("spinbutton") as HTMLInputElement;
+    await waitFor(() => {
+      expect(portInput).toHaveValue(6543);
+    });
+
+    fireEvent.change(portInput, { target: { value: "7777" } });
+    fireEvent.change(portInput, { target: { value: "" } });
+
+    await waitFor(() => {
+      expect(k8sMocks.getK8sResourcePorts).toHaveBeenCalledTimes(2);
+      expect(portInput).toHaveValue(6543);
+    });
+  });
+
   it("does not let late auto-discovery overwrite a manual port", async () => {
     const ports = createDeferred<number[]>();
     k8sMocks.getK8sResourcePorts.mockReturnValue(ports.promise);

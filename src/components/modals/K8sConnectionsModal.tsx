@@ -452,8 +452,32 @@ export function K8sConnectionsModal({
       invalidate("k8s-ports");
       setIsPortOverridden(value != null);
       setPort(value);
+
+      if (
+        value === undefined &&
+        context &&
+        namespace &&
+        resourceType === "service" &&
+        resourceName
+      ) {
+        void loadResourcePorts(
+          context,
+          namespace,
+          resourceType,
+          resourceName,
+          appliedOptions,
+        );
+      }
     },
-    [invalidate],
+    [
+      appliedOptions,
+      context,
+      invalidate,
+      loadResourcePorts,
+      namespace,
+      resourceName,
+      resourceType,
+    ],
   );
 
   const handleSave = useCallback(async () => {
