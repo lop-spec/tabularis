@@ -400,6 +400,88 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
     expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
   });
 
+  it("suppresses an inline test result after an unblurred path edit", async () => {
+    const testResult = createDeferred<string>();
+    vi.mocked(invoke).mockImplementation((command) =>
+      command === "test_connection" ? testResult.promise : Promise.resolve("ok"),
+    );
+    await openInlineK8s();
+    await chooseServiceResource();
+
+    fireEvent.click(screen.getByText("newConnection.testConnection"));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "test_connection",
+        expect.anything(),
+      );
+    });
+    const kubectlInput = openAdvancedSettings();
+    fireEvent.change(kubectlInput, { target: { value: "/new/kubectl" } });
+    await act(async () => {
+      testResult.resolve("obsolete success");
+    });
+
+    expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
+  });
+
+  it("suppresses a saved K8s test result after switching connections", async () => {
+    const testResult = createDeferred<string>();
+    vi.mocked(invoke).mockImplementation((command) =>
+      command === "test_connection" ? testResult.promise : Promise.resolve("ok"),
+    );
+    k8sMocks.loadK8sConnections.mockResolvedValue([
+      {
+        id: "saved-a",
+        name: "Cluster A",
+        context: "ctx-a",
+        namespace: "db-a",
+        resource_type: "service",
+        resource_name: "mysql-a",
+        port: 3306,
+      },
+      {
+        id: "saved-b",
+        name: "Cluster B",
+        context: "ctx-b",
+        namespace: "db-b",
+        resource_type: "service",
+        resource_name: "mysql-b",
+        port: 3306,
+      },
+    ]);
+    renderModal();
+    fireEvent.click(screen.getByText("Kubernetes"));
+    fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("option", { name: /Cluster A/ }),
+      ).toBeInTheDocument();
+    });
+    const savedConnectionSelect = screen.getByLabelText(
+      "newConnection.chooseK8s",
+    );
+    fireEvent.change(savedConnectionSelect, {
+      target: { value: "saved-a" },
+    });
+    fireEvent.click(screen.getByText("newConnection.testConnection"));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "test_connection",
+        expect.anything(),
+      );
+    });
+
+    fireEvent.change(savedConnectionSelect, {
+      target: { value: "saved-b" },
+    });
+    await act(async () => {
+      testResult.resolve("obsolete success");
+    });
+
+    expect(screen.queryByText("obsolete success")).not.toBeInTheDocument();
+  });
+
   it("blocks Test and Save when an inline advanced path is invalid", async () => {
     k8sMocks.validateK8sPath.mockRejectedValue(new Error("invalid kubectl"));
     await openInlineK8s();

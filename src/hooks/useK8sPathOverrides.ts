@@ -45,6 +45,7 @@ interface PendingValidation {
 
 export interface UseK8sPathOverridesOptions {
   onApplied?: (options: K8sCommandOptions) => void;
+  onDraftChanged?: () => void;
 }
 
 export interface K8sPathOverrides {
@@ -113,7 +114,7 @@ function validationKey(kind: K8sPathValidationKind): string {
 export function useK8sPathOverrides(
   options: UseK8sPathOverridesOptions = {},
 ): K8sPathOverrides {
-  const { onApplied } = options;
+  const { onApplied, onDraftChanged } = options;
   const { invalidate, run } = useLatestAsync();
   const [drafts, setDrafts] = useState<K8sPathDrafts>(() => toDrafts());
   const [appliedOptions, setAppliedOptions] = useState<K8sCommandOptions>({});
@@ -129,10 +130,12 @@ export function useK8sPathOverrides(
     Partial<Record<K8sPathValidationKind, PendingValidation>>
   >({});
   const onAppliedRef = useRef(onApplied);
+  const onDraftChangedRef = useRef(onDraftChanged);
 
   useEffect(() => {
     onAppliedRef.current = onApplied;
-  }, [onApplied]);
+    onDraftChangedRef.current = onDraftChanged;
+  }, [onApplied, onDraftChanged]);
 
   const setValidation = useCallback(
     (kind: K8sPathValidationKind, validation: K8sPathValidationState) => {
@@ -179,6 +182,7 @@ export function useK8sPathOverrides(
     (kind: K8sPathValidationKind, value: string) => {
       if (draftsRef.current[kind] === value) return;
 
+      onDraftChangedRef.current?.();
       invalidate(validationKey(kind));
       delete pendingRef.current[kind];
       const next = { ...draftsRef.current, [kind]: value };

@@ -32,6 +32,20 @@ describe("useK8sPathOverrides", () => {
     k8sMocks.validateK8sPath.mockReset();
   });
 
+  it("notifies consumers only when a path draft actually changes", () => {
+    const onDraftChanged = vi.fn();
+    const { result } = renderHook(() =>
+      useK8sPathOverrides({ onDraftChanged }),
+    );
+
+    act(() => {
+      result.current.setPath("kubectl", "");
+      result.current.setPath("kubectl", "/opt/kubectl");
+    });
+
+    expect(onDraftChanged).toHaveBeenCalledTimes(1);
+  });
+
   it("invalidates an in-flight validation when its draft is edited", async () => {
     const validation = createDeferred<void>();
     k8sMocks.validateK8sPath.mockReturnValue(validation.promise);

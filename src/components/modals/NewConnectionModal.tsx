@@ -614,6 +614,7 @@ export const NewConnectionModal = ({
 
   const pathOverrides = useK8sPathOverrides({
     onApplied: handleInlinePathsApplied,
+    onDraftChanged: invalidateInlineK8sTest,
   });
   const {
     appliedOptions: appliedK8sOptions,
@@ -910,6 +911,17 @@ export const NewConnectionModal = ({
     ],
   );
 
+  const handleSavedK8sConnectionChange = useCallback(
+    (value: string) => {
+      invalidateInlineK8sTest();
+      setFormData((previous) => ({
+        ...previous,
+        k8s_connection_id: value || undefined,
+      }));
+    },
+    [invalidateInlineK8sTest],
+  );
+
   const updateField = (
     field: keyof ConnectionParams,
     value: string | number | boolean | undefined,
@@ -1177,12 +1189,11 @@ export const NewConnectionModal = ({
     const inlinePaths = await ensureInlineK8sPaths();
     if (!inlinePaths.allowed) return false;
 
-    const usesInlineK8s =
-      formData.k8s_enabled === true && k8sMode === "inline";
-    const inlineTestSequence = usesInlineK8s
+    const usesK8s = formData.k8s_enabled === true;
+    const k8sTestSequence = usesK8s
       ? ++inlineK8sTestSequenceRef.current
       : undefined;
-    inlineK8sTestActiveRef.current = usesInlineK8s;
+    inlineK8sTestActiveRef.current = usesK8s;
 
     setStatus("testing");
     setMessage("");
@@ -1211,7 +1222,7 @@ export const NewConnectionModal = ({
         });
 
       let result: string;
-      if (usesInlineK8s) {
+      if (usesK8s) {
         const latestResult = await runK8sAsync("new-k8s-test", invokeTest);
         if (latestResult.status === "stale") return false;
         if (latestResult.status === "error") throw latestResult.error;
@@ -1225,8 +1236,8 @@ export const NewConnectionModal = ({
       setTestResult("success");
       setTimeout(() => {
         if (
-          inlineTestSequence !== undefined &&
-          inlineK8sTestSequenceRef.current !== inlineTestSequence
+          k8sTestSequence !== undefined &&
+          inlineK8sTestSequenceRef.current !== k8sTestSequence
         ) {
           return;
         }
@@ -1248,8 +1259,8 @@ export const NewConnectionModal = ({
       setTestResult("error");
       setTimeout(() => {
         if (
-          inlineTestSequence !== undefined &&
-          inlineK8sTestSequenceRef.current !== inlineTestSequence
+          k8sTestSequence !== undefined &&
+          inlineK8sTestSequenceRef.current !== k8sTestSequence
         ) {
           return;
         }
@@ -2413,7 +2424,7 @@ export const NewConnectionModal = ({
                         `${conn.name} (${conn.context}/${conn.namespace}/${conn.resource_name}:${conn.port})`,
                       ]),
                     )}
-                    onChange={(val) => updateField("k8s_connection_id", val)}
+                    onChange={handleSavedK8sConnectionChange}
                     searchPlaceholder={t("common.search")}
                     noResultsLabel={t("common.noResults")}
                     placeholder={
