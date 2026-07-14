@@ -35,7 +35,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { useDrivers } from "../../hooks/useDrivers";
 import { usePluginRegistry } from "../../hooks/usePluginRegistry";
 import { useDatabase } from "../../hooks/useDatabase";
-import { parseAuthor, versionGte } from "../../utils/plugins";
+import { canUpdateToLatest, parseAuthor, versionGte } from "../../utils/plugins";
 import { removePluginConfig } from "../../utils/pluginConfig";
 import { findConnectionsForDrivers } from "../../utils/connectionManager";
 import { APP_VERSION } from "../../version";
@@ -977,6 +977,9 @@ export function PluginsTab({
                       const registryPlugin = registryPlugins.find(
                         (p) => p.id === driver.id,
                       );
+                      const canUpdate =
+                        !isBuiltin &&
+                        canUpdateToLatest(registryPlugin, APP_VERSION);
                       const isEnabled =
                         isBuiltin || activeExternalDrivers.includes(driver.id);
                       const accent: CardAccent = isBuiltin
@@ -1030,6 +1033,28 @@ export function PluginsTab({
                                   )}
                                 >
                                   <SettingsIcon size={15} />
+                                </button>
+                              )}
+                              {canUpdate && registryPlugin && (
+                                <button
+                                  onClick={() =>
+                                    doInstall(
+                                      driver.id,
+                                      registryPlugin.latest_version,
+                                    )
+                                  }
+                                  disabled={installingPluginId === driver.id}
+                                  className="flex items-center gap-1 text-[11px] text-green-500/80 hover:text-green-400 disabled:opacity-50 transition-colors"
+                                >
+                                  {installingPluginId === driver.id ? (
+                                    <Loader2
+                                      size={11}
+                                      className="animate-spin"
+                                    />
+                                  ) : (
+                                    <RefreshCw size={11} />
+                                  )}
+                                  {`${t("settings.plugins.update")} v${registryPlugin.latest_version}`}
                                 </button>
                               )}
                               {!isBuiltin && (
