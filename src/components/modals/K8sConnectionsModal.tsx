@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   X,
@@ -21,12 +21,16 @@ import {
   getK8sResources,
   getK8sResourcePorts,
   validateK8sConnection,
+  type K8sCommandOptions,
   type K8sConnection,
   type K8sConnectionInput,
 } from "../../utils/k8s";
 import { toErrorMessage } from "../../utils/errors";
+import { useK8sPathOverrides } from "../../hooks/useK8sPathOverrides";
+import { useLatestAsync } from "../../hooks/useLatestAsync";
 import { Modal } from "../ui/Modal";
 import { Select } from "../ui/Select";
+import { K8sAdvancedSettings } from "../ui/K8sAdvancedSettings";
 import clsx from "clsx";
 
 interface K8sConnectionsModalProps {
@@ -34,6 +38,14 @@ interface K8sConnectionsModalProps {
   onClose: () => void;
   defaultPort?: number | null;
 }
+
+interface DiscoveryErrors {
+  contexts: string | null;
+  namespaces: string | null;
+  resources: string | null;
+}
+
+type DiscoverySource = keyof DiscoveryErrors;
 
 const InputClass =
   "w-full px-3 pt-2 pb-1 bg-base border border-strong rounded-lg text-primary focus:border-blue-500 focus:outline-none leading-tight";
@@ -45,6 +57,7 @@ export function K8sConnectionsModal({
   defaultPort,
 }: K8sConnectionsModalProps) {
   const { t } = useTranslation();
+  const { invalidate, run } = useLatestAsync();
   const [connections, setConnections] = useState<K8sConnection[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -64,6 +77,11 @@ export function K8sConnectionsModal({
   const [contexts, setContexts] = useState<string[]>([]);
   const [namespaces, setNamespaces] = useState<string[]>([]);
   const [resources, setResources] = useState<string[]>([]);
+  const [discoveryErrors, setDiscoveryErrors] = useState<DiscoveryErrors>({
+    contexts: null,
+    namespaces: null,
+    resources: null,
+  });
 
   // Status
   const [testStatus, setTestStatus] = useState<
@@ -71,134 +89,371 @@ export function K8sConnectionsModal({
   >("idle");
   const [testMessage, setTestMessage] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [pathActionError, setPathActionError] = useState<string | null>(null);
+
+  const setDiscoveryError = useCallback(
+    (source: DiscoverySource, error: string | null) => {
+      setDiscoveryErrors((previous) =>
+        previous[source] === error ? previous : { ...previous, [source]: error },
+      );
+    },
+    [],
+  );
+
+  const invalidateFormRequests = useCallback(() => {
+    invalidate("k8s-contexts");
+    invalidate("k8s-namespaces");
+    invalidate("k8s-resources");
+    invalidate("k8s-ports");
+    invalidate("k8s-test");
+  }, [invalidate]);
 
   const loadConnections = useCallback(async () => {
-    const result = await loadK8sConnections();
-    setConnections(result);
-  }, []);
-
-  const loadContexts = useCallback(async () => {
-    try {
-      const result = await getK8sContexts();
-      setContexts(result);
-    } catch {
-      setContexts([]);
+    const result = await run("k8s-connections", () => loadK8sConnections());
+    if (result.status === "success") {
+      setConnections(result.value);
     }
-  }, []);
+  }, [run]);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  const loadContexts = useCallback(
+    async (options: K8sCommandOptions) => {
+      const result = await run("k8s-contexts", () => getK8sContexts(options));
+      if (result.status === "success") {
+        setContexts(result.value);
+        setDiscoveryError("contexts", null);
+      } else if (result.status === "error") {
+        setContexts([]);
+        setDiscoveryError("contexts", toErrorMessage(result.error));
+      }
+    },
+    [run, setDiscoveryError],
+  );
 
-    void (async () => {
-      await loadConnections();
-      await loadContexts();
-    })();
-  }, [isOpen, loadConnections, loadContexts]);
-
-  useEffect(() => {
-    void (async () => {
-      if (!context) {
+  const loadNamespaces = useCallback(
+    async (selectedContext: string, options: K8sCommandOptions) => {
+      const result = await run("k8s-namespaces", () =>
+        getK8sNamespaces(selectedContext, options),
+      );
+      if (result.status === "success") {
+        setNamespaces(result.value);
+        setDiscoveryError("namespaces", null);
+      } else if (result.status === "error") {
         setNamespaces([]);
-        return;
+        setDiscoveryError("namespaces", toErrorMessage(result.error));
       }
+    },
+    [run, setDiscoveryError],
+  );
 
-      try {
-        setNamespaces(await getK8sNamespaces(context));
-      } catch {
-        setNamespaces([]);
+  const loadResources = useCallback(
+    async (
+      selectedContext: string,
+      selectedNamespace: string,
+      selectedResourceType: string,
+      options: K8sCommandOptions,
+    ) => {
+      const result = await run("k8s-resources", () =>
+        getK8sResources(
+          selectedContext,
+          selectedNamespace,
+          selectedResourceType,
+          options,
+        ),
+      );
+      if (result.status === "success") {
+        setResources(result.value);
+        setDiscoveryError("resources", null);
+      } else if (result.status === "error") {
+        setResources([]);
+        setDiscoveryError("resources", toErrorMessage(result.error));
       }
-    })();
-  }, [context]);
+    },
+    [run, setDiscoveryError],
+  );
+
+  const loadResourcePorts = useCallback(
+    async (
+      selectedContext: string,
+      selectedNamespace: string,
+      selectedResourceType: string,
+      selectedResourceName: string,
+      options: K8sCommandOptions,
+    ) => {
+      const result = await run("k8s-ports", () =>
+        getK8sResourcePorts(
+          selectedContext,
+          selectedNamespace,
+          selectedResourceType,
+          selectedResourceName,
+          options,
+        ),
+      );
+      if (result.status === "success" && result.value.length === 1) {
+        setPort((previous) =>
+          previous === result.value[0] ? previous : result.value[0],
+        );
+      }
+    },
+    [run],
+  );
+
+  const handlePathsApplied = useCallback(
+    (options: K8sCommandOptions) => {
+      invalidateFormRequests();
+      setContext("");
+      setNamespace("");
+      setResourceType("service");
+      setResourceName("");
+      setPort(undefined);
+      setIsPortOverridden(false);
+      setContexts([]);
+      setNamespaces([]);
+      setResources([]);
+      setDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
+      setTestStatus("idle");
+      setTestMessage("");
+      setPathActionError(null);
+      void loadContexts(options);
+    },
+    [invalidateFormRequests, loadContexts],
+  );
+
+  const pathOverrides = useK8sPathOverrides({
+    onApplied: handlePathsApplied,
+  });
+  const {
+    appliedOptions,
+    ensureApplied,
+    initialize: initializePathOverrides,
+    reset: resetPathOverrides,
+  } = pathOverrides;
 
   useEffect(() => {
-    void (async () => {
-      if (!context || !namespace || !resourceType) {
-        setResources([]);
-        return;
-      }
-
-      try {
-        setResources(await getK8sResources(context, namespace, resourceType));
-      } catch {
-        setResources([]);
-      }
-    })();
-  }, [context, namespace, resourceType]);
-
-  useEffect(() => {
-    if (
-      !context ||
-      !namespace ||
-      resourceType !== "service" ||
-      !resourceName ||
-      isPortOverridden
-    ) {
+    if (!isOpen) {
+      invalidate("k8s-connections");
       return;
     }
 
-    let cancelled = false;
-    void (async () => {
-      try {
-        const ports = await getK8sResourcePorts(
-          context,
-          namespace,
-          resourceType,
-          resourceName,
-        );
-        if (!cancelled && ports.length === 1) {
-          setPort((prev) => (prev === ports[0] ? prev : ports[0]));
-        }
-      } catch {
-        // Best-effort convenience only: keep the current/default port.
-      }
-    })();
+    void Promise.resolve().then(loadConnections);
+  }, [invalidate, isOpen, loadConnections]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [context, namespace, resourceType, resourceName, isPortOverridden]);
+  const resetForm = useCallback(
+    (options: K8sCommandOptions = {}) => {
+      invalidateFormRequests();
+      resetPathOverrides(options);
+      setName("");
+      setContext("");
+      setNamespace("");
+      setResourceType("service");
+      setResourceName("");
+      setPort(undefined);
+      setIsPortOverridden(false);
+      setContexts([]);
+      setNamespaces([]);
+      setResources([]);
+      setDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
+      setTestStatus("idle");
+      setTestMessage("");
+      setValidationError(null);
+      setPathActionError(null);
+    },
+    [invalidateFormRequests, resetPathOverrides],
+  );
 
-  const resetForm = () => {
-    setName("");
-    setContext("");
-    setNamespace("");
-    setResourceType("service");
-    setResourceName("");
-    setPort(undefined);
-    setIsPortOverridden(false);
-    setTestStatus("idle");
-    setTestMessage("");
-    setValidationError(null);
-  };
-
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     resetForm();
     setIsCreating(true);
     setEditingId(null);
-  };
+    void loadContexts({});
+  }, [loadContexts, resetForm]);
 
-  const handleEdit = (conn: K8sConnection) => {
-    setName(conn.name);
-    setContext(conn.context);
-    setNamespace(conn.namespace);
-    setResourceType(conn.resource_type);
-    setResourceName(conn.resource_name);
-    setPort(conn.port);
-    setIsPortOverridden(true);
-    setEditingId(conn.id);
-    setIsCreating(false);
-    setTestStatus("idle");
-    setTestMessage("");
-    setValidationError(null);
-  };
+  const handleEdit = useCallback(
+    (connection: K8sConnection) => {
+      const options: K8sCommandOptions = {
+        kubectl_path: connection.kubectl_path,
+        kubeconfig_path: connection.kubeconfig_path,
+      };
+      invalidateFormRequests();
+      initializePathOverrides(options);
+      setName(connection.name);
+      setContext(connection.context);
+      setNamespace(connection.namespace);
+      setResourceType(connection.resource_type);
+      setResourceName(connection.resource_name);
+      setPort(connection.port);
+      setIsPortOverridden(true);
+      setContexts([]);
+      setNamespaces([]);
+      setResources([]);
+      setDiscoveryErrors({ contexts: null, namespaces: null, resources: null });
+      setEditingId(connection.id);
+      setIsCreating(false);
+      setTestStatus("idle");
+      setTestMessage("");
+      setValidationError(null);
+      setPathActionError(null);
+      void loadContexts(options);
+    },
+    [initializePathOverrides, invalidateFormRequests, loadContexts],
+  );
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     resetForm();
     setEditingId(null);
     setIsCreating(false);
-  };
+  }, [resetForm]);
 
-  const handleSave = async () => {
+  const handleClose = useCallback(() => {
+    handleCancel();
+    onClose();
+  }, [handleCancel, onClose]);
+
+  const resetPortSelection = useCallback(() => {
+    if (!isPortOverridden) setPort(undefined);
+  }, [isPortOverridden]);
+
+  const invalidateConnectionTest = useCallback(() => {
+    invalidate("k8s-test");
+    setTestStatus("idle");
+    setTestMessage("");
+  }, [invalidate]);
+
+  const handleContextChange = useCallback(
+    (value: string) => {
+      invalidate("k8s-namespaces");
+      invalidate("k8s-resources");
+      invalidate("k8s-ports");
+      invalidateConnectionTest();
+      setContext(value);
+      setNamespace("");
+      setResourceName("");
+      resetPortSelection();
+      setNamespaces([]);
+      setResources([]);
+      setDiscoveryError("namespaces", null);
+      setDiscoveryError("resources", null);
+      setPathActionError(null);
+
+      if (!value) return;
+      void loadNamespaces(value, appliedOptions);
+    },
+    [
+      appliedOptions,
+      invalidate,
+      invalidateConnectionTest,
+      loadNamespaces,
+      resetPortSelection,
+      setDiscoveryError,
+    ],
+  );
+
+  const handleNamespaceChange = useCallback(
+    (value: string) => {
+      invalidate("k8s-resources");
+      invalidate("k8s-ports");
+      invalidateConnectionTest();
+      setNamespace(value);
+      setResourceName("");
+      resetPortSelection();
+      setResources([]);
+      setDiscoveryError("resources", null);
+
+      if (!context || !value || !resourceType) return;
+      void loadResources(context, value, resourceType, appliedOptions);
+    },
+    [
+      appliedOptions,
+      context,
+      invalidate,
+      invalidateConnectionTest,
+      loadResources,
+      resetPortSelection,
+      resourceType,
+      setDiscoveryError,
+    ],
+  );
+
+  const handleResourceTypeChange = useCallback(
+    (value: string) => {
+      invalidate("k8s-resources");
+      invalidate("k8s-ports");
+      setResourceType(value);
+      setResourceName("");
+      resetPortSelection();
+      setResources([]);
+      setDiscoveryError("resources", null);
+
+      if (!context || !namespace || !value) return;
+      void loadResources(context, namespace, value, appliedOptions);
+    },
+    [
+      appliedOptions,
+      context,
+      invalidate,
+      loadResources,
+      namespace,
+      resetPortSelection,
+      setDiscoveryError,
+    ],
+  );
+
+  const handleResourceNameChange = useCallback(
+    (value: string) => {
+      invalidate("k8s-ports");
+      setResourceName(value);
+      resetPortSelection();
+
+      if (
+        !context ||
+        !namespace ||
+        resourceType !== "service" ||
+        !value ||
+        isPortOverridden
+      ) {
+        return;
+      }
+
+      void loadResourcePorts(
+        context,
+        namespace,
+        resourceType,
+        value,
+        appliedOptions,
+      );
+    },
+    [
+      appliedOptions,
+      context,
+      invalidate,
+      isPortOverridden,
+      loadResourcePorts,
+      namespace,
+      resetPortSelection,
+      resourceType,
+    ],
+  );
+
+  const handlePortChange = useCallback(
+    (value: number | undefined) => {
+      invalidate("k8s-ports");
+      setIsPortOverridden(value != null);
+      setPort(value);
+    },
+    [invalidate],
+  );
+
+  const handleSave = useCallback(async () => {
+    const paths = await ensureApplied();
+    if (paths.status === "invalid") {
+      setPathActionError(t("k8sConnections.pathValidationFailed"));
+      return;
+    }
+    if (paths.status === "applied") {
+      setPathActionError(t("k8sConnections.pathSelectionReset"));
+      return;
+    }
+    setPathActionError(null);
+
     const validation = validateK8sConnection({
       name,
       context,
@@ -206,6 +461,7 @@ export function K8sConnectionsModal({
       resource_type: resourceType,
       resource_name: resourceName,
       port: effectivePort,
+      ...paths.options,
     });
     if (!validation.isValid) {
       setValidationError(t(validation.errorKey));
@@ -224,39 +480,96 @@ export function K8sConnectionsModal({
     } catch (error) {
       setValidationError(toErrorMessage(error));
     }
-  };
+  }, [
+    context,
+    editingId,
+    effectivePort,
+    ensureApplied,
+    handleCancel,
+    isCreating,
+    loadConnections,
+    name,
+    namespace,
+    resourceName,
+    resourceType,
+    t,
+  ]);
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteK8sConnection(id);
-      await loadConnections();
-      if (editingId === id) handleCancel();
-    } catch (error) {
-      console.error("Failed to delete K8s connection:", error);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      try {
+        await deleteK8sConnection(id);
+        await loadConnections();
+        if (editingId === id) handleCancel();
+      } catch (error) {
+        console.error("Failed to delete K8s connection:", error);
+      }
+    },
+    [editingId, handleCancel, loadConnections],
+  );
+
+  const handleTest = useCallback(async () => {
+    const paths = await ensureApplied();
+    if (paths.status === "invalid") {
+      setPathActionError(t("k8sConnections.pathValidationFailed"));
+      return;
     }
-  };
-
-  const handleTest = async () => {
+    if (paths.status === "applied") {
+      setPathActionError(t("k8sConnections.pathSelectionReset"));
+      return;
+    }
+    setPathActionError(null);
     if (!context || !namespace) return;
+
     setTestStatus("testing");
-    try {
-      const result = await testK8sConnection(context, namespace);
+    setTestMessage("");
+    const result = await run("k8s-test", () =>
+      testK8sConnection(context, namespace, paths.options),
+    );
+    if (result.status === "success") {
       setTestStatus("success");
-      setTestMessage(result);
-    } catch (error) {
+      setTestMessage(result.value);
+    } else if (result.status === "error") {
       setTestStatus("error");
-      setTestMessage(toErrorMessage(error));
+      setTestMessage(toErrorMessage(result.error));
     }
+  }, [context, ensureApplied, namespace, run, t]);
+
+  const editFormProps = {
+    name,
+    setName,
+    context,
+    onContextChange: handleContextChange,
+    namespace,
+    onNamespaceChange: handleNamespaceChange,
+    resourceType,
+    onResourceTypeChange: handleResourceTypeChange,
+    resourceName,
+    onResourceNameChange: handleResourceNameChange,
+    port: effectivePort,
+    onPortChange: handlePortChange,
+    defaultPort: effectiveDefaultPort,
+    contexts,
+    namespaces,
+    resources,
+    discoveryErrors,
+    pathOverrides,
+    validationError,
+    pathActionError,
+    testStatus,
+    testMessage,
+    onTest: handleTest,
+    onSave: handleSave,
+    onCancel: handleCancel,
   };
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       overlayClassName="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm"
     >
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[640px] max-h-[80vh] flex flex-col overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-default bg-base">
           <h2 className="text-sm font-semibold text-primary">
             {t("k8sConnections.title", {
@@ -272,7 +585,7 @@ export function K8sConnectionsModal({
               {t("k8sConnections.add", { defaultValue: "Add" })}
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1.5 text-muted hover:text-primary hover:bg-surface-secondary rounded-md transition-colors"
             >
               <X size={16} />
@@ -280,110 +593,54 @@ export function K8sConnectionsModal({
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
-          {/* Connection list */}
-          {connections.map((conn) =>
-            editingId === conn.id ? (
-              /* Inline edit form */
+          {connections.map((connection) =>
+            editingId === connection.id ? (
               <div
-                key={conn.id}
+                key={connection.id}
                 className="border border-blue-500/30 rounded-lg p-4 bg-base/50 space-y-3"
               >
-                {/* Edit form — same fields as create */}
-                <EditForm
-                  name={name}
-                  setName={setName}
-                  context={context}
-                  setContext={setContext}
-                  namespace={namespace}
-                  setNamespace={setNamespace}
-                  resourceType={resourceType}
-                  setResourceType={setResourceType}
-                  resourceName={resourceName}
-                  setResourceName={setResourceName}
-                  port={effectivePort}
-                  setPort={(value) => {
-                    setIsPortOverridden(value != null);
-                    setPort(value);
-                  }}
-                  defaultPort={effectiveDefaultPort}
-                  contexts={contexts}
-                  namespaces={namespaces}
-                  resources={resources}
-                  validationError={validationError}
-                  testStatus={testStatus}
-                  testMessage={testMessage}
-                  onTest={handleTest}
-                  onSave={handleSave}
-                  onCancel={handleCancel}
-                />
+                <EditForm {...editFormProps} />
               </div>
             ) : (
               <div
-                key={conn.id}
+                key={connection.id}
                 className="flex items-center gap-3 p-3 rounded-lg bg-base border border-default hover:border-strong transition-colors"
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-primary truncate">
-                    {conn.name}
+                    {connection.name}
                   </div>
                   <div className="text-xs text-muted truncate">
-                    {conn.context}/{conn.namespace}/{conn.resource_type}/{conn.resource_name}:{conn.port}
+                    {connection.context}/{connection.namespace}/
+                    {connection.resource_type}/{connection.resource_name}:
+                    {connection.port}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => handleEdit(conn)}
+                    onClick={() => handleEdit(connection)}
                     className="p-1.5 text-muted hover:text-primary hover:bg-surface-secondary rounded transition-colors"
                   >
                     <Edit2 size={14} />
                   </button>
                   <button
-                    onClick={() => handleDelete(conn.id)}
+                    onClick={() => handleDelete(connection.id)}
                     className="p-1.5 text-muted hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
               </div>
-            )
+            ),
           )}
 
-          {/* Create form */}
           {isCreating && (
             <div className="border border-blue-500/30 rounded-lg p-4 bg-base/50 space-y-3">
-              <EditForm
-                name={name}
-                setName={setName}
-                context={context}
-                setContext={setContext}
-                namespace={namespace}
-                setNamespace={setNamespace}
-                resourceType={resourceType}
-                setResourceType={setResourceType}
-                resourceName={resourceName}
-                setResourceName={setResourceName}
-                port={effectivePort}
-                setPort={(value) => {
-                  setIsPortOverridden(value != null);
-                  setPort(value);
-                }}
-                defaultPort={effectiveDefaultPort}
-                contexts={contexts}
-                namespaces={namespaces}
-                resources={resources}
-                validationError={validationError}
-                testStatus={testStatus}
-                testMessage={testMessage}
-                onTest={handleTest}
-                onSave={handleSave}
-                onCancel={handleCancel}
-              />
+              <EditForm {...editFormProps} />
             </div>
           )}
 
-          {/* Empty state */}
           {connections.length === 0 && !isCreating && (
             <p className="text-xs text-muted italic text-center py-6">
               {t("k8sConnections.empty", {
@@ -398,26 +655,27 @@ export function K8sConnectionsModal({
   );
 }
 
-// ── Shared edit form ──
-
 interface EditFormProps {
   name: string;
-  setName: (v: string) => void;
+  setName: (value: string) => void;
   context: string;
-  setContext: (v: string) => void;
+  onContextChange: (value: string) => void;
   namespace: string;
-  setNamespace: (v: string) => void;
+  onNamespaceChange: (value: string) => void;
   resourceType: string;
-  setResourceType: (v: string) => void;
+  onResourceTypeChange: (value: string) => void;
   resourceName: string;
-  setResourceName: (v: string) => void;
+  onResourceNameChange: (value: string) => void;
   port: number | undefined;
-  setPort: (v: number | undefined) => void;
+  onPortChange: (value: number | undefined) => void;
   defaultPort?: number;
   contexts: string[];
   namespaces: string[];
   resources: string[];
+  discoveryErrors: DiscoveryErrors;
+  pathOverrides: ReturnType<typeof useK8sPathOverrides>;
   validationError: string | null;
+  pathActionError: string | null;
   testStatus: "idle" | "testing" | "success" | "error";
   testMessage: string;
   onTest: () => void;
@@ -429,20 +687,23 @@ function EditForm({
   name,
   setName,
   context,
-  setContext,
+  onContextChange,
   namespace,
-  setNamespace,
+  onNamespaceChange,
   resourceType,
-  setResourceType,
+  onResourceTypeChange,
   resourceName,
-  setResourceName,
+  onResourceNameChange,
   port,
-  setPort,
+  onPortChange,
   defaultPort,
   contexts,
   namespaces,
   resources,
+  discoveryErrors,
+  pathOverrides,
   validationError,
+  pathActionError,
   testStatus,
   testMessage,
   onTest,
@@ -450,29 +711,41 @@ function EditForm({
   onCancel,
 }: EditFormProps) {
   const { t } = useTranslation();
+
   return (
     <div className="space-y-3">
       <div>
         <label className={LabelClass}>{t("k8sConnections.name")}</label>
         <input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(event) => setName(event.target.value)}
           className={InputClass}
           placeholder={t("k8sConnections.namePlaceholder")}
           autoFocus
         />
       </div>
 
+      <K8sAdvancedSettings pathOverrides={pathOverrides} />
+
       <div>
         <label className={LabelClass}>{t("k8sConnections.context")}</label>
         <Select
           value={context || null}
           options={contexts}
-          onChange={(val) => setContext(val)}
-          placeholder={t("k8sConnections.chooseContext")}
+          onChange={onContextChange}
+          placeholder={
+            contexts.length === 0
+              ? t("k8sConnections.noContexts")
+              : t("k8sConnections.chooseContext")
+          }
           searchPlaceholder={t("common.search")}
           noResultsLabel={t("common.noResults")}
         />
+        {discoveryErrors.contexts && (
+          <p role="alert" className="mt-1 text-xs text-red-400">
+            {discoveryErrors.contexts}
+          </p>
+        )}
       </div>
 
       <div>
@@ -480,11 +753,20 @@ function EditForm({
         <Select
           value={namespace || null}
           options={namespaces}
-          onChange={(val) => setNamespace(val)}
-          placeholder={t("k8sConnections.chooseNamespace")}
+          onChange={onNamespaceChange}
+          placeholder={
+            namespaces.length === 0
+              ? t("k8sConnections.noNamespaces")
+              : t("k8sConnections.chooseNamespace")
+          }
           searchPlaceholder={t("common.search")}
           noResultsLabel={t("common.noResults")}
         />
+        {discoveryErrors.namespaces && (
+          <p role="alert" className="mt-1 text-xs text-red-400">
+            {discoveryErrors.namespaces}
+          </p>
+        )}
       </div>
 
       <div className="flex gap-3">
@@ -499,7 +781,7 @@ function EditForm({
               service: t("k8sConnections.resourceTypeService"),
               pod: t("k8sConnections.resourceTypePod"),
             }}
-            onChange={(val) => setResourceType(val)}
+            onChange={onResourceTypeChange}
             searchable={false}
           />
         </div>
@@ -511,11 +793,20 @@ function EditForm({
           <Select
             value={resourceName || null}
             options={resources}
-            onChange={(val) => setResourceName(val)}
-            placeholder={t("k8sConnections.chooseResource")}
+            onChange={onResourceNameChange}
+            placeholder={
+              resources.length === 0
+                ? t("k8sConnections.noResources")
+                : t("k8sConnections.chooseResource")
+            }
             searchPlaceholder={t("common.search")}
             noResultsLabel={t("common.noResults")}
           />
+          {discoveryErrors.resources && (
+            <p role="alert" className="mt-1 text-xs text-red-400">
+              {discoveryErrors.resources}
+            </p>
+          )}
         </div>
       </div>
 
@@ -524,22 +815,23 @@ function EditForm({
         <input
           type="number"
           value={port ?? ""}
-          onChange={(e) =>
-            setPort(e.target.value === "" ? undefined : Number(e.target.value))
+          onChange={(event) =>
+            onPortChange(
+              event.target.value === "" ? undefined : Number(event.target.value),
+            )
           }
           className={InputClass}
           placeholder={defaultPort != null ? String(defaultPort) : undefined}
         />
       </div>
 
-      {/* Test result */}
       {testStatus !== "idle" && (
         <div
           className={clsx(
             "text-xs px-3 py-2 rounded-md",
             testStatus === "testing" && "text-muted",
             testStatus === "success" && "text-green-400 bg-green-500/10",
-            testStatus === "error" && "text-red-400 bg-red-500/10"
+            testStatus === "error" && "text-red-400 bg-red-500/10",
           )}
         >
           {testStatus === "testing" && (
@@ -563,12 +855,13 @@ function EditForm({
         </div>
       )}
 
-      {/* Validation error */}
       {validationError && (
         <p className="text-xs text-red-400">{validationError}</p>
       )}
+      {pathActionError && (
+        <p className="text-xs text-red-400">{pathActionError}</p>
+      )}
 
-      {/* Actions */}
       <div className="flex items-center gap-2 pt-1">
         <button
           onClick={onTest}
