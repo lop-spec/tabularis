@@ -124,6 +124,14 @@ pub fn legacy_registry_url(config: &crate::config::AppConfig) -> String {
         .unwrap_or_else(|| LEGACY_REGISTRY_URL.to_string())
 }
 
+/// COMPAT(registry-ga): whether a bundle ships a legacy `manifest.json`.
+/// Kept next to `read_legacy_manifest` so both disappear together at the
+/// cutover — a presence check that disagrees with the read path is what makes
+/// legacy bundles look manifest-less.
+pub fn has_legacy_manifest(dir: &Path) -> bool {
+    dir.join("manifest.json").exists()
+}
+
 /// COMPAT(registry-ga): reads a legacy `manifest.json` bundle manifest for
 /// plugins published before the `.tabularium` cutover. Same JSON shape — the
 /// canonical structs tolerate the old flat fields via `#[serde(default)]`.

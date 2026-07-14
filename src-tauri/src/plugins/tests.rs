@@ -2,7 +2,7 @@ use std::fs;
 
 use tempfile::tempdir;
 
-use super::installer::read_plugin_info_from_dir;
+use super::installer::{has_manifest, read_plugin_info_from_dir};
 use super::manager::ConfigManifest;
 
 #[test]
@@ -52,6 +52,26 @@ fn errors_when_no_manifest_present() {
     let dir = tempdir().expect("temp dir");
     let error = read_plugin_info_from_dir(dir.path()).expect_err("no manifest");
     assert!(error.contains("No .tabularium manifest"));
+}
+
+// Regression: install and list gate on has_manifest before read_manifest gets a
+// say. When it only knew `.tabularium`, a legacy bundle (e.g. redis) was
+// rejected as manifest-less even though read_manifest would have loaded it.
+#[test]
+fn has_manifest_accepts_both_canonical_and_legacy_bundles() {
+    let canonical = tempdir().expect("temp dir");
+    fs::write(canonical.path().join(".tabularium"), "{}").expect("write manifest");
+    assert!(has_manifest(canonical.path()));
+
+    let legacy = tempdir().expect("temp dir");
+    fs::write(legacy.path().join("manifest.json"), "{}").expect("write manifest");
+    assert!(
+        has_manifest(legacy.path()),
+        "legacy manifest.json bundles must not look manifest-less"
+    );
+
+    let empty = tempdir().expect("temp dir");
+    assert!(!has_manifest(empty.path()));
 }
 
 #[test]

@@ -42,9 +42,11 @@ pub fn get_plugins_dir() -> Result<PathBuf, String> {
 /// (see `COMPAT(registry-ga)`), which goes away once all plugins republish.
 const MANIFEST_FILE: &str = ".tabularium";
 
-/// Whether a directory contains a `.tabularium` bundle manifest.
+/// Whether a directory contains a bundle manifest `read_manifest` can read —
+/// including the legacy `manifest.json` fallback, so callers gating on this
+/// don't reject bundles the read path would happily accept.
 pub fn has_manifest(dir: &Path) -> bool {
-    dir.join(MANIFEST_FILE).exists()
+    dir.join(MANIFEST_FILE).exists() || crate::plugins::compat::has_legacy_manifest(dir)
 }
 
 /// Reads and deserialises a plugin bundle's `.tabularium` manifest (JSON).
@@ -228,9 +230,9 @@ pub async fn download_and_install(
         }
     }
 
-    // Validate the bundle ships a `.tabularium` manifest and that it deserialises
-    // into a well-formed manifest with the required fields (notably `version` —
-    // the strict-mode drift catch).
+    // Validate the bundle ships a manifest and that it deserialises into a
+    // well-formed one with the required fields (notably `version` — the
+    // strict-mode drift catch).
     if !has_manifest(&tmp_dir) {
         fs::remove_dir_all(&tmp_dir).ok();
         return Err("Plugin archive does not contain a .tabularium manifest".to_string());
