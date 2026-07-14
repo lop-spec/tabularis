@@ -682,6 +682,16 @@ export function PluginsTab({
       setInstallingPluginId(pluginId);
       try {
         await invoke("install_plugin", { pluginId, version });
+        // The picked version is spent once installed. Keeping it would pin the
+        // card to what's now on disk, which reads as neither "up to date" (it
+        // isn't latest) nor updatable (it is installed) — and the picker hides
+        // itself once only one other release is left, leaving no way out.
+        setSelectedVersions((prev) => {
+          if (!(pluginId in prev)) return prev;
+          const next = { ...prev };
+          delete next[pluginId];
+          return next;
+        });
         await updateSettingRef.current(
           "activeExternalDrivers",
           Array.from(
