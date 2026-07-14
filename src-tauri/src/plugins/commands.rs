@@ -27,8 +27,10 @@ pub async fn fetch_plugin_registry(
     // COMPAT(registry-ga): merge the API with the legacy static registry.json so
     // not-yet-migrated plugins stay visible during the transition.
     let legacy_url = crate::plugins::compat::legacy_registry_url(&config);
-    let remote = crate::plugins::compat::resolve_registry(&base_url, &legacy_url).await?;
     let installed = installer::list_installed()?;
+    let installed_ids: Vec<String> = installed.iter().map(|i| i.id.clone()).collect();
+    let remote =
+        crate::plugins::compat::resolve_registry(&base_url, &legacy_url, &installed_ids).await?;
     let platform = registry::get_current_platform();
 
     let result: Vec<RegistryPluginWithStatus> = remote

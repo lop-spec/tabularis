@@ -15,6 +15,7 @@
 //!   3. Legacy GitHub-raw default URL fallback
 //!   4. Legacy `manifest.json` bundle manifest
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::plugins::registry::{self, PluginRegistry};
@@ -57,7 +58,13 @@ pub async fn fetch_legacy_registry(url: &str) -> Result<PluginRegistry, String> 
 ///   3. If only one side is reachable, use it (API down → legacy only; legacy
 ///      unreachable → API only).
 ///   4. If both fail, surface the ORIGINAL API error.
-pub async fn resolve_registry(base_url: &str, legacy_url: &str) -> Result<PluginRegistry, String> {
+///   5. Installed plugins the 0.13 list endpoint hides are re-resolved by slug
+///      (see `readd_unlisted_installed`).
+pub async fn resolve_registry(
+    base_url: &str,
+    legacy_url: &str,
+    installed_ids: &[String],
+) -> Result<PluginRegistry, String> {
     // Explicit static registry — the configured file is the sole source.
     if base_url.ends_with(".json") {
         return fetch_legacy_registry(base_url).await;
@@ -66,11 +73,11 @@ pub async fn resolve_registry(base_url: &str, legacy_url: &str) -> Result<Plugin
     let api = registry::fetch_tabularium_registry(base_url).await;
     let legacy = fetch_legacy_registry(legacy_url).await;
 
-    match (api, legacy) {
-        (Ok(api), Ok(legacy)) => Ok(merge_registries(stamp_api_source(api, base_url), legacy)),
+    let mut resolved = match (api, legacy) {
+        (Ok(api), Ok(legacy)) => merge_registries(stamp_api_source(api, base_url), legacy),
         (Ok(api), Err(e)) => {
             log::warn!("Legacy registry merge skipped ({}): {}", legacy_url, e);
-            Ok(stamp_api_source(api, base_url))
+            stamp_api_source(api, base_url)
         }
         (Err(e), Ok(legacy)) => {
             log::warn!(
@@ -78,9 +85,54 @@ pub async fn resolve_registry(base_url: &str, legacy_url: &str) -> Result<Plugin
                 base_url,
                 e
             );
-            Ok(legacy)
+            // The API is down, so slug lookups would fail too — return as-is.
+            return Ok(legacy);
         }
-        (Err(api_err), Err(_)) => Err(api_err),
+        (Err(api_err), Err(_)) => return Err(api_err),
+    };
+
+    readd_unlisted_installed(&mut resolved, base_url, installed_ids).await;
+    Ok(resolved)
+}
+
+/// Re-attaches installed plugins that the catalogue no longer lists.
+///
+/// Registry 0.13 gates `GET /api/plugins` on a manifest having resolved at
+/// ingest, so a plugin can vanish from the list while `GET /api/plugins/{slug}`
+/// still resolves it. Dropping out of the list is not a deletion: without this,
+/// an installed plugin would silently lose its update path the moment its
+/// publisher shipped a release whose `.tabularium` didn't resolve.
+///
+/// Slugs the API doesn't know (locally-installed or legacy-only plugins) are
+/// skipped quietly — they're not expected to be there.
+async fn readd_unlisted_installed(
+    reg: &mut PluginRegistry,
+    base_url: &str,
+    installed_ids: &[String],
+) {
+    let listed: HashSet<&str> = reg.plugins.iter().map(|p| p.id.as_str()).collect();
+    let missing: Vec<&String> = installed_ids
+        .iter()
+        .filter(|id| !listed.contains(id.as_str()))
+        .collect();
+    if missing.is_empty() {
+        return;
+    }
+
+    for id in missing {
+        match crate::plugins::tabularium::fetch_plugin_detail(base_url, id).await {
+            Ok(mut plugin) => {
+                plugin.registry_base_url = Some(base_url.trim_end_matches('/').to_string());
+                log::info!(
+                    "Plugin '{}' is installed but unlisted (unresolved manifest at ingest) — resolved by slug",
+                    id
+                );
+                reg.plugins.push(plugin);
+            }
+            Err(e) => {
+                log::debug!("Installed plugin '{}' not resolvable on the API: {}", id, e);
+            }
+        }
     }
 }
 
@@ -370,6 +422,39 @@ mod tests {
         );
     }
 
+    // Registry 0.13 hides plugins whose manifest didn't resolve at ingest, so an
+    // installed plugin can drop out of the catalogue while its slug still
+    // resolves. Nothing to re-add while it's still listed — the lookup only
+    // fires for genuinely missing ones (the network path is exercised live).
+    #[tokio::test]
+    async fn listed_installed_plugins_are_not_looked_up_again() {
+        let mut reg = registry_with_ids(&["firestore", "duckdb"]);
+        let before = reg.plugins.len();
+        // Port 0 is unconnectable: any slug lookup here would error out, and a
+        // lookup for an already-listed id would be a bug.
+        readd_unlisted_installed(
+            &mut reg,
+            "http://127.0.0.1:0",
+            &["firestore".to_string(), "duckdb".to_string()],
+        )
+        .await;
+        assert_eq!(reg.plugins.len(), before);
+    }
+
+    // An unresolvable slug (locally-installed plugin, or API down) must not
+    // fail the catalogue — it's skipped, the rest still renders.
+    #[tokio::test]
+    async fn unresolvable_slugs_are_skipped_not_fatal() {
+        let mut reg = registry_with_ids(&["firestore"]);
+        readd_unlisted_installed(&mut reg, "http://127.0.0.1:0", &["my-local-plugin".to_string()])
+            .await;
+        assert_eq!(
+            reg.plugins.len(),
+            1,
+            "a slug the API can't resolve must leave the catalogue intact"
+        );
+    }
+
     #[test]
     fn legacy_registry_url_defaults_then_honours_config() {
         let mut cfg = AppConfig::default();
@@ -409,7 +494,7 @@ mod tests {
     async fn json_suffix_url_takes_legacy_path() {
         // A bogus .json URL must fail via the legacy fetcher (network error),
         // proving it never went through the Tabularium SDK path.
-        let err = resolve_registry("http://127.0.0.1:0/registry.json", LEGACY_REGISTRY_URL)
+        let err = resolve_registry("http://127.0.0.1:0/registry.json", LEGACY_REGISTRY_URL, &[])
             .await
             .unwrap_err();
         assert!(
