@@ -28,6 +28,7 @@ import {
   Edit,
   Sparkles,
   Ban,
+  Eraser,
   FileDigit,
   ExternalLink,
   PanelBottomOpen,
@@ -41,11 +42,16 @@ import {
   getColumnSortState,
   calculateSelectionRange,
   toggleSetValue,
+  getResultValueType,
+  buildPkMap,
+  serializePkKey,
   type MergedRow,
 } from "../../utils/dataGrid";
+import { useSettings } from "../../hooks/useSettings";
 import { isGeometricType, formatGeometricValue } from "../../utils/geometry";
 import { isBlobColumn, isBlobWireFormat } from "../../utils/blob";
 import { isJsonColumn, isJsonContent } from "../../utils/json";
+import { supportsEmptyString } from "../../utils/text";
 import {
   pickPrimaryForeignKeyByColumn,
   getForeignKeyForPreview,
@@ -59,6 +65,7 @@ import { RowEditorSidebar } from "./RowEditorSidebar";
 import { useDatabase } from "../../hooks/useDatabase";
 import {
   rowsToCSV,
+  rowsToCSVWithHeaders,
   rowsToJSON,
   rowsToSqlInsert,
   getSelectedRows,
@@ -75,7 +82,7 @@ interface DataGridProps {
   columns: string[];
   data: unknown[][];
   tableName?: string | null;
-  pkColumn?: string | null;
+  pkColumns?: string[] | null;
   autoIncrementColumns?: string[];
   defaultValueColumns?: string[];
   nullableColumns?: string[];
@@ -107,6 +114,7 @@ interface DataGridProps {
   onSelectionChange?: (indices: Set<number>) => void;
   copyFormat?: "csv" | "json" | "sql-insert";
   csvDelimiter?: string;
+  csvIncludeHeaders?: boolean;
   sortClause?: string;
   onSort?: (colName: string) => void;
   readonly?: boolean;
@@ -117,7 +125,7 @@ export const DataGrid = React.memo(
     columns,
     data,
     tableName,
-    pkColumn,
+    pkColumns,
     autoIncrementColumns,
     defaultValueColumns,
     nullableColumns,
@@ -142,6 +150,7 @@ export const DataGrid = React.memo(
     onSelectionChange,
     copyFormat,
     csvDelimiter = ",",
+    csvIncludeHeaders = true,
     sortClause,
     onSort,
     readonly: readonlyProp,
@@ -149,6 +158,9 @@ export const DataGrid = React.memo(
     const { t } = useTranslation();
     const { activeSchema, connections } = useDatabase();
     const { showAlert } = useAlert();
+    const { settings } = useSettings();
+    const colorByType = settings.resultColorByType ?? false;
+    const stickyColumnHeaders = settings.stickyColumnHeaders ?? true;
 
     const detectJsonInTextColumns = useMemo(() => {
       if (!connectionId) return false;
@@ -234,12 +246,15 @@ export const DataGrid = React.memo(
       [onSelectionChange],
     );
 
-    // Pre-calculate pkIndex once for O(1) lookup instead of O(n) in render loop
-    const pkIndexMap = useMemo(() => {
-      if (!pkColumn) return null;
-      const pkIndex = columns.indexOf(pkColumn);
-      return pkIndex >= 0 ? pkIndex : null;
-    }, [columns, pkColumn]);
+    // Pre-calculate pkIndex array once for O(1) lookup instead of O(n) in render loop
+    const pkIndexMaps = useMemo((): number[] => {
+      if (!pkColumns || pkColumns.length === 0) return [];
+      const indices = pkColumns.map((col) => columns.indexOf(col));
+      // If any PK column is absent from the result set, disable editing entirely
+      // to avoid partial WHERE clauses that could match multiple rows.
+      if (indices.some((idx) => idx < 0)) return [];
+      return indices;
+    }, [columns, pkColumns]);
 
     // Create column type map for O(1) lookup during cell rendering
     const columnTypeMap = useMemo(() => {
@@ -255,6 +270,19 @@ export const DataGrid = React.memo(
       );
     }, [columnMetadata]);
 
+    // Precompute the result-coloring class per column once (the type is fixed
+    // per column), so rows don't reclassify every cell on each render. `null`
+    // when the feature is off, which makes rows skip the wrapper entirely.
+    const resultColorClassMap = useMemo(() => {
+      if (!colorByType) return null;
+      const map = new Map<string, string>();
+      for (const colName of columns) {
+        const colType = columnTypeMap?.get(colName);
+        if (colType) map.set(colName, `rcell-${getResultValueType(undefined, colType)}`);
+      }
+      return map;
+    }, [colorByType, columns, columnTypeMap]);
+
     const isJsonCellTarget = useCallback(
       (colType: string | undefined, value: unknown): boolean => {
         if (colType && isJsonColumn(colType)) return true;
@@ -269,15 +297,15 @@ export const DataGrid = React.memo(
     const buildRowLabel = useCallback(
       (rowData: unknown[], rowIndex: number, isInsertion: boolean): string => {
         if (isInsertion) return t("dataGrid.newRow", { defaultValue: "NEW" });
-        if (pkColumn && pkIndexMap !== null) {
-          const pkVal = rowData[pkIndexMap];
+        if (pkColumns && pkColumns.length > 0 && pkIndexMaps.length > 0) {
+          const pkVal = rowData[pkIndexMaps[0]];
           if (pkVal !== null && pkVal !== undefined && pkVal !== "") {
-            return `${pkColumn}=${String(pkVal)}`;
+            return `${pkColumns[0]}=${String(pkVal)}`;
           }
         }
         return `Row ${rowIndex + 1}`;
       },
-      [pkColumn, pkIndexMap, t],
+      [pkColumns, pkIndexMaps, t],
     );
 
     const openJsonViewerWindow = useCallback(
@@ -296,13 +324,14 @@ export const DataGrid = React.memo(
           let cellKey: string | null = null;
           const canSaveBack =
             (isInsertion && !!tempId) ||
-            (!isInsertion && pkIndexMap !== null);
+            (!isInsertion && pkIndexMaps.length > 0);
           if (isInsertion && tempId) {
             cellKey = `ins:${tempId}:${colName}`;
-          } else if (!isInsertion && pkIndexMap !== null) {
-            const pkVal = rowData[pkIndexMap];
-            if (pkVal !== null && pkVal !== undefined && pkVal !== "") {
-              cellKey = `pk:${String(pkVal)}:${colName}`;
+          } else if (!isInsertion && pkIndexMaps.length > 0) {
+            const pkMapVal = buildPkMap(pkColumns!, rowData, pkIndexMaps);
+            const serialized = serializePkKey(pkMapVal);
+            if (serialized !== "" && serialized !== "null" && serialized !== "undefined") {
+              cellKey = `pk:${serialized}:${colName}`;
             }
           }
           const sessionId = await invoke<string>("open_json_viewer_window", {
@@ -323,7 +352,7 @@ export const DataGrid = React.memo(
           console.error("Failed to open JSON viewer window:", e);
         }
       },
-      [buildRowLabel, pkIndexMap],
+      [buildRowLabel, pkIndexMaps, pkColumns],
     );
 
     useEffect(() => {
@@ -338,16 +367,16 @@ export const DataGrid = React.memo(
           const { colName, rowData, isInsertion, tempId } = session;
           if (isInsertion && onPendingInsertionChange && tempId) {
             onPendingInsertionChange(tempId, colName, value);
-          } else if (!isInsertion && onPendingChange && pkIndexMap !== null) {
-            const pkVal = rowData[pkIndexMap];
-            onPendingChange(pkVal, colName, value);
+          } else if (!isInsertion && onPendingChange && pkIndexMaps.length > 0) {
+            const pkMapVal = buildPkMap(pkColumns!, rowData, pkIndexMaps);
+            onPendingChange(pkMapVal, colName, value);
           }
         },
       );
       return () => {
         unlistenPromise.then((fn) => fn());
       };
-    }, [onPendingChange, onPendingInsertionChange, pkIndexMap]);
+    }, [onPendingChange, onPendingInsertionChange, pkIndexMaps, pkColumns]);
 
     const fksByColumn = useMemo(
       () => pickPrimaryForeignKeyByColumn(foreignKeys),
@@ -425,12 +454,30 @@ export const DataGrid = React.memo(
       } else {
         const allIndices = new Set(mergedRows.map((_, i) => i));
         updateSelection(allIndices);
+        const allRows = mergedRows.map((r) => r.rowData);
+        const text = copyFormat === "json"
+          ? rowsToJSON(allRows, columns)
+          : copyFormat === "sql-insert"
+          ? rowsToSqlInsert(allRows, columns, tableName ?? "table")
+          : csvIncludeHeaders
+          ? rowsToCSVWithHeaders(allRows, columns, "null", csvDelimiter)
+          : rowsToCSV(allRows, "null", csvDelimiter);
+        copyTextToClipboard(text).catch((e) => {
+          showAlert(t("common.error") + ": " + e, { title: t("common.error"), kind: "error" });
+        });
       }
     }, [
       selectedRowIndices.size,
       mergedRows,
       updateSelection,
       onForeignKeyHidePanel,
+      columns,
+      copyFormat,
+      csvDelimiter,
+      csvIncludeHeaders,
+      tableName,
+      showAlert,
+      t,
     ]);
 
     useEffect(() => {
@@ -445,14 +492,14 @@ export const DataGrid = React.memo(
         columns.forEach((col, idx) => {
           rowData[col] = rowArray[idx];
         });
-        if (!isInsertion && pkIndexMap !== null) {
-          const pkVal = rowArray[pkIndexMap];
-          const pending = pendingChanges?.[String(pkVal)]?.changes;
+        if (!isInsertion && pkIndexMaps.length > 0) {
+          const pkMapVal = buildPkMap(pkColumns!, rowArray, pkIndexMaps);
+          const pending = pendingChanges?.[serializePkKey(pkMapVal)]?.changes;
           if (pending) Object.assign(rowData, pending);
         }
         return rowData;
       },
-      [columns, pkIndexMap, pendingChanges],
+      [columns, pkIndexMaps, pkColumns, pendingChanges],
     );
 
     const handleCellDoubleClick = useCallback(
@@ -461,9 +508,59 @@ export const DataGrid = React.memo(
 
       const mergedRow = mergedRows[rowIndex];
       if (!mergedRow) return;
-      if (mergedRow.type !== "insertion" && !pkColumn) return;
+      // No primary key defined for the table at all → editing impossible.
+      if (
+        mergedRow.type !== "insertion" &&
+        (!pkColumns || pkColumns.length === 0)
+      )
+        return;
 
       const colName = columns[colIndex];
+
+      // For existing rows we must be able to build a safe UPDATE. Two guards,
+      // each running whenever the data it depends on is available, so they
+      // don't silently no-op when a driver omits result metadata:
+      //
+      // 1. Every primary key column must be present in the result set (needed
+      //    for the WHERE clause). Depends only on pkColumns + columns.
+      // 2. The edited column must map to a real physical column of the table
+      //    (prevents malformed UPDATEs on aliased/computed columns). Requires
+      //    columnMetadata; skipped when it's unavailable.
+      if (mergedRow.type !== "insertion") {
+        const missingPk = (pkColumns ?? []).filter(
+          (pk) => !columns.some((c) => c.toLowerCase() === pk.toLowerCase()),
+        );
+        if (missingPk.length > 0) {
+          showAlert(
+            t("dataGrid.pkRequiredToEdit", {
+              pk: missingPk.join(", "),
+              defaultValue:
+                'To edit this result, include the primary key column "{{pk}}" in your SELECT.',
+            }),
+            { title: t("common.error"), kind: "warning" },
+          );
+          return;
+        }
+
+        if (columnMetadata && columnMetadata.length > 0) {
+          const realColumns = new Set(
+            columnMetadata.map((c) => c.name.toLowerCase()),
+          );
+          if (!realColumns.has(colName.toLowerCase())) {
+            showAlert(
+              t("dataGrid.columnNotEditable", {
+                column: colName,
+                table: tableName,
+                defaultValue:
+                  'Column "{{column}}" can\'t be edited — it is not a direct column of table "{{table}}" (likely an alias or computed value).',
+              }),
+              { title: t("common.error"), kind: "warning" },
+            );
+            return;
+          }
+        }
+      }
+
       const colType = columnTypeMap?.get(colName);
 
       if (
@@ -514,12 +611,15 @@ export const DataGrid = React.memo(
         tableName,
         readonlyProp,
         mergedRows,
-        pkColumn,
+        pkColumns,
         columns,
         columnTypeMap,
         columnLengthMap,
+        columnMetadata,
         buildRowDataWithPending,
         openJsonViewerWindow,
+        showAlert,
+        t,
       ],
     );
 
@@ -579,17 +679,17 @@ export const DataGrid = React.memo(
           return;
         }
 
-        // PK Value - check pkIndexMap is valid
-        if (pkIndexMap === null) {
+        // PK Value - check pkIndexMaps is valid
+        if (pkIndexMaps.length === 0 || !pkColumns) {
           setEditingCell(null);
           return;
         }
-        const pkVal = row[pkIndexMap];
+        const pkMapVal = buildPkMap(pkColumns, row, pkIndexMaps);
         const colName = columns[colIndex];
 
         if (onPendingChange) {
           // If value matches original, pass undefined to remove the pending change
-          onPendingChange(pkVal, colName, isUnchanged ? undefined : value);
+          onPendingChange(pkMapVal, colName, isUnchanged ? undefined : value);
           setEditingCell(null);
           return;
         }
@@ -601,8 +701,7 @@ export const DataGrid = React.memo(
           await invoke("update_record", {
             connectionId,
             table: tableName,
-            pkCol: pkColumn,
-            pkVal,
+            pkMap: pkMapVal,
             colName,
             newVal: value,
             ...(activeSchema ? { schema: activeSchema } : {}),
@@ -625,8 +724,8 @@ export const DataGrid = React.memo(
       columns,
       onPendingInsertionChange,
       onPendingChange,
-      pkIndexMap,
-      pkColumn,
+      pkIndexMaps,
+      pkColumns,
       connectionId,
       activeSchema,
       onRefresh,
@@ -684,6 +783,20 @@ export const DataGrid = React.memo(
       }
     }, [handleEditCommit, mergedRows, columns]);
 
+    // Commit a specific value in a single event, bypassing the editingCellRef
+    // lag (the ref is synced via a passive effect, so a picker that changes and
+    // commits within the same click — e.g. an ENUM dropdown — would otherwise
+    // read the stale previous value).
+    const commitEditWithValue = useCallback(
+      (value: unknown) => {
+        if (editingCellRef.current) {
+          editingCellRef.current = { ...editingCellRef.current, value };
+        }
+        handleEditCommit();
+      },
+      [handleEditCommit],
+    );
+
     const columnHelper = useMemo(() => createColumnHelper<unknown[]>(), []);
 
     const coreRowModel = useMemo(() => getCoreRowModel(), []);
@@ -700,19 +813,37 @@ export const DataGrid = React.memo(
               const sortState = getColumnSortState(colName, sortClause);
               const displaySortState: "none" | "asc" | "desc" =
                 sortState ?? "none";
+              // Column data type for the DataGrip-style header hover tooltip.
+              // Only populated when column metadata is present (i.e. table
+              // browse), not for arbitrary query results.
+              const colType = columnTypeMap?.get(colName);
 
               return (
                 <div
-                  className={`flex items-center gap-2 select-none group/header ${onSort ? "cursor-pointer" : ""}`}
+                  role={onSort ? "button" : undefined}
+                  tabIndex={onSort ? 0 : undefined}
+                  aria-label={onSort ? (
+                    displaySortState === "none"
+                      ? t("dataGrid.sortByAsc", { col: colName })
+                      : displaySortState === "asc"
+                        ? t("dataGrid.sortByDesc", { col: colName })
+                        : t("dataGrid.clearSort")
+                  ) : undefined}
+                  className={`relative flex items-center gap-2 select-none group/header ${onSort ? "cursor-pointer" : ""}`}
                   onClick={() => onSort && onSort(colName)}
+                  onKeyDown={(e) => { if (onSort && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onSort(colName); } }}
                   title={
-                    onSort
-                      ? displaySortState === "none"
-                        ? t("dataGrid.sortByAsc", { col: colName })
-                        : displaySortState === "asc"
-                          ? t("dataGrid.sortByDesc", { col: colName })
-                          : t("dataGrid.clearSort")
-                      : undefined
+                    // Suppress the native sort-hint title while the type tooltip
+                    // is shown, to avoid two overlapping tooltips on hover.
+                    colType
+                      ? undefined
+                      : onSort
+                        ? displaySortState === "none"
+                          ? t("dataGrid.sortByAsc", { col: colName })
+                          : displaySortState === "asc"
+                            ? t("dataGrid.sortByDesc", { col: colName })
+                            : t("dataGrid.clearSort")
+                        : undefined
                   }
                 >
                   <span>{colName}</span>
@@ -732,6 +863,14 @@ export const DataGrid = React.memo(
                       )}
                     </span>
                   )}
+                  {colType && (
+                    <span
+                      role="tooltip"
+                      className="pointer-events-none absolute left-0 top-full z-20 mt-1 whitespace-nowrap rounded-lg border border-strong bg-tooltip px-2 py-1 text-xs font-normal normal-case tracking-normal text-secondary opacity-0 shadow-xl transition-opacity duration-100 group-hover/header:opacity-100"
+                    >
+                      <span className="text-primary">{colName}</span>: {colType}
+                    </span>
+                  )}
                 </div>
               );
             },
@@ -743,6 +882,7 @@ export const DataGrid = React.memo(
         t,
         sortClause,
         onSort,
+        columnTypeMap,
       ],
     );
 
@@ -834,16 +974,16 @@ export const DataGrid = React.memo(
         return;
       }
 
-      // For existing rows, need pkColumn
-      if (!pkColumn || pkIndexMap === null) return;
+      // For existing rows, need pkColumns
+      if (!pkColumns || pkIndexMaps.length === 0) return;
 
-      const pkVal = contextMenu.row[pkIndexMap];
-      const pkValStr = String(pkVal);
+      const pkMapVal = buildPkMap(pkColumns, contextMenu.row, pkIndexMaps);
+      const pkValStr = serializePkKey(pkMapVal);
 
       // Handle pending deletion revert
       const isPendingDelete = pendingDeletions?.[pkValStr] !== undefined;
       if (isPendingDelete && onRevertDeletion) {
-        onRevertDeletion(pkVal);
+        onRevertDeletion(pkMapVal);
         setContextMenu(null);
         return;
       }
@@ -853,7 +993,7 @@ export const DataGrid = React.memo(
       if (rowPendingChanges && onPendingChange) {
         // Revert all pending changes for this row by setting them to undefined
         Object.keys(rowPendingChanges.changes).forEach((colName) => {
-          onPendingChange(pkVal, colName, undefined);
+          onPendingChange(pkMapVal, colName, undefined);
         });
         setContextMenu(null);
         return;
@@ -865,8 +1005,8 @@ export const DataGrid = React.memo(
       onPendingChange,
       onRevertDeletion,
       onDiscardInsertion,
-      pkColumn,
-      pkIndexMap,
+      pkColumns,
+      pkIndexMaps,
       pendingChanges,
       pendingDeletions,
     ]);
@@ -879,8 +1019,8 @@ export const DataGrid = React.memo(
 
         if (mergedRow.type === "insertion" && mergedRow.tempId && onDiscardInsertion) {
           onDiscardInsertion(mergedRow.tempId);
-        } else if (mergedRow.type === "existing" && pkColumn && pkIndexMap !== null) {
-          pkVals.push(mergedRow.rowData[pkIndexMap]);
+        } else if (mergedRow.type === "existing" && pkColumns && pkIndexMaps.length > 0) {
+          pkVals.push(buildPkMap(pkColumns, mergedRow.rowData, pkIndexMaps));
         }
       }
 
@@ -892,7 +1032,7 @@ export const DataGrid = React.memo(
           pkVals.forEach((v) => onMarkForDeletion(v));
         }
       }
-    }, [mergedRows, onDiscardInsertion, onMarkForDeletion, onMarkMultipleForDeletion, pkColumn, pkIndexMap]);
+    }, [mergedRows, onDiscardInsertion, onMarkForDeletion, onMarkMultipleForDeletion, pkColumns, pkIndexMaps]);
 
     const deleteSelectedRow = useCallback(() => {
       if (!contextMenu) return;
@@ -967,13 +1107,13 @@ export const DataGrid = React.memo(
 
         if (isInsertion && onPendingInsertionChange && mergedRow.tempId) {
           onPendingInsertionChange(mergedRow.tempId, colName, value);
-        } else if (onPendingChange && pkIndexMap !== null) {
-          const pkVal = contextMenu.row[pkIndexMap];
-          onPendingChange(pkVal, colName, value);
+        } else if (onPendingChange && pkIndexMaps.length > 0) {
+          const pkMapVal = buildPkMap(pkColumns!, contextMenu.row, pkIndexMaps);
+          onPendingChange(pkMapVal, colName, value);
         }
         setContextMenu(null);
       },
-      [contextMenu, onPendingInsertionChange, onPendingChange, pkIndexMap],
+      [contextMenu, onPendingInsertionChange, onPendingChange, pkIndexMaps, pkColumns],
     );
 
     const setCellGenerate = useCallback(
@@ -987,7 +1127,7 @@ export const DataGrid = React.memo(
       // For insertions, null triggers <default> display; for existing rows, use sentinel
       setCellValue(isInsertion ? null : USE_DEFAULT_SENTINEL);
     }, [contextMenu, setCellValue]);
-    const setCellEmpty = useCallback(() => setCellValue(" "), [setCellValue]);
+    const setCellEmpty = useCallback(() => setCellValue(""), [setCellValue]);
 
     const setCellServerNow = useCallback(() => {
       if (!contextMenu || !connectionId) return;
@@ -1003,8 +1143,9 @@ export const DataGrid = React.memo(
           const formatted = formatDateTime(parseDateTime(raw), dateMode);
           if (isInsertion && onPendingInsertionChange && mergedRow?.tempId) {
             onPendingInsertionChange(mergedRow.tempId, colName, formatted);
-          } else if (onPendingChange && pkIndexMap !== null) {
-            onPendingChange(row[pkIndexMap], colName, formatted);
+          } else if (onPendingChange && pkIndexMaps.length > 0) {
+            const pkMapVal = buildPkMap(pkColumns!, row, pkIndexMaps);
+            onPendingChange(pkMapVal, colName, formatted);
           }
         })
         .catch((err) => {
@@ -1016,7 +1157,8 @@ export const DataGrid = React.memo(
       columnTypeMap,
       onPendingInsertionChange,
       onPendingChange,
-      pkIndexMap,
+      pkIndexMaps,
+      pkColumns,
       t,
       showAlert,
     ]);
@@ -1039,13 +1181,15 @@ export const DataGrid = React.memo(
     );
 
     const formatRows = useCallback(
-      (rows: unknown[][]) => {
+      (rows: unknown[][], withHeaders = false) => {
         if (copyFormat === "json") return rowsToJSON(rows, columns);
         if (copyFormat === "sql-insert")
           return rowsToSqlInsert(rows, columns, tableName ?? "table");
+        if (withHeaders && csvIncludeHeaders)
+          return rowsToCSVWithHeaders(rows, columns, "null", csvDelimiter);
         return rowsToCSV(rows, "null", csvDelimiter);
       },
-      [columns, copyFormat, csvDelimiter, tableName],
+      [columns, copyFormat, csvDelimiter, csvIncludeHeaders, tableName],
     );
 
     const copySelectedOrContextRow = useCallback(async () => {
@@ -1056,7 +1200,7 @@ export const DataGrid = React.memo(
           ? getSelectedRows(data, selectedRowIndices)
           : [contextMenu.row];
 
-      await copyToClipboard(formatRows(rows));
+      await copyToClipboard(formatRows(rows, true));
     }, [contextMenu, selectedRowIndices, data, formatRows, copyToClipboard]);
 
     const copyHeaderName = useCallback(async () => {
@@ -1081,7 +1225,7 @@ export const DataGrid = React.memo(
     const copySelectedCells = useCallback(async () => {
       if (selectedRowIndices.size === 0) return;
       await copyToClipboard(
-        formatRows(getSelectedRows(data, selectedRowIndices)),
+        formatRows(getSelectedRows(data, selectedRowIndices), true),
       );
     }, [selectedRowIndices, data, formatRows, copyToClipboard]);
 
@@ -1141,15 +1285,16 @@ export const DataGrid = React.memo(
         autoIncrementColumns,
         defaultValueColumns,
         nullableColumns,
-        pkColumn,
+        pkColumns,
         pendingChanges,
         columnTypeMap,
         columnLengthMap,
+        resultColorClassMap,
         isJsonCellTarget,
         fksByColumn,
         t,
         mergedRows,
-        pkIndexMap,
+        pkIndexMaps,
         parentViewportWidth,
         readonly: readonlyProp,
         updateSelection,
@@ -1162,6 +1307,7 @@ export const DataGrid = React.memo(
         handleCellDoubleClick,
         handleContextMenu,
         handleEditCommit,
+        commitEditWithValue,
         handleKeyDown,
         onForeignKeyShowPanel,
         onForeignKeyHidePanel,
@@ -1177,15 +1323,16 @@ export const DataGrid = React.memo(
         autoIncrementColumns,
         defaultValueColumns,
         nullableColumns,
-        pkColumn,
+        pkColumns,
         pendingChanges,
         columnTypeMap,
         columnLengthMap,
+        resultColorClassMap,
         isJsonCellTarget,
         fksByColumn,
         t,
         mergedRows,
-        pkIndexMap,
+        pkIndexMaps,
         parentViewportWidth,
         readonlyProp,
         updateSelection,
@@ -1198,6 +1345,7 @@ export const DataGrid = React.memo(
         handleCellDoubleClick,
         handleContextMenu,
         handleEditCommit,
+        commitEditWithValue,
         handleKeyDown,
         onForeignKeyShowPanel,
         onForeignKeyHidePanel,
@@ -1220,108 +1368,117 @@ export const DataGrid = React.memo(
       );
     }
 
+    const virtualItems = rowVirtualizer.getVirtualItems();
+    const virtualPaddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+    const virtualPaddingBottom =
+      virtualItems.length > 0
+        ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+        : 0;
+    const totalColumnCount = tableColumns.length + 1;
+
     return (
       <>
         <div
           ref={parentRef}
           className="h-full overflow-auto border border-default rounded bg-elevated relative"
         >
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              position: "relative",
-            }}
-          >
-            <table
-              className="w-full text-left border-collapse absolute top-0 left-0"
-              style={{
-                transform: `translateY(${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px)`,
-              }}
+          <table className="w-full text-left border-collapse">
+            <thead
+              className={`bg-base z-10 shadow-sm ${stickyColumnHeaders ? "sticky top-0" : ""}`}
             >
-              <thead
-                className="bg-base sticky top-0 z-10 shadow-sm"
-                style={{
-                  transform: `translateY(${-1 * (rowVirtualizer.getVirtualItems()[0]?.start ?? 0)}px)`,
-                }}
-              >
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  <th
+                    onClick={handleSelectAll}
+                    className="px-2 py-2 text-xs font-semibold text-muted border-b border-r border-default bg-base sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-elevated"
+                  >
+                    #
+                  </th>
+                  {headerGroup.headers.map((header) => (
                     <th
-                      onClick={handleSelectAll}
-                      className="px-2 py-2 text-xs font-semibold text-muted border-b border-r border-default bg-base sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-elevated"
+                      key={header.id}
+                      className="px-4 py-2 text-xs font-semibold text-secondary tracking-wider border-b border-r border-default last:border-r-0 whitespace-nowrap"
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setHeaderContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          colName: header.id,
+                        });
+                      }}
                     >
-                      #
+                      {flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )}
                     </th>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-4 py-2 text-xs font-semibold text-secondary tracking-wider border-b border-r border-default last:border-r-0 whitespace-nowrap"
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          setHeaderContextMenu({
-                            x: e.clientX,
-                            y: e.clientY,
-                            colName: header.id,
-                          });
-                        }}
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const rowIndex = virtualRow.index;
-                  const row = tableRows[rowIndex];
-                  const rowOriginal = row.original as unknown[];
-                  const isSelected = selectedRowIndices.has(rowIndex);
-                  const mergedRow = mergedRows[rowIndex];
-                  const isInsertion = mergedRow?.type === "insertion";
-                  const pkVal =
-                    pkIndexMap !== null
-                      ? String(rowOriginal[pkIndexMap])
-                      : null;
-                  const isPendingDelete =
-                    !isInsertion && pkVal
-                      ? pendingDeletions?.[pkVal] !== undefined
-                      : false;
-                  const isRowEditing = editingCell?.rowIndex === rowIndex;
-                  const isRowFocused = focusedCell?.rowIndex === rowIndex;
-                  const isRowExpanded = expandedCell?.rowIndex === rowIndex;
-                  return (
-                    <MemoRow
-                      key={row.id}
-                      ctx={rowCtx}
-                      rowIndex={rowIndex}
-                      rowOriginal={rowOriginal}
-                      isSelected={isSelected}
-                      isInsertion={isInsertion}
-                      isPendingDelete={isPendingDelete}
-                      pkVal={pkVal}
-                      editingColIndex={isRowEditing ? editingCell!.colIndex : null}
-                      editingValue={isRowEditing ? editingCell!.value : undefined}
-                      focusedColIndex={isRowFocused ? focusedCell!.colIndex : null}
-                      expandedColIndex={isRowExpanded ? expandedCell!.colIndex : null}
-                      expandedKind={isRowExpanded ? expandedCell!.kind : null}
-                    />
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {virtualPaddingTop > 0 && (
+                <tr>
+                  <td
+                    colSpan={totalColumnCount}
+                    style={{ height: virtualPaddingTop, padding: 0, border: "none" }}
+                  />
+                </tr>
+              )}
+              {virtualItems.map((virtualRow) => {
+                const rowIndex = virtualRow.index;
+                const row = tableRows[rowIndex];
+                const rowOriginal = row.original as unknown[];
+                const isSelected = selectedRowIndices.has(rowIndex);
+                const mergedRow = mergedRows[rowIndex];
+                const isInsertion = mergedRow?.type === "insertion";
+                const pkVal =
+                  pkIndexMaps.length > 0 && pkColumns
+                    ? serializePkKey(buildPkMap(pkColumns, rowOriginal as unknown[], pkIndexMaps))
+                    : null;
+                const isPendingDelete =
+                  !isInsertion && pkVal
+                    ? pendingDeletions?.[pkVal] !== undefined
+                    : false;
+                const isRowEditing = editingCell?.rowIndex === rowIndex;
+                const isRowFocused = focusedCell?.rowIndex === rowIndex;
+                const isRowExpanded = expandedCell?.rowIndex === rowIndex;
+                return (
+                  <MemoRow
+                    key={row.id}
+                    ctx={rowCtx}
+                    rowIndex={rowIndex}
+                    rowOriginal={rowOriginal}
+                    isSelected={isSelected}
+                    isInsertion={isInsertion}
+                    isPendingDelete={isPendingDelete}
+                    pkVal={pkVal}
+                    editingColIndex={isRowEditing ? editingCell!.colIndex : null}
+                    editingValue={isRowEditing ? editingCell!.value : undefined}
+                    focusedColIndex={isRowFocused ? focusedCell!.colIndex : null}
+                    expandedColIndex={isRowExpanded ? expandedCell!.colIndex : null}
+                    expandedKind={isRowExpanded ? expandedCell!.kind : null}
+                  />
+                );
+              })}
+              {virtualPaddingBottom > 0 && (
+                <tr>
+                  <td
+                    colSpan={totalColumnCount}
+                    style={{ height: virtualPaddingBottom, padding: 0, border: "none" }}
+                  />
+                </tr>
+              )}
+            </tbody>
+          </table>
 
           {contextMenu &&
             (() => {
               // Check if this row has any pending changes, deletions, or is an insertion
               const isInsertion = contextMenu.mergedRow?.type === "insertion";
               const pkVal =
-                pkIndexMap !== null
-                  ? String(contextMenu.row[pkIndexMap])
+                pkIndexMaps.length > 0 && pkColumns
+                  ? serializePkKey(buildPkMap(pkColumns, contextMenu.row, pkIndexMaps))
                   : null;
               const hasPendingChanges =
                 !isInsertion && pkVal && pendingChanges?.[pkVal] !== undefined;
@@ -1371,12 +1528,14 @@ export const DataGrid = React.memo(
                     action: setCellDefault,
                   });
                 }
-                // Always allow setting empty string, except for BLOB columns
+                // Empty string ("") is only a valid value for textual columns.
+                // Strongly-typed columns (uuid, numeric, temporal, …) reject it,
+                // so offer "Set Empty" only where an empty string is assignable.
                 const colDataType = columnTypeMap?.get(colName) ?? "";
-                if (!isBlobColumn(colDataType, columnLengthMap?.get(colName))) {
+                if (supportsEmptyString(colDataType)) {
                   menuItems.push({
                     label: t("dataGrid.setEmpty"),
-                    icon: Copy,
+                    icon: Eraser,
                     action: setCellEmpty,
                   });
                 }
@@ -1566,19 +1725,24 @@ export const DataGrid = React.memo(
                   detectJsonInTextColumns={detectJsonInTextColumns}
                   rowIndex={sidebarRowData.rowIndex}
                   isInsertion={isInsertion}
-                  columns={columns.map((colName, index) => ({
-                    name: colName,
-                    type: columnMetadata?.[index]?.data_type,
-                    characterMaximumLength:
-                      columnMetadata?.[index]?.character_maximum_length,
-                  }))}
+                  columns={columns.map((colName) => {
+                    const meta = columnMetadata?.find(
+                      (c) => c.name === colName,
+                    );
+                    return {
+                      name: colName,
+                      type: meta?.data_type,
+                      characterMaximumLength:
+                        meta?.character_maximum_length,
+                    };
+                  })}
                   autoIncrementColumns={autoIncrementColumns}
                   defaultValueColumns={defaultValueColumns}
                   nullableColumns={nullableColumns}
                   focusField={sidebarRowData.focusField}
                   connectionId={connectionId}
                   tableName={tableName}
-                  pkColumn={pkColumn}
+                  pkColumns={pkColumns}
                   schema={activeSchema}
                   onChange={(colName, value) => {
                     // Get the merged row to determine if it's an insertion or existing row
@@ -1602,14 +1766,14 @@ export const DataGrid = React.memo(
                     } else if (
                       !isInsertion &&
                       onPendingChange &&
-                      pkColumn &&
-                      pkIndexMap !== null
+                      pkColumns &&
+                      pkIndexMaps.length > 0
                     ) {
                       // Handle existing row updates
                       const rowData = mergedRow.rowData;
                       if (rowData) {
-                        const pkVal = rowData[pkIndexMap];
-                        onPendingChange(pkVal, colName, value);
+                        const pkMapVal = buildPkMap(pkColumns, rowData, pkIndexMaps);
+                        onPendingChange(pkMapVal, colName, value);
                       }
                     }
                   }}

@@ -25,6 +25,7 @@ interface StackedResultItemProps {
   connectionId: string | null;
   copyFormat: "csv" | "json" | "sql-insert";
   csvDelimiter: string;
+  csvIncludeHeaders: boolean;
   collapsed: boolean;
   aiEnabled: boolean;
   aiRenaming: boolean;
@@ -41,6 +42,7 @@ export function StackedResultItem({
   connectionId,
   copyFormat,
   csvDelimiter,
+  csvIncludeHeaders,
   collapsed,
   aiEnabled,
   aiRenaming,
@@ -222,7 +224,7 @@ export function StackedResultItem({
         {hasResult && (
           <div className="flex items-center gap-2 shrink-0">
             {entry.result!.pagination?.has_more && (
-              <span className="px-1.5 py-0.5 bg-yellow-900/30 text-yellow-400 rounded text-[10px] font-semibold uppercase tracking-wide border border-yellow-500/30">
+              <span className="px-1.5 py-0.5 bg-accent-warning/15 text-accent-warning rounded text-[10px] font-semibold uppercase tracking-wide border border-accent-warning/50">
                 {t("editor.autoPaginated")}
               </span>
             )}
@@ -293,6 +295,7 @@ export function StackedResultItem({
                 connectionId={connectionId}
                 copyFormat={copyFormat}
                 csvDelimiter={csvDelimiter}
+                csvIncludeHeaders={csvIncludeHeaders}
                 onPageChange={onPageChange}
                 compact
               />
@@ -305,6 +308,7 @@ export function StackedResultItem({
                   connectionId={connectionId}
                   copyFormat={copyFormat}
                   csvDelimiter={csvDelimiter}
+                  csvIncludeHeaders={csvIncludeHeaders}
                   onPageChange={onPageChange}
                   compact
                 />

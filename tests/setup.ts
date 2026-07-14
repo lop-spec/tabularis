@@ -21,6 +21,32 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/api/window", () => ({
+  UserAttentionType: {
+    Critical: 1,
+    Informational: 2,
+  },
+  getCurrentWindow: () => ({
+    isAlwaysOnTop: vi.fn().mockResolvedValue(false),
+    isVisible: vi.fn().mockResolvedValue(true),
+    isMinimized: vi.fn().mockResolvedValue(false),
+    setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
+    show: vi.fn().mockResolvedValue(undefined),
+    hide: vi.fn().mockResolvedValue(undefined),
+    minimize: vi.fn().mockResolvedValue(undefined),
+    unminimize: vi.fn().mockResolvedValue(undefined),
+    setFocus: vi.fn().mockResolvedValue(undefined),
+    requestUserAttention: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+vi.mock("@tauri-apps/plugin-notification", () => ({
+  isPermissionGranted: vi.fn().mockResolvedValue(true),
+  requestPermission: vi.fn().mockResolvedValue("granted"),
+  sendNotification: vi.fn(),
+}));
+
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: vi.fn(),
   message: vi.fn(),
@@ -102,6 +128,7 @@ vi.mock("lucide-react", () => ({
   Copy: () => null,
   Link: () => null,
   Eye: () => null,
+  EyeOff: () => null,
   RefreshCw: () => null,
   SquareStack: () => null,
   Check: () => null,
@@ -114,6 +141,7 @@ vi.mock("lucide-react", () => ({
   Braces: () => null,
   Sparkles: () => null,
   Ban: () => null,
+  Eraser: () => null,
   FileDigit: () => null,
   HelpCircle: () => null,
   Maximize: () => null,
@@ -148,6 +176,7 @@ vi.mock("lucide-react", () => ({
   Globe: () => null,
   Lock: () => null,
   Unlock: () => null,
+  FileWarning: () => null,
   Shield: () => null,
   User: () => null,
   Folder: () => null,
@@ -170,9 +199,14 @@ vi.mock("lucide-react", () => ({
   PanelTop: () => null,
   ChevronsDownUp: () => null,
   ChevronsUpDown: () => null,
-  Home: () => null,
+  ArrowLeft: () => null,
   Boxes: () => null,
   CheckCircle2: () => null,
+  FolderPlus: () => null,
+  FlaskConical: () => null,
+  Home: () => null,
+  Github: () => null,
+  Share2: () => null,
   // CONNECTION_ICON_PACK icons
   Server: () => null,
   HardDrive: () => null,

@@ -5,8 +5,8 @@
 # tabularis
 
 <p align="center">
-  <strong>Un client database open source per PostgreSQL, MySQL/MariaDB e SQLite.<br />
-  Notebook SQL, Visual EXPLAIN, AI e MCP integrati. I plugin aggiungono tutto il resto.</strong>
+  <strong>Tabularis è un workspace SQL desktop open source per PostgreSQL, MySQL/MariaDB, SQLite e oltre 12 altri database come DuckDB, ClickHouse, Redis e Firestore.<br />
+  Il suo server MCP integrato permette a Claude, Cursor e Devin (ex Windsurf) di leggere il tuo schema ed eseguire query nella stessa app che usi già.</strong>
 </p>
 
 <p align="center">
@@ -18,7 +18,8 @@
   <a href="./README.fr.md">Français</a> |
   <a href="./README.de.md">Deutsch</a> |
   <a href="./README.ja.md">日本語</a> |
-  <a href="./README.ru.md">Русский</a>
+  <a href="./README.ru.md">Русский</a> |
+  <a href="./README.tl.md">Tagalog</a>
 </p>
 
 <p align="center">
@@ -34,6 +35,7 @@
 
 <p align="center">
   <a href="https://snapcraft.io/tabularis"><img src="https://img.shields.io/badge/snap-tabularis-blue?logo=snapcraft" alt="Snap Store" /></a>
+  <a href="https://flatpark.org/apps/dev.tabularis.Tabularis/"><img src="https://img.shields.io/badge/flatpak-tabularis-4A90D9?logo=flatpak&logoColor=white" alt="Flatpak (Flatpark)" /></a>
   <a href="https://aur.archlinux.org/packages/tabularis-bin"><img src="https://img.shields.io/badge/AUR-tabularis--bin-1793D1?logo=archlinux&logoColor=white" alt="AUR" /></a>
   <a href="https://winstall.app/apps/Debba.Tabularis"><img src="https://img.shields.io/winget/v/Debba.Tabularis?label=WinGet&logo=windows&color=0078D4" alt="WinGet" /></a>
 </p>
@@ -58,7 +60,7 @@ Oppure scarica direttamente un installer:
 
 [![Windows](https://img.shields.io/badge/Windows-Download-blue?logo=windows)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_x64-setup.exe) [![macOS (Apple Silicon)](https://img.shields.io/badge/macOS-Apple%20Silicon-black?logo=apple)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_aarch64.dmg) [![macOS (Intel)](https://img.shields.io/badge/macOS-Intel-black?logo=apple)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_x64.dmg) [![Linux AppImage](https://img.shields.io/badge/Linux-AppImage-green?logo=linux)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_amd64.AppImage) [![Linux .deb](https://img.shields.io/badge/Linux-.deb-orange?logo=debian)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis_0.13.1_amd64.deb) [![Linux .rpm](https://img.shields.io/badge/Linux-.rpm-red?logo=redhat)](https://github.com/TabularisDB/tabularis/releases/download/v0.13.1/tabularis-0.13.1-1.x86_64.rpm)
 
-L’interfaccia dell’app è disponibile in inglese, italiano, spagnolo, cinese (semplificato), francese, tedesco, giapponese e russo.
+L’interfaccia dell’app è disponibile in inglese, italiano, spagnolo, cinese (semplificato), francese, tedesco, giapponese, russo e tagalog.
 
 ## Perché tabularis?
 
@@ -70,9 +72,17 @@ L’interfaccia dell’app è disponibile in inglese, italiano, spagnolo, cinese
 | Plugin in **qualsiasi linguaggio** (JSON-RPC su stdio) | ✅ | Plugin Java/Eclipse | Plugin JavaScript | ❌ |
 | Text-to-SQL AI con **modelli locali** (Ollama) | ✅ | Assistente AI basato su cloud | ❌ | ❌ |
 | Visual EXPLAIN con grafi interattivi del piano | ✅ | ✅ | ❌ | ❌ |
-| Database supportati nativamente | 3 (+ qualsiasi via plugin) | 100+ | 20+ | ~10 |
+| Database supportati nativamente | 3 nativi + 12 plugin ufficiali | 100+ | 20+ | ~10 |
 
 > Confronto aggiornato a giugno 2026; le funzionalità degli altri strumenti potrebbero essere cambiate nel frattempo. Se ti servono decine di driver, usa DBeaver — tabularis si concentra sul supportare bene pochi database.
+
+### Database supportati
+
+PostgreSQL, MySQL/MariaDB e SQLite sono integrati nativamente. Tutto il resto è un plugin — ecco a che punto è oggi ogni integrazione, rispecchiando la [copertura driver & plugin](https://tabularis.dev/#driver-coverage) sul sito.
+
+ClickHouse (disponibile), Cloudflare D1 (disponibile), DuckDB (disponibile), Firestore (disponibile), IBM Db2 (disponibile), IBM Informix (disponibile), Redis (disponibile), CSV Folder (disponibile), Google Sheets (disponibile), HackerNews (disponibile), Google BigQuery (assegnato), LibSQL / Turso (assegnato), Meilisearch (assegnato), MongoDB (assegnato), Oracle (assegnato), SQL Server (assegnato), Amazon Redshift (definito), CockroachDB (definito), TiDB (definito), DynamoDB (in arrivo), Snowflake (in arrivo), Cassandra (aperto), Elasticsearch (aperto), Etcd (aperto), Firebird (aperto), ScyllaDB (aperto), SQL Anywhere (aperto), SurrealDB (aperto), Trino / Presto (aperto).
+
+> I driver **Disponibili** sono installabili dal [registro dei plugin](https://tabularis.dev/plugins). Tutto il resto è sulla [bacheca delle taglie](https://tabularis.dev/plugins/bounties) — prendine una in carico, sponsorizzala o [richiedi un database](https://github.com/TabularisDB/tabularis/discussions).
 
 ## Installazione
 
@@ -91,7 +101,12 @@ brew tap TabularisDB/tabularis
 brew install --cask tabularis
 ```
 
-Se installi da release diretta, potrebbe essere necessario eseguire:
+Le build dalla **v0.13.1** in poi sono firmate e autenticate (notarized) da Apple, quindi si aprono senza passaggi aggiuntivi.
+
+Le note seguenti valgono solo per le release più vecchie (precedenti alla v0.13.1) scaricate direttamente:
+
+- Su macOS devi concedere l’accesso all’accessibilità (Privacy e sicurezza) all’app tabularis. Se stai aggiornando e tabularis è già nell’elenco delle app consentite, dovrai rimuoverla manualmente prima di poter concedere l’accesso alla nuova versione.
+- Potrebbe essere necessario eseguire:
 
 ```bash
 xattr -c /Applications/tabularis.app
@@ -103,6 +118,13 @@ Snap:
 
 ```bash
 sudo snap install tabularis
+```
+
+Flatpak:
+
+```bash
+flatpak remote-add --if-not-exists flatpark https://dl.flatpark.org/flatpark.flatpakrepo
+flatpak install flatpark dev.tabularis.Tabularis
 ```
 
 AppImage:
@@ -209,7 +231,7 @@ File principali:
 - `preferences/`
 - `connection-icons/` (immagini personalizzate per le icone di connessione)
 
-In `config.json`, il campo `language` supporta `auto`, `en`, `it`, `es`, `zh`, `fr`, `de`.
+In `config.json`, il campo `language` supporta `auto`, `en`, `it`, `es`, `zh`, `fr`, `de`, `ja`, `ru`, `tl`.
 
 ## AI
 
@@ -241,6 +263,7 @@ Client supportati:
 Strumenti disponibili:
 
 - `list_connections`
+- `list_databases`
 - `list_tables`
 - `describe_table`
 - `run_query`

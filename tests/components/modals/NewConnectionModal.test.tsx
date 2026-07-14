@@ -81,6 +81,31 @@ vi.mock("../../../src/hooks/usePluginSlotRegistry", () => ({
   }),
 }));
 
+vi.mock("../../../src/hooks/useSettings", () => ({
+  useSettings: () => ({
+    settings: {},
+    updateSetting: vi.fn(),
+  }),
+}));
+
+vi.mock("../../../src/hooks/useConnectionCatalogue", () => ({
+  useConnectionCatalogue: () => ({
+    groups: [],
+    facets: [],
+    loading: false,
+    registryOffline: false,
+    refresh: vi.fn(),
+  }),
+}));
+
+vi.mock("../../../src/utils/credentials", () => ({
+  fetchConnectionWithCredentials: vi.fn(async () => ({
+    id: "conn-1",
+    name: "Existing",
+    params: { driver: "mysql", database: "db" },
+  })),
+}));
+
 vi.mock("../../../src/utils/ssh", () => ({
   loadSshConnections: sshMocks.loadSshConnections,
 }));
@@ -105,14 +130,32 @@ vi.mock("../../../src/components/modals/K8sConnectionsModal", () => ({
   K8sConnectionsModal: () => null,
 }));
 
+// A connection is passed in so the modal opens on the form step: without one it
+// starts on the catalogue step, where the K8s tab isn't rendered yet.
+const existingConnection = {
+  id: "conn-1",
+  name: "Existing",
+  params: { driver: "mysql", database: "db" },
+};
+
 function renderModal() {
   return render(
-    <NewConnectionModal isOpen={true} onClose={vi.fn()} onSave={vi.fn()} />,
+    <NewConnectionModal
+      isOpen={true}
+      onClose={vi.fn()}
+      onSave={vi.fn()}
+      initialConnection={existingConnection}
+    />,
   );
 }
 
 async function openInlineK8s() {
   renderModal();
+  // The form step hydrates asynchronously (credentials fetch); clicking before
+  // it settles lets the init overwrite the form state again.
+  await waitFor(() => {
+    expect(k8sMocks.getK8sContexts).toHaveBeenCalled();
+  });
   fireEvent.click(screen.getByText("Kubernetes"));
   fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
   fireEvent.click(screen.getByText("newConnection.createInlineK8s"));

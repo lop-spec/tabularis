@@ -58,10 +58,16 @@ import {
   createNotebookFromState,
 } from "../../utils/notebookStore";
 import { useDatabase } from "../../hooks/useDatabase";
+import { useSqlAutocompleteRegistration } from "../../hooks/useSqlAutocompleteRegistration";
 import { isMultiDatabaseCapable } from "../../utils/database";
 import { useSettings } from "../../hooks/useSettings";
 import { useAlert } from "../../hooks/useAlert";
 import { useKeybindings } from "../../hooks/useKeybindings";
+import {
+  useDangerousQueryGuard,
+  DANGEROUS_QUERY_I18N,
+} from "../../hooks/useDangerousQueryGuard";
+import { ConfirmModal } from "../modals/ConfirmModal";
 import { NotebookToolbar } from "./NotebookToolbar";
 import { NotebookHistoryPanel } from "./NotebookHistoryPanel";
 import { NotebookCellWrapper } from "./NotebookCellWrapper";
@@ -90,9 +96,18 @@ export function NotebookView({
     isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
   const effectiveSchema =
     tab.schema || activeSchema || (isMultiDb ? selectedDatabases[0] : null);
+  useSqlAutocompleteRegistration(connectionId, {
+    schema: effectiveSchema,
+    enabled: isActive,
+  });
   const { settings } = useSettings();
   const { showAlert } = useAlert();
   const { matchesShortcut } = useKeybindings();
+  const {
+    pending: dangerousQuery,
+    guardQuery: guardDangerousQuery,
+    resolve: resolveDangerousQuery,
+  } = useDangerousQueryGuard();
 
   // Local notebook state — loaded from store/disk, NOT from tab
   const [notebook, setNotebook] = useState<NotebookState | null>(() =>
@@ -351,6 +366,11 @@ export function NotebookView({
         return;
       }
 
+      if (!(await guardDangerousQuery(resolvedSql))) {
+        updateCell(cellId, { isLoading: false });
+        return;
+      }
+
       const start = performance.now();
       try {
         const res = await invoke<QueryResult>("execute_query", {
@@ -404,6 +424,7 @@ export function NotebookView({
       settings.resultPageSize,
       updateCell,
       params,
+      guardDangerousQuery,
     ],
   );
 
@@ -815,6 +836,25 @@ export function NotebookView({
 
   return (
     <div className="flex flex-col h-full relative">
+      <ConfirmModal
+        isOpen={!!dangerousQuery}
+        onClose={() => resolveDangerousQuery(false)}
+        onConfirm={() => resolveDangerousQuery(true)}
+        title={t(
+          dangerousQuery
+            ? DANGEROUS_QUERY_I18N[dangerousQuery.kind].title
+            : "editor.dangerousQueryTitle",
+        )}
+        message={t(
+          dangerousQuery
+            ? DANGEROUS_QUERY_I18N[dangerousQuery.kind].message
+            : "editor.dangerousQueryMessage",
+        )}
+        sql={dangerousQuery?.sql}
+        confirmLabel={t("editor.dangerousQueryConfirm")}
+        variant="danger"
+        confirmDelaySeconds={5}
+      />
       <NotebookToolbar {...toolbarProps} />
       {showHistory && (
         <NotebookHistoryPanel

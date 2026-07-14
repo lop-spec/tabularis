@@ -24,6 +24,12 @@ export interface Settings {
   displayTimezone?: string;
   fontFamily: string;
   fontSize: number;
+  /** Colorize query result cell values by their data type. Default: false. */
+  resultColorByType?: boolean;
+  /** Per-type hex color overrides for result cell values (keys: number, string, date, boolean). */
+  resultTypeColors?: Record<string, string>;
+  /** Keep the result grid's column headers pinned to the top while scrolling. Default: true. */
+  stickyColumnHeaders?: boolean;
   aiEnabled: boolean;
   aiProvider: AiProvider | null;
   aiModel: string | null;
@@ -37,6 +43,8 @@ export interface Settings {
   erDiagramDefaultLayout?: ERDiagramLayout;
   copyFormat?: CopyFormat;
   csvDelimiter?: string;
+  /** Whether copied CSV output includes a header row. Default: true. */
+  csvIncludeHeaders?: boolean;
   activeExternalDrivers?: string[];
   /** Base URL of the Tabularium plugin registry. Defaults to the built-in instance when unset. */
   tabulariumRegistryUrl?: string;
@@ -52,6 +60,10 @@ export interface Settings {
   pingInterval?: number;
   queryHistoryMaxEntries?: number;
   showWelcome?: boolean;
+  /** Reconnect to the last active connection on startup. Default: true. */
+  autoConnectLastConnection?: boolean;
+  /** Maximize the window on startup. Default: false. */
+  startMaximized?: boolean;
   // AI / MCP safety
   aiAuditEnabled?: boolean;
   aiAuditMaxEntries?: number;
@@ -61,6 +73,8 @@ export interface Settings {
   mcpApprovalMode?: "off" | "writes_only" | "all";
   mcpApprovalTimeoutSeconds?: number;
   mcpPreflightExplain?: boolean;
+  mcpApprovalAlwaysOnTop?: boolean;
+  mcpApprovalNotifySound?: boolean;
 }
 
 export interface SettingsContextType {
@@ -70,6 +84,8 @@ export interface SettingsContextType {
     value: Settings[K],
   ) => Promise<void>;
   isLoading: boolean;
+  isLanguageReady: boolean;
+  isLanguageSettled: boolean;
 }
 
 export const SettingsContext = createContext<SettingsContextType | undefined>(
@@ -82,6 +98,9 @@ export const DEFAULT_SETTINGS: Settings = {
   displayTimezone: "auto",
   fontFamily: "System",
   fontSize: 14,
+  resultColorByType: false,
+  resultTypeColors: {},
+  stickyColumnHeaders: true,
   aiEnabled: false,
   aiProvider: null,
   aiModel: null,
@@ -93,6 +112,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxLogEntries: 1000,
   copyFormat: "csv",
   csvDelimiter: ",",
+  csvIncludeHeaders: true,
   erDiagramDefaultLayout: "LR",
   editorFontFamily: "JetBrains Mono",
   editorFontSize: 14,
@@ -103,6 +123,8 @@ export const DEFAULT_SETTINGS: Settings = {
   editorAcceptSuggestionOnEnter: true,
   pingInterval: 30,
   queryHistoryMaxEntries: 500,
+  autoConnectLastConnection: true,
+  startMaximized: false,
   aiAuditEnabled: true,
   aiAuditMaxEntries: 5000,
   aiSessionGapMinutes: 10,
@@ -111,4 +133,6 @@ export const DEFAULT_SETTINGS: Settings = {
   mcpApprovalMode: "writes_only",
   mcpApprovalTimeoutSeconds: 120,
   mcpPreflightExplain: true,
+  mcpApprovalAlwaysOnTop: true,
+  mcpApprovalNotifySound: true,
 };
