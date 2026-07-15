@@ -390,6 +390,12 @@ pub struct QueryResult {
     #[serde(default)]
     pub truncated: bool,
     pub pagination: Option<Pagination>,
+    /// Extra result sets produced by a single statement beyond the first one,
+    /// e.g. a MySQL `CALL` to a stored procedure containing multiple `SELECT`s.
+    /// The first result set stays in `columns` / `rows` so consumers unaware
+    /// of multi-result statements keep working unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub additional_results: Option<Vec<QueryResult>>,
 }
 
 /// One statement's outcome within an `execute_batch` call. Exactly one of
