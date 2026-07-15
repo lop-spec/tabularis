@@ -22,7 +22,7 @@ export function K8sAdvancedSettings({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="border border-default rounded-lg overflow-hidden">
+    <div className="border border-default rounded-md overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -42,7 +42,7 @@ export function K8sAdvancedSettings({
           <div className="pt-3">
             <label
               htmlFor="k8s-kubectl-path"
-              className="block text-xs uppercase font-bold text-muted mb-1"
+              className="block text-[10px] uppercase font-semibold tracking-wider text-muted mb-1"
             >
               {t("k8sConnections.kubectlPath")}
             </label>
@@ -62,7 +62,7 @@ export function K8sAdvancedSettings({
                 autoCapitalize="off"
                 autoComplete="off"
                 spellCheck={false}
-                className={`w-full px-3 py-2 pr-9 bg-base border rounded-lg text-primary focus:border-blue-500 focus:outline-none ${
+                className={`w-full px-3 py-2 pr-9 bg-base border rounded-md text-sm text-primary placeholder:text-muted placeholder:italic focus:border-blue-500 focus:outline-none transition-colors ${
                   pathOverrides.kubectlValidation.status === "error"
                     ? "border-red-500"
                     : "border-strong"
@@ -88,7 +88,7 @@ export function K8sAdvancedSettings({
           <div>
             <label
               htmlFor="k8s-kubeconfig-path"
-              className="block text-xs uppercase font-bold text-muted mb-1"
+              className="block text-[10px] uppercase font-semibold tracking-wider text-muted mb-1"
             >
               {t("k8sConnections.kubeconfigPath")}
             </label>
@@ -108,7 +108,7 @@ export function K8sAdvancedSettings({
                 autoCapitalize="off"
                 autoComplete="off"
                 spellCheck={false}
-                className={`w-full px-3 py-2 pr-9 bg-base border rounded-lg text-primary focus:border-blue-500 focus:outline-none ${
+                className={`w-full px-3 py-2 pr-9 bg-base border rounded-md text-sm text-primary placeholder:text-muted placeholder:italic focus:border-blue-500 focus:outline-none transition-colors ${
                   pathOverrides.kubeconfigValidation.status === "error"
                     ? "border-red-500"
                     : "border-strong"
