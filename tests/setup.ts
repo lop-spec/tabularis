@@ -107,6 +107,7 @@ vi.mock("@monaco-editor/react", () => ({
 vi.mock("lucide-react", () => ({
   Trash2: () => null,
   Edit: () => null,
+  Edit2: () => null,
   ArrowUp: () => null,
   ArrowDown: () => null,
   ArrowUpDown: () => null,

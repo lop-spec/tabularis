@@ -1828,7 +1828,17 @@
       "resourceTypeInvalid": "Le type de ressource doit être \"service\" ou \"pod\"",
       "resourceNameRequired": "Le nom de la ressource est requis",
       "portInvalid": "Le port doit être compris entre 1 et 65535"
-    }
+    },
+    "advancedSettings": "Paramètres kubectl avancés",
+    "kubectlPath": "Chemin de kubectl",
+    "kubectlPathPlaceholder": "kubectl",
+    "kubeconfigPath": "Chemin du kubeconfig",
+    "kubeconfigPathPlaceholder": "Chemin vers le kubeconfig",
+    "pathValidationFailed": "Corrigez les champs de chemin Kubernetes avancés non valides avant de continuer.",
+    "pathSelectionReset": "Les chemins Kubernetes avancés ont changé. Choisissez à nouveau le contexte, le namespace et la ressource.",
+    "noContexts": "Aucun contexte disponible",
+    "noNamespaces": "Aucun namespace disponible",
+    "noResources": "Aucune ressource disponible"
   },
   "routines": {
     "menuRun": "Exécuter…",

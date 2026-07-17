@@ -1770,7 +1770,17 @@
       "resourceTypeInvalid": "リソースタイプは \"service\" または \"pod\" である必要があります",
       "resourceNameRequired": "リソース名は必須です",
       "portInvalid": "ポートは 1 から 65535 の範囲で指定してください"
-    }
+    },
+    "advancedSettings": "kubectl の詳細設定",
+    "kubectlPath": "kubectl のパス",
+    "kubectlPathPlaceholder": "kubectl",
+    "kubeconfigPath": "kubeconfig のパス",
+    "kubeconfigPathPlaceholder": "kubeconfig へのパス",
+    "pathValidationFailed": "続行する前に、Kubernetes の詳細設定にある無効なパス項目を修正してください。",
+    "pathSelectionReset": "Kubernetes の詳細パスが変更されました。コンテキスト、名前空間、リソースをもう一度選択してください。",
+    "noContexts": "利用可能なコンテキストはありません",
+    "noNamespaces": "利用可能なネームスペースはありません",
+    "noResources": "利用可能なリソースはありません"
   },
   "routines": {
     "menuRun": "実行…",

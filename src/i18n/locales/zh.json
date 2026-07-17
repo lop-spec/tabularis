@@ -1692,7 +1692,17 @@
       "resourceTypeInvalid": "资源类型必须为 \"service\" 或 \"pod\"",
       "resourceNameRequired": "资源名称为必填项",
       "portInvalid": "端口必须介于 1 和 65535 之间"
-    }
+    },
+    "advancedSettings": "kubectl 高级设置",
+    "kubectlPath": "kubectl 路径",
+    "kubectlPathPlaceholder": "kubectl",
+    "kubeconfigPath": "kubeconfig 路径",
+    "kubeconfigPathPlaceholder": "kubeconfig 的路径",
+    "pathValidationFailed": "继续前，请修正无效的 Kubernetes 高级路径字段。",
+    "pathSelectionReset": "Kubernetes 高级路径已更改。请重新选择上下文、命名空间和资源。",
+    "noContexts": "没有可用的上下文",
+    "noNamespaces": "没有可用的命名空间",
+    "noResources": "没有可用的资源"
   },
   "routines": {
     "menuRun": "运行…",
