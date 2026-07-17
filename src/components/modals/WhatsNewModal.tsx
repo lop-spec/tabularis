@@ -8,12 +8,11 @@ import {
   Rocket,
   ExternalLink,
   Loader2,
-  Github,
 } from "lucide-react";
 import { Modal } from "../ui/Modal";
-import { DiscordIcon } from "../icons/DiscordIcon";
+import { SocialLinks } from "../SocialLinks";
+import Markdown from "react-markdown";
 import { type ChangelogEntry } from "../../utils/changelog";
-import { GITHUB_URL, DISCORD_URL } from "../../config/links";
 
 interface WhatsNewModalProps {
   isOpen: boolean;
@@ -132,22 +131,7 @@ export const WhatsNewModal = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-default bg-base/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => openUrl(GITHUB_URL)}
-              className="p-2 text-secondary hover:text-primary hover:bg-surface-tertiary rounded-lg transition-colors"
-              title="GitHub"
-            >
-              <Github size={18} />
-            </button>
-            <button
-              onClick={() => openUrl(DISCORD_URL)}
-              className="p-2 text-secondary hover:text-indigo-400 hover:bg-indigo-900/20 rounded-lg transition-colors"
-              title="Discord"
-            >
-              <DiscordIcon size={18} />
-            </button>
-          </div>
+          <SocialLinks iconSize={18} />
           <button
             onClick={onClose}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
@@ -183,10 +167,46 @@ function ChangelogSection({
             key={i}
             className={`text-sm text-secondary pl-5 relative break-words before:content-[''] before:absolute before:left-1.5 before:top-2 before:w-1.5 before:h-1.5 before:rounded-full ${dotColor}`}
           >
-            {item}
+            <InlineMarkdown text={item} />
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+function InlineMarkdown({ text }: { text: string }) {
+  return (
+    <Markdown
+      components={{
+        // Keep list items on a single line: unwrap the paragraph react-markdown
+        // wraps inline content in.
+        p: ({ children }) => <>{children}</>,
+        // Open links via the OS opener instead of navigating the app window.
+        a: ({ href, children }) => (
+          <a
+            href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              if (href) openUrl(href);
+            }}
+            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors cursor-pointer"
+          >
+            {children}
+          </a>
+        ),
+        code: ({ children }) => (
+          <code className="px-1 py-0.5 rounded bg-base text-primary font-mono text-xs">
+            {children}
+          </code>
+        ),
+        strong: ({ children }) => (
+          <strong className="font-semibold text-primary">{children}</strong>
+        ),
+        em: ({ children }) => <em className="italic">{children}</em>,
+      }}
+    >
+      {text}
+    </Markdown>
   );
 }

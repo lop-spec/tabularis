@@ -12,6 +12,12 @@ export function rowsToCSV(rows: unknown[][], nullLabel: string = "null", delimit
     .join("\n");
 }
 
+export function rowsToCSVWithHeaders(rows: unknown[][], columns: string[], nullLabel: string = "null", delimiter: string = ","): string {
+  const header = columns.join(delimiter);
+  const body = rowsToCSV(rows, nullLabel, delimiter);
+  return body ? `${header}\n${body}` : header;
+}
+
 export function rowToJSON(row: unknown[], columns: string[]): string {
   const obj: Record<string, unknown> = {};
   columns.forEach((col, i) => {
@@ -30,6 +36,22 @@ export function rowsToJSON(rows: unknown[][], columns: string[]): string {
       return obj;
     }),
   );
+}
+
+function markdownCell(cell: unknown, nullLabel: string = "null"): string {
+  return formatCellValue(cell, nullLabel)
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n/g, "<br>");
+}
+
+export function rowsToMarkdown(rows: unknown[][], columns: string[], nullLabel: string = "null", includeHeaders: boolean = true): string {
+  const body = rows.map(
+    (row) => `| ${row.map((cell) => markdownCell(cell, nullLabel)).join(" | ")} |`,
+  );
+  if (!includeHeaders) return body.join("\n");
+  const header = `| ${columns.map((c) => markdownCell(c)).join(" | ")} |`;
+  const separator = `| ${columns.map(() => "---").join(" | ")} |`;
+  return [header, separator, ...body].join("\n");
 }
 
 export function getSelectedRows(

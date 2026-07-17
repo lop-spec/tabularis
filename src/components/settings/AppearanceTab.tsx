@@ -14,6 +14,7 @@ import {
 } from "./SettingControls";
 import { FontPicker } from "./FontPicker";
 import { ThemePicker } from "./ThemePicker";
+import { ResultColorsSection } from "./ResultColorsSection";
 
 export function AppearanceTab() {
   const { t } = useTranslation();
@@ -105,6 +106,20 @@ export function AppearanceTab() {
               </p>
             </div>
           </SettingSection>
+
+          <SettingSection title={t("settings.dataGrid.title")}>
+            <SettingRow
+              label={t("settings.dataGrid.stickyHeaders")}
+              description={t("settings.dataGrid.stickyHeadersDesc")}
+            >
+              <SettingToggle
+                checked={settings.stickyColumnHeaders ?? true}
+                onChange={(v) => updateSetting("stickyColumnHeaders", v)}
+              />
+            </SettingRow>
+          </SettingSection>
+
+          <ResultColorsSection />
         </>
       )}
 
