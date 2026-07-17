@@ -110,6 +110,7 @@ vi.mock("lucide-react", () => ({
   AlertTriangle: () => null,
   Trash2: () => null,
   Edit: () => null,
+  Edit2: () => null,
   ArrowUp: () => null,
   ArrowDown: () => null,
   ArrowUpDown: () => null,
