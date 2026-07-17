@@ -123,6 +123,12 @@ pub struct DriverCapabilities {
     /// their manifest. Defaults to `false`.
     #[serde(default, alias = "supportsSsl")]
     pub supports_ssl: bool,
+    /// Supports EXPLAIN / query plan visualization (`explain_query`).
+    /// When `false`, the Visual Explain UI is hidden for connections using
+    /// this driver. Built-in drivers set this; plugins opt in via their
+    /// manifest. Defaults to `false`.
+    #[serde(default)]
+    pub explain: bool,
     /// When `true`, the driver is read-only: all data modification operations
     /// (INSERT, UPDATE, DELETE) are disabled in the UI.
     /// Table/column management is also hidden regardless of `manage_tables`.
