@@ -1,4 +1,6 @@
 name: Release
+env:
+  GH_TOKEN: ${{ SECRETS.GITHUB_TOKEN }}
 on:
   push:
     tags:
@@ -13,12 +15,23 @@ on:
         required: false
 
 jobs:
-  meta:
-    runs-on: ubuntu-latest
-    outputs:
-      ref: ${{ steps.meta.outputs.ref }}
-      tag: ${{ steps.meta.outputs.tag }}
-      prerelease: ${{ steps.meta.outputs.prerelease }}
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # for Arm64
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-15-intel" # for Intel
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-24.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - name: Resolve build ref + tag
         id: meta
@@ -44,15 +57,98 @@ jobs:
             fi
           fi
 
-  build:
-    needs: meta
-    permissions:
-      contents: write
-    uses: ./.github/workflows/build.yml
-    secrets: inherit
-    with:
-      ref: ${{ needs.meta.outputs.ref }}
-      tag: ${{ needs.meta.outputs.tag }}
-      release_name: "v__VERSION__"
-      prerelease: ${{ needs.meta.outputs.prerelease == 'true' }}
-      draft: true
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.meta.outputs.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: "pnpm"
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-24.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libfuse2 \
+            libsoup-3.0-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf \
+            xdg-utils \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-bad \
+            fonts-noto-color-emoji \
+            pkg-config \
+            unzip
+
+      - name: install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2.9.1
+        with:
+          workspaces: src-tauri
+
+      # Notarization needs the App Store Connect API key on disk. The .p8 is stored
+      # base64-encoded in APPLE_API_KEY_CONTENT and decoded into a temp file (macOS only).
+      - name: Prepare Apple API key (macOS only)
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        run: |
+          echo "${{ secrets.APPLE_API_KEY_CONTENT }}" | base64 --decode > "$RUNNER_TEMP/apple_api_key.p8"
+          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/apple_api_key.p8" >> "$GITHUB_ENV"
+
+      - uses: tauri-apps/tauri-action@v0.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # macOS code signing (Developer ID Application certificate)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # macOS notarization (App Store Connect API key)
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+        with:
+          tagName: ${{ steps.meta.outputs.tag }}
+          releaseName: "v__VERSION__"
+          releaseBody: |
+            See the assets below to download this version and install.
+
+            ---
+            **Stay in touch:** [Website](https://tabularis.dev) · [Discord](https://discord.com/invite/K2hmhfHRSt) · [X](https://x.com/tabularisdb) · [Bluesky](https://bsky.app/profile/tabularis.bsky.social) · [Mastodon](https://mastodon.social/@tabularis) · [GitHub](https://github.com/TabularisDB/tabularis)
+          releaseDraft: true
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          tauriScript: pnpm tauri
+          args: ${{ matrix.args }}
+
+      - name: Upload portable executable (Windows only)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.meta.outputs.tag }}".TrimStart('v')
+          $src = "src-tauri\target\release\tabularis.exe"
+          $portable = "tabularis_${version}_x64-portable.exe"
+          Copy-Item $src $portable
+          gh release upload "${{ steps.meta.outputs.tag }}" $portable --clobber

@@ -3,8 +3,6 @@ name: Nightly
 # Daily signed build of main, published to a single rolling `nightly` prerelease
 # that is deleted + recreated each run, so the releases page never accumulates.
 # The prerelease flag keeps it out of AUR/Snap/Winget (those gate on !prerelease).
-# Signed PR previews are handled elsewhere: unsigned via preview.yml (artifacts),
-# or on-demand signed via release.yml's workflow_dispatch(pr_number).
 on:
   schedule:
     - cron: "0 3 * * *" # 03:00 UTC daily

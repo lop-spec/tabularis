@@ -1,8 +1,7 @@
 name: Build
 
-# Reusable build matrix shared by release.yml (tags), nightly.yml (cron) and
-# manual preview runs. All the signing/notarization config lives here once so
-# it can't drift between the release and preview pipelines.
+# Reusable build matrix used by nightly.yml (cron). Centralises the
+# signing/notarization config in one place so callers can't drift from it.
 on:
   workflow_call:
     inputs:
