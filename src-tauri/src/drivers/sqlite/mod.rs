@@ -897,6 +897,7 @@ impl SqliteDriver {
                     create_foreign_keys: false,
                     no_connection_required: false,
                     manage_tables: true,
+                    explain: true,
                     readonly: false,
                     triggers: true,
                     supports_ssl: false,
