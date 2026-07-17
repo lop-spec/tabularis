@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import { isMultiDatabaseCapable } from "../utils/database";
-import { isReadonly } from "../utils/driverCapabilities";
+import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
 import {
   useDangerousQueryGuard,
   DANGEROUS_QUERY_I18N,
@@ -197,6 +197,7 @@ export const Editor = () => {
   const navigate = useNavigate();
 
   const driverReadonly = isReadonly(activeCapabilities);
+  const driverSupportsExplain = supportsExplain(activeCapabilities);
   const activeDialect = activeCapabilities?.sql_dialect;
 
   const [tabContextMenu, setTabContextMenu] = useState<{
@@ -459,6 +460,7 @@ export const Editor = () => {
   const runMultipleQueriesRef = useRef<typeof runMultipleQueries>(null!);
   const openExplainForQueryRef = useRef<(query: string) => void>(null!);
   const activeDialectRef = useRef<typeof activeDialect>(undefined);
+  const supportsExplainRef = useRef(false);
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -1543,6 +1545,7 @@ export const Editor = () => {
   runMultipleQueriesRef.current = runMultipleQueries;
   openExplainForQueryRef.current = openExplainForQuery;
   activeDialectRef.current = activeDialect;
+  supportsExplainRef.current = driverSupportsExplain;
 
   // Global Ctrl/Command+F5 shortcut for Run
   useEffect(() => {
@@ -2566,6 +2569,7 @@ export const Editor = () => {
       contextMenuGroupId: "navigation",
       contextMenuOrder: 1.6,
       run: (ed) => {
+        if (!supportsExplainRef.current) return;
         const selection = ed.getSelection();
         const selectedText = selection && !selection.isEmpty()
           ? ed.getModel()?.getValueInRange(selection)
@@ -3315,8 +3319,8 @@ export const Editor = () => {
             {/* Editor overlay buttons — bottom-right */}
             {tab.type !== "query_builder" && (
               <div className="absolute bottom-2 right-6 z-10 flex items-center gap-1">
-                {/* Visual Explain — hidden for read-only definition tabs */}
-                {!tab.readOnly && (
+                {/* Visual Explain — hidden for read-only definition tabs and drivers without EXPLAIN support */}
+                {!tab.readOnly && driverSupportsExplain && (
                 <button
                   onClick={handleExplainButton}
                   disabled={!activeConnectionId || !tab.query?.trim()}
