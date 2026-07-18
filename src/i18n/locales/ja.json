@@ -776,6 +776,7 @@
     "namePlaceholder": "接続名を入力",
     "nameRequired": "接続名は必須です",
     "dbNameRequired": "データベース名は必須です",
+    "connectionUriRequiresKeychain": "接続 URI は OS のキーチェーンに保存する必要があります。「パスワードをキーチェーンに保存」を有効にしてください。",
     "dbType": "データベースの種類",
     "host": "ホスト",
     "port": "ポート",

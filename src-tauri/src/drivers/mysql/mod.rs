@@ -1567,6 +1567,8 @@ impl MysqlDriver {
                     folder_based: false,
                     connection_string: true,
                     connection_string_example: "mysql://user:pass@localhost:3306/db".into(),
+                    connection_uri: false,
+                    connection_uri_schemes: Vec::new(),
                     identifier_quote: "`".into(),
                     alter_primary_key: true,
                     auto_increment_keyword: "AUTO_INCREMENT".into(),

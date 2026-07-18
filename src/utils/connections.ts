@@ -19,6 +19,12 @@ export interface ConnectionParams {
   port?: number;
   username?: string;
   password?: string;
+  /** Raw driver-specific connection URI, forwarded verbatim to the driver.
+   * Never persisted in connections.json: it embeds credentials and is stored
+   * in the OS keychain instead. */
+  connection_uri?: string;
+  /** True when the URI can be restored from the OS keychain. */
+  connection_uri_in_keychain?: boolean;
   ssh_enabled?: boolean;
   ssh_connection_id?: string;
   // Legacy fields (for backward compatibility)

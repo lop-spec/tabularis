@@ -1667,6 +1667,8 @@ impl PostgresDriver {
                     folder_based: false,
                     connection_string: true,
                     connection_string_example: "postgres://user:pass@localhost:5432/db".into(),
+                    connection_uri: false,
+                    connection_uri_schemes: Vec::new(),
                     identifier_quote: "\"".into(),
                     alter_primary_key: true,
                     auto_increment_keyword: String::new(),

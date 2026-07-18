@@ -792,6 +792,7 @@
     "namePlaceholder": "Ilagay ang pangalan ng connection",
     "nameRequired": "Kailangan ang pangalan ng connection",
     "dbNameRequired": "Kailangan ang pangalan ng database",
+    "connectionUriRequiresKeychain": "Dapat i-save ang mga connection URI sa OS keychain. I-enable ang “I-save ang mga password sa Keychain” para magpatuloy.",
     "dbType": "Uri ng Database",
     "host": "Host",
     "port": "Port",

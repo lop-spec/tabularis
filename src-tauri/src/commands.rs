@@ -400,6 +400,132 @@ pub fn get_ssh_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, St
     Ok(config_dir.join("ssh_connections.json"))
 }
 
+fn runtime_connection_uri(params: &ConnectionParams) -> Option<&str> {
+    params
+        .connection_uri
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+}
+
+/// A connection URI embeds credentials, so it may only be persisted behind the
+/// OS keychain. Refuse the save rather than silently downgrading to plaintext.
+fn validate_connection_uri_persistence(params: &ConnectionParams) -> Result<(), String> {
+    if runtime_connection_uri(params).is_some() && !params.save_in_keychain.unwrap_or(false) {
+        return Err("Connection URIs must be stored in the OS keychain".to_string());
+    }
+    Ok(())
+}
+
+/// Write the secret first, then persist `connections.json`. If persistence
+/// fails the secret is restored to its previous value so the keychain never
+/// drifts from the file.
+fn persist_secret_change(
+    apply: impl FnOnce() -> Result<(), String>,
+    persist: impl FnOnce() -> Result<(), String>,
+    rollback: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    apply()?;
+    match persist() {
+        Ok(()) => Ok(()),
+        Err(error) => match rollback() {
+            Ok(()) => Err(error),
+            // Report both: the rollback error alone would hide why the save
+            // failed in the first place.
+            Err(rollback_error) => Err(format!("{error} ({rollback_error})")),
+        },
+    }
+}
+
+/// `change` is `None` to leave the stored URI untouched, `Some(Some(uri))` to
+/// write it, and `Some(None)` to clear it.
+fn persist_connection_uri_change(
+    cache: &credential_cache::CredentialCache,
+    connection_id: &str,
+    stored_in_keychain: bool,
+    change: Option<Option<&str>>,
+    persist: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let Some(value) = change else {
+        return persist();
+    };
+    let previous_keychain = stored_in_keychain
+        .then(|| keychain_utils::get_connection_uri(connection_id))
+        .transpose()
+        .map_err(|_| "Failed to read the stored connection URI from the OS keychain".to_string())?;
+    let previous_cache = cache
+        .connection_uris
+        .lock()
+        .unwrap()
+        .get(connection_id)
+        .cloned();
+
+    persist_secret_change(
+        || {
+            if let Some(value) = value {
+                keychain_utils::set_connection_uri(connection_id, value)?;
+                credential_cache::set_connection_uri_cached(cache, connection_id, value);
+            } else {
+                keychain_utils::delete_connection_uri(connection_id)?;
+                credential_cache::invalidate_connection_uri(cache, connection_id);
+            }
+            Ok(())
+        },
+        persist,
+        || {
+            let keychain_result = match previous_keychain.as_deref() {
+                Some(value) => keychain_utils::set_connection_uri(connection_id, value),
+                None => keychain_utils::delete_connection_uri(connection_id),
+            };
+            let mut entries = cache.connection_uris.lock().unwrap();
+            match (&keychain_result, previous_cache) {
+                // Only re-pin the old value once the keychain actually holds it
+                // again. If the restore failed, drop the entry so the next read
+                // consults the keychain instead of trusting a stale copy.
+                (Ok(()), Some(entry)) => _ = entries.insert(connection_id.to_string(), entry),
+                (Ok(()), None) | (Err(_), _) => _ = entries.remove(connection_id),
+            }
+            keychain_result.map_err(|_| "Failed to roll back the stored connection URI".to_string())
+        },
+    )
+}
+
+/// Strip the URI out of the params that go to `connections.json`, leaving only
+/// the marker that says a keychain entry exists.
+fn params_for_persistence(
+    params: &ConnectionParams,
+    connection_uri_in_keychain: bool,
+) -> ConnectionParams {
+    let mut persisted = params.clone();
+    persisted.connection_uri = None;
+    persisted.connection_uri_in_keychain = connection_uri_in_keychain.then_some(true);
+    persisted
+}
+
+/// Re-attach the URI a saved connection needs at runtime, from the session
+/// cache or the keychain.
+fn restore_runtime_connection_uri(
+    cache: &credential_cache::CredentialCache,
+    connection_id: &str,
+    params: &mut ConnectionParams,
+) -> Result<(), String> {
+    if runtime_connection_uri(params).is_some() {
+        return Ok(());
+    }
+
+    let stored_in_keychain = params.connection_uri_in_keychain.unwrap_or(false);
+    match credential_cache::get_connection_uri_cached(cache, connection_id, stored_in_keychain) {
+        Ok(Some(connection_uri)) => {
+            params.connection_uri = Some(connection_uri);
+            Ok(())
+        }
+        Ok(None) if stored_in_keychain => {
+            Err("Stored connection URI is unavailable in the OS keychain".to_string())
+        }
+        Ok(None) => Ok(()),
+        Err(_) => Err("Failed to read the stored connection URI from the OS keychain".to_string()),
+    }
+}
+
 pub fn find_connection_by_id<R: Runtime>(
     app: &AppHandle<R>,
     id: &str,
@@ -424,11 +550,13 @@ pub fn find_connection_by_id<R: Runtime>(
         }
     };
 
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    restore_runtime_connection_uri(&cache, &conn.id, &mut conn.params)?;
+
     // Load passwords from keychain if needed, via the in-memory cache.
     // On a warm cache hit this is a HashMap lookup (nanoseconds); on a cold miss
     // it calls keychain once and caches the result for all subsequent reads.
     if conn.params.save_in_keychain.unwrap_or(false) {
-        let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
         match credential_cache::get_db_password_cached(&cache, &conn.id) {
             Ok(pwd) => conn.params.password = Some(pwd),
             Err(e) => eprintln!(
@@ -741,16 +869,18 @@ pub async fn save_connection<R: Runtime>(
     detect_json_in_text_columns: Option<bool>,
 ) -> Result<SavedConnection, String> {
     log::info!("Saving new connection: {}", name);
+    validate_connection_uri_persistence(&params)?;
 
     let path = get_config_path(&app)?;
     let mut conn_file = persistence::load_connections_file(&path).unwrap_or_default();
 
     let id = Uuid::new_v4().to_string();
-    let mut params_to_save = params.clone();
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    let connection_uri = runtime_connection_uri(&params).map(str::to_owned);
+    let mut params_to_save = params_for_persistence(&params, connection_uri.is_some());
 
     if params.save_in_keychain.unwrap_or(false) {
         log::debug!("Storing passwords in keychain for connection: {}", name);
-        let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
         if let Some(pwd) = &params.password {
             keychain_utils::set_db_password(&id, pwd)?;
             credential_cache::set_db_password_cached(&cache, &id, pwd);
@@ -782,7 +912,13 @@ pub async fn save_connection<R: Runtime>(
         appearance: None,
     };
     conn_file.connections.push(new_conn.clone());
-    save_connections_and_invalidate(&app, &path, &conn_file)?;
+    persist_connection_uri_change(
+        &cache,
+        &id,
+        false,
+        connection_uri.as_deref().map(Some),
+        || save_connections_and_invalidate(&app, &path, &conn_file),
+    )?;
 
     log::info!("Connection saved successfully: {} (ID: {})", name, id);
 
@@ -802,6 +938,14 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
 
     let mut conn_file = persistence::load_connections_file(&path)?;
 
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    let uri_stored_in_keychain = conn_file
+        .connections
+        .iter()
+        .find(|c| c.id == id)
+        .and_then(|c| c.params.connection_uri_in_keychain)
+        .unwrap_or(false);
+
     // Capture the appearance before retain so we can cascade-delete the icon file.
     let appearance_to_delete = conn_file
         .connections
@@ -817,11 +961,11 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
     keychain_utils::delete_db_password(&id).ok();
     keychain_utils::delete_ssh_password(&id).ok();
     keychain_utils::delete_ssh_key_passphrase(&id).ok();
+    persist_connection_uri_change(&cache, &id, uri_stored_in_keychain, Some(None), || {
+        save_connections_and_invalidate(&app, &path, &conn_file)
+    })?;
     // Invalidate the in-memory cache for this connection
-    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
     credential_cache::invalidate_all_for_connection(&cache, &id);
-
-    save_connections_and_invalidate(&app, &path, &conn_file)?;
 
     // Cascade-delete the custom icon file if the connection used one.
     if let Ok(app_data) = app.path().app_data_dir() {
@@ -853,6 +997,7 @@ pub async fn update_connection<R: Runtime>(
     params: ConnectionParams,
     detect_json_in_text_columns: Option<bool>,
 ) -> Result<SavedConnection, String> {
+    validate_connection_uri_persistence(&params)?;
     let path = get_config_path(&app)?;
     let mut conn_file = persistence::load_connections_file(&path)?;
 
@@ -862,7 +1007,29 @@ pub async fn update_connection<R: Runtime>(
         .position(|c| c.id == id)
         .ok_or("Connection not found")?;
 
-    let mut params_to_save = params.clone();
+    let existing_uri_in_keychain = conn_file.connections[conn_idx]
+        .params
+        .connection_uri_in_keychain
+        .unwrap_or(false);
+    // A stored URI belongs to the driver that produced it. Switching drivers
+    // must drop it rather than hand one driver's credentials to another.
+    let same_driver = conn_file.connections[conn_idx].params.driver == params.driver;
+    let connection_uri = runtime_connection_uri(&params).map(str::to_owned);
+    // The frontend sends the URI back only when the user retyped it. An edit
+    // that leaves the field untouched must keep the stored secret; an edit that
+    // explicitly clears the marker must delete it.
+    let preserve_stored_uri = connection_uri.is_none()
+        && same_driver
+        && params.save_in_keychain.unwrap_or(false)
+        && existing_uri_in_keychain
+        && params.connection_uri_in_keychain != Some(false);
+    let uri_change = match connection_uri.as_deref() {
+        Some(value) => Some(Some(value)),
+        None if preserve_stored_uri => None,
+        None => Some(None),
+    };
+    let mut params_to_save =
+        params_for_persistence(&params, connection_uri.is_some() || preserve_stored_uri);
 
     let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
     if params.save_in_keychain.unwrap_or(false) {
@@ -894,7 +1061,11 @@ pub async fn update_connection<R: Runtime>(
         keychain_utils::delete_db_password(&id).ok();
         keychain_utils::delete_ssh_password(&id).ok();
         keychain_utils::delete_ssh_key_passphrase(&id).ok();
-        credential_cache::invalidate_all_for_connection(&cache, &id);
+        // The connection URI is cleared by its own transaction below, which
+        // needs the previous cache entry intact to roll back.
+        credential_cache::invalidate_db_password(&cache, &id);
+        credential_cache::invalidate_ssh_password(&cache, &id);
+        credential_cache::invalidate_ssh_key_passphrase(&cache, &id);
     }
 
     // Preserve existing group_id and sort_order from the original connection
@@ -916,7 +1087,9 @@ pub async fn update_connection<R: Runtime>(
 
     conn_file.connections[conn_idx] = updated.clone();
 
-    save_connections_and_invalidate(&app, &path, &conn_file)?;
+    persist_connection_uri_change(&cache, &id, existing_uri_in_keychain, uri_change, || {
+        save_connections_and_invalidate(&app, &path, &conn_file)
+    })?;
 
     // On single→multi transition, associate existing favorites/history (with no
     // database set) to the original single database name.
@@ -1992,6 +2165,109 @@ mod tests {
             database: DatabaseSelection::Single("testdb".to_string()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn persisted_params_never_contain_the_connection_uri() {
+        let sentinel = "mongodb+srv://fixture-user:fixture-password@cluster.example.invalid/app";
+        let params = ConnectionParams {
+            connection_uri: Some(sentinel.to_string()),
+            save_in_keychain: Some(true),
+            ..base_params()
+        };
+
+        let persisted = params_for_persistence(&params, true);
+        let json = serde_json::to_string(&persisted).expect("serialize persisted params");
+
+        assert_eq!(persisted.connection_uri, None);
+        assert_eq!(persisted.connection_uri_in_keychain, Some(true));
+        assert!(!json.contains(sentinel));
+        assert!(!json.contains("fixture-password"));
+    }
+
+    #[test]
+    fn a_connection_uri_cannot_be_saved_outside_the_keychain() {
+        let params = ConnectionParams {
+            connection_uri: Some("mongodb+srv://cluster.example.invalid/app".to_string()),
+            save_in_keychain: Some(false),
+            ..base_params()
+        };
+
+        assert!(validate_connection_uri_persistence(&params).is_err());
+        assert!(validate_connection_uri_persistence(&base_params()).is_ok());
+    }
+
+    #[test]
+    fn a_blank_connection_uri_is_treated_as_absent() {
+        let params = ConnectionParams {
+            connection_uri: Some("   ".to_string()),
+            save_in_keychain: Some(false),
+            ..base_params()
+        };
+
+        assert_eq!(runtime_connection_uri(&params), None);
+        assert!(validate_connection_uri_persistence(&params).is_ok());
+    }
+
+    #[test]
+    fn restores_the_exact_connection_uri_from_the_session_cache() {
+        let cache = credential_cache::CredentialCache::default();
+        let sentinel =
+            "mongodb+srv://fixture-user:fixture-password@cluster.example.invalid/app?x=a%2Fb";
+        credential_cache::set_connection_uri_cached(&cache, "conn-1", sentinel);
+        let mut params = base_params();
+
+        restore_runtime_connection_uri(&cache, "conn-1", &mut params)
+            .expect("restore cached connection URI");
+
+        assert_eq!(params.connection_uri.as_deref(), Some(sentinel));
+    }
+
+    #[test]
+    fn params_saved_before_the_uri_field_existed_remain_usable() {
+        let cache = credential_cache::CredentialCache::default();
+        let mut params = base_params();
+
+        restore_runtime_connection_uri(&cache, "legacy-conn", &mut params)
+            .expect("legacy params remain usable");
+
+        assert_eq!(params.connection_uri, None);
+        assert_eq!(params.host.as_deref(), Some("localhost"));
+    }
+
+    #[test]
+    fn deleting_a_connection_clears_its_cached_uri() {
+        let cache = credential_cache::CredentialCache::default();
+        credential_cache::set_connection_uri_cached(
+            &cache,
+            "conn-1",
+            "mongodb+srv://cluster.example.invalid/app",
+        );
+
+        credential_cache::invalidate_all_for_connection(&cache, "conn-1");
+
+        assert_eq!(
+            credential_cache::get_connection_uri_cached(&cache, "conn-1", false).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_failed_persist_rolls_the_stored_uri_back() {
+        let rolled_back = std::cell::Cell::new(false);
+
+        let error = persist_secret_change(
+            || Ok(()),
+            || Err("fictional connections.json failure".to_string()),
+            || {
+                rolled_back.set(true);
+                Ok(())
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "fictional connections.json failure");
+        assert!(rolled_back.get());
     }
 
     fn saved_conn(id: &str, password: Option<&str>, save_in_keychain: bool) -> SavedConnection {
@@ -4995,9 +5271,17 @@ pub async fn export_connections_payload<R: Runtime>(
             conn.params.password = None;
             conn.params.ssh_password = None;
             conn.params.ssh_key_passphrase = None;
+            conn.params.connection_uri = None;
             continue;
         }
         if conn.params.save_in_keychain.unwrap_or(false) {
+            // Without this the export carries the marker but not the URI, and
+            // restoring elsewhere yields a connection that cannot resolve it.
+            if let Ok(Some(uri)) =
+                credential_cache::get_connection_uri_cached(&cache, &conn.id, true)
+            {
+                conn.params.connection_uri = Some(uri);
+            }
             if let Ok(pwd) = credential_cache::get_db_password_cached(&cache, &conn.id) {
                 conn.params.password = Some(pwd);
             }
@@ -5095,8 +5379,17 @@ pub async fn apply_export_payload<R: Runtime>(
 
     // Merge connections and handle passwords
     for mut new_conn in payload.connections {
+        // An imported payload is untrusted input and may carry an inline URI.
+        // Hold it to the same rule as a save: keychain or nothing.
+        validate_connection_uri_persistence(&new_conn.params)?;
+
         // Handle passwords in keychain
         if new_conn.params.save_in_keychain.unwrap_or(false) {
+            if let Some(uri) = runtime_connection_uri(&new_conn.params) {
+                let uri = uri.to_string();
+                keychain_utils::set_connection_uri(&new_conn.id, &uri)?;
+                credential_cache::set_connection_uri_cached(&cache, &new_conn.id, &uri);
+            }
             if let Some(pwd) = &new_conn.params.password {
                 keychain_utils::set_db_password(&new_conn.id, pwd)?;
                 credential_cache::set_db_password_cached(&cache, &new_conn.id, pwd);
@@ -5120,6 +5413,11 @@ pub async fn apply_export_payload<R: Runtime>(
             new_conn.params.ssh_password = None;
             new_conn.params.ssh_key_passphrase = None;
         }
+
+        // The URI never reaches disk: it is either in the keychain by now, or
+        // `validate_connection_uri_persistence` rejected the payload above.
+        let imported_uri_in_keychain = runtime_connection_uri(&new_conn.params).is_some();
+        new_conn.params = params_for_persistence(&new_conn.params, imported_uri_in_keychain);
 
         if let Some(existing) = current_file
             .connections

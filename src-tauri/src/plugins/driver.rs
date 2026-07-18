@@ -988,6 +988,8 @@ mod tests {
             port: Some(1234),
             username: Some("user".to_string()),
             password: Some("secret".to_string()),
+            connection_uri: None,
+            connection_uri_in_keychain: None,
             database: DatabaseSelection::Single("db".to_string()),
             ssl_mode: None,
             ssl_ca: None,
@@ -1127,6 +1129,55 @@ mod tests {
         assert_eq!(context.tables[0].name, "users");
         assert_eq!(context.tables[0].columns[0].name, "id");
         assert_eq!(context.total_table_count, 1);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_the_connection_uri_to_test_connection() {
+        let uri = "mongodb+srv://cluster.example.invalid/app?retryWrites=true&w=majority";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "test_connection");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            Value::Null
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        driver
+            .test_connection(&params)
+            .await
+            .expect("test connection");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_the_connection_uri_to_subsequent_operations() {
+        let uri = "mongodb+srv://cluster.example.invalid/app?retryWrites=true&w=majority";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "get_databases");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            json!(["app"])
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        let databases = driver.get_databases(&params).await.expect("get databases");
+
+        assert_eq!(databases, vec!["app"]);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_omits_the_connection_uri_when_unset() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_databases");
+            assert!(request.params["params"].get("connection_uri").is_none());
+            json!(["db"])
+        });
+
+        driver
+            .get_databases(&test_connection_params())
+            .await
+            .expect("get databases");
     }
 
     #[tokio::test]
