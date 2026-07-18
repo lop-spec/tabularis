@@ -971,6 +971,8 @@ mod tests {
                 ..Default::default()
             },
             is_builtin: false,
+            engine: None,
+            paradigms: Vec::new(),
             default_username: String::new(),
             color: String::new(),
             icon: String::new(),
