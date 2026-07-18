@@ -2118,6 +2118,16 @@ pub async fn test_connection<R: Runtime>(
             });
     }
 
+    // Reconnecting to a saved connection sends the on-disk params, which never
+    // carry the URI — restore it the same way the password is restored above.
+    // An inline URI (the ephemeral Test Connection flow) always wins.
+    if runtime_connection_uri(&expanded_params).is_none() {
+        if let Some(conn_id) = &request.connection_id {
+            let cache = app.state::<std::sync::Arc<credential_cache::CredentialCache>>();
+            restore_runtime_connection_uri(&cache, conn_id, &mut expanded_params)?;
+        }
+    }
+
     let resolved_params = if let Some(conn_id) = &request.connection_id {
         resolve_connection_params_with_id(&expanded_params, conn_id)?
     } else {
@@ -3245,6 +3255,16 @@ pub async fn list_databases<R: Runtime>(
             resolve_test_connection_password(&request.params, saved_conn.as_ref(), |conn_id| {
                 keychain_utils::get_db_password(conn_id, "")
             });
+    }
+
+    // Reconnecting to a saved connection sends the on-disk params, which never
+    // carry the URI — restore it the same way the password is restored above.
+    // An inline URI (the ephemeral Test Connection flow) always wins.
+    if runtime_connection_uri(&expanded_params).is_none() {
+        if let Some(conn_id) = &request.connection_id {
+            let cache = app.state::<std::sync::Arc<credential_cache::CredentialCache>>();
+            restore_runtime_connection_uri(&cache, conn_id, &mut expanded_params)?;
+        }
     }
 
     let resolved_params = if let Some(conn_id) = &request.connection_id {
