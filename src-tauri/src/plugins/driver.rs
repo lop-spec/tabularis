@@ -31,6 +31,7 @@ const PLUGIN_CALL_TIMEOUT: Duration = Duration::from_secs(120);
 const PLUGIN_INIT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Flag to create the process without a console window on Windows.
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Heuristic for the JSON-RPC "method not found" error (code -32601). Only
