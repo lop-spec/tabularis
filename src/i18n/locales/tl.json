@@ -197,7 +197,10 @@
       "delete": "Burahin",
       "deleteConfirm": "Burahin ang notebook na \"{{title}}\"? Hindi na ito mababawi.",
       "renamePlaceholder": "Pangalan ng notebook"
-    }
+    },
+    "addToSplitGroup": "Idagdag sa Split Group",
+    "removeFromSplitGroup": "Alisin sa Grupo",
+    "movePanel": "Ilipat ang panel"
   },
   "mcp": {
     "title": "Integrasyon ng MCP Server",
@@ -1094,6 +1097,9 @@
     "submitChanges": "Isumite ang mga Pagbabago",
     "rollbackChanges": "I-rollback ang mga Pagbabago",
     "applyToAll": "Ilapat sa lahat",
+    "submit": "Isumite",
+    "rollback": "I-rollback",
+    "pendingCount": "{{count}} nakabinbin",
     "executingQuery": "Isinasakatuparan ang query...",
     "exporting": "Nag-e-export...",
     "rowsProcessed": "Mga Row na Naproseso",

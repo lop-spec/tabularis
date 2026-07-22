@@ -197,7 +197,10 @@
       "delete": "삭제",
       "deleteConfirm": "\"{{title}}\" 노트북을 삭제할까요? 되돌릴 수 없습니다.",
       "renamePlaceholder": "노트북 이름"
-    }
+    },
+    "addToSplitGroup": "분할 그룹에 추가",
+    "removeFromSplitGroup": "그룹에서 제거",
+    "movePanel": "패널 이동"
   },
   "mcp": {
     "title": "MCP 서버 연동",
@@ -1061,6 +1064,9 @@
     "submitChanges": "변경 사항 제출",
     "rollbackChanges": "변경 사항 롤백",
     "applyToAll": "전체에 적용",
+    "submit": "제출",
+    "rollback": "롤백",
+    "pendingCount": "대기 중 {{count}}건",
     "executingQuery": "쿼리를 실행하는 중...",
     "exporting": "내보내는 중...",
     "rowsProcessed": "처리된 행",

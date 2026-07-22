@@ -183,7 +183,10 @@
       "delete": "删除",
       "deleteConfirm": "删除笔记本“{{title}}”？此操作无法撤销。",
       "renamePlaceholder": "笔记本名称"
-    }
+    },
+    "addToSplitGroup": "添加到拆分组",
+    "removeFromSplitGroup": "从组中移除",
+    "movePanel": "移动面板"
   },
   "mcp": {
     "title": "MCP 服务器集成",
@@ -1029,6 +1032,9 @@
     "submitChanges": "提交更改",
     "rollbackChanges": "回滚更改",
     "applyToAll": "应用到全部",
+    "submit": "提交",
+    "rollback": "回滚",
+    "pendingCount": "{{count}} 待处理",
     "executingQuery": "执行查询中...",
     "exporting": "导出中...",
     "rowsProcessed": "已处理行数",

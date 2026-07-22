@@ -197,7 +197,10 @@
       "delete": "Supprimer",
       "deleteConfirm": "Supprimer le notebook « {{title}} » ? Cette action est irréversible.",
       "renamePlaceholder": "Nom du notebook"
-    }
+    },
+    "addToSplitGroup": "Ajouter au groupe divisé",
+    "removeFromSplitGroup": "Retirer du groupe",
+    "movePanel": "Déplacer le panneau"
   },
   "mcp": {
     "title": "Intégration du serveur MCP",
@@ -1101,6 +1104,9 @@
     "submitChanges": "Soumettre les modifications",
     "rollbackChanges": "Annuler les modifications",
     "applyToAll": "Appliquer à tout",
+    "submit": "Soumettre",
+    "rollback": "Annuler",
+    "pendingCount": "{{count}} en attente",
     "executingQuery": "Exécution de la requête...",
     "exporting": "Exportation...",
     "rowsProcessed": "Lignes traitées",

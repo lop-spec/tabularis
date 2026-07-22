@@ -197,7 +197,10 @@
       "delete": "Удалить",
       "deleteConfirm": "Удалить блокнот «{{title}}»? Это действие нельзя отменить.",
       "renamePlaceholder": "Имя блокнота"
-    }
+    },
+    "addToSplitGroup": "Добавить в группу разделения",
+    "removeFromSplitGroup": "Убрать из группы",
+    "movePanel": "Переместить панель"
   },
   "mcp": {
     "title": "Интеграция MCP-сервера",
@@ -1059,6 +1062,9 @@
     "submitChanges": "Применить изменения",
     "rollbackChanges": "Откатить изменения",
     "applyToAll": "Применить ко всем",
+    "submit": "Применить",
+    "rollback": "Откатить",
+    "pendingCount": "Ожидает: {{count}}",
     "executingQuery": "Выполнение запроса...",
     "exporting": "Экспорт...",
     "rowsProcessed": "Обработано строк",
