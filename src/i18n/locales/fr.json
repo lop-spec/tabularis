@@ -1513,7 +1513,6 @@
     "errorNoTables": "Veuillez sélectionner au moins une table",
     "importStarted": "Import démarré...",
     "importSuccess": "Fichier SQL exécuté avec succès",
-    "importFailure": "Échec de l’import : ",
     "importCancelled": "Import annulé",
     "importFailed": "Échec de l’import",
     "importingFrom": "Import depuis",

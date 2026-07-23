@@ -1480,7 +1480,6 @@
     "errorNoTables": "Выберите хотя бы одну таблицу",
     "importStarted": "Импорт начат...",
     "importSuccess": "SQL-файл выполнен",
-    "importFailure": "Ошибка импорта: ",
     "importCancelled": "Импорт отменён",
     "importFailed": "Импорт не удался",
     "importingFrom": "Импорт из",

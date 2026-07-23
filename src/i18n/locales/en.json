@@ -1519,7 +1519,6 @@
     "errorNoTables": "Please select at least one table",
     "importStarted": "Import started...",
     "importSuccess": "SQL file executed successfully",
-    "importFailure": "Import failed: ",
     "importCancelled": "Import cancelled",
     "importFailed": "Import failed",
     "importingFrom": "Importing from",

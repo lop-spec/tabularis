@@ -1391,7 +1391,6 @@
     "errorNoTables": "请至少选择一个表",
     "importStarted": "导入开始...",
     "importSuccess": "SQL 文件执行成功",
-    "importFailure": "导入失败：",
     "importCancelled": "导入已取消",
     "importFailed": "导入失败",
     "importingFrom": "从以下文件导入",

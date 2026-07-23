@@ -1447,7 +1447,6 @@
     "errorNoTables": "Bitte wähle mindestens eine Tabelle",
     "importStarted": "Import gestartet...",
     "importSuccess": "SQL-Datei erfolgreich ausgeführt",
-    "importFailure": "Import fehlgeschlagen: ",
     "importCancelled": "Import abgebrochen",
     "importFailed": "Import fehlgeschlagen",
     "importingFrom": "Importiere aus",

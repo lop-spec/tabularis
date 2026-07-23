@@ -1443,7 +1443,6 @@
     "errorNoTables": "Selecciona al menos una tabla",
     "importStarted": "Importación iniciada...",
     "importSuccess": "Archivo SQL ejecutado correctamente",
-    "importFailure": "Error en la importación: ",
     "importCancelled": "Importación cancelada",
     "importFailed": "Importación fallida",
     "importingFrom": "Importando desde",

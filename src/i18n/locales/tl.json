@@ -1505,7 +1505,6 @@
     "errorNoTables": "Pumili ng kahit isang table",
     "importStarted": "Nagsimula ang import...",
     "importSuccess": "Matagumpay na na-execute ang SQL file",
-    "importFailure": "Nabigo ang import: ",
     "importCancelled": "Kinansela ang import",
     "importFailed": "Nabigo ang import",
     "importingFrom": "Ini-import mula sa",

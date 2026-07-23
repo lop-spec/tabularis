@@ -1472,7 +1472,6 @@
     "errorNoTables": "테이블을 하나 이상 선택하세요",
     "importStarted": "가져오기를 시작합니다...",
     "importSuccess": "SQL 파일이 성공적으로 실행되었습니다",
-    "importFailure": "가져오기에 실패했습니다: ",
     "importCancelled": "가져오기가 취소되었습니다",
     "importFailed": "가져오기 실패",
     "importingFrom": "가져오는 중",
