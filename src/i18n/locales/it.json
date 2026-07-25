@@ -1015,6 +1015,8 @@
     "noActiveSession": "Nessuna sessione attiva. Seleziona una connessione.",
     "stop": "Stop",
     "run": "Esegui",
+    "runSelection": "Esegui selezione",
+    "runStatement": "Esegui istruzione",
     "runAll": "Esegui tutto",
     "export": "Esporta",
     "connected": "Connesso",

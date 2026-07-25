@@ -1012,6 +1012,8 @@
     "noActiveSession": "Keine aktive Sitzung. Bitte wähle eine Verbindung aus.",
     "stop": "Stopp",
     "run": "Ausführen",
+    "runSelection": "Auswahl ausführen",
+    "runStatement": "Anweisung ausführen",
     "runAll": "Alle ausführen",
     "export": "Exportieren",
     "connected": "Verbunden",

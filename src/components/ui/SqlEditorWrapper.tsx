@@ -28,6 +28,12 @@ interface SqlEditorWrapperProps {
   dialect?: Dialect | string;
   /** Run the whole editor content (Mod+Shift+Enter). */
   onRunAll?: () => void;
+  /**
+   * Notified whenever what Run would execute changes: whether a selection is
+   * active and how many statements the buffer holds. Lets the toolbar label
+   * the button with its actual target. Requires `dialect`.
+   */
+  onRunContextChange?: (context: { hasSelection: boolean; statementCount: number }) => void;
 }
 
 // Internal component that resets when key changes
@@ -39,7 +45,8 @@ const SqlEditorInternal = ({
   height = "100%",
   options,
   dialect,
-  onRunAll
+  onRunAll,
+  onRunContextChange
 }: SqlEditorWrapperProps & { editorKey: string }) => {
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -48,6 +55,9 @@ const SqlEditorInternal = ({
   onRunRef.current = onRun;
   const onRunAllRef = useRef(onRunAll);
   onRunAllRef.current = onRunAll;
+  const onRunContextChangeRef = useRef(onRunContextChange);
+  onRunContextChangeRef.current = onRunContextChange;
+  const lastRunContextRef = useRef<{ hasSelection: boolean; statementCount: number } | null>(null);
   const dialectRef = useRef(dialect);
   dialectRef.current = dialect;
   const lastSplitRef = useRef<{ text: string; statements: Statement[] }>({
@@ -338,20 +348,39 @@ const SqlEditorInternal = ({
           return lastSplitRef.current.statements;
         };
 
+        // Only fires the callback when the answer actually changes — cursor
+        // selection events arrive on every keystroke and arrow key.
+        const notifyRunContext = (hasSelection: boolean, statementCount: number) => {
+          const previous = lastRunContextRef.current;
+          if (
+            previous &&
+            previous.hasSelection === hasSelection &&
+            previous.statementCount === statementCount
+          ) {
+            return;
+          }
+          lastRunContextRef.current = { hasSelection, statementCount };
+          onRunContextChangeRef.current?.({ hasSelection, statementCount });
+        };
+
         const updateCursorStatementHighlight = () => {
+          const model = editor.getModel();
           const selection = editor.getSelection();
-          if (selection && !selection.isEmpty()) {
+          const hasSelection = !!selection && !selection.isEmpty();
+          const statements = model ? getStatements(model.getValue()) : [];
+          notifyRunContext(hasSelection, statements.length);
+
+          if (hasSelection) {
             decorations.clear();
             return;
           }
-          const model = editor.getModel();
           const position = editor.getPosition();
           if (!model || !position) {
             decorations.clear();
             return;
           }
           const offset = model.getOffsetAt(position);
-          const statement = findStatementAtOffset(getStatements(model.getValue()), offset);
+          const statement = findStatementAtOffset(statements, offset);
           if (!statement) {
             decorations.clear();
             return;

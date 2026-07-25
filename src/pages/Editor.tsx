@@ -77,6 +77,7 @@ import {
   type ExportStatus,
 } from "../components/modals/ExportProgressModal";
 import { splitQueries, splitStatements, findStatementAtOffset, extractTableName, getExplainableQueries, statementLabel, type Statement } from "../utils/sql";
+import { resolveRunTarget } from "../utils/runTarget";
 import {
   createResultEntries,
   createEntriesFromResultSets,
@@ -361,6 +362,12 @@ export const Editor = () => {
   const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
 
   const [selectableQueries, setSelectableQueries] = useState<string[]>([]);
+  // What Run would execute right now, reported by the editor on every cursor,
+  // selection and content change.
+  const [runContext, setRunContext] = useState<{ hasSelection: boolean; statementCount: number }>({
+    hasSelection: false,
+    statementCount: 0,
+  });
   const [isQuerySelectionModalOpen, setIsQuerySelectionModalOpen] =
     useState(false);
   const {
@@ -1531,6 +1538,35 @@ export const Editor = () => {
     loadCount,
     updateTab,
   ]);
+
+  // Keep the Run button honest about its target: with no selection a pasted
+  // multi-statement script only runs the statement under the cursor, and a
+  // button that just reads "Run" gives no hint that the rest was skipped.
+  // Mirrors the branching in handleRunButton below.
+  const runTarget = useMemo(
+    () =>
+      resolveRunTarget({
+        hasSelection: runContext.hasSelection,
+        statementCount: runContext.statementCount,
+        runStatementUnderCursor: settings.runStatementUnderCursor !== false,
+      }),
+    [runContext, settings.runStatementUnderCursor],
+  );
+
+  const runLabel = useMemo(() => {
+    if (isTableTab) return t("editor.run");
+    if (runTarget === "selection") return t("editor.runSelection");
+    if (runTarget === "statement") return t("editor.runStatement");
+    return t("editor.run");
+  }, [isTableTab, runTarget, t]);
+
+  const runTitle = useMemo(() => {
+    const base = `${runLabel} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`;
+    // Surface the whole-script escape hatch exactly when the button would run
+    // one statement out of several.
+    if (runTarget !== "statement") return base;
+    return `${base} · ${t("editor.runAll")} (${isMac ? "Cmd+Shift+Enter" : "Ctrl+Shift+Enter"})`;
+  }, [runLabel, runTarget, isMac, t]);
 
   const handleRunAll = useCallback(() => {
     if (!activeTab) return;
@@ -3227,15 +3263,15 @@ export const Editor = () => {
             <button
               onClick={handleRunButton}
               disabled={!activeConnectionId}
-              aria-label={`${t("editor.run")} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`}
+              aria-label={`${runLabel} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`}
               aria-keyshortcuts={isMac ? "Meta+Enter" : "Control+Enter"}
-              title={`${t("editor.run")} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`}
+              title={runTitle}
               className={clsx(
                 "flex items-center gap-2 px-3 py-1.5 text-white text-sm font-medium disabled:opacity-50 hover:bg-green-600",
                 isTableTab ? "rounded" : "rounded-l",
               )}
             >
-              <Play size={16} fill="currentColor" /> {t("editor.run")}
+              <Play size={16} fill="currentColor" /> {runLabel}
             </button>
             {!isTableTab && (
               <>
@@ -3494,6 +3530,7 @@ export const Editor = () => {
                 }}
                 onRun={handleRunButton}
                 onRunAll={handleRunAll}
+                onRunContextChange={isActive ? setRunContext : undefined}
                 onMount={
                   isActive
                     ? (editor, monaco) =>
