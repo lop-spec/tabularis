@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
-import { isMultiDatabaseCapable } from "../utils/database";
+import { getTableDataChangeScope, isMultiDatabaseCapable } from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
@@ -2404,10 +2404,11 @@ export const Editor = () => {
     try {
       const promises = [];
 
-      const databaseParam =
-        isMultiDatabaseCapable(activeCapabilities) && activeTab?.schema
-          ? { database: activeTab.schema }
-          : {};
+      const dataChangeScope = getTableDataChangeScope(
+        activeCapabilities,
+        activeTab?.schema,
+        activeSchema,
+      );
 
       // Deletions
       if (deletions.length > 0) {
@@ -2417,8 +2418,7 @@ export const Editor = () => {
               connectionId: activeConnectionId,
               table: activeTable,
               pkMap,
-              ...(activeSchema ? { schema: activeSchema } : {}),
-              ...databaseParam,
+              ...dataChangeScope,
             }),
           ),
         );
@@ -2434,8 +2434,7 @@ export const Editor = () => {
               pkMap: u.pkVal,
               colName: u.colName,
               newVal: u.newVal,
-              ...(activeSchema ? { schema: activeSchema } : {}),
-              ...databaseParam,
+              ...dataChangeScope,
             }),
           ),
         );
@@ -2449,8 +2448,7 @@ export const Editor = () => {
               connectionId: activeConnectionId,
               table: activeTable,
               data: insertion.data,
-              ...(activeSchema ? { schema: activeSchema } : {}),
-              ...databaseParam,
+              ...dataChangeScope,
             }),
           ),
         );
