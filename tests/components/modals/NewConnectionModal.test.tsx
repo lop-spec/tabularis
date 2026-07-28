@@ -291,6 +291,31 @@ function pickEngineFromCatalogue() {
   );
 }
 
+describe("NewConnectionModal layout", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    driverState.defaultPort = 15432;
+    vi.mocked(invoke).mockResolvedValue("ok");
+    sshMocks.loadSshConnections.mockResolvedValue([]);
+    k8sMocks.loadK8sConnections.mockResolvedValue([]);
+    k8sMocks.getK8sContexts.mockResolvedValue(["ctx"]);
+    k8sMocks.getK8sNamespaces.mockResolvedValue(["db"]);
+    k8sMocks.getK8sResources.mockResolvedValue(["mysql-svc"]);
+    k8sMocks.getK8sResourcePorts.mockResolvedValue([6543]);
+    k8sMocks.validateK8sPath.mockResolvedValue(undefined);
+  });
+
+  it("keeps the dialog shell at a stable viewport-bounded height", () => {
+    const { container } = renderModal();
+    const shell = container.querySelector("fieldset");
+
+    expect(shell).toHaveClass("h-[min(760px,90vh)]");
+    expect(shell).toHaveClass("overflow-hidden");
+    expect(shell).toHaveClass("flex");
+    expect(shell).toHaveClass("flex-col");
+  });
+});
+
 async function openInlineK8s() {
   const view = renderModal();
   pickEngineFromCatalogue();

@@ -3209,7 +3209,7 @@ export const NewConnectionModal = ({
         disabled={isPersistencePending}
         aria-busy={isPersistencePending}
         className={clsx(
-          "bg-elevated border border-strong rounded-xl shadow-2xl w-[900px] max-w-[92vw] max-h-[90vh] flex flex-col overflow-hidden p-0 m-0 min-w-0",
+          "bg-elevated border border-strong rounded-xl shadow-2xl w-[900px] max-w-[92vw] h-[min(760px,90vh)] flex flex-col overflow-hidden p-0 m-0 min-w-0",
           isPersistencePending && "pointer-events-none",
         )}
       >
