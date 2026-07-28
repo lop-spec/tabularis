@@ -1463,7 +1463,11 @@
     "showAllTables": "すべてのテーブルを表示",
     "showAll": "すべて表示",
     "focusedOn": "フォーカス中",
-    "focusOnTable": "テーブルにフォーカス"
+    "focusOnTable": "テーブルにフォーカス",
+    "exportMermaid": "Mermaid 図としてエクスポート",
+    "exportSuccess": "図をエクスポートしました",
+    "exportDbml": "DBML としてエクスポート",
+    "export": "エクスポート"
   },
   "views": {
     "createView": "ビューを作成",

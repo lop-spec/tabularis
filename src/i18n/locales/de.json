@@ -1452,7 +1452,11 @@
     "showAllTables": "Alle Tabellen anzeigen",
     "showAll": "Alle anzeigen",
     "focusedOn": "Fokussiert auf",
-    "focusOnTable": "Auf Tabelle fokussieren"
+    "focusOnTable": "Auf Tabelle fokussieren",
+    "exportMermaid": "Als Mermaid-Diagramm exportieren",
+    "exportSuccess": "Diagramm exportiert",
+    "exportDbml": "Als DBML exportieren",
+    "export": "Exportieren"
   },
   "views": {
     "createView": "Ansicht erstellen",

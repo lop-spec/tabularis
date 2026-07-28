@@ -1415,7 +1415,11 @@
     "showAllTables": "Mostrar Todas las Tablas",
     "showAll": "Mostrar Todo",
     "focusedOn": "Enfocado en",
-    "focusOnTable": "Enfocar en Tabla"
+    "focusOnTable": "Enfocar en Tabla",
+    "exportMermaid": "Exportar como diagrama Mermaid",
+    "exportSuccess": "Diagrama exportado",
+    "exportDbml": "Exportar como DBML",
+    "export": "Exportar"
   },
   "views": {
     "createView": "Crear Vista",

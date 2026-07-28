@@ -1449,7 +1449,11 @@
     "showAllTables": "모든 테이블 표시",
     "showAll": "모두 표시",
     "focusedOn": "포커스 대상",
-    "focusOnTable": "테이블에 포커스"
+    "focusOnTable": "테이블에 포커스",
+    "exportMermaid": "Mermaid 다이어그램으로 내보내기",
+    "exportSuccess": "다이어그램 내보내기 완료",
+    "exportDbml": "DBML로 내보내기",
+    "export": "내보내기"
   },
   "views": {
     "createView": "뷰 생성",

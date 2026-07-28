@@ -16,7 +16,19 @@ import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
 import { useEditor } from "../../hooks/useEditor";
 import { SchemaTableNodeComponent } from "./SchemaTableNode";
-import { Loader2, ArrowLeftRight, ArrowUpDown, Maximize2, Focus } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeftRight,
+  ArrowUpDown,
+  Maximize2,
+  Focus,
+  Download,
+  ChevronDown,
+} from "lucide-react";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { generateMermaidErDiagram, generateDbml } from "../../utils/schemaExport";
+import { useAlert } from "../../hooks/useAlert";
 import { useTranslation } from "react-i18next";
 import { ContextMenu } from "./ContextMenu";
 import { useSearchParams } from "react-router-dom";
@@ -89,6 +101,7 @@ const SchemaDiagramContent = ({
 }: SchemaDiagramContentProps) => {
   const { t } = useTranslation();
   const { getSchema } = useEditor();
+  const { showAlert } = useAlert();
   const { settings } = useSettings();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -111,6 +124,9 @@ const SchemaDiagramContent = ({
     y: number;
     tableId: string;
   } | null>(null);
+  const [exportMenu, setExportMenu] = useState<{ x: number; y: number } | null>(
+    null,
+  );
   const [searchParams] = useSearchParams();
 
   // Callback per gestire il click su una tabella
@@ -142,6 +158,41 @@ const SchemaDiagramContent = ({
       return current === "LR" ? "TB" : "LR";
     });
   }, [layoutDirectionFromSettings]);
+
+  // Export the full schema as a Mermaid erDiagram. Uses allNodes/allEdges
+  // rather than the rendered nodes so the export stays complete even while a
+  // single table is focused.
+  const handleExport = useCallback(
+    async (format: "mermaid" | "dbml") => {
+      if (allNodes.length === 0) return;
+
+      const isMermaid = format === "mermaid";
+      const extension = isMermaid ? "mmd" : "dbml";
+
+      try {
+        const filePath = await save({
+          filters: [
+            {
+              name: isMermaid ? "Mermaid" : "DBML",
+              extensions: [extension],
+            },
+          ],
+          defaultPath: `schema_${new Date().toISOString().slice(0, 10)}.${extension}`,
+        });
+        if (!filePath) return;
+
+        const content = isMermaid
+          ? generateMermaidErDiagram(allNodes, allEdges)
+          : generateDbml(allNodes, allEdges);
+
+        await writeTextFile(filePath, content);
+        showAlert(t("erDiagram.exportSuccess"), { kind: "info" });
+      } catch (err) {
+        showAlert(String(err), { kind: "error" });
+      }
+    },
+    [allNodes, allEdges, showAlert, t],
+  );
 
   // Callback per tornare alla vista completa
   const handleResetView = useCallback(() => {
@@ -356,6 +407,20 @@ const SchemaDiagramContent = ({
           )}
         </button>
 
+        <button
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setExportMenu({ x: rect.left, y: rect.bottom + 4 });
+          }}
+          disabled={allNodes.length === 0}
+          className="flex items-center gap-2 px-3 py-2 bg-elevated hover:bg-surface-secondary text-primary rounded-lg border border-strong transition-colors shadow-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          title={t("erDiagram.export")}
+        >
+          <Download size={16} />
+          <span>{t("erDiagram.export")}</span>
+          <ChevronDown size={14} />
+        </button>
+
         {selectedTable && (
           <button
             onClick={handleResetView}
@@ -411,6 +476,26 @@ const SchemaDiagramContent = ({
       </ReactFlow>
 
       {/* Context Menu */}
+      {exportMenu && (
+        <ContextMenu
+          x={exportMenu.x}
+          y={exportMenu.y}
+          onClose={() => setExportMenu(null)}
+          items={[
+            {
+              label: t("erDiagram.exportMermaid"),
+              icon: Download,
+              action: () => handleExport("mermaid"),
+            },
+            {
+              label: t("erDiagram.exportDbml"),
+              icon: Download,
+              action: () => handleExport("dbml"),
+            },
+          ]}
+        />
+      )}
+
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}

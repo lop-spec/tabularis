@@ -1457,7 +1457,11 @@
     "showAllTables": "Показать все таблицы",
     "showAll": "Показать все",
     "focusedOn": "Фокус на",
-    "focusOnTable": "Фокус на таблице"
+    "focusOnTable": "Фокус на таблице",
+    "exportMermaid": "Экспортировать как диаграмму Mermaid",
+    "exportSuccess": "Диаграмма экспортирована",
+    "exportDbml": "Экспортировать как DBML",
+    "export": "Экспорт"
   },
   "views": {
     "createView": "Создать представление",

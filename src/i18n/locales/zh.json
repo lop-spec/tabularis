@@ -1396,7 +1396,11 @@
     "showAllTables": "显示所有表",
     "showAll": "显示全部",
     "focusedOn": "聚焦于",
-    "focusOnTable": "聚焦于表"
+    "focusOnTable": "聚焦于表",
+    "exportMermaid": "导出为 Mermaid 图表",
+    "exportSuccess": "图表已导出",
+    "exportDbml": "导出为 DBML",
+    "export": "导出"
   },
   "views": {
     "createView": "创建视图",
