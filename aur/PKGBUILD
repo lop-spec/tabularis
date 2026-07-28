@@ -1,4 +1,4 @@
-# Maintainer: Debba <debba@example.com>
+# Maintainer: Debba <andrea@tabularis.dev>
 pkgname=tabularis-bin
 _pkgname=tabularis
 pkgver=x.y.z
