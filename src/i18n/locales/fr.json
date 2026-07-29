@@ -1040,6 +1040,8 @@
     "noActiveSession": "Aucune session active. Veuillez sélectionner une connexion.",
     "stop": "Arrêter",
     "run": "Exécuter",
+    "runSelection": "Exécuter la sélection",
+    "runStatement": "Exécuter l'instruction",
     "runAll": "Tout exécuter",
     "export": "Exporter",
     "connected": "Connecté",

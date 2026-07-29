@@ -1033,6 +1033,8 @@
     "noActiveSession": "Walang aktibong session. Pumili ng connection.",
     "stop": "Itigil",
     "run": "Patakbuhin",
+    "runSelection": "Patakbuhin ang napili",
+    "runStatement": "Patakbuhin ang statement",
     "runAll": "Patakbuhin lahat",
     "export": "I-export",
     "connected": "Nakakonekta",
