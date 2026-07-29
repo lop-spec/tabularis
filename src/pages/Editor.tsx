@@ -77,7 +77,7 @@ import {
   type ExportStatus,
 } from "../components/modals/ExportProgressModal";
 import { splitQueries, splitStatements, findStatementAtOffset, extractTableName, getExplainableQueries, statementLabel, type Statement } from "../utils/sql";
-import { resolveRunTarget } from "../utils/runTarget";
+import { resolveRunTarget, type RunContext } from "../utils/runTarget";
 import {
   createResultEntries,
   createEntriesFromResultSets,
@@ -364,10 +364,21 @@ export const Editor = () => {
   const [selectableQueries, setSelectableQueries] = useState<string[]>([]);
   // What Run would execute right now, reported by the editor on every cursor,
   // selection and content change.
-  const [runContext, setRunContext] = useState<{ hasSelection: boolean; statementCount: number }>({
+  const [runContext, setRunContext] = useState<RunContext>({
     hasSelection: false,
     statementCount: 0,
   });
+  // The label only distinguishes ≤1 from >1 statements, so bail out of count
+  // changes that can't affect it (typing a ';' mid-way through a script) —
+  // each accepted update re-renders this whole page component.
+  const handleRunContextChange = useCallback((context: RunContext) => {
+    setRunContext((previous) =>
+      previous.hasSelection === context.hasSelection &&
+      (previous.statementCount > 1) === (context.statementCount > 1)
+        ? previous
+        : context,
+    );
+  }, []);
   const [isQuerySelectionModalOpen, setIsQuerySelectionModalOpen] =
     useState(false);
   const {
@@ -1542,31 +1553,32 @@ export const Editor = () => {
   // Keep the Run button honest about its target: with no selection a pasted
   // multi-statement script only runs the statement under the cursor, and a
   // button that just reads "Run" gives no hint that the rest was skipped.
-  // Mirrors the branching in handleRunButton below.
-  const runTarget = useMemo(
-    () =>
-      resolveRunTarget({
-        hasSelection: runContext.hasSelection,
-        statementCount: runContext.statementCount,
-        runStatementUnderCursor: settings.runStatementUnderCursor !== false,
-      }),
-    [runContext, settings.runStatementUnderCursor],
-  );
+  // handleRunButton below dispatches on the same resolveRunTarget call.
+  // Table and query-builder tabs always run their whole (generated) query;
+  // runContext also still describes the last SQL editor tab on a builder tab.
+  const runTarget =
+    isTableTab || activeTab?.type === "query_builder"
+      ? "whole"
+      : resolveRunTarget({
+          hasSelection: runContext.hasSelection,
+          statementCount: runContext.statementCount,
+          runStatementUnderCursor: settings.runStatementUnderCursor !== false,
+        });
 
-  const runLabel = useMemo(() => {
-    if (isTableTab) return t("editor.run");
-    if (runTarget === "selection") return t("editor.runSelection");
-    if (runTarget === "statement") return t("editor.runStatement");
-    return t("editor.run");
-  }, [isTableTab, runTarget, t]);
+  const runLabel =
+    runTarget === "selection"
+      ? t("editor.runSelection")
+      : runTarget === "statement"
+        ? t("editor.runStatement")
+        : t("editor.run");
 
-  const runTitle = useMemo(() => {
-    const base = `${runLabel} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`;
-    // Surface the whole-script escape hatch exactly when the button would run
-    // one statement out of several.
-    if (runTarget !== "statement") return base;
-    return `${base} · ${t("editor.runAll")} (${isMac ? "Cmd+Shift+Enter" : "Ctrl+Shift+Enter"})`;
-  }, [runLabel, runTarget, isMac, t]);
+  const runButtonBase = `${runLabel} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`;
+  // Surface the whole-script escape hatch exactly when the button would run
+  // one statement out of several.
+  const runTitle =
+    runTarget === "statement"
+      ? `${runButtonBase} · ${t("editor.runAll")} (${isMac ? "Cmd+Shift+Enter" : "Ctrl+Shift+Enter"})`
+      : runButtonBase;
 
   const handleRunAll = useCallback(() => {
     if (!activeTab) return;
@@ -1613,29 +1625,44 @@ export const Editor = () => {
     const selectedText = selection
       ? editor.getModel()?.getValueInRange(selection)
       : undefined;
-
-    if (selectedText && selection && !selection.isEmpty()) {
-      const selectedQueries = splitQueries(selectedText, activeDialect);
-      if (selectedQueries.length > 1) {
-        runMultipleQueries(selectedQueries);
-      } else {
-        runQuery(selectedQueries[0] || selectedText, 1);
-      }
-      return;
-    }
+    const hasSelection = !!(selectedText && selection && !selection.isEmpty());
 
     const fullText = editor.getValue();
-    if (!fullText.trim()) return;
+    if (!hasSelection && !fullText.trim()) return;
 
     const queries = splitQueries(fullText, activeDialect);
-    if (queries.length <= 1) {
-      runQuery(queries[0] || fullText, 1);
-    } else if (settings.runStatementUnderCursor !== false) {
-      const statement = getStatementAtCursor(editor, activeDialect);
-      runQuery(statement?.text || queries[0] || fullText, 1);
-    } else {
-      setSelectableQueries(queries);
-      setIsQuerySelectionModalOpen(true);
+    // Dispatch on the same resolution that labels the Run button, so the
+    // label and the behaviour cannot drift apart.
+    switch (
+      resolveRunTarget({
+        hasSelection,
+        statementCount: queries.length,
+        runStatementUnderCursor: settings.runStatementUnderCursor !== false,
+      })
+    ) {
+      case "selection": {
+        const selectedQueries = splitQueries(selectedText!, activeDialect);
+        if (selectedQueries.length > 1) {
+          runMultipleQueries(selectedQueries);
+        } else {
+          runQuery(selectedQueries[0] || selectedText!, 1);
+        }
+        return;
+      }
+      case "whole":
+        runQuery(queries[0] || fullText, 1);
+        return;
+      case "statement": {
+        const statement = getStatementAtCursor(editor, activeDialect);
+        // Only undefined without a model/position; the first statement is
+        // what the cursor resolution would have picked then.
+        runQuery(statement?.text ?? queries[0], 1);
+        return;
+      }
+      case "pick":
+        setSelectableQueries(queries);
+        setIsQuerySelectionModalOpen(true);
+        return;
     }
   }, [activeTab, activeDialect, runQuery, runMultipleQueries, settings.runStatementUnderCursor]);
 
@@ -3263,7 +3290,7 @@ export const Editor = () => {
             <button
               onClick={handleRunButton}
               disabled={!activeConnectionId}
-              aria-label={`${runLabel} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`}
+              aria-label={runButtonBase}
               aria-keyshortcuts={isMac ? "Meta+Enter" : "Control+Enter"}
               title={runTitle}
               className={clsx(
@@ -3530,7 +3557,7 @@ export const Editor = () => {
                 }}
                 onRun={handleRunButton}
                 onRunAll={handleRunAll}
-                onRunContextChange={isActive ? setRunContext : undefined}
+                onRunContextChange={isActive ? handleRunContextChange : undefined}
                 onMount={
                   isActive
                     ? (editor, monaco) =>

@@ -15,6 +15,7 @@ import {
 } from "../../utils/sqlSplitter";
 import { formatSql } from "../../utils/sqlFormat";
 import type { SqlDialect } from "../../utils/sql";
+import type { RunContext } from "../../utils/runTarget";
 
 interface SqlEditorWrapperProps {
   initialValue: string;
@@ -33,7 +34,7 @@ interface SqlEditorWrapperProps {
    * active and how many statements the buffer holds. Lets the toolbar label
    * the button with its actual target. Requires `dialect`.
    */
-  onRunContextChange?: (context: { hasSelection: boolean; statementCount: number }) => void;
+  onRunContextChange?: (context: RunContext) => void;
 }
 
 // Internal component that resets when key changes
@@ -57,13 +58,18 @@ const SqlEditorInternal = ({
   onRunAllRef.current = onRunAll;
   const onRunContextChangeRef = useRef(onRunContextChange);
   onRunContextChangeRef.current = onRunContextChange;
-  const lastRunContextRef = useRef<{ hasSelection: boolean; statementCount: number } | null>(null);
+  const lastRunContextRef = useRef<RunContext | null>(null);
+  const refreshRunContextRef = useRef<(() => void) | null>(null);
   const dialectRef = useRef(dialect);
   dialectRef.current = dialect;
-  const lastSplitRef = useRef<{ text: string; statements: Statement[] }>({
-    text: "",
-    statements: [],
-  });
+  // Keyed on the model's version id: cursor and selection events fire per
+  // keystroke and per mouse move during a drag-select, and comparing version
+  // ids skips even the O(n) getValue() that a text-keyed cache would need.
+  const lastSplitRef = useRef<{
+    model: Monaco.editor.ITextModel | null;
+    versionId: number;
+    statements: Statement[];
+  }>({ model: null, versionId: -1, statements: [] });
   const editorTheme = useEditorTheme();
   const { settings } = useSettings();
   const { matchesShortcut } = useKeybindings();
@@ -102,6 +108,16 @@ const SqlEditorInternal = ({
       loadMonacoTheme(editorTheme, monacoRef.current);
     }
   }, [editorTheme]);
+
+  // All editors stay mounted (hidden tabs use display:none) and a hidden
+  // editor's notifications are dropped, so on becoming the active tab the
+  // consumer's run context still describes the previous tab. Re-announce it.
+  useEffect(() => {
+    if (onRunContextChange) {
+      lastRunContextRef.current = null;
+      refreshRunContextRef.current?.();
+    }
+  }, [onRunContextChange]);
 
     const handleChange = useCallback(
       (val: string | undefined) => {
@@ -338,11 +354,16 @@ const SqlEditorInternal = ({
       if (dialectRef.current !== undefined) {
         const decorations = editor.createDecorationsCollection();
 
-        const getStatements = (text: string): Statement[] => {
-          if (lastSplitRef.current.text !== text) {
+        const getStatements = (model: Monaco.editor.ITextModel): Statement[] => {
+          const versionId = model.getVersionId();
+          if (
+            lastSplitRef.current.model !== model ||
+            lastSplitRef.current.versionId !== versionId
+          ) {
             lastSplitRef.current = {
-              text,
-              statements: splitStatements(text, dialectRef.current),
+              model,
+              versionId,
+              statements: splitStatements(model.getValue(), dialectRef.current),
             };
           }
           return lastSplitRef.current.statements;
@@ -367,7 +388,7 @@ const SqlEditorInternal = ({
           const model = editor.getModel();
           const selection = editor.getSelection();
           const hasSelection = !!selection && !selection.isEmpty();
-          const statements = model ? getStatements(model.getValue()) : [];
+          const statements = model ? getStatements(model) : [];
           notifyRunContext(hasSelection, statements.length);
 
           if (hasSelection) {
@@ -402,6 +423,7 @@ const SqlEditorInternal = ({
 
         editor.onDidChangeCursorSelection(updateCursorStatementHighlight);
         editor.onDidChangeModelContent(updateCursorStatementHighlight);
+        refreshRunContextRef.current = updateCursorStatementHighlight;
         updateCursorStatementHighlight();
       }
 

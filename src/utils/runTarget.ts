@@ -17,9 +17,13 @@ export type RunTarget =
   /** Single statement (or empty): run the whole buffer. */
   | "whole";
 
-export function resolveRunTarget(options: {
+/** Editor state the run target is derived from, as reported by the editor. */
+export interface RunContext {
   hasSelection: boolean;
   statementCount: number;
+}
+
+export function resolveRunTarget(options: RunContext & {
   runStatementUnderCursor: boolean;
 }): RunTarget {
   if (options.hasSelection) return "selection";
