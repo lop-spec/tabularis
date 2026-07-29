@@ -10,6 +10,7 @@ import { QueryKindBadge } from "../settings/ai-activity/QueryKindBadge";
 import { VisualExplainView } from "../explain/VisualExplainView";
 import type { ExplainViewMode } from "@tabularis/explain/react";
 import { isDestructiveApproval } from "../../utils/aiActivity";
+import { parseApprovalExplainPlan } from "../../utils/approvalExplain";
 
 interface AiApprovalModalProps {
   approval: PendingApproval;
@@ -55,15 +56,13 @@ export function AiApprovalModal({
     return () => window.removeEventListener("keydown", handler, true);
   }, [planExpanded]);
 
-  const explainPlan = useMemo<ExplainPlan | null>(() => {
-    if (!approval.explainPlan || typeof approval.explainPlan !== "object") {
-      return null;
-    }
-    return approval.explainPlan as ExplainPlan;
-  }, [approval.explainPlan]);
+  const explainPlan = useMemo<ExplainPlan | null>(
+    () => parseApprovalExplainPlan(approval.explainPlan),
+    [approval.explainPlan],
+  );
 
   useEffect(() => {
-    if (explainPlan?.root.id && !selectedNodeId) {
+    if (explainPlan?.root?.id && !selectedNodeId) {
       setSelectedNodeId(explainPlan.root.id);
     }
   }, [explainPlan, selectedNodeId]);
