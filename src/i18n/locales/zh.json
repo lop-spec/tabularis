@@ -1764,6 +1764,8 @@
   },
   "aiApproval": {
     "title": "AI 请求执行数据库写入",
+    "titleRead": "AI 请求执行数据库读取",
+    "planEstimatedRows": "预估行数",
     "subtitle": "在 {{connection}} 上 — 请审核后再执行。",
     "subtitleWithClient": "{{client}} 在 {{connection}} 上 — 请审核后再执行。",
     "query": "查询",

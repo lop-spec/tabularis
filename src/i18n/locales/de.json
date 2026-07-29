@@ -1824,6 +1824,8 @@
   },
   "aiApproval": {
     "title": "KI möchte in die Datenbank schreiben",
+    "titleRead": "KI möchte aus der Datenbank lesen",
+    "planEstimatedRows": "Geschätzte Zeilen",
     "subtitle": "Auf {{connection}} — vor Ausführung prüfen.",
     "subtitleWithClient": "{{client}} auf {{connection}} — vor Ausführung prüfen.",
     "query": "Abfrage",

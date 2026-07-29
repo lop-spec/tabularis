@@ -1746,6 +1746,8 @@
   },
   "aiApproval": {
     "title": "La IA quiere ejecutar una escritura en la base de datos",
+    "titleRead": "La IA quiere ejecutar una lectura en la base de datos",
+    "planEstimatedRows": "Filas estimadas",
     "subtitle": "En {{connection}} — revisa y decide antes de ejecutar.",
     "subtitleWithClient": "{{client}} en {{connection}} — revisa y decide antes de ejecutar.",
     "query": "Consulta",
