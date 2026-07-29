@@ -1840,6 +1840,8 @@
   },
   "aiApproval": {
     "title": "AI がデータベース書き込みを要求しています",
+    "titleRead": "AI がデータベース読み取りを要求しています",
+    "planEstimatedRows": "推定行数",
     "subtitle": "{{connection}} 上 — 実行前に確認して判断してください。",
     "subtitleWithClient": "{{client}} が {{connection}} 上 — 実行前に確認して判断してください。",
     "query": "クエリ",

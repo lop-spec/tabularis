@@ -1893,6 +1893,8 @@
   },
   "aiApproval": {
     "title": "AI запрашивает запись в базу данных",
+    "titleRead": "AI запрашивает чтение из базы данных",
+    "planEstimatedRows": "Оценка строк",
     "subtitle": "На {{connection}} — проверьте запрос перед выполнением.",
     "subtitleWithClient": "{{client}} на {{connection}} — проверьте запрос перед выполнением.",
     "query": "Запрос",

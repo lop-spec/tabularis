@@ -1911,6 +1911,8 @@
   },
   "aiApproval": {
     "title": "AI requested a database write",
+    "titleRead": "AI requested a database read",
+    "planEstimatedRows": "Estimated rows",
     "subtitle": "On {{connection}} — review and decide before it executes.",
     "subtitleWithClient": "{{client}} on {{connection}} — review and decide before it executes.",
     "query": "Query",

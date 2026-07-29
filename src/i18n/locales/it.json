@@ -1824,6 +1824,8 @@
   },
   "aiApproval": {
     "title": "L'AI vuole eseguire una scrittura sul database",
+    "titleRead": "L'AI vuole eseguire una lettura sul database",
+    "planEstimatedRows": "Righe stimate",
     "subtitle": "Su {{connection}} — controlla e decidi prima dell'esecuzione.",
     "subtitleWithClient": "{{client}} su {{connection}} — controlla e decidi prima dell'esecuzione.",
     "query": "Query",
