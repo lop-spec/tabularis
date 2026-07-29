@@ -1050,6 +1050,8 @@
     "noActiveSession": "No active session. Please select a connection.",
     "stop": "Stop",
     "run": "Run",
+    "runSelection": "Run Selection",
+    "runStatement": "Run Statement",
     "runAll": "Run All",
     "export": "Export",
     "connected": "Connected",
