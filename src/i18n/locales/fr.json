@@ -842,6 +842,7 @@
     "namePlaceholder": "Indiquez le nom de votre connexion",
     "nameRequired": "Le nom de la connexion est requis",
     "dbNameRequired": "Le nom de la base de données est requis",
+    "connectionUriRequiresKeychain": "Les URI de connexion doivent être enregistrées dans le trousseau du système. Activez « Enregistrer les mots de passe dans le trousseau » pour continuer.",
     "dbType": "Type de base de données",
     "host": "Hôte",
     "port": "Port",

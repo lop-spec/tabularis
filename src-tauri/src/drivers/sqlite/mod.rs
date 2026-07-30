@@ -991,6 +991,8 @@ impl SqliteDriver {
                     folder_based: false,
                     connection_string: false,
                     connection_string_example: String::new(),
+                    connection_uri: false,
+                    connection_uri_schemes: Vec::new(),
                     identifier_quote: "\"".into(),
                     alter_primary_key: true,
                     auto_increment_keyword: "AUTOINCREMENT".into(),

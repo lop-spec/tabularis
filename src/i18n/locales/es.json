@@ -833,6 +833,7 @@
     "namePlaceholder": "Ingresa el nombre de tu conexión",
     "nameRequired": "El nombre de la conexión es requerido",
     "dbNameRequired": "El nombre de la base de datos es requerido",
+    "connectionUriRequiresKeychain": "Las URI de conexión deben guardarse en el Llavero del sistema. Activa “Guardar contraseñas en el Llavero” para continuar.",
     "dbType": "Tipo de Base de Datos",
     "host": "Host",
     "port": "Puerto",

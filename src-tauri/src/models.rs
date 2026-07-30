@@ -173,6 +173,22 @@ pub struct ConnectionParams {
     pub port: Option<u16>,
     pub username: Option<String>,
     pub password: Option<String>,
+    /// Opaque driver-specific connection URI forwarded verbatim to the driver
+    /// (e.g. a `mongodb+srv://` seedlist URI). Runtime only: command handlers
+    /// strip it before persisting a connection, because it embeds credentials.
+    #[serde(
+        default,
+        alias = "connectionUri",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub connection_uri: Option<String>,
+    /// True when the URI can be restored from a separate OS keychain entry.
+    #[serde(
+        default,
+        alias = "connectionUriInKeychain",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub connection_uri_in_keychain: Option<bool>,
     pub database: DatabaseSelection,
     pub ssl_mode: Option<String>,
     pub ssl_ca: Option<String>,

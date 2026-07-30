@@ -852,6 +852,7 @@
     "namePlaceholder": "Provide your connection name",
     "nameRequired": "Connection name is required",
     "dbNameRequired": "Database name is required",
+    "connectionUriRequiresKeychain": "Connection URIs must be saved in the OS keychain. Enable “Save passwords in Keychain” to continue.",
     "dbType": "Database Type",
     "host": "Host",
     "port": "Port",

@@ -86,6 +86,10 @@ interface ConnectionParams {
   port?: number;
   username?: string;
   password?: string;
+  /** Raw driver-specific connection URI, stored in the OS keychain, never in connections.json. */
+  connection_uri?: string;
+  /** True when the URI can be restored from the OS keychain. */
+  connection_uri_in_keychain?: boolean;
   database: string | string[];
   ssl_mode?: string;
   ssl_ca?: string;
@@ -516,6 +520,9 @@ export const NewConnectionModal = ({
   // ── capabilities ──
   const noConnectionRequired =
     activeDriver?.capabilities?.no_connection_required === true;
+  // A raw URI is self-contained: it carries the database (or deliberately omits
+  // it, as Atlas URIs do) and the credentials, so it replaces those form fields.
+  const hasConnectionUri = !!formData.connection_uri?.trim();
   const isNetworkDriver =
     !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
@@ -1734,6 +1741,14 @@ export const NewConnectionModal = ({
         nameInputRef.current?.focus();
         return;
       }
+      // The URI embeds credentials, so it may only leave this modal if it can
+      // go to the OS keychain. Fail loudly instead of persisting it in plaintext.
+      if (hasConnectionUri && !formData.save_in_keychain) {
+        setStatus("error");
+        setMessage(t("newConnection.connectionUriRequiresKeychain"));
+        setTestResult("error");
+        return;
+      }
       if (isMultiDb) {
         if (selectedDatabasesState.length === 0) {
           setStatus("error");
@@ -1746,6 +1761,7 @@ export const NewConnectionModal = ({
       } else if (
         !noConnectionRequired &&
         !singleDatabase &&
+        !hasConnectionUri &&
         (!formData.database ||
           (typeof formData.database === "string" && !formData.database.trim()))
       ) {
@@ -1891,6 +1907,11 @@ export const NewConnectionModal = ({
     setConnectionStringError(null);
 
     if (!value.trim()) {
+      setFormData((prev) => ({
+        ...prev,
+        connection_uri: undefined,
+        connection_uri_in_keychain: false,
+      }));
       return;
     }
 
@@ -1913,9 +1934,17 @@ export const NewConnectionModal = ({
         host: parsed.host || "localhost",
         port: parsed.port,
         username: parsed.username || "",
-        password: parsed.password || "",
         database: parsed.database || "",
+        connection_uri: parsed.connection_uri,
+        connection_uri_in_keychain: false,
       };
+
+      // A passthrough URI carries its own credentials, so the password field is
+      // left untouched rather than blanked — writing "" here would overwrite the
+      // password already stored for this connection.
+      if (!parsed.connection_uri) {
+        parsedFields.password = parsed.password || "";
+      }
 
       if (parsedIsMultiDb && parsed.database) {
         setSelectedDatabasesState([parsed.database]);
@@ -1939,6 +1968,13 @@ export const NewConnectionModal = ({
   const handleClearConnectionString = () => {
     setConnectionString("");
     setConnectionStringError(null);
+    // Drop the imported URI too, so clearing the field also clears the secret
+    // instead of leaving a stale keychain entry behind.
+    setFormData((prev) => ({
+      ...prev,
+      connection_uri: undefined,
+      connection_uri_in_keychain: false,
+    }));
   };
 
   // ── rendered general tab content ──

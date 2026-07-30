@@ -808,6 +808,7 @@
     "namePlaceholder": "Gib deinen Verbindungsnamen an",
     "nameRequired": "Verbindungsname ist erforderlich",
     "dbNameRequired": "Datenbankname ist erforderlich",
+    "connectionUriRequiresKeychain": "Verbindungs-URIs müssen im Keychain des Betriebssystems gespeichert werden. Aktiviere „Passwörter im Keychain speichern“, um fortzufahren.",
     "dbType": "Datenbanktyp",
     "host": "Host",
     "port": "Port",

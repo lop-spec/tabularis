@@ -81,6 +81,16 @@ pub struct DriverCapabilities {
     /// Optional placeholder example shown for connection string input.
     #[serde(default, alias = "connectionStringExample")]
     pub connection_string_example: String,
+    /// The driver consumes the raw connection URI verbatim instead of the
+    /// decomposed host/port/database fields. Set by drivers whose scheme
+    /// carries semantics the decomposition would destroy (e.g. the DNS
+    /// seedlist lookup implied by `mongodb+srv://`). Defaults to `false`.
+    #[serde(default, alias = "connectionUri")]
+    pub connection_uri: bool,
+    /// Additional URI schemes handled by this driver, beyond its own id and
+    /// the scheme of `connection_string_example` (e.g. `["mongodb+srv"]`).
+    #[serde(default, alias = "connectionUriSchemes")]
+    pub connection_uri_schemes: Vec<String>,
     /// Character used to quote identifiers (e.g. `"` for PostgreSQL, `` ` `` for MySQL).
     #[serde(default = "default_double_quote")]
     pub identifier_quote: String,
