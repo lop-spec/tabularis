@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isMultiDatabaseCapable,
   isMultiDatabaseSelection,
+  getTableDataChangeScope,
   getDatabaseList,
   getEffectiveDatabase,
   reconcileDatabaseSelection,
@@ -49,6 +50,44 @@ describe('isMultiDatabaseCapable', () => {
 
   it('returns false for undefined capabilities', () => {
     expect(isMultiDatabaseCapable(undefined)).toBe(false);
+  });
+});
+
+describe('getTableDataChangeScope', () => {
+  it('prefers the table tab schema for schema-capable drivers', () => {
+    expect(
+      getTableDataChangeScope(
+        { ...baseCapabilities, schemas: true },
+        'schema_a',
+        'schema_b',
+      ),
+    ).toEqual({ schema: 'schema_a' });
+  });
+
+  it('falls back to the active schema when a schema-capable tab has no schema', () => {
+    expect(
+      getTableDataChangeScope(
+        { ...baseCapabilities, schemas: true },
+        undefined,
+        'public',
+      ),
+    ).toEqual({ schema: 'public' });
+  });
+
+  it('uses the table tab value as database for multi-database drivers', () => {
+    expect(getTableDataChangeScope(baseCapabilities, 'app_db', 'ignored')).toEqual({
+      database: 'app_db',
+    });
+  });
+
+  it('omits scope for flat drivers', () => {
+    expect(
+      getTableDataChangeScope(
+        { ...baseCapabilities, file_based: true },
+        'main',
+        'public',
+      ),
+    ).toEqual({});
   });
 });
 

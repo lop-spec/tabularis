@@ -1,5 +1,10 @@
 import type { DriverCapabilities } from '../types/plugins';
 
+export interface TableDataChangeScope {
+  schema?: string;
+  database?: string;
+}
+
 /**
  * Returns true when a driver supports cross-database access from a single connection
  * (e.g. MySQL). Postgres uses schemas; SQLite/DuckDB are file-based or folder-based.
@@ -14,6 +19,23 @@ export function isMultiDatabaseCapable(capabilities: DriverCapabilities | null |
     !capabilities.folder_based &&
     capabilities.schemas === false
   );
+}
+
+export function getTableDataChangeScope(
+  capabilities: DriverCapabilities | null | undefined,
+  tabSchema: string | null | undefined,
+  activeSchema: string | null | undefined,
+): TableDataChangeScope {
+  if (isMultiDatabaseCapable(capabilities) && tabSchema) {
+    return { database: tabSchema };
+  }
+
+  if (capabilities?.schemas === true) {
+    const schema = tabSchema ?? activeSchema;
+    return schema ? { schema } : {};
+  }
+
+  return {};
 }
 
 /**
