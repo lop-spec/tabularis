@@ -1025,6 +1025,8 @@
     "noActiveSession": "Nessuna sessione attiva. Seleziona una connessione.",
     "stop": "Stop",
     "run": "Esegui",
+    "runSelection": "Esegui selezione",
+    "runStatement": "Esegui istruzione",
     "runAll": "Esegui tutto",
     "export": "Esporta",
     "connected": "Connesso",
@@ -1469,12 +1471,18 @@
     "noConnectionDesc": "Impossibile visualizzare il diagramma senza un ID connessione.",
     "switchToVertical": "Passa a Layout Verticale",
     "switchToHorizontal": "Passa a Layout Orizzontale",
+    "lockNodes": "Blocca le posizioni dei nodi",
+    "unlockNodes": "Sblocca i nodi per spostarli",
     "vertical": "Verticale",
     "horizontal": "Orizzontale",
     "showAllTables": "Mostra Tutte le Tabelle",
     "showAll": "Mostra Tutto",
     "focusedOn": "Focus su",
-    "focusOnTable": "Focus su Tabella"
+    "focusOnTable": "Focus su Tabella",
+    "exportMermaid": "Esporta come diagramma Mermaid",
+    "exportSuccess": "Diagramma esportato",
+    "exportDbml": "Esporta come DBML",
+    "export": "Esporta"
   },
   "views": {
     "createView": "Crea Vista",
@@ -1818,6 +1826,8 @@
   },
   "aiApproval": {
     "title": "L'AI vuole eseguire una scrittura sul database",
+    "titleRead": "L'AI vuole eseguire una lettura sul database",
+    "planEstimatedRows": "Righe stimate",
     "subtitle": "Su {{connection}} — controlla e decidi prima dell'esecuzione.",
     "subtitleWithClient": "{{client}} su {{connection}} — controlla e decidi prima dell'esecuzione.",
     "query": "Query",
