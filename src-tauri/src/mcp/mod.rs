@@ -245,8 +245,11 @@ async fn resolve_db_params(
 ) -> Result<(crate::models::SavedConnection, ConnectionParams), JsonRpcError> {
     let mut conn = find_connection(conn_id)?;
 
-    // Load DB password from keychain if it isn't stored inline
-    if conn.params.save_in_keychain.unwrap_or(false) {
+    // Load DB password from keychain unless the connection uses IAM auth,
+    // whose 15-min tokens must come from the `password` field on every
+    // connect — never from the keychain, where a stale token would survive.
+    let iam_auth = conn.params.use_iam_auth.unwrap_or(false);
+    if !iam_auth && conn.params.save_in_keychain.unwrap_or(false) {
         let cache = std::sync::Arc::new(credential_cache::CredentialCache::default());
         let id = conn.id.clone();
         let pwd = tokio::task::spawn_blocking(move || {
@@ -264,25 +267,33 @@ async fn resolve_db_params(
                 conn.params.password = Some(p);
             }
         }
+    } else if iam_auth && conn.params.save_in_keychain.unwrap_or(false) {
+        log::warn!(
+            "MCP: connection {} has use_iam_auth=true; ignoring any password stored in the keychain. A fresh RDS auth token must be supplied on every connect.",
+            conn_id
+        );
+        conn.params.password = None;
+    }
 
-        // connections.json never holds the URI, so a passthrough connection
-        // that works in the app would reach the driver without its endpoint
-        // and credentials here unless it is restored the same way.
-        if conn.params.connection_uri_in_keychain.unwrap_or(false) {
-            let cache = std::sync::Arc::new(credential_cache::CredentialCache::default());
-            let id = conn.id.clone();
-            let uri = tokio::task::spawn_blocking(move || {
-                credential_cache::get_connection_uri_cached(&cache, &id, true)
-            })
-            .await
-            .map_err(|e| JsonRpcError {
-                code: -32000,
-                message: e.to_string(),
-                data: None,
-            })?;
-            if let Ok(Some(value)) = uri {
-                conn.params.connection_uri = Some(value);
-            }
+    // connections.json never holds the URI, so a passthrough connection that
+    // works in the app would reach the driver without its endpoint and
+    // credentials here unless it is restored the same way. Kept out of the
+    // password branches above: the URI has its own keychain entry and its own
+    // marker, so it must not depend on how the password happens to be stored.
+    if conn.params.connection_uri_in_keychain.unwrap_or(false) {
+        let cache = std::sync::Arc::new(credential_cache::CredentialCache::default());
+        let id = conn.id.clone();
+        let uri = tokio::task::spawn_blocking(move || {
+            credential_cache::get_connection_uri_cached(&cache, &id, true)
+        })
+        .await
+        .map_err(|e| JsonRpcError {
+            code: -32000,
+            message: e.to_string(),
+            data: None,
+        })?;
+        if let Ok(Some(value)) = uri {
+            conn.params.connection_uri = Some(value);
         }
     }
 

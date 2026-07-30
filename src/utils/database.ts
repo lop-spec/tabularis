@@ -1,5 +1,10 @@
 import type { DriverCapabilities } from '../types/plugins';
 
+export interface TableDataChangeScope {
+  schema?: string;
+  database?: string;
+}
+
 /**
  * Returns true when a driver supports cross-database access from a single connection
  * (e.g. MySQL). Postgres uses schemas; SQLite/DuckDB are file-based or folder-based.
@@ -14,6 +19,23 @@ export function isMultiDatabaseCapable(capabilities: DriverCapabilities | null |
     !capabilities.folder_based &&
     capabilities.schemas === false
   );
+}
+
+export function getTableDataChangeScope(
+  capabilities: DriverCapabilities | null | undefined,
+  tabSchema: string | null | undefined,
+  activeSchema: string | null | undefined,
+): TableDataChangeScope {
+  if (isMultiDatabaseCapable(capabilities) && tabSchema) {
+    return { database: tabSchema };
+  }
+
+  if (capabilities?.schemas === true) {
+    const schema = tabSchema ?? activeSchema;
+    return schema ? { schema } : {};
+  }
+
+  return {};
 }
 
 /**
@@ -43,4 +65,26 @@ export function getEffectiveDatabase(db: string | string[]): string {
     return db[0] ?? '';
   }
   return db;
+}
+
+/**
+ * Reconciles a saved database selection against the databases that actually
+ * exist on the server. Preserves the saved order; entries that no longer
+ * exist are reported in `removed` so callers can persist the pruned list.
+ */
+export function reconcileDatabaseSelection(
+  saved: string[],
+  available: string[],
+): { selection: string[]; removed: string[] } {
+  const availableSet = new Set(available);
+  const selection: string[] = [];
+  const removed: string[] = [];
+  for (const db of saved) {
+    if (availableSet.has(db)) {
+      selection.push(db);
+    } else {
+      removed.push(db);
+    }
+  }
+  return { selection, removed };
 }
