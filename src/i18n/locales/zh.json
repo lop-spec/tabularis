@@ -989,6 +989,8 @@
     "noActiveSession": "无活动会话。请选择一个连接。",
     "stop": "停止",
     "run": "运行",
+    "runSelection": "运行选中内容",
+    "runStatement": "运行当前语句",
     "runAll": "全部运行",
     "export": "导出",
     "connected": "已连接",
@@ -1391,12 +1393,18 @@
     "noConnectionDesc": "无法在没有连接 ID 的情况下显示图表。",
     "switchToVertical": "切换到垂直布局",
     "switchToHorizontal": "切换到水平布局",
+    "lockNodes": "锁定节点位置",
+    "unlockNodes": "解锁节点以移动",
     "vertical": "垂直",
     "horizontal": "水平",
     "showAllTables": "显示所有表",
     "showAll": "显示全部",
     "focusedOn": "聚焦于",
-    "focusOnTable": "聚焦于表"
+    "focusOnTable": "聚焦于表",
+    "exportMermaid": "导出为 Mermaid 图表",
+    "exportSuccess": "图表已导出",
+    "exportDbml": "导出为 DBML",
+    "export": "导出"
   },
   "views": {
     "createView": "创建视图",
@@ -1756,6 +1764,8 @@
   },
   "aiApproval": {
     "title": "AI 请求执行数据库写入",
+    "titleRead": "AI 请求执行数据库读取",
+    "planEstimatedRows": "预估行数",
     "subtitle": "在 {{connection}} 上 — 请审核后再执行。",
     "subtitleWithClient": "{{client}} 在 {{connection}} 上 — 请审核后再执行。",
     "query": "查询",
