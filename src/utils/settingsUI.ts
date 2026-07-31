@@ -3,8 +3,6 @@
  * Extracted from Settings.tsx for testability
  */
 
-import type { AiProvider } from '../contexts/SettingsContext';
-
 /**
  * Font size bounds
  */
@@ -21,30 +19,6 @@ export function validateFontSize(size: number): boolean {
 }
 
 /**
- * Get a human-readable label for an AI provider
- * @param id - AI provider ID
- * @returns Display label
- */
-export function getProviderLabel(id: AiProvider): string {
-  switch (id) {
-    case 'openai':
-      return 'OpenAI';
-    case 'anthropic':
-      return 'Anthropic';
-    case 'openrouter':
-      return 'OpenRouter';
-    case 'ollama':
-      return 'Ollama';
-    case 'custom-openai':
-      return 'OpenAI Compatible';
-    case 'minimax':
-      return 'MiniMax';
-    default:
-      return String(id).charAt(0).toUpperCase() + String(id).slice(1);
-  }
-}
-
-/**
  * Check if a font family is a predefined preset
  * @param fontFamily - Font family name
  * @param availableFonts - List of available font presets
@@ -55,17 +29,6 @@ export function isPresetFont(
   availableFonts: ReadonlyArray<{ name: string; label: string }>
 ): boolean {
   return availableFonts.some((f) => f.name === fontFamily);
-}
-
-/**
- * Check if an API key appears to be valid (basic format check)
- * @param key - API key to validate
- * @returns True if key appears valid
- */
-export function isValidApiKeyFormat(key: string): boolean {
-  const trimmed = key.trim();
-  // API keys should be at least 10 characters and contain alphanumeric/special chars
-  return trimmed.length >= 10 && /^[A-Za-z0-9_\-:.]+$/.test(trimmed);
 }
 
 /**

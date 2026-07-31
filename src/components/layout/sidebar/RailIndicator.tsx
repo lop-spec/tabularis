@@ -5,7 +5,7 @@ interface RailIndicatorProps {
 }
 
 /**
- * Discord-style left indicator for items in the narrow sidebar rail:
+ * Left indicator for items in the narrow sidebar rail:
  * full-height white pill when active, shorter pill revealed on hover.
  * The parent must be `relative` and carry the `group` class.
  */

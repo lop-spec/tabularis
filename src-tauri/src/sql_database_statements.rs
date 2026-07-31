@@ -8,10 +8,97 @@
 //! today's behaviour anyway; a wrong detection would tell the user a database
 //! is gone when it isn't, which is worse than doing nothing.
 
-use crate::ai_activity::{has_trailing_statements, strip_strings_and_comments};
-
 #[cfg(test)]
 mod tests;
+
+fn has_trailing_statements(stripped: &str) -> bool {
+    let mut found_terminator = false;
+    for character in stripped.chars() {
+        if found_terminator && !character.is_whitespace() {
+            return true;
+        }
+        if character == ';' {
+            found_terminator = true;
+        }
+    }
+    false
+}
+
+fn strip_strings_and_comments(sql: &str) -> String {
+    let bytes = sql.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        let current = bytes[index];
+
+        if current == b'-' && index + 1 < bytes.len() && bytes[index + 1] == b'-' {
+            while index < bytes.len() && bytes[index] != b'\n' {
+                output.push(b' ');
+                index += 1;
+            }
+            continue;
+        }
+
+        if current == b'/' && index + 1 < bytes.len() && bytes[index + 1] == b'*' {
+            output.extend_from_slice(b"  ");
+            index += 2;
+            while index + 1 < bytes.len()
+                && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
+            {
+                output.push(b' ');
+                index += 1;
+            }
+            if index + 1 < bytes.len() {
+                output.extend_from_slice(b"  ");
+                index += 2;
+            } else {
+                output.resize(bytes.len(), b' ');
+                index = bytes.len();
+            }
+            continue;
+        }
+
+        if current == b'\'' {
+            output.push(b' ');
+            index += 1;
+            while index < bytes.len() {
+                if bytes[index] == b'\'' && index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
+                    output.extend_from_slice(b"  ");
+                    index += 2;
+                } else if bytes[index] == b'\'' {
+                    output.push(b' ');
+                    index += 1;
+                    break;
+                } else {
+                    output.push(b' ');
+                    index += 1;
+                }
+            }
+            continue;
+        }
+
+        if matches!(current, b'"' | b'`') {
+            let quote = current;
+            output.push(b' ');
+            index += 1;
+            while index < bytes.len() && bytes[index] != quote {
+                output.push(b' ');
+                index += 1;
+            }
+            if index < bytes.len() {
+                output.push(b' ');
+                index += 1;
+            }
+            continue;
+        }
+
+        output.push(current);
+        index += 1;
+    }
+
+    String::from_utf8(output).unwrap_or_default()
+}
 
 /// The database targeted by a `DROP DATABASE` / `DROP SCHEMA` statement.
 ///

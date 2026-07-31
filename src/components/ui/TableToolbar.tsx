@@ -21,7 +21,6 @@ import type { StructuredFilter } from "../../utils/filterBar";
 import { formatSqlIdentifier } from "../../utils/identifiers";
 import { formatSortClause } from "../../utils/tableToolbar";
 import { FilterRow } from "./FilterRow";
-import { SlotAnchor } from "./SlotAnchor";
 import { useDatabase } from "../../hooks/useDatabase";
 
 interface TableToolbarProps {
@@ -544,12 +543,6 @@ const TableToolbarInternal = ({
           />
         </div>
 
-        {/* Plugin extension slot */}
-        <SlotAnchor
-          name="data-grid.toolbar.actions"
-          context={{}}
-          className="flex items-center gap-1"
-        />
       </div>
 
       {/* Overlay filter panel */}

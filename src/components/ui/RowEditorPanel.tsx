@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useRowEditor } from "../../hooks/useRowEditor";
 import { FieldEditor } from "./FieldEditor";
-import { SlotAnchor } from "./SlotAnchor";
 
 interface RowEditorPanelProps {
 	onClose: () => void;
@@ -105,18 +104,6 @@ export const RowEditorPanel = ({
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
-					<SlotAnchor
-						name="row-editor-sidebar.header.actions"
-						context={{
-							connectionId,
-							tableName,
-							schema,
-							rowData,
-							rowIndex,
-							isInsertion,
-						}}
-						className="flex items-center gap-1"
-					/>
 					{onTogglePin && (
 						<button
 							type="button"
@@ -178,20 +165,6 @@ export const RowEditorPanel = ({
 								tableName={tableName}
 								pkMap={pkMap}
 								schema={schema}
-							/>
-							<SlotAnchor
-								name="row-editor-sidebar.field.after"
-								context={{
-									connectionId,
-									tableName,
-									schema,
-									columnName: column.name,
-									rowData: editedData,
-									rowIndex,
-									isInsertion,
-									onFieldChange: (value: unknown) =>
-										updateField(column.name, value),
-								}}
 							/>
 						</div>
 					);

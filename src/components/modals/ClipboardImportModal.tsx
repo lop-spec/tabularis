@@ -18,7 +18,6 @@ import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { Modal } from '../ui/Modal';
 import { Select } from '../ui/Select';
 import { useDatabase } from '../../hooks/useDatabase';
-import { useSettings } from '../../hooks/useSettings';
 import { SchemaEditor, type SchemaColumn } from './ClipboardImport/SchemaEditor';
 import { DataPreview } from './ClipboardImport/DataPreview';
 import { TableNameInput } from './ClipboardImport/TableNameInput';
@@ -54,7 +53,6 @@ export function ClipboardImportModal({ isOpen, onClose, onSuccess }: ClipboardIm
   const errorId = useId();
   const warningsId = useId();
   const { activeConnectionId, activeDriver, activeSchema } = useDatabase();
-  const { settings } = useSettings();
   const { dataTypes } = useDataTypes(activeDriver ?? undefined);
 
   const [rawText, setRawText] = useState<string>('');
@@ -69,7 +67,6 @@ export function ClipboardImportModal({ isOpen, onClose, onSuccess }: ClipboardIm
 
   const [isLoadingClipboard, setIsLoadingClipboard] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [isAiLoading, setIsAiLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<ImportResult | null>(null);
   const [warningsExpanded, setWarningsExpanded] = useState(false);
@@ -229,28 +226,6 @@ export function ClipboardImportModal({ isOpen, onClose, onSuccess }: ClipboardIm
     },
     [parsed, rawText, toSchemaColumns]
   );
-
-  const handleAiSuggest = useCallback(async () => {
-    if (!settings.aiProvider || !parsed) return;
-    setIsAiLoading(true);
-    try {
-      const name = await invoke<string>('suggest_table_name', {
-        req: {
-          provider: settings.aiProvider,
-          model: settings.aiModel || '',
-          headers: parsed.headers,
-          sample_rows: parsed.rows.slice(0, 3).map((r) =>
-            r.map((cell) => (cell === '' ? 'NULL' : cell))
-          ),
-        },
-      });
-      if (name) setTableName(name);
-    } catch {
-      // Silently fail AI suggestion
-    } finally {
-      setIsAiLoading(false);
-    }
-  }, [settings, parsed]);
 
   const handleImport = useCallback(async () => {
     if (!activeConnectionId || !parsed || !tableName.trim() || columns.length === 0) return;
@@ -458,9 +433,6 @@ export function ClipboardImportModal({ isOpen, onClose, onSuccess }: ClipboardIm
                           value={tableName}
                           onChange={setTableName}
                           tableExists={tableExists}
-                          aiEnabled={!!settings.aiProvider}
-                          aiLoading={isAiLoading}
-                          onAiSuggest={handleAiSuggest}
                         />
                       ) : (
                         <>

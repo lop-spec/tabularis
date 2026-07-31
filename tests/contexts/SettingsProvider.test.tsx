@@ -36,12 +36,6 @@ describe("SettingsProvider", () => {
       if (cmd === "save_config") {
         return Promise.resolve(undefined);
       }
-      if (cmd === "check_ai_key") {
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({});
-      }
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
   });
@@ -65,9 +59,6 @@ describe("SettingsProvider", () => {
     expect(result.current.settings.language).toBe("auto");
     expect(result.current.settings.fontFamily).toBe("System");
     expect(result.current.settings.fontSize).toBe(14);
-    expect(result.current.settings.aiEnabled).toBe(false);
-    expect(result.current.settings.aiProvider).toBeNull();
-    expect(result.current.settings.aiModel).toBeNull();
   });
 
   it("should load settings from backend config", async () => {
@@ -76,9 +67,6 @@ describe("SettingsProvider", () => {
       language: "it",
       fontFamily: "Roboto",
       fontSize: 16,
-      aiEnabled: true,
-      aiProvider: "openai",
-      aiModel: "gpt-4",
     };
 
     vi.mocked(invoke).mockImplementation((cmd: string) => {
@@ -87,12 +75,6 @@ describe("SettingsProvider", () => {
       }
       if (cmd === "save_config") {
         return Promise.resolve(undefined);
-      }
-      if (cmd === "check_ai_key") {
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({});
       }
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
@@ -110,9 +92,6 @@ describe("SettingsProvider", () => {
     expect(result.current.settings.language).toBe("it");
     expect(result.current.settings.fontFamily).toBe("Roboto");
     expect(result.current.settings.fontSize).toBe(16);
-    expect(result.current.settings.aiEnabled).toBe(true);
-    expect(result.current.settings.aiProvider).toBe("openai");
-    expect(result.current.settings.aiModel).toBe("gpt-4");
   });
 
   it("hydrates persisted settings even while language application is still pending", async () => {
@@ -128,12 +107,6 @@ describe("SettingsProvider", () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === "get_config") {
         return Promise.resolve({ language: "it" });
-      }
-      if (cmd === "check_ai_key") {
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({});
       }
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
@@ -167,12 +140,6 @@ describe("SettingsProvider", () => {
       if (cmd === "get_config") {
         return Promise.resolve({ language: "it" });
       }
-      if (cmd === "check_ai_key") {
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({});
-      }
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
 
@@ -198,12 +165,6 @@ describe("SettingsProvider", () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === "get_config") {
         return Promise.resolve({ language: "it" });
-      }
-      if (cmd === "check_ai_key") {
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({});
       }
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
@@ -258,12 +219,6 @@ describe("SettingsProvider", () => {
         expect(args?.config).toHaveProperty("language", "en");
         return Promise.resolve(undefined);
       }
-      if (cmd === "check_ai_key") {
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({});
-      }
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });
 
@@ -284,65 +239,6 @@ describe("SettingsProvider", () => {
         language: "en",
       }),
     }));
-  });
-
-  it("should treat null/undefined aiEnabled as false", async () => {
-    vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === "get_config") {
-        return Promise.resolve({ aiEnabled: null });
-      }
-      if (cmd === "check_ai_key") {
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({});
-      }
-      return Promise.reject(new Error(`Unexpected command: ${cmd}`));
-    });
-
-    const wrapper = ({ children }: { children: React.ReactNode }) =>
-      React.createElement(SettingsProvider, null, children);
-
-    const { result } = renderHook(() => useSettings(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    expect(result.current.settings.aiEnabled).toBe(false);
-  });
-
-  it("should auto-detect AI provider when aiEnabled but provider not set", async () => {
-    vi.mocked(invoke).mockImplementation((cmd: string, args?: any) => {
-      if (cmd === "get_config") {
-        return Promise.resolve({ aiEnabled: true });
-      }
-      if (cmd === "check_ai_key") {
-        if (args?.provider === "openai") return Promise.resolve(true);
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({
-          openai: ["gpt-4", "gpt-3.5-turbo"],
-        });
-      }
-      if (cmd === "save_config") {
-        return Promise.resolve(undefined);
-      }
-      return Promise.reject(new Error(`Unexpected command: ${cmd}`));
-    });
-
-    const wrapper = ({ children }: { children: React.ReactNode }) =>
-      React.createElement(SettingsProvider, null, children);
-
-    const { result } = renderHook(() => useSettings(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    expect(result.current.settings.aiProvider).toBe("openai");
-    expect(result.current.settings.aiModel).toBe("gpt-4");
   });
 
   it("should update settings and persist to backend", async () => {
@@ -398,12 +294,6 @@ describe("SettingsProvider", () => {
           fontFamily: "JetBrains Mono",
           fontSize: 18,
         });
-      }
-      if (cmd === "check_ai_key") {
-        return Promise.resolve(false);
-      }
-      if (cmd === "get_ai_models") {
-        return Promise.resolve({});
       }
       return Promise.reject(new Error(`Unexpected command: ${cmd}`));
     });

@@ -1,7 +1,6 @@
 import type {
   Settings,
   AppLanguage,
-  AiProvider,
 } from "../contexts/SettingsContext";
 
 export const FONT_MAP: Record<string, string> = {
@@ -110,41 +109,7 @@ export function mergeSettings(
     ...baseSettings,
   };
 
-  // Ensure aiEnabled is boolean (not null/undefined)
-  // When no config is provided (empty object), use default value
-  if (baseSettings.aiEnabled === null || baseSettings.aiEnabled === undefined) {
-    merged.aiEnabled = defaults.aiEnabled;
-  }
-
   return merged;
-}
-
-export interface DetectedAIConfig {
-  provider: AiProvider | null;
-  model: string | null;
-}
-
-export function detectAIProviderFromKeys(
-  keyStatus: Record<AiProvider, boolean>,
-  availableModels: Record<string, string[]>,
-): DetectedAIConfig {
-  const providers: AiProvider[] = ["openai", "anthropic", "openrouter", "minimax"];
-
-  for (const provider of providers) {
-    if (keyStatus[provider]) {
-      const models = availableModels[provider] || [];
-      return {
-        provider,
-        model: models[0] || null,
-      };
-    }
-  }
-
-  return { provider: null, model: null };
-}
-
-export function shouldDetectAIProvider(settings: Settings): boolean {
-  return settings.aiEnabled && (!settings.aiProvider || !settings.aiModel);
 }
 
 export function applyFontToDocument(

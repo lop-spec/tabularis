@@ -22,7 +22,6 @@ pub struct CredentialCache {
     pub connection_uris: Mutex<HashMap<String, CacheEntry>>,
     pub ssh_passwords: Mutex<HashMap<String, CacheEntry>>,
     pub ssh_passphrases: Mutex<HashMap<String, CacheEntry>>,
-    pub ai_keys: Mutex<HashMap<String, CacheEntry>>,
 }
 
 impl Default for CredentialCache {
@@ -32,7 +31,6 @@ impl Default for CredentialCache {
             connection_uris: Mutex::new(HashMap::new()),
             ssh_passwords: Mutex::new(HashMap::new()),
             ssh_passphrases: Mutex::new(HashMap::new()),
-            ai_keys: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -149,34 +147,6 @@ pub fn get_ssh_key_passphrase_cached(
     result
 }
 
-/// Get AI API key: check cache first, fall through to keychain on miss.
-pub fn get_ai_key_cached(cache: &CredentialCache, provider: &str) -> Result<String, String> {
-    {
-        let guard = cache.ai_keys.lock().unwrap();
-        match guard.get(provider) {
-            Some(CacheEntry::Present(v)) => return Ok(v.clone()),
-            Some(CacheEntry::Absent) => return Err("No entry".to_string()),
-            None => {}
-        }
-    }
-    match crate::keychain_utils::get_ai_key(provider) {
-        // A value, or a definitive miss (NoEntry): both are safe to memoize so
-        // we never re-prompt for this provider again this session.
-        Ok(maybe) => {
-            let entry = match &maybe {
-                Some(v) => CacheEntry::Present(v.clone()),
-                None => CacheEntry::Absent,
-            };
-            cache.ai_keys.lock().unwrap().insert(provider.to_string(), entry);
-            maybe.ok_or_else(|| "No entry".to_string())
-        }
-        // Transient failure (denied prompt, timeout, securityd error): do NOT
-        // cache, so the next read retries the keychain instead of pinning the
-        // key as permanently absent.
-        Err(e) => Err(e),
-    }
-}
-
 // ─── Write-through helpers ────────────────────────────────────────────────────
 // Call these AFTER the corresponding keychain_utils::set_* succeeds.
 
@@ -216,14 +186,6 @@ pub fn set_ssh_key_passphrase_cached(
     );
 }
 
-pub fn set_ai_key_cached(cache: &CredentialCache, provider: &str, key: &str) {
-    cache
-        .ai_keys
-        .lock()
-        .unwrap()
-        .insert(provider.to_string(), CacheEntry::Present(key.to_string()));
-}
-
 // ─── Invalidation helpers ─────────────────────────────────────────────────────
 // Call these AFTER the corresponding keychain_utils::delete_* succeeds.
 // Removing the entry forces the next read to re-query the keychain (which will
@@ -243,10 +205,6 @@ pub fn invalidate_ssh_password(cache: &CredentialCache, connection_id: &str) {
 
 pub fn invalidate_ssh_key_passphrase(cache: &CredentialCache, connection_id: &str) {
     cache.ssh_passphrases.lock().unwrap().remove(connection_id);
-}
-
-pub fn invalidate_ai_key(cache: &CredentialCache, provider: &str) {
-    cache.ai_keys.lock().unwrap().remove(provider);
 }
 
 /// Invalidate all cached credentials for a connection ID (e.g. on delete).

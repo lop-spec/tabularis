@@ -15,7 +15,7 @@ interface MockSelectProps {
 
 const driverState = vi.hoisted(() => ({
   defaultPort: 15432 as number | null,
-  catalogueDriver: "mysql" as "mysql" | "sqlite",
+  selectedDriver: "mysql" as "mysql" | "sqlite",
 }));
 
 const k8sMocks = vi.hoisted(() => ({
@@ -97,16 +97,9 @@ vi.mock("../../../src/hooks/useDrivers", () => ({
       },
     ],
     allDrivers: [],
-    installedPlugins: [],
     loading: false,
     error: null,
     refresh: vi.fn(),
-  }),
-}));
-
-vi.mock("../../../src/hooks/usePluginSlotRegistry", () => ({
-  usePluginSlotRegistry: () => ({
-    getSlotContributions: () => [],
   }),
 }));
 
@@ -115,49 +108,6 @@ vi.mock("../../../src/hooks/useSettings", () => ({
     settings: {},
     updateSetting: vi.fn(),
   }),
-}));
-
-vi.mock("../../../src/hooks/useConnectionCatalogue", () => ({
-  useConnectionCatalogue: () => {
-    const engine = driverState.catalogueDriver;
-    const name = engine === "sqlite" ? "SQLite" : "MySQL";
-    return {
-      groups: [
-        {
-          engine,
-          displayName: name,
-          primaryParadigm: "sql",
-          secondaryParadigms: [],
-          installed: true,
-          verified: true,
-          platformSupported: true,
-          downloads: null,
-          drivers: [
-            {
-              slug: engine,
-              name,
-              engine,
-              paradigms: ["sql"],
-              verified: true,
-              installed: true,
-              installedVersion: "1.0.0",
-              latestVersion: "1.0.0",
-              isBuiltin: true,
-              platformSupported: true,
-              downloads: null,
-              updateAvailable: false,
-              icon: null,
-              color: null,
-            },
-          ],
-        },
-      ],
-      facets: [],
-      loading: false,
-      registryOffline: false,
-      refresh: vi.fn(),
-    };
-  },
 }));
 
 vi.mock("../../../src/utils/ssh", () => ({
@@ -287,12 +237,9 @@ function SwitchingModalHarness({
   );
 }
 
-// A new connection opens on the catalogue step; picking an engine is what a user
-// does to reach the form.
-function pickEngineFromCatalogue() {
-  fireEvent.click(
-    screen.getByRole("button", { name: "connectionCatalogue.connectTo" }),
-  );
+function selectDriver() {
+  const name = driverState.selectedDriver === "sqlite" ? "SQLite" : "MySQL";
+  fireEvent.click(screen.getByRole("button", { name }));
 }
 
 describe("NewConnectionModal layout", () => {
@@ -322,7 +269,7 @@ describe("NewConnectionModal layout", () => {
 
 async function openInlineK8s() {
   const view = renderModal();
-  pickEngineFromCatalogue();
+  selectDriver();
   fireEvent.click(screen.getByText("Kubernetes"));
   fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
   fireEvent.click(screen.getByText("newConnection.createInlineK8s"));
@@ -463,7 +410,7 @@ describe("NewConnectionModal rollback protection", () => {
 
   it("defaults off and persists only after the connection toggle is enabled", async () => {
     renderModal();
-    pickEngineFromCatalogue();
+    selectDriver();
     fireEvent.change(screen.getByPlaceholderText("newConnection.namePlaceholder"), {
       target: { value: "Protected MySQL" },
     });
@@ -541,7 +488,7 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
       context === "ctx-a" ? firstNamespaces.promise : secondNamespaces.promise,
     );
     renderModal();
-    pickEngineFromCatalogue();
+    selectDriver();
     fireEvent.click(screen.getByText("Kubernetes"));
     fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
     fireEvent.click(screen.getByText("newConnection.createInlineK8s"));
@@ -755,7 +702,7 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
     });
     fireEvent.click(screen.getByLabelText("modal-close"));
     fireEvent.click(screen.getByText("open-new"));
-    pickEngineFromCatalogue();
+    selectDriver();
     await waitFor(() => {
       expect(
         screen.getByPlaceholderText("newConnection.namePlaceholder"),
@@ -806,7 +753,7 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
       },
     ]);
     renderModal();
-    pickEngineFromCatalogue();
+    selectDriver();
     fireEvent.click(screen.getByText("Kubernetes"));
     fireEvent.click(screen.getByLabelText("newConnection.useK8s"));
 
@@ -1082,7 +1029,7 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
         onSave={onSave}
       />,
     );
-    pickEngineFromCatalogue();
+    selectDriver();
     fillSaveFields();
 
     fireEvent.click(screen.getByText("newConnection.save"));
@@ -1230,7 +1177,7 @@ describe("NewConnectionModal advanced inline K8s paths", () => {
 describe("NewConnectionModal SQLite file creation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    driverState.catalogueDriver = "sqlite";
+    driverState.selectedDriver = "sqlite";
     vi.mocked(save).mockResolvedValue("/tmp/customers");
     vi.mocked(invoke).mockImplementation((command) => {
       if (command === "create_sqlite_file") {
@@ -1246,12 +1193,12 @@ describe("NewConnectionModal SQLite file creation", () => {
   });
 
   afterEach(() => {
-    driverState.catalogueDriver = "mysql";
+    driverState.selectedDriver = "mysql";
   });
 
   it("creates a file and continues through the existing save flow", async () => {
     renderModal();
-    pickEngineFromCatalogue();
+    selectDriver();
 
     fireEvent.click(screen.getByText("newConnection.createSqliteFile"));
 
@@ -1295,7 +1242,7 @@ describe("NewConnectionModal SQLite file creation", () => {
   it("leaves the path unchanged when file creation is cancelled", async () => {
     vi.mocked(save).mockResolvedValue(null);
     renderModal();
-    pickEngineFromCatalogue();
+    selectDriver();
 
     fireEvent.click(screen.getByText("newConnection.createSqliteFile"));
 
@@ -1312,7 +1259,7 @@ describe("NewConnectionModal SQLite file creation", () => {
   it("shows an error when the SQLite file cannot be created", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("permission denied"));
     renderModal();
-    pickEngineFromCatalogue();
+    selectDriver();
 
     fireEvent.click(screen.getByText("newConnection.createSqliteFile"));
 

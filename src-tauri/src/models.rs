@@ -568,9 +568,7 @@ pub struct RawExplainOutput {
 }
 
 /// What `explain_query` hands to the frontend: a raw payload from a built-in
-/// driver, or a plan a plugin driver already parsed. Plugins know engines the
-/// core parsers do not, so their JSON-RPC `explain_query` result passes
-/// through untouched.
+/// driver, or an already-parsed plan.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ExplainQueryOutput {
@@ -583,15 +581,6 @@ pub struct TableSchema {
     pub name: String,
     pub columns: Vec<TableColumn>,
     pub foreign_keys: Vec<ForeignKey>,
-}
-
-/// Bounded schema metadata prepared by a database driver for AI features.
-/// The host remains responsible for rendering this structured data into a
-/// provider-agnostic prompt.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AiSchemaContext {
-    pub tables: Vec<TableSchema>,
-    pub total_table_count: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

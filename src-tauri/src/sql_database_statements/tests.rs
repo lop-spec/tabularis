@@ -109,6 +109,26 @@ fn refuses_to_guess_in_a_multi_statement_payload() {
 }
 
 #[test]
+fn ignores_terminators_inside_literals_identifiers_and_comments() {
+    assert!(!has_trailing_statements(&strip_strings_and_comments(
+        "DROP DATABASE `semi;colon`",
+    )));
+    assert!(!has_trailing_statements(&strip_strings_and_comments(
+        "DROP DATABASE foo /* ; ignored */",
+    )));
+    assert!(!has_trailing_statements(&strip_strings_and_comments(
+        "SELECT '; ignored'",
+    )));
+}
+
+#[test]
+fn detects_content_after_a_real_terminator() {
+    assert!(has_trailing_statements(&strip_strings_and_comments(
+        "DROP DATABASE foo; SELECT 1",
+    )));
+}
+
+#[test]
 fn refuses_anything_trailing_the_identifier() {
     assert_eq!(dropped_database("DROP DATABASE foo bar"), None);
     assert_eq!(dropped_database("DROP DATABASE foo;;"), None);

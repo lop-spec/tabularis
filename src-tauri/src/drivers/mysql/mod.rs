@@ -1625,31 +1625,6 @@ const DEFAULT_MYSQL_SOCKET_TIMEOUT_MS: u64 = 600_000;
 const DEFAULT_MYSQL_CONNECT_TIMEOUT_MS: u64 = 60_000;
 const DEFAULT_MYSQL_TIMEZONE: &str = "SYSTEM";
 
-fn mysql_setting_value(key: &str) -> Option<serde_json::Value> {
-    crate::config::get_cached_config()
-        .plugins
-        .and_then(|plugins| plugins.get("mysql").cloned())
-        .and_then(|plugin| plugin.settings.get(key).cloned())
-}
-
-fn mysql_string_setting(key: &str, default: &str) -> String {
-    mysql_setting_value(key)
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| default.to_string())
-}
-
-fn mysql_numeric_setting(key: &str, default: u64) -> u64 {
-    mysql_setting_value(key)
-        .and_then(|value| {
-            value
-                .as_u64()
-                .or_else(|| value.as_i64().and_then(|item| u64::try_from(item).ok()))
-                .or_else(|| value.as_str().and_then(|item| item.parse::<u64>().ok()))
-        })
-        .unwrap_or(default)
-}
-
 pub struct MysqlDriver {
     manifest: PluginManifest,
 }
@@ -1776,13 +1751,6 @@ impl DatabaseDriver for MysqlDriver {
         } else {
             format!("{}:{}", user, encode(raw_pass))
         };
-        let max_allowed_packet =
-            mysql_numeric_setting("maxAllowedPacket", DEFAULT_MYSQL_MAX_ALLOWED_PACKET);
-        let socket_timeout =
-            mysql_numeric_setting("socketTimeout", DEFAULT_MYSQL_SOCKET_TIMEOUT_MS);
-        let connect_timeout =
-            mysql_numeric_setting("connectTimeout", DEFAULT_MYSQL_CONNECT_TIMEOUT_MS);
-        let timezone = mysql_string_setting("timezone", DEFAULT_MYSQL_TIMEZONE);
         let ssl_mode = match params.ssl_mode.as_deref() {
             Some("disabled") | Some("disable") => "disabled",
             Some("preferred") | Some("prefer") => "preferred",
@@ -1797,10 +1765,10 @@ impl DatabaseDriver for MysqlDriver {
             params.host.as_deref().unwrap_or("localhost"),
             params.port.unwrap_or(3306),
             params.database,
-            max_allowed_packet,
-            socket_timeout,
-            connect_timeout,
-            encode(&timezone),
+            DEFAULT_MYSQL_MAX_ALLOWED_PACKET,
+            DEFAULT_MYSQL_SOCKET_TIMEOUT_MS,
+            DEFAULT_MYSQL_CONNECT_TIMEOUT_MS,
+            encode(DEFAULT_MYSQL_TIMEZONE),
             ssl_mode,
         ))
     }

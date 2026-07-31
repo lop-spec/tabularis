@@ -8,7 +8,6 @@ import { quoteTableRef } from "../../utils/identifiers";
 import { isGeometricType } from "../../utils/geometry";
 import { GeometryInput } from "../ui/GeometryInput";
 import type { ForeignKey } from "../../types/schema";
-import { SlotAnchor } from "../ui/SlotAnchor";
 
 interface TableColumn {
   name: string;
@@ -355,18 +354,6 @@ export const NewRowModal = ({
                           `}
                     />
                   )}
-                  <SlotAnchor
-                    name="row-edit-modal.field.after"
-                    context={{
-                      connectionId: activeConnectionId,
-                      tableName,
-                      schema: activeSchema,
-                      driver: activeDriver,
-                      columnName: col.name,
-                      rowData: formData,
-                      onFieldChange: (value: unknown) => setFormData((prev) => ({ ...prev, [col.name]: value })),
-                    }}
-                  />
                 </div>
               );
             })
@@ -374,17 +361,6 @@ export const NewRowModal = ({
         </div>
 
         <div className="p-4 border-t border-strong bg-surface-secondary/50 flex justify-end gap-3 rounded-b-lg">
-          <SlotAnchor
-            name="row-edit-modal.footer.before"
-            context={{
-              connectionId: activeConnectionId,
-              tableName,
-              schema: activeSchema,
-              driver: activeDriver,
-              rowData: formData,
-            }}
-            className="flex items-center gap-2"
-          />
           <button
             onClick={onClose}
             className="px-4 py-2 text-secondary hover:text-primary hover:bg-surface-secondary font-medium text-sm rounded-lg transition-colors"

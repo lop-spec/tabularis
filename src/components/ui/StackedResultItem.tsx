@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Pencil,
   Play,
-  Sparkles,
   X,
 } from "lucide-react";
 import clsx from "clsx";
@@ -27,13 +26,10 @@ interface StackedResultItemProps {
   csvDelimiter: string;
   csvIncludeHeaders: boolean;
   collapsed: boolean;
-  aiEnabled: boolean;
-  aiRenaming: boolean;
   onToggleCollapse: () => void;
   onPageChange: (page: number) => void;
   onRename: (label: string) => void;
   onRerun: () => void;
-  onAiRename: () => void;
   onClose: () => void;
 }
 
@@ -44,13 +40,10 @@ export function StackedResultItem({
   csvDelimiter,
   csvIncludeHeaders,
   collapsed,
-  aiEnabled,
-  aiRenaming,
   onToggleCollapse,
   onPageChange,
   onRename,
   onRerun,
-  onAiRename,
   onClose,
 }: StackedResultItemProps) {
   const { t } = useTranslation();
@@ -169,25 +162,6 @@ export function StackedResultItem({
             title={t("editor.multiResult.rename")}
           >
             <Pencil size={10} />
-          </button>
-        )}
-
-        {/* AI rename button */}
-        {aiEnabled && !isEditing && !entry.isLoading && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAiRename();
-            }}
-            disabled={aiRenaming}
-            className="p-0.5 rounded-sm hover:bg-surface-secondary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-            title={aiRenaming ? t("editor.multiResult.generatingName") : t("editor.multiResult.aiGenerateName")}
-          >
-            {aiRenaming ? (
-              <Loader2 size={10} className="animate-spin text-muted" />
-            ) : (
-              <Sparkles size={10} className="text-purple-300" />
-            )}
           </button>
         )}
 

@@ -21,7 +21,6 @@ import {
 } from "@tabularis/explain/react";
 import { useEditorTheme } from "../../hooks/useEditorTheme";
 import { loadMonacoTheme } from "../../themes/themeUtils";
-import { ExplainAiAnalysis } from "../modals/visual-explain/ExplainAiAnalysis";
 
 export interface VisualExplainViewProps {
   plan: ExplainPlan | null;
@@ -31,7 +30,6 @@ export interface VisualExplainViewProps {
   onViewModeChange: (mode: ExplainViewMode) => void;
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
-  aiEnabled: boolean;
 }
 
 /**
@@ -46,7 +44,6 @@ export const VisualExplainView = ({
   onViewModeChange,
   selectedNodeId,
   onSelectNode,
-  aiEnabled,
 }: VisualExplainViewProps) => {
   const { t } = useTranslation();
   const editorTheme = useEditorTheme();
@@ -89,7 +86,6 @@ export const VisualExplainView = ({
         plan={plan}
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
-        aiEnabled={aiEnabled}
       />
       {plan && metrics && (
         <ExplainOverviewBar
@@ -129,8 +125,6 @@ export const VisualExplainView = ({
                 wordWrap: "on",
               }}
             />
-          ) : viewMode === "ai" ? (
-            <ExplainAiAnalysis plan={plan} />
           ) : viewMode === "table" ? (
             <ExplainTableView
               plan={plan}

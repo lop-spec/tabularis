@@ -1,7 +1,7 @@
 //! Command-line argument parsing for the Tabularis binary.
 //!
 //! Keeping this in its own module means `lib.rs` does not have to know about
-//! clap, and the flag surface (`--mcp`, `--debug`, `--explain`, `--help`,
+//! clap, and the flag surface (`--debug`, `--explain`, `--help`,
 //! `--version`) lives in one place.
 
 use clap::Parser;
@@ -9,10 +9,6 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    /// Start in MCP Server mode (Model Context Protocol)
-    #[arg(long)]
-    pub mcp: bool,
-
     /// Enable debug logging (including sqlx queries)
     #[arg(long)]
     pub debug: bool,
@@ -26,7 +22,6 @@ pub struct Args {
 impl Args {
     fn defaults() -> Self {
         Self {
-            mcp: false,
             debug: false,
             explain: None,
         }

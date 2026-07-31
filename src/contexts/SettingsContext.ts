@@ -3,19 +3,7 @@ import type { AppLanguage } from "../i18n/config";
 
 export type { AppLanguage };
 export type CopyFormat = "csv" | "json" | "sql-insert" | "markdown";
-export type AiProvider =
-  | "openai"
-  | "anthropic"
-  | "openrouter"
-  | "ollama"
-  | "custom-openai"
-  | "minimax";
 export type ERDiagramLayout = "LR" | "TB";
-
-export interface PluginConfig {
-  interpreter?: string;
-  settings?: Record<string, unknown>;
-}
 
 export interface Settings {
   resultPageSize: number; // Changed from queryLimit to match backend config
@@ -30,13 +18,6 @@ export interface Settings {
   resultTypeColors?: Record<string, string>;
   /** Keep the result grid's column headers pinned to the top while scrolling. Default: true. */
   stickyColumnHeaders?: boolean;
-  aiEnabled: boolean;
-  aiProvider: AiProvider | null;
-  aiModel: string | null;
-  aiCustomModels?: Record<string, string[]>;
-  aiOllamaPort?: number;
-  aiCustomOpenaiUrl?: string;
-  aiCustomOpenaiModel?: string;
   autoCheckUpdatesOnStartup?: boolean;
   releaseChannel?: "stable" | "nightly";
   loggingEnabled?: boolean;
@@ -50,10 +31,6 @@ export interface Settings {
   rowEditorFollowSelection?: boolean;
   /** What happens on double-click of a data cell: "inline" (edit in place), "sidebar" (open in row editor), "both" (inline + update sidebar). Default: "inline". */
   cellDoubleClickAction?: "inline" | "sidebar" | "both";
-  activeExternalDrivers?: string[];
-  /** Base URL of the Tabularium plugin registry. Defaults to the built-in instance when unset. */
-  tabulariumRegistryUrl?: string;
-  plugins?: Record<string, PluginConfig>;
   editorTheme?: string;
   editorFontFamily?: string;
   editorFontSize?: number;
@@ -78,17 +55,6 @@ export interface Settings {
   autoConnectLastConnection?: boolean;
   /** Maximize the window on startup. Default: false. */
   startMaximized?: boolean;
-  // AI / MCP safety
-  aiAuditEnabled?: boolean;
-  aiAuditMaxEntries?: number;
-  aiSessionGapMinutes?: number;
-  mcpReadonlyDefault?: boolean;
-  mcpReadonlyConnections?: string[];
-  mcpApprovalMode?: "off" | "writes_only" | "all";
-  mcpApprovalTimeoutSeconds?: number;
-  mcpPreflightExplain?: boolean;
-  mcpApprovalAlwaysOnTop?: boolean;
-  mcpApprovalNotifySound?: boolean;
   // Automatic connections backup
   /** When backups run: "manual" (default), "interval", "onClose" or "onLaunch". */
   backupMode?: "manual" | "interval" | "onClose" | "onLaunch";
@@ -130,13 +96,6 @@ export const DEFAULT_SETTINGS: Settings = {
   resultColorByType: false,
   resultTypeColors: {},
   stickyColumnHeaders: true,
-  aiEnabled: false,
-  aiProvider: null,
-  aiModel: null,
-  aiCustomModels: undefined,
-  aiOllamaPort: 11434,
-  aiCustomOpenaiUrl: "",
-  aiCustomOpenaiModel: "",
   loggingEnabled: true,
   maxLogEntries: 1000,
   copyFormat: "csv",
@@ -162,16 +121,6 @@ export const DEFAULT_SETTINGS: Settings = {
   queryHistoryMaxEntries: 500,
   autoConnectLastConnection: true,
   startMaximized: false,
-  aiAuditEnabled: true,
-  aiAuditMaxEntries: 5000,
-  aiSessionGapMinutes: 10,
-  mcpReadonlyDefault: false,
-  mcpReadonlyConnections: [],
-  mcpApprovalMode: "writes_only",
-  mcpApprovalTimeoutSeconds: 120,
-  mcpPreflightExplain: true,
-  mcpApprovalAlwaysOnTop: true,
-  mcpApprovalNotifySound: true,
   backupMode: "manual",
   backupDirectory: "",
   backupIntervalMinutes: 1440,

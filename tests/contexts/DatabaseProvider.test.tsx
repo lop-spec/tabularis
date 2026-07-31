@@ -19,7 +19,7 @@ vi.mock('../../src/utils/autocomplete', () => ({
 
 vi.mock('../../src/hooks/useSettings', () => ({
   useSettings: () => ({
-    settings: { activeExternalDrivers: [] },
+    settings: {},
     updateSetting: vi.fn(),
     isLoading: false,
   }),

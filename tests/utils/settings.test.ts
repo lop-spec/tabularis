@@ -13,15 +13,12 @@ import {
   saveFontCache,
   migrateFromLocalStorage,
   mergeSettings,
-  detectAIProviderFromKeys,
-  shouldDetectAIProvider,
   applyFontToDocument,
   getLanguageForI18n,
   type FontCache,
-  type DetectedAIConfig,
 } from '../../src/utils/settings';
 import { DEFAULT_SETTINGS } from '../../src/contexts/SettingsContext';
-import type { Settings, AppLanguage, AiProvider } from '../../src/contexts/SettingsContext';
+import type { Settings, AppLanguage } from '../../src/contexts/SettingsContext';
 
 describe('settings', () => {
   const localStorageMock = {
@@ -220,9 +217,6 @@ describe('settings', () => {
       language: 'auto',
       fontFamily: 'System',
       fontSize: 14,
-      aiEnabled: true,
-      aiProvider: null,
-      aiModel: null,
     };
 
     it('should use defaults when no overrides', () => {
@@ -256,165 +250,6 @@ describe('settings', () => {
       expect(result.language).toBe('it');
     });
 
-    it('should use default aiEnabled when null/undefined in config', () => {
-      const backendConfig: Partial<Settings> = {
-        aiEnabled: null as any,
-      };
-      
-      const result = mergeSettings(defaults, backendConfig, {}, false);
-      
-      expect(result.aiEnabled).toBe(true); // Uses defaults.aiEnabled
-    });
-
-    it('should preserve aiEnabled when explicitly set', () => {
-      const backendConfig: Partial<Settings> = {
-        aiEnabled: true,
-      };
-      
-      const result = mergeSettings(defaults, backendConfig, {}, false);
-      
-      expect(result.aiEnabled).toBe(true);
-    });
-  });
-
-  describe('detectAIProviderFromKeys', () => {
-    it('should detect openai when key exists', () => {
-      const keyStatus: Record<AiProvider, boolean> = {
-        openai: true,
-        anthropic: false,
-        openrouter: false,
-        minimax: false,
-      };
-      const models: Record<string, string[]> = {
-        openai: ['gpt-4', 'gpt-3.5'],
-      };
-      
-      const result: DetectedAIConfig = detectAIProviderFromKeys(keyStatus, models);
-      
-      expect(result.provider).toBe('openai');
-      expect(result.model).toBe('gpt-4');
-    });
-
-    it('should detect anthropic when openai not available', () => {
-      const keyStatus: Record<AiProvider, boolean> = {
-        openai: false,
-        anthropic: true,
-        openrouter: false,
-        minimax: false,
-      };
-      const models: Record<string, string[]> = {
-        anthropic: ['claude-3'],
-      };
-
-      const result = detectAIProviderFromKeys(keyStatus, models);
-
-      expect(result.provider).toBe('anthropic');
-    });
-
-    it('should detect minimax when openai/anthropic/openrouter not available', () => {
-      const keyStatus: Record<AiProvider, boolean> = {
-        openai: false,
-        anthropic: false,
-        openrouter: false,
-        minimax: true,
-      };
-      const models: Record<string, string[]> = {
-        minimax: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'],
-      };
-
-      const result = detectAIProviderFromKeys(keyStatus, models);
-
-      expect(result.provider).toBe('minimax');
-      expect(result.model).toBe('MiniMax-M3');
-    });
-
-    it('should return null when no keys available', () => {
-      const keyStatus: Record<AiProvider, boolean> = {
-        openai: false,
-        anthropic: false,
-        openrouter: false,
-        minimax: false,
-      };
-      const models: Record<string, string[]> = {};
-
-      const result = detectAIProviderFromKeys(keyStatus, models);
-
-      expect(result.provider).toBeNull();
-      expect(result.model).toBeNull();
-    });
-
-    it('should return null model when no models available for provider', () => {
-      const keyStatus: Record<AiProvider, boolean> = {
-        openai: true,
-        anthropic: false,
-        openrouter: false,
-        minimax: false,
-      };
-      const models: Record<string, string[]> = {};
-
-      const result = detectAIProviderFromKeys(keyStatus, models);
-
-      expect(result.provider).toBe('openai');
-      expect(result.model).toBeNull();
-    });
-  });
-
-  describe('shouldDetectAIProvider', () => {
-    it('should return true when AI enabled but provider not set', () => {
-      const settings: Settings = {
-        aiEnabled: true,
-        aiProvider: null,
-        aiModel: null,
-        resultPageSize: 500,
-        language: 'auto',
-        fontFamily: 'System',
-        fontSize: 14,
-      };
-      
-      expect(shouldDetectAIProvider(settings)).toBe(true);
-    });
-
-    it('should return true when AI enabled but model not set', () => {
-      const settings: Settings = {
-        aiEnabled: true,
-        aiProvider: 'openai',
-        aiModel: null,
-        resultPageSize: 500,
-        language: 'auto',
-        fontFamily: 'System',
-        fontSize: 14,
-      };
-      
-      expect(shouldDetectAIProvider(settings)).toBe(true);
-    });
-
-    it('should return false when AI disabled', () => {
-      const settings: Settings = {
-        aiEnabled: false,
-        aiProvider: null,
-        aiModel: null,
-        resultPageSize: 500,
-        language: 'auto',
-        fontFamily: 'System',
-        fontSize: 14,
-      };
-      
-      expect(shouldDetectAIProvider(settings)).toBe(false);
-    });
-
-    it('should return false when both provider and model set', () => {
-      const settings: Settings = {
-        aiEnabled: true,
-        aiProvider: 'openai',
-        aiModel: 'gpt-4',
-        resultPageSize: 500,
-        language: 'auto',
-        fontFamily: 'System',
-        fontSize: 14,
-      };
-      
-      expect(shouldDetectAIProvider(settings)).toBe(false);
-    });
   });
 
   describe('applyFontToDocument', () => {
@@ -552,9 +387,6 @@ describe('settings', () => {
   describe('mergeSettings with editor fields', () => {
     const defaults: Settings = {
       ...DEFAULT_SETTINGS,
-      aiEnabled: false,
-      aiProvider: null,
-      aiModel: null,
     };
 
     it('should carry editor settings from backend config', () => {

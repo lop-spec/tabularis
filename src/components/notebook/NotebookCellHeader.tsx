@@ -16,7 +16,6 @@ import {
   History,
 } from "lucide-react";
 import type { NotebookCellType } from "../../types/notebook";
-import { CellNameAiButton } from "./CellNameAiButton";
 
 interface NotebookCellHeaderProps {
   cellType: NotebookCellType;
@@ -45,7 +44,6 @@ interface NotebookCellHeaderProps {
   onToggleCollapse: () => void;
   cellName?: string;
   onNameChange: (name: string) => void;
-  cellContent?: string;
 }
 
 function CellTypeBadge({ cellType }: { cellType: NotebookCellType }) {
@@ -113,7 +111,6 @@ export function NotebookCellHeader({
   onToggleCollapse,
   cellName,
   onNameChange,
-  cellContent,
 }: NotebookCellHeaderProps) {
   const { t } = useTranslation();
   const [isDbOpen, setIsDbOpen] = useState(false);
@@ -203,9 +200,6 @@ export function NotebookCellHeader({
           >
             {cellName || t("editor.notebook.cellNamePlaceholder")}
           </button>
-        )}
-        {cellContent && (
-          <CellNameAiButton content={cellContent} onNameGenerated={onNameChange} />
         )}
         {showDbSelector && (
           <div className="relative">

@@ -155,11 +155,6 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
             ...config,
           };
 
-          // If aiEnabled is null or undefined in config, treat it as disabled (false)
-          if (config.aiEnabled === null || config.aiEnabled === undefined) {
-            finalSettings.aiEnabled = false;
-          }
-
           if (typeof config.runStatementUnderCursor !== "boolean") {
             finalSettings.runStatementUnderCursor = true;
           }
@@ -172,56 +167,6 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
           // Ensure erDiagramDefaultLayout has a valid default
           if (!finalSettings.erDiagramDefaultLayout) {
             finalSettings.erDiagramDefaultLayout = DEFAULT_SETTINGS.erDiagramDefaultLayout;
-          }
-        }
-
-        // Smart detect AI Provider and Model if aiEnabled but provider/model not set
-        if (
-          finalSettings.aiEnabled &&
-          (!finalSettings.aiProvider || !finalSettings.aiModel)
-        ) {
-          // First, detect which provider has an API key
-          let detectedProvider: string | null = null;
-          const hasOpenAI = await invoke<boolean>("check_ai_key", {
-            provider: "openai",
-          });
-          if (hasOpenAI) {
-            detectedProvider = "openai";
-          } else {
-            const hasAnthropic = await invoke<boolean>("check_ai_key", {
-              provider: "anthropic",
-            });
-            if (hasAnthropic) {
-              detectedProvider = "anthropic";
-            } else {
-              const hasOpenRouter = await invoke<boolean>("check_ai_key", {
-                provider: "openrouter",
-              });
-              if (hasOpenRouter) detectedProvider = "openrouter";
-            else {
-              const hasMiniMax = await invoke<boolean>("check_ai_key", {
-                provider: "minimax",
-              });
-              if (hasMiniMax) detectedProvider = "minimax";
-            }
-            }
-          }
-
-          if (detectedProvider) {
-            // Get available models for the detected provider
-            const models =
-              await invoke<Record<string, string[]>>("get_ai_models");
-            const providerModels = models[detectedProvider] || [];
-            const firstModel = providerModels[0] || null;
-
-            // Only set provider if not already set
-            if (!finalSettings.aiProvider) {
-              finalSettings.aiProvider = detectedProvider as "openai" | "anthropic" | "openrouter" | "minimax";
-            }
-            // Only set model if not already set AND we have a model available
-            if (!finalSettings.aiModel && firstModel) {
-              finalSettings.aiModel = firstModel;
-            }
           }
         }
 

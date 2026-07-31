@@ -1,18 +1,3 @@
-pub mod ai;
-pub mod ai_activity;
-#[cfg(test)]
-pub mod ai_activity_tests;
-pub mod ai_approval;
-#[cfg(test)]
-pub mod ai_approval_tests;
-pub mod ai_approval_watcher;
-pub mod ai_commands;
-pub mod ai_notebook_export;
-#[cfg(test)]
-pub mod ai_notebook_export_tests;
-pub mod ai_schema_context;
-#[cfg(test)]
-pub mod ai_schema_context_tests;
 pub mod askpass;
 pub mod backup;
 pub mod cli;
@@ -45,9 +30,6 @@ pub mod export_import_tests;
 pub mod health_check;
 #[cfg(test)]
 pub mod group_tree_tests;
-pub mod heartbeat;
-#[cfg(test)]
-pub mod heartbeat_tests;
 pub mod json_viewer;
 pub mod keychain_utils;
 pub mod native_cli;
@@ -57,14 +39,12 @@ pub mod rollback_sql;
 pub mod k8s_tunnel;
 pub mod log_commands;
 pub mod logger;
-pub mod mcp;
 pub mod models;
 #[cfg(test)]
 pub mod models_tests;
 pub mod notebooks;
 pub mod paths; // Added
 pub mod persistence;
-pub mod plugins;
 pub mod pool_manager;
 #[cfg(test)]
 pub mod pool_manager_tests;
@@ -163,16 +143,6 @@ pub fn run() {
 
     let args = cli::parse();
 
-    if args.mcp {
-        // Initialize the logger so plugin-loading and driver RPC errors (which
-        // use the `log` crate) are visible. The custom logger writes to stderr
-        // only, leaving the stdout JSON-RPC stream clean.
-        init_logger(create_log_buffer(1000), log::LevelFilter::Info);
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-        rt.block_on(mcp::run_mcp_server());
-        return;
-    }
-
     // Configure log level based on debug flag
     // Default to Info level so users can see application logs
     let log_level = log::LevelFilter::Info;
@@ -201,21 +171,9 @@ pub fn run() {
     sqlx::any::install_default_drivers();
 
     tauri::Builder::default()
-        // Singleton: a second launch (typically a `tabularis://...` URL
-        // clicked while the app is already running) hands its argv to the
-        // first instance and exits. With `features = ["deep-link"]` the plugin
-        // usually auto-routes those URLs through `on_open_url`, but on
-        // Linux/Windows the URL arrives as a plain argv entry on warm launch.
-        // We scan argv for it defensively and dispatch ourselves so the
-        // install modal fires even when auto-routing doesn't.
-        //
-        // Order matters: must be the FIRST plugin in the chain so it can
-        // intercept duplicate launches before any heavy initialisation.
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        // Keep a single application instance and focus the existing window.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             log::info!("Duplicate launch detected — forwarded to existing instance");
-            if let Some(url) = argv.iter().find(|a| a.starts_with("tabularis:")) {
-                crate::plugins::deep_link::handle_url(app, url);
-            }
             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
                 let _ = win.unminimize();
                 let _ = win.set_focus();
@@ -227,8 +185,6 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_deep_link::init())
-        .manage(crate::plugins::deep_link::PendingInstall::default())
         .manage(commands::QueryCancellationState::default())
         .manage(export::ExportCancellationState::default())
         .manage(dump_commands::DumpCancellationState::default())
@@ -250,21 +206,12 @@ pub fn run() {
             // to bridge askpass prompts to the frontend.
             askpass::set_app_handle(app.handle().clone());
 
-            // Read persisted config to know which external plugins are enabled.
-            // `None` means no preference has been saved yet → load all installed plugins.
-            let active_ext_drivers =
-                crate::config::load_config_internal(&app.handle()).active_external_drivers;
-
             // Register built-in drivers
             tauri::async_runtime::block_on(async {
                 drivers::registry::register_driver(drivers::mysql::MysqlDriver::new()).await;
                 drivers::registry::register_driver(drivers::postgres::PostgresDriver::new()).await;
                 drivers::registry::register_driver(drivers::sqlite::SqliteDriver::new()).await;
                 native_cli::register_manifests().await;
-
-                // Load only enabled external plugins (or all if no preference saved).
-                crate::plugins::manager::load_plugins(&app.handle(), active_ext_drivers.as_deref())
-                    .await;
             });
 
             // Start connection health-check ping loop.
@@ -279,55 +226,8 @@ pub fn run() {
                 });
             }
 
-            // Subscribe to `tabularis://` deep links so a registry's
-            // "Open in App" button can hand us a plugin slug + version.
-            // The handler emits a frontend event; the React side opens the
-            // install confirmation modal. See `plugins::deep_link`.
-            //
-            // On Linux/Windows the scheme is only auto-registered when the
-            // app is installed from a bundled package. Under `tauri dev`
-            // the binary lives in `target/debug/...`, so call
-            // `register("tabularis")` here — it writes the desktop / xdg-mime
-            // entry pointing at the current binary so Firefox & friends can
-            // route `tabularis://...` to us. The call is a no-op on macOS
-            // (handled by Info.plist) and idempotent across restarts.
-            {
-                use tauri_plugin_deep_link::DeepLinkExt;
-                let handle = app.handle().clone();
-                let deep_link = app.deep_link();
-                #[cfg(any(target_os = "linux", all(debug_assertions, target_os = "windows")))]
-                if let Err(e) = deep_link.register("tabularis") {
-                    log::warn!("Failed to register tabularis:// scheme: {}", e);
-                }
-                deep_link.on_open_url({
-                    let handle = handle.clone();
-                    move |event| {
-                        for url in event.urls() {
-                            crate::plugins::deep_link::handle_url(&handle, url.as_str());
-                        }
-                    }
-                });
-                // Cold-start path: when the OS launched us *because of* a
-                // tabularis:// URL, on_open_url won't fire — the URL is
-                // already consumed by the launch handshake. Pull it out via
-                // get_current() and route it through the same handler.
-                if let Ok(Some(urls)) = deep_link.get_current() {
-                    for url in urls {
-                        crate::plugins::deep_link::handle_url(&handle, url.as_str());
-                    }
-                }
-            }
-
-            // Watch for pending MCP approval requests and run periodic cleanup.
-            ai_approval_watcher::spawn(app.handle().clone());
-
             // Periodic encrypted backup of the connections, when enabled.
             backup::spawn_scheduler(app.handle().clone());
-
-            // Refresh the GUI heartbeat so the MCP subprocess can detect
-            // when Tabularis is closed and fail fast on approval-gated
-            // queries instead of waiting for the full approval timeout.
-            heartbeat::spawn();
 
             // Maximize the window on startup if the user enabled it.
             if crate::config::load_config_internal(&app.handle())
@@ -505,36 +405,8 @@ pub fn run() {
             config::get_config_json,
             config::save_config_json,
             config::relaunch_app,
-            config::set_ai_key,
-            config::delete_ai_key,
-            config::check_ai_key,
-            config::check_ai_key_status,
-            config::get_system_prompt,
-            config::save_system_prompt,
-            config::reset_system_prompt,
-            config::get_explain_prompt,
-            config::save_explain_prompt,
-            config::reset_explain_prompt,
-            config::get_explainplan_prompt,
-            config::save_explainplan_prompt,
-            config::reset_explainplan_prompt,
-            config::get_cellname_prompt,
-            config::save_cellname_prompt,
-            config::reset_cellname_prompt,
-            config::get_tabrename_prompt,
-            config::save_tabrename_prompt,
-            config::reset_tabrename_prompt,
-            // AI
-            ai::generate_ai_query,
-            ai::explain_ai_query,
-            ai::analyze_ai_explain_plan,
-            ai::generate_cell_name,
-            ai::generate_tab_rename,
-            ai::suggest_table_name,
-            ai::get_ai_models,
             // Clipboard Import
             clipboard_import::execute_clipboard_import,
-            commands::get_ai_schema_context,
             commands::get_schema_snapshot,
             // DDL generation
             commands::get_create_table_sql,
@@ -557,19 +429,6 @@ pub fn run() {
             commands::get_trigger_definition,
             commands::create_trigger,
             commands::drop_trigger,
-            // MCP
-            mcp::install::get_mcp_status,
-            mcp::install::install_mcp_config,
-            // AI Activity / Approvals
-            ai_commands::get_ai_activity,
-            ai_commands::get_ai_sessions,
-            ai_commands::get_ai_session_events,
-            ai_commands::clear_ai_activity,
-            ai_commands::export_ai_activity_json,
-            ai_commands::export_ai_activity_csv,
-            ai_commands::export_ai_session_as_notebook,
-            ai_commands::list_pending_approvals,
-            ai_commands::decide_pending_approval,
             // Themes
             theme_commands::get_all_themes,
             theme_commands::get_theme,
@@ -608,19 +467,6 @@ pub fn run() {
             notebooks::delete_notebook,
             notebooks::rename_notebook,
             notebooks::list_notebooks,
-            // Plugin Registry
-            plugins::commands::fetch_plugin_registry,
-            plugins::commands::install_plugin,
-            plugins::commands::uninstall_plugin,
-            plugins::commands::get_installed_plugins,
-            plugins::commands::disable_plugin,
-            plugins::commands::enable_plugin,
-            plugins::commands::get_plugin_manifest,
-            plugins::commands::get_plugin_dir,
-            plugins::commands::read_plugin_file,
-            plugins::commands::fetch_tabularium_plugin_preview,
-            plugins::deep_link::consume_pending_deep_link_install,
-            plugins::manager::get_plugin_startup_errors,
             // JSON Viewer
             json_viewer::open_json_viewer_window,
             json_viewer::get_json_viewer_session,
@@ -630,11 +476,8 @@ pub fn run() {
             // Connection Window
             connection_window::open_connection_window,
             // Task Manager
-            task_manager::get_process_list,
             task_manager::get_system_stats,
             task_manager::get_tabularis_children,
-            task_manager::kill_plugin_process,
-            task_manager::restart_plugin_process,
             task_manager::open_task_manager_window,
             // Connection Appearance
             connection_appearance::save_connection_icon,

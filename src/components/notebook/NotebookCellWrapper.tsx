@@ -101,7 +101,6 @@ export function NotebookCellWrapper({
         onToggleCollapse={() => onUpdate({ isCollapsed: !cell.isCollapsed })}
         cellName={cell.name}
         onNameChange={(name) => onUpdate({ name: name || undefined })}
-        cellContent={cell.content}
       />
 
       {showHistory && cell.type === "sql" && (

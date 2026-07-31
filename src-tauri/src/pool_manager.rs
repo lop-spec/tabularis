@@ -61,31 +61,6 @@ const SQLITE_STARTUP_SCRIPT_TIMEOUT_MS: u64 = 30_000;
 /// never wedge pool creation indefinitely.
 const POSTGRES_STARTUP_SCRIPT_TIMEOUT_MS: u64 = 30_000;
 
-fn mysql_setting_value(key: &str) -> Option<serde_json::Value> {
-    crate::config::get_cached_config()
-        .plugins
-        .and_then(|plugins| plugins.get("mysql").cloned())
-        .and_then(|plugin| plugin.settings.get(key).cloned())
-}
-
-fn mysql_string_setting(key: &str, default: &str) -> String {
-    mysql_setting_value(key)
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| default.to_string())
-}
-
-fn mysql_numeric_setting(key: &str, default: u64) -> u64 {
-    mysql_setting_value(key)
-        .and_then(|value| {
-            value
-                .as_u64()
-                .or_else(|| value.as_i64().and_then(|item| u64::try_from(item).ok()))
-                .or_else(|| value.as_str().and_then(|item| item.parse::<u64>().ok()))
-        })
-        .unwrap_or(default)
-}
-
 /// Stable pool key: uses `connection_id` when present (saved connections),
 /// else `host:port:database` (ad-hoc). The TLS/iam tuple is appended so
 /// different SSL settings of the same connection get separate pools.
@@ -173,7 +148,7 @@ pub(crate) fn build_mysql_options(
     let host = params.host.as_deref().unwrap_or("localhost");
     let port = params.port.unwrap_or(3306);
     let database = override_db.unwrap_or_else(|| params.database.primary());
-    let timezone = mysql_string_setting("timezone", DEFAULT_MYSQL_TIMEZONE);
+    let timezone = DEFAULT_MYSQL_TIMEZONE.to_string();
 
     // ssl_mode: user-selected, with auto-escalation to VerifyCa when an ssl_ca
     // is supplied under Required/Preferred. sqlx-mysql only forwards the CA
@@ -794,11 +769,7 @@ async fn get_mysql_pool_for_database_with_id(
     // trust store is used; a process-level rustls CryptoProvider is not
     // required here. The Postgres deadpool path still installs one in
     // build_postgres_configurations via the same helper.
-    let options = build_mysql_options(params, override_db)?;
-    let connect_timeout = Duration::from_millis(mysql_numeric_setting(
-        "connectTimeout",
-        DEFAULT_MYSQL_CONNECT_TIMEOUT_MS,
-    ));
+    let connect_timeout = Duration::from_millis(DEFAULT_MYSQL_CONNECT_TIMEOUT_MS);
     let script = startup_script(params);
 
     let pool = match build_and_connect_mysql_pool(

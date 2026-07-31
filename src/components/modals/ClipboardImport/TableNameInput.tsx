@@ -1,22 +1,16 @@
-import { Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 interface TableNameInputProps {
   value: string;
   onChange: (value: string) => void;
   tableExists: boolean;
-  aiEnabled: boolean;
-  aiLoading: boolean;
-  onAiSuggest: () => void;
 }
 
 export function TableNameInput({
   value,
   onChange,
   tableExists,
-  aiEnabled,
-  aiLoading,
-  onAiSuggest,
 }: TableNameInputProps) {
   const { t } = useTranslation();
 
@@ -43,21 +37,6 @@ export function TableNameInput({
             </div>
           )}
         </div>
-        {aiEnabled && (
-          <button
-            onClick={onAiSuggest}
-            disabled={aiLoading}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs bg-purple-900/30 hover:bg-purple-900/50 border border-purple-800/40 text-purple-300 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
-            title={t('clipboardImport.aiSuggest')}
-          >
-            {aiLoading ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Sparkles size={13} />
-            )}
-            {t('clipboardImport.aiSuggest')}
-          </button>
-        )}
       </div>
     </div>
   );

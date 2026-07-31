@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 describe("SOCIAL_LINKS", () => {
   it("includes every project social network with a valid https URL", () => {
     const labels = SOCIAL_LINKS.map((l) => l.label);
-    expect(labels).toEqual(["GitHub", "Discord", "X", "Bluesky", "Mastodon"]);
+    expect(labels).toEqual(["GitHub", "X", "Bluesky", "Mastodon"]);
     for (const link of SOCIAL_LINKS) {
       expect(link.href).toMatch(/^https:\/\//);
     }
@@ -23,7 +23,6 @@ describe("SOCIAL_LINKS", () => {
       SOCIAL_LINKS.map((l) => [l.label, l.href]),
     );
     expect(byLabel.GitHub).toBe(LINKS.GITHUB);
-    expect(byLabel.Discord).toBe(LINKS.DISCORD);
     expect(byLabel.X).toBe(LINKS.X);
     expect(byLabel.Bluesky).toBe(LINKS.BLUESKY);
     expect(byLabel.Mastodon).toBe(LINKS.MASTODON);
@@ -50,14 +49,13 @@ describe("SocialLinks", () => {
   });
 
   it("omits networks listed in the exclude prop", () => {
-    render(<SocialLinks exclude={["GitHub", "Discord"]} />);
+    render(<SocialLinks exclude={["GitHub", "X"]} />);
     expect(
       screen.queryByRole("button", { name: "GitHub" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Discord" }),
+      screen.queryByRole("button", { name: "X" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "X" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bluesky" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Mastodon" }),

@@ -16,14 +16,12 @@ import {
   ChevronDown,
   ChevronUp,
   Code2,
-  Sparkles,
   PanelTop,
   Rows3,
   ChevronsDownUp,
   ChevronsUpDown,
 } from "lucide-react";
 import clsx from "clsx";
-import { invoke } from "@tauri-apps/api/core";
 import { ResultEntryContent } from "./ResultEntryContent";
 import { StackedResultItem } from "./StackedResultItem";
 import { ContextMenu } from "./ContextMenu";
@@ -36,7 +34,6 @@ import {
   totalExecutionTime,
   getEntryDisplayLabel,
 } from "../../utils/multiResult";
-import { useSettings } from "../../hooks/useSettings";
 import type { QueryResultEntry } from "../../types/editor";
 
 interface MultiResultPanelProps {
@@ -62,27 +59,21 @@ function ResultTab({
   entry,
   isActive,
   initialEditing,
-  aiEnabled,
-  aiRenaming,
   queryPrefix,
   onSelect,
   onRerun,
   onClose,
   onRename,
-  onAiRename,
   onContextMenu,
 }: {
   entry: QueryResultEntry;
   isActive: boolean;
   initialEditing: boolean;
-  aiEnabled: boolean;
-  aiRenaming: boolean;
   queryPrefix: string;
   onSelect: () => void;
   onRerun: () => void;
   onClose: () => void;
   onRename: (label: string) => void;
-  onAiRename: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
@@ -179,25 +170,6 @@ function ResultTab({
         )}
       </span>
 
-      {/* AI rename button — hover only */}
-      {aiEnabled && !entry.isLoading && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onAiRename();
-          }}
-          disabled={aiRenaming}
-          className="p-0.5 rounded-sm hover:bg-surface-secondary transition-opacity shrink-0 opacity-0 group-hover:opacity-100 disabled:opacity-50"
-          title={aiRenaming ? t("editor.multiResult.generatingName") : t("editor.multiResult.aiGenerateName")}
-        >
-          {aiRenaming ? (
-            <Loader2 size={10} className="animate-spin" />
-          ) : (
-            <Sparkles size={10} className="text-purple-300" />
-          )}
-        </button>
-      )}
-
       {/* Rerun button — hover only */}
       {!entry.isLoading && (
         <button
@@ -247,7 +219,6 @@ export function MultiResultPanel({
   onRenameEntry,
 }: MultiResultPanelProps) {
   const { t } = useTranslation();
-  const { settings } = useSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -257,13 +228,12 @@ export function MultiResultPanel({
     entryId: string;
   } | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-  const [queryExpanded, setQueryExpanded] = useState(false);
+  const [expandedQueryId, setExpandedQueryId] = useState<string | null>(null);
   const [viewModeOverride, setViewModeOverride] = useState<
     "tabs" | "stacked" | null
   >(null);
   const viewMode =
     viewModeOverride ?? (results.length > 1 ? "stacked" : "tabs");
-  const [aiRenamingEntryId, setAiRenamingEntryId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const activeEntry = findActiveEntry(results, activeResultId);
   const succeeded = countSucceeded(results);
@@ -282,10 +252,6 @@ export function MultiResultPanel({
   useEffect(() => {
     updateScrollArrows();
   }, [results, updateScrollArrows]);
-
-  useEffect(() => {
-    setQueryExpanded(false);
-  }, [activeResultId]);
 
   const pending = results.filter((r) => r.isLoading).length;
   const isRunning = pending > 0;
@@ -324,28 +290,6 @@ export function MultiResultPanel({
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, entryId });
   };
-
-  const handleAiRename = async (entryId: string) => {
-    const entry = results.find((r) => r.id === entryId);
-    if (!entry?.query.trim() || !settings.aiProvider) return;
-    setAiRenamingEntryId(entryId);
-    try {
-      const name = await invoke<string>("generate_tab_rename", {
-        req: {
-          provider: settings.aiProvider,
-          model: settings.aiModel || "",
-          query: entry.query,
-        },
-      });
-      onRenameEntry(entryId, name.trim());
-    } catch (e) {
-      console.error("Failed to generate tab name:", e);
-    } finally {
-      setAiRenamingEntryId(null);
-    }
-  };
-
-  const aiEnabled = !!(settings.aiEnabled && settings.aiProvider);
 
   const viewToggle = results.length > 1 && (
     <button
@@ -419,14 +363,11 @@ export function MultiResultPanel({
                   entry={entry}
                   isActive={entry.id === activeEntry.id}
                   initialEditing={shouldEdit}
-                  aiEnabled={aiEnabled}
-                  aiRenaming={aiRenamingEntryId === entry.id}
                   queryPrefix={queryPrefix}
                   onSelect={() => { if (shouldEdit) setEditingEntryId(null); onSelectResult(entry.id); }}
                   onRerun={() => onRerunEntry(entry.id)}
                   onClose={() => onCloseEntry(entry.id)}
                   onRename={(label) => onRenameEntry(entry.id, label)}
-                  onAiRename={() => handleAiRename(entry.id)}
                   onContextMenu={(e) => handleContextMenu(entry.id, e)}
                 />
                 );
@@ -440,19 +381,27 @@ export function MultiResultPanel({
           {activeEntry.query && (
             <div
               className="bg-surface-secondary border-b border-default px-3 py-1.5 flex items-start gap-2 cursor-pointer select-none group/qp"
-              onClick={() => setQueryExpanded((v) => !v)}
+              onClick={() =>
+                setExpandedQueryId((currentId) =>
+                  currentId === activeEntry.id ? null : activeEntry.id,
+                )
+              }
             >
               <Code2 size={12} className="text-muted shrink-0 mt-0.5" />
               <pre
                 className={clsx(
                   "flex-1 text-[11px] font-mono text-secondary whitespace-pre-wrap break-all m-0",
-                  !queryExpanded && "line-clamp-1",
+                  expandedQueryId !== activeEntry.id && "line-clamp-1",
                 )}
               >
                 {activeEntry.query.trim()}
               </pre>
               <button className="text-muted hover:text-white shrink-0 mt-0.5">
-                {queryExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {expandedQueryId === activeEntry.id ? (
+                  <ChevronUp size={12} />
+                ) : (
+                  <ChevronDown size={12} />
+                )}
               </button>
             </div>
           )}
@@ -518,8 +467,6 @@ export function MultiResultPanel({
                 csvDelimiter={csvDelimiter}
                 csvIncludeHeaders={csvIncludeHeaders}
                 collapsed={collapsedIds.has(entry.id)}
-                aiEnabled={aiEnabled}
-                aiRenaming={aiRenamingEntryId === entry.id}
                 onToggleCollapse={() =>
                   setCollapsedIds((prev) => {
                     const next = new Set(prev);
@@ -531,7 +478,6 @@ export function MultiResultPanel({
                 onPageChange={(page) => onPageChange(entry.id, page)}
                 onRename={(label) => onRenameEntry(entry.id, label)}
                 onRerun={() => onRerunEntry(entry.id)}
-                onAiRename={() => handleAiRename(entry.id)}
                 onClose={() => onCloseEntry(entry.id)}
               />
             ))}
@@ -551,18 +497,6 @@ export function MultiResultPanel({
               icon: Pencil,
               action: () => setEditingEntryId(contextMenu.entryId),
             },
-            ...(aiEnabled
-              ? [
-                  {
-                    label: aiRenamingEntryId === contextMenu.entryId
-                      ? t("editor.multiResult.generatingName")
-                      : t("editor.multiResult.aiGenerateName"),
-                    icon: Sparkles,
-                    action: () => handleAiRename(contextMenu.entryId),
-                    disabled: aiRenamingEntryId !== null,
-                  },
-                ]
-              : []),
             { separator: true },
             {
               label: t("editor.closeTab"),

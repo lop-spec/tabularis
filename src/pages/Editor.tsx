@@ -23,9 +23,6 @@ import {
   validatePendingInsertion,
   insertionToBackendData,
 } from "../utils/pendingInsertions";
-import { AiQueryModal } from "../components/modals/AiQueryModal";
-import { AiExplainModal } from "../components/modals/AiExplainModal";
-import { AiDropdownButton } from "../components/ui/AiDropdownButton";
 import { VisualExplainModal } from "../components/modals/VisualExplainModal";
 import {
   Play,
@@ -499,8 +496,6 @@ export const Editor = () => {
     () => setIsDbDropdownOpen(false),
     isDbDropdownOpen,
   );
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-  const [isAiExplainModalOpen, setIsAiExplainModalOpen] = useState(false);
   const [isVisualExplainOpen, setIsVisualExplainOpen] = useState(false);
   const [visualExplainQuery, setVisualExplainQuery] = useState<string | null>(null);
   const [isExplainSelectionOpen, setIsExplainSelectionOpen] = useState(false);
@@ -4293,15 +4288,6 @@ export const Editor = () => {
                   {t("editor.visualExplain.buttonShort")}
                 </button>
                 )}
-                {/* AI dropdown — only if AI enabled */}
-                {settings.aiEnabled && (
-                  <AiDropdownButton
-                    onGenerate={() => setIsAiModalOpen(true)}
-                    onExplain={() => setIsAiExplainModalOpen(true)}
-                    disableAll={!activeConnectionId}
-                    disableExplain={!tab.query?.trim()}
-                  />
-                )}
               </div>
             )}
           </div>
@@ -5022,21 +5008,6 @@ export const Editor = () => {
           title={t("editor.saveQuery")}
         />
       )}
-      <AiQueryModal
-        isOpen={isAiModalOpen}
-        onClose={() => setIsAiModalOpen(false)}
-        connectionId={activeConnectionId ?? undefined}
-        schema={getExecutionScopeForTab(activeTab)}
-        onInsert={(q) => {
-          updateActiveTab({ query: q });
-          runQuery(q, 1);
-        }}
-      />
-      <AiExplainModal
-        isOpen={isAiExplainModalOpen}
-        onClose={() => setIsAiExplainModalOpen(false)}
-        query={activeTab.query}
-      />
       <VisualExplainModal
         isOpen={isVisualExplainOpen}
         onClose={() => {

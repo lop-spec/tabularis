@@ -7,7 +7,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { useSettings } from "../../hooks/useSettings";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useDrivers } from "../../hooks/useDrivers";
 import type { ExplainPlan, ExplainQueryOutput } from "@tabularis/explain";
@@ -25,7 +24,7 @@ interface VisualExplainModalProps {
   connectionId: string;
   schema?: string;
   /// Display label to use when the connection isn't loaded in the active
-  /// database context (e.g. opened from the AI Activity panel). Falls back
+  /// database context. Falls back
   /// to the live connection name if available, then to `connectionId`.
   connectionLabel?: string;
 }
@@ -39,7 +38,6 @@ export const VisualExplainModal = ({
   connectionLabel,
 }: VisualExplainModalProps) => {
   const { t } = useTranslation();
-  const { settings } = useSettings();
   const { getConnectionData, connections } = useDatabase();
   const { allDrivers } = useDrivers();
   const [plan, setPlan] = useState<ExplainPlan | null>(null);
@@ -149,7 +147,6 @@ export const VisualExplainModal = ({
           onViewModeChange={setViewMode}
           selectedNodeId={selectedNodeId}
           onSelectNode={setSelectedNodeId}
-          aiEnabled={!!settings.aiEnabled}
         />
 
         <div className="p-4 border-t border-default bg-base/50 flex items-center gap-4">

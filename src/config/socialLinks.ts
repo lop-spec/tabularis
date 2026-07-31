@@ -1,7 +1,6 @@
 import type { ComponentType } from "react";
 import { Github } from "lucide-react";
 import { LINKS } from "./links";
-import { DiscordIcon } from "../components/icons/DiscordIcon";
 import {
   XIcon,
   BlueskyIcon,
@@ -25,7 +24,6 @@ export interface SocialLink {
  */
 export const SOCIAL_LINKS: SocialLink[] = [
   { label: "GitHub", href: LINKS.GITHUB, Icon: Github },
-  { label: "Discord", href: LINKS.DISCORD, Icon: DiscordIcon },
   { label: "X", href: LINKS.X, Icon: XIcon },
   { label: "Bluesky", href: LINKS.BLUESKY, Icon: BlueskyIcon },
   { label: "Mastodon", href: LINKS.MASTODON, Icon: MastodonIcon },

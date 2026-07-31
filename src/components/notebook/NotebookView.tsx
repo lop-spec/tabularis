@@ -876,7 +876,6 @@ export function NotebookView({
         <NotebookOutline
           cells={cells}
           onScrollToCell={scrollToCell}
-          onCellNameGenerated={(cellId, name) => updateCell(cellId, { name })}
         />
 
         {runAllResult && (

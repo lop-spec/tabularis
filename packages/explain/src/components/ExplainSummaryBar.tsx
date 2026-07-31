@@ -4,7 +4,6 @@ import {
   BarChart3,
   FileText,
   PieChart,
-  Sparkles,
   TableProperties,
   Network,
 } from "lucide-react";
@@ -16,18 +15,16 @@ export type ExplainViewMode =
   | "diagram"
   | "table"
   | "stats"
-  | "raw"
-  | "ai";
+  | "raw";
 
 interface ExplainSummaryBarProps {
   plan: ExplainPlan | null;
   viewMode: ExplainViewMode;
   onViewModeChange: (mode: ExplainViewMode) => void;
-  aiEnabled: boolean;
 }
 
 export const ExplainSummaryBar = memo(
-  ({ plan, viewMode, onViewModeChange, aiEnabled }: ExplainSummaryBarProps) => {
+  ({ plan, viewMode, onViewModeChange }: ExplainSummaryBarProps) => {
     const { t } = useTranslation();
 
     if (!plan) return null;
@@ -37,9 +34,7 @@ export const ExplainSummaryBar = memo(
     const toggleButtonClass = (mode: ExplainViewMode) =>
       `flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
         viewMode === mode
-          ? mode === "ai"
-            ? "bg-purple-900/40 text-purple-300"
-            : "bg-blue-900/40 text-blue-300"
+          ? "bg-blue-900/40 text-blue-300"
           : "text-muted hover:text-primary"
       }`;
 
@@ -116,15 +111,6 @@ export const ExplainSummaryBar = memo(
             <FileText size={12} />
             {t("editor.visualExplain.rawOutput")}
           </button>
-          {aiEnabled && (
-            <button
-              onClick={() => onViewModeChange("ai")}
-              className={toggleButtonClass("ai")}
-            >
-              <Sparkles size={12} />
-              {t("editor.visualExplain.aiAnalysis")}
-            </button>
-          )}
         </div>
       </div>
     );

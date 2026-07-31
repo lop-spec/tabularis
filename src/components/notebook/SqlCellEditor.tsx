@@ -1,7 +1,5 @@
 import { useTranslation } from "react-i18next";
 import { SqlEditorWrapper } from "../ui/SqlEditorWrapper";
-import { useSettings } from "../../hooks/useSettings";
-import { NotebookAiButtons } from "./NotebookAiButtons";
 import { CellSectionHeader } from "./CellSectionHeader";
 
 interface SqlCellEditorProps {
@@ -20,12 +18,9 @@ export function SqlCellEditor({
   content,
   onContentChange,
   onRun,
-  connectionId,
-  schema,
   collapsed,
   onToggleCollapse,
 }: SqlCellEditorProps) {
-  const { settings } = useSettings();
   const { t } = useTranslation();
 
   return (
@@ -50,14 +45,6 @@ export function SqlCellEditor({
               scrollbar: { alwaysConsumeMouseWheel: false },
             }}
           />
-          {settings.aiEnabled && (
-            <NotebookAiButtons
-              content={content}
-              onInsert={onContentChange}
-              connectionId={connectionId}
-              schema={schema}
-            />
-          )}
         </div>
       )}
     </div>

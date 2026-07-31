@@ -19,9 +19,6 @@ vi.mock("../../../src/components/ui/ErrorDisplay", () => ({
 vi.mock("../../../src/hooks/useSettings", () => ({
   useSettings: () => ({
     settings: {
-      aiEnabled: false,
-      aiProvider: null,
-      aiModel: "",
     },
     updateSettings: vi.fn(),
   }),

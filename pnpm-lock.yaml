@@ -196,28 +196,6 @@ importers:
         specifier: ^4.1.2
         version: 4.1.2(@types/node@24.12.0)(jsdom@28.1.0)(vite@7.3.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0))
 
-  packages/create-plugin:
-    dependencies:
-      kleur:
-        specifier: ^4.1.5
-        version: 4.1.5
-    devDependencies:
-      '@types/node':
-        specifier: ^24.12.0
-        version: 24.12.0
-      tsup:
-        specifier: ^8.3.5
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
-      tsx:
-        specifier: ^4.19.2
-        version: 4.21.0
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.2
-        version: 4.1.2(@types/node@24.12.0)(jsdom@28.1.0)(vite@7.3.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0))
-
   packages/explain:
     devDependencies:
       '@types/dagre':
@@ -247,24 +225,6 @@ importers:
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-
-  packages/plugin-api:
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.14
-      react:
-        specifier: ^19.2.4
-        version: 19.2.4
-      tsup:
-        specifier: ^8.3.5
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
-      tsx:
-        specifier: ^4.19.2
-        version: 4.21.0
       typescript:
         specifier: ~5.9.3
         version: 5.9.3
@@ -2712,10 +2672,6 @@ packages:
 
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
-
-  kleur@4.1.5:
-    resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
-    engines: {node: '>=6'}
 
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
@@ -6101,6 +6057,7 @@ snapshots:
   get-tsconfig@4.14.0:
     dependencies:
       resolve-pkg-maps: 1.0.0
+    optional: true
 
   gitnexus@1.6.9(graphology-types@0.24.8)(zod@4.3.6):
     dependencies:
@@ -6500,8 +6457,6 @@ snapshots:
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
-
-  kleur@4.1.5: {}
 
   levn@0.4.1:
     dependencies:
@@ -7309,7 +7264,8 @@ snapshots:
 
   resolve-from@5.0.0: {}
 
-  resolve-pkg-maps@1.0.0: {}
+  resolve-pkg-maps@1.0.0:
+    optional: true
 
   ret@0.1.15: {}
 
@@ -7778,6 +7734,7 @@ snapshots:
       get-tsconfig: 4.14.0
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   type-check@0.4.0:
     dependencies:

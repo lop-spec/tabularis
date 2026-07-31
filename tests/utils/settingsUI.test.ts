@@ -3,12 +3,9 @@ import {
   MIN_FONT_SIZE,
   MAX_FONT_SIZE,
   validateFontSize,
-  getProviderLabel,
   isPresetFont,
-  isValidApiKeyFormat,
   formatRoadmapFeature,
 } from '../../src/utils/settingsUI';
-import type { AiProvider } from '../../src/contexts/SettingsContext';
 
 describe('settingsUI', () => {
   describe('validateFontSize', () => {
@@ -39,29 +36,6 @@ describe('settingsUI', () => {
     });
   });
 
-  describe('getProviderLabel', () => {
-    it('should return correct label for OpenAI', () => {
-      expect(getProviderLabel('openai' as AiProvider)).toBe('OpenAI');
-    });
-
-    it('should return correct label for Anthropic', () => {
-      expect(getProviderLabel('anthropic' as AiProvider)).toBe('Anthropic');
-    });
-
-    it('should return correct label for OpenRouter', () => {
-      expect(getProviderLabel('openrouter' as AiProvider)).toBe('OpenRouter');
-    });
-
-    it('should return correct label for MiniMax', () => {
-      expect(getProviderLabel('minimax' as AiProvider)).toBe('MiniMax');
-    });
-
-    it('should capitalize unknown providers', () => {
-      expect(getProviderLabel('custom' as AiProvider)).toBe('Custom');
-      expect(getProviderLabel('test' as AiProvider)).toBe('Test');
-    });
-  });
-
   describe('isPresetFont', () => {
     const availableFonts = [
       { name: 'System', label: 'System Default' },
@@ -87,42 +61,6 @@ describe('settingsUI', () => {
 
     it('should handle empty font list', () => {
       expect(isPresetFont('System', [])).toBe(false);
-    });
-  });
-
-  describe('isValidApiKeyFormat', () => {
-    it('should validate typical OpenAI keys', () => {
-      expect(isValidApiKeyFormat('sk-1234567890abcdef')).toBe(true);
-    });
-
-    it('should validate typical Anthropic keys', () => {
-      expect(isValidApiKeyFormat('sk-ant-1234567890')).toBe(true);
-    });
-
-    it('should validate keys with hyphens and underscores', () => {
-      expect(isValidApiKeyFormat('api_key-123_456')).toBe(true);
-    });
-
-    it('should validate keys with colons and dots', () => {
-      expect(isValidApiKeyFormat('key:123.456')).toBe(true);
-    });
-
-    it('should reject keys shorter than 10 characters', () => {
-      expect(isValidApiKeyFormat('sk-123')).toBe(false);
-      expect(isValidApiKeyFormat('key')).toBe(false);
-    });
-
-    it('should reject empty strings', () => {
-      expect(isValidApiKeyFormat('')).toBe(false);
-    });
-
-    it('should reject keys with invalid characters', () => {
-      expect(isValidApiKeyFormat('sk-1234567890@#$')).toBe(false);
-      expect(isValidApiKeyFormat('sk-1234 5678')).toBe(false);
-    });
-
-    it('should trim whitespace before validating', () => {
-      expect(isValidApiKeyFormat('  sk-1234567890  ')).toBe(true);
     });
   });
 

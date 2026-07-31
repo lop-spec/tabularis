@@ -5,12 +5,9 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { ConnectionLayoutProvider } from "./contexts/ConnectionLayoutProvider";
 import { RightSidebarProvider } from "./contexts/RightSidebarProvider";
 import { KeybindingsProvider } from "./contexts/KeybindingsProvider";
-import { PluginSlotProvider } from "./contexts/PluginSlotProvider";
-import { PluginModalProvider } from "./contexts/PluginModalProvider";
 import { AlertProvider } from "./contexts/AlertProvider";
 import { Connections } from "./pages/Connections";
 import { Editor } from "./pages/Editor";
-import { McpPage } from "./pages/McpPage";
 import { Settings } from "./pages/Settings";
 import { SchemaDiagramPage } from "./pages/SchemaDiagramPage";
 import { TaskManagerPage } from "./pages/TaskManagerPage";
@@ -21,15 +18,10 @@ import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { EditorErrorBoundary } from "./components/ui/EditorErrorBoundary";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
-import { CommunityModal } from "./components/modals/CommunityModal";
 import { WhatsNewModal } from "./components/modals/WhatsNewModal";
-import { AiApprovalGate } from "./components/modals/AiApprovalGate";
-import { PluginInstallConfirmModal } from "./components/modals/PluginInstallConfirmModal";
 import { SshAskpassGate } from "./components/modals/SshAskpassGate";
 import { useUpdate } from "./hooks/useUpdate";
 import { useChangelog } from "./hooks/useChangelog";
-import { useSettings } from "./hooks/useSettings";
-import { useDeepLinkInstall } from "./hooks/useDeepLinkInstall";
 import { useResultTypeColors } from "./hooks/useResultTypeColors";
 import { APP_VERSION } from "./version";
 import { isVersionAtMost, isVersionNewer } from "./utils/versionCompare";
@@ -45,11 +37,8 @@ export function App() {
     dismissUpdate,
     error: updateError,
   } = useUpdate();
-  const { settings, updateSetting, isLoading: isSettingsLoading } = useSettings();
   useResultTypeColors();
   const [isDebugMode, setIsDebugMode] = useState(false);
-  const deepLinkInstall = useDeepLinkInstall();
-  const [isCommunityModalDismissed, setIsCommunityModalDismissed] = useState(false);
 
   const lastSeenVersion = localStorage.getItem(WHATS_NEW_VERSION_KEY);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(
@@ -67,29 +56,10 @@ export function App() {
     );
   }, [lastSeenVersion, allEntries]);
 
-  const dismissCommunityModal = useCallback(() => {
-    updateSetting("showWelcome", false);
-    localStorage.setItem(WHATS_NEW_VERSION_KEY, APP_VERSION);
-    setIsCommunityModalDismissed(true);
-  }, [updateSetting]);
-
   const dismissWhatsNew = useCallback(() => {
     localStorage.setItem(WHATS_NEW_VERSION_KEY, APP_VERSION);
     setIsWhatsNewOpen(false);
   }, []);
-
-  // Seed WHATS_NEW_VERSION_KEY for users who completed the welcome flow
-  // before the WhatsNew feature was introduced. Without this, lastSeenVersion
-  // stays null and WhatsNew never triggers.
-  useEffect(() => {
-    if (
-      !isSettingsLoading &&
-      settings.showWelcome === false &&
-      !localStorage.getItem(WHATS_NEW_VERSION_KEY)
-    ) {
-      localStorage.setItem(WHATS_NEW_VERSION_KEY, APP_VERSION);
-    }
-  }, [isSettingsLoading, settings.showWelcome]);
 
   useEffect(() => {
     invoke<boolean>("is_debug_mode").then((debugMode) => {
@@ -117,10 +87,8 @@ export function App() {
         <BrowserRouter>
           <ConnectionHealthMonitor />
           <KeybindingsProvider>
-            <PluginSlotProvider>
-              <PluginModalProvider>
-                <ConnectionLayoutProvider>
-                  <RightSidebarProvider>
+            <ConnectionLayoutProvider>
+              <RightSidebarProvider>
                   <Routes>
                     <Route path="/" element={<MainLayout />}>
                       <Route
@@ -136,7 +104,6 @@ export function App() {
                           </EditorErrorBoundary>
                         }
                       />
-                      <Route path="mcp" element={<McpPage />} />
                       <Route path="recovery" element={<RecoveryPage />} />
                       <Route path="settings" element={<Settings />} />
                     </Route>
@@ -152,10 +119,8 @@ export function App() {
                       element={<ResultsWindowPage />}
                     />
                   </Routes>
-                  </RightSidebarProvider>
-                </ConnectionLayoutProvider>
-              </PluginModalProvider>
-            </PluginSlotProvider>
+              </RightSidebarProvider>
+            </ConnectionLayoutProvider>
           </KeybindingsProvider>
         </BrowserRouter>
       </AlertProvider>
@@ -170,37 +135,14 @@ export function App() {
         error={updateError}
       />
 
-      <CommunityModal
-        isOpen={!isSettingsLoading && settings.showWelcome !== false && !isCommunityModalDismissed}
-        onClose={dismissCommunityModal}
-      />
-
       <WhatsNewModal
-        isOpen={isWhatsNewOpen && !isSettingsLoading && (settings.showWelcome === false || isCommunityModalDismissed)}
+        isOpen={isWhatsNewOpen}
         onClose={dismissWhatsNew}
         entries={whatsNewEntries}
         isLoading={isChangelogLoading}
       />
 
-      <AiApprovalGate />
       <SshAskpassGate />
-
-      <PluginInstallConfirmModal
-        key={
-          deepLinkInstall.pending
-            ? `${deepLinkInstall.pending.slug}@${deepLinkInstall.pending.version ?? ""}@${deepLinkInstall.pending.registry ?? ""}`
-            : "idle"
-        }
-        request={deepLinkInstall.pending}
-        busy={deepLinkInstall.busy}
-        error={deepLinkInstall.error}
-        onConfirm={() => {
-          void deepLinkInstall.confirm();
-        }}
-        onCancel={deepLinkInstall.cancel}
-        configuredRegistry={settings.tabulariumRegistryUrl ?? null}
-      />
-
     </>
   );
 }

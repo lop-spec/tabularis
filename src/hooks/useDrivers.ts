@@ -1,8 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 
-import type { InstalledPluginInfo, PluginManifest } from "../types/plugins";
-import { useSettings } from "./useSettings";
+import type { PluginManifest } from "../types/plugins";
 
 const FALLBACK_DRIVERS: PluginManifest[] = [
   {
@@ -125,26 +124,21 @@ const FALLBACK_DRIVERS: PluginManifest[] = [
 export function useDrivers(): {
   drivers: PluginManifest[];
   allDrivers: PluginManifest[];
-  installedPlugins: InstalledPluginInfo[];
   loading: boolean;
   error: string | null;
   refresh: () => void;
 } {
-  const [allDrivers, setAllDrivers] =
+  const [drivers, setDrivers] =
     useState<PluginManifest[]>(FALLBACK_DRIVERS);
-  const [installedPlugins, setInstalledPlugins] = useState<InstalledPluginInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { settings } = useSettings();
 
   const load = useCallback(() => {
-    Promise.all([
-      invoke<PluginManifest[]>("get_registered_drivers"),
-      invoke<InstalledPluginInfo[]>("get_installed_plugins"),
-    ])
-      .then(([drivers, installed]) => {
-        setAllDrivers(drivers);
-        setInstalledPlugins(installed);
+    invoke<PluginManifest[]>("get_registered_drivers")
+      .then((registeredDrivers) => {
+        setDrivers(
+          registeredDrivers.filter((driver) => driver.is_builtin === true),
+        );
         setError(null);
       })
       .catch((err: unknown) => {
@@ -162,10 +156,11 @@ export function useDrivers(): {
     load();
   }, [load]);
 
-  const activeExt = settings.activeExternalDrivers || [];
-  const active = allDrivers.filter(
-    (d) => d.is_builtin === true || activeExt.includes(d.id),
-  );
-
-  return { drivers: active, allDrivers, installedPlugins, loading, error, refresh };
+  return {
+    drivers,
+    allDrivers: drivers,
+    loading,
+    error,
+    refresh,
+  };
 }

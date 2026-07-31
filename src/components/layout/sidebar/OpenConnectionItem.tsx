@@ -51,7 +51,7 @@ export const OpenConnectionItem = ({
   const location = useLocation();
   const { isActive, isConnecting, name, database, sshEnabled, error } = connection;
   // The rail indicator marks the current view: a connection "owns" it only in
-  // the editor, otherwise it belongs to the active nav item (connections/mcp/settings)
+  // the editor, otherwise it belongs to the active nav item.
   const isCurrentView = isActive && location.pathname === "/editor";
   const savedConnection = connections.find(c => c.id === connection.id);
   const driverColor = getConnectionAccent(savedConnection, driverManifest);

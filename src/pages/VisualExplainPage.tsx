@@ -4,10 +4,9 @@ import { useTranslation } from "react-i18next";
 import { FileJson, FolderOpen, Loader2, RefreshCw } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import type { ExplainPlan, ExplainQueryOutput } from "@tabularis/explain";
+import type { ExplainPlan } from "@tabularis/explain";
 import {
   parseExplain,
-  resolveExplainOutput,
   withSourceLabel,
 } from "@tabularis/explain";
 import { VisualExplainView } from "../components/explain/VisualExplainView";
@@ -16,8 +15,6 @@ import {
   getExplainFileName,
   parseExplainFileParam,
 } from "../utils/explainImport";
-import { parseVisualExplainDeepLink } from "../utils/aiActivity";
-import { useSettings } from "../hooks/useSettings";
 
 export interface VisualExplainPageProps {
   /// When provided, render in embedded mode: skip the page header, use the
@@ -32,11 +29,8 @@ export const VisualExplainPage = ({
   compactMode = false,
 }: VisualExplainPageProps = {}) => {
   const { t } = useTranslation();
-  const { settings } = useSettings();
   const { search } = useLocation();
   const initialParamPath = parseExplainFileParam(search);
-  const deepLink = parseVisualExplainDeepLink(search);
-  const isDeepLink = !!deepLink.query && !!deepLink.connectionId;
 
   const [filePath, setFilePath] = useState<string | null>(initialParamPath);
   const [plan, setPlan] = useState<ExplainPlan | null>(initialPlan);
@@ -67,42 +61,13 @@ export const VisualExplainPage = ({
     }
   }, []);
 
-  const runExplainForDeepLink = useCallback(
-    async (connectionId: string, query: string) => {
-      setIsLoading(true);
-      setError(null);
-      setPlan(null);
-      setSelectedNodeId(null);
-      try {
-        const result = await invoke<ExplainQueryOutput>("explain_query_plan", {
-          connectionId,
-          query,
-          analyze: false,
-          schema: null,
-        });
-        const parsedPlan = resolveExplainOutput(result);
-        setPlan(parsedPlan);
-        setSelectedNodeId(parsedPlan.root.id);
-      } catch (err) {
-        setError(String(err));
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [],
-  );
-
-  // On mount: prefer initialPlan (embedded mode), then deep link, then file
-  // path, then any pending CLI handoff.
+  // On mount: prefer initialPlan (embedded mode), then file path, then any
+  // pending CLI handoff.
   useEffect(() => {
     if (initialPlan) return;
     let cancelled = false;
 
     const bootstrap = async () => {
-      if (isDeepLink) {
-        await runExplainForDeepLink(deepLink.connectionId!, deepLink.query!);
-        return;
-      }
       if (initialParamPath) {
         await loadPlan(initialParamPath);
         return;
@@ -125,11 +90,7 @@ export const VisualExplainPage = ({
   }, [
     initialPlan,
     initialParamPath,
-    isDeepLink,
-    deepLink.connectionId,
-    deepLink.query,
     loadPlan,
-    runExplainForDeepLink,
   ]);
 
   const handlePickFile = useCallback(async () => {
@@ -231,7 +192,6 @@ export const VisualExplainPage = ({
             onViewModeChange={setViewMode}
             selectedNodeId={selectedNodeId}
             onSelectNode={setSelectedNodeId}
-            aiEnabled={!!settings.aiEnabled}
           />
         )}
       </div>

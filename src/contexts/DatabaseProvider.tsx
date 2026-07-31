@@ -18,9 +18,7 @@ import type { ReactNode } from 'react';
 import type { PluginManifest } from '../types/plugins';
 import { clearAutocompleteCache } from '../utils/autocomplete';
 import { toErrorMessage } from '../utils/errors';
-import { useSettings } from '../hooks/useSettings';
 import { useToast } from '../hooks/useToast';
-import { findConnectionsForDrivers } from '../utils/connectionManager';
 import {
   isMultiDatabaseCapable,
   getEffectiveDatabase,
@@ -58,7 +56,6 @@ const createEmptyConnectionData = (driver: string = '', name: string = '', dbNam
 });
 
 export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
-  const { settings } = useSettings();
   const { showToast } = useToast();
   const { t } = useTranslation();
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
@@ -73,12 +70,8 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   // can show accurate cross-window connection status.
   const [globallyOpenConnectionIds, setGloballyOpenConnectionIds] = useState<string[]>([]);
 
-  // Refs used in the plugin-disable effect to avoid stale closures
   const openConnectionIdsRef = useRef(openConnectionIds);
   openConnectionIdsRef.current = openConnectionIds;
-  const connectionDataMapRef = useRef(connectionDataMap);
-  connectionDataMapRef.current = connectionDataMap;
-  const prevActiveExtRef = useRef<string[] | undefined>(undefined);
 
   const getActiveConnectionData = useCallback((): ConnectionData | undefined => {
     if (!activeConnectionId) return undefined;
@@ -965,27 +958,6 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     return openConnectionIds.includes(connectionId)
       || globallyOpenConnectionIds.includes(connectionId);
   }, [openConnectionIds, globallyOpenConnectionIds]);
-
-  // Auto-disconnect open connections when their plugin is disabled
-  useEffect(() => {
-    const currActiveExt = settings.activeExternalDrivers ?? [];
-    const prevActiveExt = prevActiveExtRef.current;
-    prevActiveExtRef.current = currActiveExt;
-
-    // Skip on first render — no change to detect
-    if (prevActiveExt === undefined) return;
-
-    const removedDrivers = prevActiveExt.filter(id => !currActiveExt.includes(id));
-    if (removedDrivers.length === 0) return;
-
-    const toDisconnect = findConnectionsForDrivers(
-      openConnectionIdsRef.current,
-      connectionDataMapRef.current,
-      removedDrivers,
-    );
-    toDisconnect.forEach(id => disconnect(id));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.activeExternalDrivers]);
 
   // Persist the active connection so the app can reconnect to it on next launch.
   // Skip null so a fresh launch (activeConnectionId starts null) doesn't wipe
