@@ -50,7 +50,10 @@ pub mod heartbeat;
 pub mod heartbeat_tests;
 pub mod json_viewer;
 pub mod keychain_utils;
+pub mod native_cli;
+pub mod recovery_history;
 pub mod results_window;
+pub mod rollback_sql;
 pub mod k8s_tunnel;
 pub mod log_commands;
 pub mod logger;
@@ -236,6 +239,7 @@ pub fn run() {
         .manage(std::sync::Arc::new(
             connection_cache::ConnectionCache::default(),
         ))
+        .manage(std::sync::Arc::new(native_cli::NativeCliState::default()))
         .manage(connection_import_commands::ImportEnvelopeCache::default())
         .manage(explain_import::PendingExplainFile::default())
         .manage(json_viewer::JsonViewerStore::default())
@@ -256,6 +260,7 @@ pub fn run() {
                 drivers::registry::register_driver(drivers::mysql::MysqlDriver::new()).await;
                 drivers::registry::register_driver(drivers::postgres::PostgresDriver::new()).await;
                 drivers::registry::register_driver(drivers::sqlite::SqliteDriver::new()).await;
+                native_cli::register_manifests().await;
 
                 // Load only enabled external plugins (or all if no preference saved).
                 crate::plugins::manager::load_plugins(&app.handle(), active_ext_drivers.as_deref())
@@ -448,6 +453,13 @@ pub fn run() {
             commands::read_file_as_data_url,
             commands::execute_query,
             commands::execute_query_batch,
+            commands::start_native_cli_session,
+            commands::write_native_cli_session,
+            commands::resize_native_cli_session,
+            commands::interrupt_native_cli_session,
+            commands::clear_native_cli_output,
+            commands::close_native_cli_session,
+            commands::rollback_transaction_context,
             commands::get_server_now,
             commands::explain_query_plan,
             commands::count_query,
@@ -477,6 +489,8 @@ pub fn run() {
             query_history::add_query_history_entry,
             query_history::delete_query_history_entry,
             query_history::clear_query_history,
+            recovery_history::list_recovery_runs,
+            commands::generate_recovery_sql,
             // Config
             config::get_schema_preference,
             config::set_schema_preference,

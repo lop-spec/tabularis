@@ -1,6 +1,6 @@
 use super::build_mysql_pk_where;
-use super::{is_text_protocol_stmt, MysqlDriver};
 use super::helpers::{inline_str_placeholders, mysql_bytes_literal, mysql_string_literal};
+use super::{is_text_protocol_stmt, mysql_database_scope_statement, MysqlDriver};
 use crate::drivers::driver_trait::DatabaseDriver;
 use crate::models::{ConnectionParams, DatabaseSelection};
 
@@ -34,6 +34,14 @@ fn build_connection_url_includes_disabled_ssl_mode() {
     let url = driver.build_connection_url(&params).unwrap();
 
     assert!(url.contains("ssl-mode=disabled"), "url was: {url}");
+}
+
+#[test]
+fn mysql_database_scope_statement_quotes_the_exact_database() {
+    assert_eq!(
+        mysql_database_scope_statement("right`click_db"),
+        "USE `right``click_db`"
+    );
 }
 
 // -- Text-protocol literal helpers (Warpgate / cleartext bastion path) -----
@@ -410,10 +418,7 @@ mod routine_management {
                 arg("p_out", "OUT", None, false),
             ],
         );
-        assert_eq!(
-            sql,
-            "CALL `sp_out`(1, @p_out);\nSELECT @p_out AS `p_out`;"
-        );
+        assert_eq!(sql, "CALL `sp_out`(1, @p_out);\nSELECT @p_out AS `p_out`;");
     }
 
     #[test]

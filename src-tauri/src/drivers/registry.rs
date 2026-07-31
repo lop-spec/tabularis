@@ -31,6 +31,16 @@ pub async fn get_driver(id: &str) -> Option<Arc<dyn DatabaseDriver>> {
     reg.get(id).cloned()
 }
 
+/// Look up either a concrete driver manifest or a UI/native-console-only
+/// manifest. Concrete drivers win if both registries contain the same id.
+pub async fn get_manifest(id: &str) -> Option<PluginManifest> {
+    if let Some(driver) = get_driver(id).await {
+        return Some(driver.manifest().clone());
+    }
+    let manifests = MANIFEST_REGISTRY.read().await;
+    manifests.get(id).cloned()
+}
+
 /// Unregister a driver by its id. Shuts down its background process (if any)
 /// and returns `true` if a driver was removed.
 pub async fn unregister_driver(id: &str) -> bool {

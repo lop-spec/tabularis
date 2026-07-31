@@ -21,7 +21,13 @@ import { toErrorMessage } from '../utils/errors';
 import { useSettings } from '../hooks/useSettings';
 import { useToast } from '../hooks/useToast';
 import { findConnectionsForDrivers } from '../utils/connectionManager';
-import { isMultiDatabaseCapable, getEffectiveDatabase, getDatabaseList, reconcileDatabaseSelection } from '../utils/database';
+import {
+  isMultiDatabaseCapable,
+  getEffectiveDatabase,
+  getDatabaseList,
+  reconcileDatabaseSelection,
+  resolveActiveDatabase,
+} from '../utils/database';
 
 /** Label of the main window; Tauri defaults to this when none is configured. */
 const MAIN_WINDOW_LABEL = 'main';
@@ -541,6 +547,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     updateConnectionData(connId, {
       selectedDatabases: newDatabases,
       databaseDataMap: prunedDataMap,
+      activeSchema: resolveActiveDatabase(newDatabases, currentData.activeSchema),
     });
 
     if (newDatabases.length > 0) {
@@ -631,6 +638,29 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(errorMsg);
       }
 
+      // Native mongosh/redis-cli connections are interactive console sessions,
+      // not metadata/query drivers. Their real process starts in the Console
+      // output pane, so schema discovery and SQL health polling do not apply.
+      if (capabilities?.console_only === true) {
+        updateConnectionData(connectionId, {
+          selectedDatabases: [],
+          activeSchema: null,
+          tables: [],
+          views: [],
+          routines: [],
+          triggers: [],
+          isLoadingTables: false,
+          isLoadingViews: false,
+          isLoadingRoutines: false,
+          isLoadingTriggers: false,
+          isLoadingSchemas: false,
+          isConnecting: false,
+          isConnected: true,
+          error: undefined,
+        });
+        return;
+      }
+
       // Register for health-check pinging.
       await invoke('register_active_connection', { connectionId });
 
@@ -703,6 +733,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
 
         updateConnectionData(connectionId, {
           selectedDatabases: dbList,
+          activeSchema: firstDb || null,
           databaseDataMap: initialDbMap,
           isLoadingTables: false,
           isLoadingViews: false,

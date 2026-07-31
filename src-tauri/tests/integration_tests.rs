@@ -28,6 +28,726 @@ fn get_postgres_params() -> ConnectionParams {
     }
 }
 
+fn split_generated_rollback_sql(sql: &str) -> Vec<String> {
+    let mut statements = Vec::new();
+    let mut current = String::new();
+    for line in sql.lines() {
+        let trimmed = line.trim();
+        let executable = if let Some(ddl) = trimmed.strip_prefix("-- TABULARIS_MANUAL_DDL: ") {
+            ddl
+        } else if trimmed == "ROLLBACK;" {
+            "COMMIT;"
+        } else {
+            trimmed
+        };
+        if executable.is_empty() || executable.starts_with("--") {
+            continue;
+        }
+        if !current.is_empty() {
+            current.push('\n');
+        }
+        current.push_str(executable);
+        if executable.ends_with(';') {
+            current.pop();
+            statements.push(std::mem::take(&mut current));
+        }
+    }
+    assert!(current.trim().is_empty(), "unterminated rollback SQL");
+    statements
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_mysql_protected_explicit_transaction_commits_and_rolls_back_exactly() {
+    let mut params = get_mysql_params();
+    if !wait_for_mysql(&params).await {
+        eprintln!("SKIPPING: MySQL not reachable on 33060");
+        return;
+    }
+    params.connection_id = Some("integration-rollback-explicit-commit".to_string());
+    params.connection_name = Some("集成测试-显式事务提交".to_string());
+    params.rollback_protection_enabled = Some(true);
+    let mut unprotected = params.clone();
+    unprotected.rollback_protection_enabled = None;
+
+    let _ = mysql::execute_query(
+        &unprotected,
+        "DROP TABLE IF EXISTS test_protected_explicit_tx",
+        None,
+        1,
+        None,
+    )
+    .await;
+    mysql::execute_query(
+        &unprotected,
+        "CREATE TABLE test_protected_explicit_tx (
+            id BIGINT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            title VARCHAR(100) NOT NULL,
+            updated_at DATETIME(3) NOT NULL
+        ) ENGINE=InnoDB",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    mysql::execute_query(
+        &unprotected,
+        "INSERT INTO test_protected_explicit_tx (id, name, title, updated_at)
+         VALUES
+            (1, 'computingDashboard', 'before-one', '2026-01-01 00:00:00.001'),
+            (2, 'rechargeHistory', 'before-two', '2026-01-01 00:00:00.002')",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let queries = [
+        "START TRANSACTION",
+        "UPDATE test_protected_explicit_tx
+         SET title = '积分看板', updated_at = NOW(3)
+         WHERE BINARY name = BINARY 'computingDashboard'
+           AND BINARY title <> BINARY '积分看板'",
+        "UPDATE test_protected_explicit_tx
+         SET title = '积分充值记录', updated_at = NOW(3)
+         WHERE BINARY name = BINARY 'rechargeHistory'
+           AND BINARY title <> BINARY '积分充值记录'",
+        "COMMIT",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect::<Vec<_>>();
+    let results = mysql::execute_batch(&params, &queries, None, 1, None, None)
+        .await
+        .unwrap();
+    assert!(
+        results.iter().all(|result| result.error.is_none()),
+        "{results:?}"
+    );
+    let rollback_path = results[0]
+        .rollback_file
+        .as_ref()
+        .expect("explicit transaction must expose one rollback file");
+    assert!(results
+        .iter()
+        .all(|result| result.rollback_file.as_deref() == Some(rollback_path.as_str())));
+
+    let rollback_sql = std::fs::read_to_string(rollback_path).unwrap();
+    let rollback_results = mysql::execute_batch(
+        &unprotected,
+        &split_generated_rollback_sql(&rollback_sql),
+        None,
+        1,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(
+        rollback_results.iter().all(|result| result.error.is_none()),
+        "{rollback_results:?}"
+    );
+
+    let restored = mysql::execute_query(
+        &unprotected,
+        "SELECT id, title, DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s.%f')
+         FROM test_protected_explicit_tx ORDER BY id",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(restored.rows[0][1].as_str(), Some("before-one"));
+    assert_eq!(
+        restored.rows[0][2].as_str(),
+        Some("2026-01-01 00:00:00.001000")
+    );
+    assert_eq!(restored.rows[1][1].as_str(), Some("before-two"));
+    assert_eq!(
+        restored.rows[1][2].as_str(),
+        Some("2026-01-01 00:00:00.002000")
+    );
+
+    let _ = mysql::execute_query(
+        &unprotected,
+        "DROP TABLE test_protected_explicit_tx",
+        None,
+        1,
+        None,
+    )
+    .await;
+    let _ = std::fs::remove_file(rollback_path);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_mysql_protected_explicit_rollback_discards_inverse_steps() {
+    let mut params = get_mysql_params();
+    if !wait_for_mysql(&params).await {
+        eprintln!("SKIPPING: MySQL not reachable on 33060");
+        return;
+    }
+    params.connection_id = Some("integration-rollback-explicit-rollback".to_string());
+    params.connection_name = Some("集成测试-显式事务回滚".to_string());
+    params.rollback_protection_enabled = Some(true);
+    let mut unprotected = params.clone();
+    unprotected.rollback_protection_enabled = None;
+
+    let _ = mysql::execute_query(
+        &unprotected,
+        "DROP TABLE IF EXISTS test_protected_explicit_rollback",
+        None,
+        1,
+        None,
+    )
+    .await;
+    mysql::execute_query(
+        &unprotected,
+        "CREATE TABLE test_protected_explicit_rollback (
+            id BIGINT PRIMARY KEY,
+            value_text VARCHAR(100) NOT NULL
+        ) ENGINE=InnoDB",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    mysql::execute_query(
+        &unprotected,
+        "INSERT INTO test_protected_explicit_rollback (id, value_text)
+         VALUES (1, 'before')",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let results = mysql::execute_batch(
+        &params,
+        &[
+            "START TRANSACTION".to_string(),
+            "UPDATE test_protected_explicit_rollback
+             SET value_text = 'must-not-persist' WHERE id = 1"
+                .to_string(),
+            "ROLLBACK".to_string(),
+        ],
+        None,
+        1,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(
+        results.iter().all(|result| result.error.is_none()),
+        "{results:?}"
+    );
+    let rollback_path = results[0].rollback_file.as_ref().unwrap();
+    let rollback_sql = std::fs::read_to_string(rollback_path).unwrap();
+    assert!(
+        !rollback_sql.contains("PREPARE tabularis_rollback_step"),
+        "a user ROLLBACK must remove inverse steps for changes that never committed"
+    );
+
+    let row = mysql::execute_query(
+        &unprotected,
+        "SELECT value_text FROM test_protected_explicit_rollback WHERE id = 1",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(row.rows[0][0].as_str(), Some("before"));
+
+    let _ = mysql::execute_query(
+        &unprotected,
+        "DROP TABLE test_protected_explicit_rollback",
+        None,
+        1,
+        None,
+    )
+    .await;
+    let _ = std::fs::remove_file(rollback_path);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_mysql_protected_batch_mixes_dml_ddl_and_rolls_back_exactly() {
+    let mut params = get_mysql_params();
+    if !wait_for_mysql(&params).await {
+        eprintln!("SKIPPING: MySQL not reachable on 33060");
+        return;
+    }
+    params.connection_id = Some("integration-rollback-connection".to_string());
+    params.connection_name = Some("集成测试-DML-DDL".to_string());
+    params.rollback_protection_enabled = Some(true);
+
+    let _ = mysql::execute_query(
+        &params,
+        "DROP TABLE IF EXISTS test_protected_rollback",
+        None,
+        1,
+        None,
+    )
+    .await;
+    mysql::execute_query(
+        &params,
+        "CREATE TABLE test_protected_rollback (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            amount DECIMAL(20, 6) NOT NULL,
+            payload VARBINARY(16),
+            note TEXT,
+            happened_at DATETIME(6) NOT NULL,
+            bit_flags BIT(8),
+            json_doc JSON,
+            blob_payload BLOB,
+            event_ts TIMESTAMP(6) NULL,
+            enum_state ENUM('new', 'done'),
+            set_flags SET('a', 'b'),
+            unicode_text VARCHAR(100) CHARACTER SET utf8mb4
+        ) ENGINE=InnoDB",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    mysql::execute_query(
+        &params,
+        "INSERT INTO test_protected_rollback
+            (id, name, amount, payload, note, happened_at, bit_flags,
+             json_doc, blob_payload, event_ts, enum_state, set_flags, unicode_text)
+         VALUES
+            (1, 'before', 12345.670000, X'00FF10', NULL,
+             '2026-07-29 12:34:56.123456', b'00000101',
+             JSON_OBJECT('k', 'initial', 'n', 1), X'000102FF',
+             '2026-07-29 12:34:56.654321', 'new', 'a,b', '中文🙂')",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let protected_queries: Vec<String> = [
+        "UPDATE test_protected_rollback
+         SET name = 'after',
+             amount = -98765.432100,
+             payload = X'7F0080',
+             note = 'changed',
+             happened_at = '2030-01-02 03:04:05.654321',
+             bit_flags = b'10101010',
+             json_doc = JSON_OBJECT('k', 'changed', 'n', 2),
+             blob_payload = X'FFEEDDCC',
+             event_ts = '2030-01-02 03:04:05.123456',
+             enum_state = 'done',
+             set_flags = 'b',
+             unicode_text = 'changed'
+         WHERE id = 1",
+        "INSERT INTO test_protected_rollback
+            (name, amount, payload, note, happened_at, bit_flags,
+             json_doc, blob_payload, event_ts, enum_state, set_flags, unicode_text)
+         VALUES
+            ('inserted', 1.250000, X'DEAD', 'new row',
+             '2031-02-03 04:05:06.000007', b'11110000',
+             JSON_OBJECT('k', 'inserted'), X'DEADBEAF',
+             '2031-02-03 04:05:06.000008', 'done', 'a', '新增')",
+        "DELETE FROM test_protected_rollback WHERE id = 1",
+        "ALTER TABLE test_protected_rollback ADD COLUMN rollback_marker VARCHAR(50)",
+        "CREATE INDEX test_protected_name_idx ON test_protected_rollback (name)",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    let protected_results = mysql::execute_batch(&params, &protected_queries, None, 1, None, None)
+        .await
+        .unwrap();
+    for (index, result) in protected_results.iter().enumerate() {
+        assert!(
+            result.error.is_none(),
+            "protected statement {} failed: {:?}",
+            index + 1,
+            result.error
+        );
+    }
+    let rollback_path = protected_results[0]
+        .rollback_file
+        .as_ref()
+        .expect("protected batch must expose its rollback file");
+    assert!(std::path::Path::new(rollback_path).is_file());
+    let rollback_sql = std::fs::read_to_string(rollback_path).unwrap();
+    assert!(!rollback_sql.contains("@tabularis_"));
+    assert!(!rollback_sql.contains("PREPARE "));
+    assert!(!rollback_sql.contains("EXECUTE "));
+    assert!(rollback_sql.contains("\nROLLBACK;\n"));
+    assert!(rollback_sql.contains("-- TABULARIS_MANUAL_DDL: "));
+
+    let mut unprotected = params.clone();
+    unprotected.rollback_protection_enabled = None;
+    let rollback_statements = split_generated_rollback_sql(&rollback_sql);
+
+    let rollback_results =
+        mysql::execute_batch(&unprotected, &rollback_statements, None, 1, None, None)
+            .await
+            .unwrap();
+    for (index, result) in rollback_results.iter().enumerate() {
+        assert!(
+            result.error.is_none(),
+            "rollback statement {} failed: {:?}",
+            index + 1,
+            result.error
+        );
+    }
+
+    let restored = mysql::execute_query(
+        &unprotected,
+        "SELECT id,
+                name,
+                CAST(amount AS CHAR),
+                HEX(payload),
+                note,
+                DATE_FORMAT(happened_at, '%Y-%m-%d %H:%i:%s.%f'),
+                LPAD(HEX(bit_flags), 2, '0') AS bit_flags_hex,
+                JSON_UNQUOTE(JSON_EXTRACT(json_doc, '$.k')) AS json_k,
+                HEX(blob_payload) AS blob_hex,
+                DATE_FORMAT(event_ts, '%Y-%m-%d %H:%i:%s.%f') AS event_ts_text,
+                enum_state,
+                set_flags,
+                unicode_text
+         FROM test_protected_rollback
+         ORDER BY id",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(restored.rows.len(), 1);
+    let id = restored
+        .columns
+        .iter()
+        .position(|column| column == "id")
+        .unwrap();
+    let name = restored
+        .columns
+        .iter()
+        .position(|column| column == "name")
+        .unwrap();
+    assert_eq!(restored.rows[0][id].as_i64(), Some(1));
+    assert_eq!(restored.rows[0][name].as_str(), Some("before"));
+    assert_eq!(restored.rows[0][2].as_str(), Some("12345.670000"));
+    assert_eq!(restored.rows[0][3].as_str(), Some("00FF10"));
+    assert!(restored.rows[0][4].is_null());
+    assert_eq!(
+        restored.rows[0][5].as_str(),
+        Some("2026-07-29 12:34:56.123456")
+    );
+    assert_eq!(restored.rows[0][6].as_str(), Some("05"));
+    assert_eq!(restored.rows[0][7].as_str(), Some("initial"));
+    assert_eq!(restored.rows[0][8].as_str(), Some("000102FF"));
+    assert_eq!(
+        restored.rows[0][9].as_str(),
+        Some("2026-07-29 12:34:56.654321")
+    );
+    assert_eq!(restored.rows[0][10].as_str(), Some("new"));
+    assert_eq!(restored.rows[0][11].as_str(), Some("a,b"));
+    assert_eq!(restored.rows[0][12].as_str(), Some("中文🙂"));
+
+    let _ = mysql::execute_query(
+        &unprotected,
+        "DROP TABLE test_protected_rollback",
+        None,
+        1,
+        None,
+    )
+    .await;
+    let _ = std::fs::remove_file(rollback_path);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_mysql_every_supported_ddl_inverse_runs_in_reverse_order() {
+    let mut params = get_mysql_params();
+    if !wait_for_mysql(&params).await {
+        eprintln!("SKIPPING: MySQL not reachable on 33060");
+        return;
+    }
+    params.connection_id = Some("integration-rollback-ddl-matrix".to_string());
+    params.connection_name = Some("集成测试-DDL矩阵".to_string());
+    params.rollback_protection_enabled = Some(true);
+
+    let mut unprotected = params.clone();
+    unprotected.rollback_protection_enabled = None;
+    for cleanup in [
+        "DROP VIEW IF EXISTS test_protected_ddl_view",
+        "DROP TABLE IF EXISTS test_protected_ddl",
+        "DROP TABLE IF EXISTS test_protected_ddl_two",
+        "DROP TABLE IF EXISTS test_protected_ddl_three",
+        "DROP DATABASE IF EXISTS test_protected_ddl_database",
+    ] {
+        let _ = mysql::execute_query(&unprotected, cleanup, None, 1, None).await;
+    }
+
+    let statements: Vec<String> = [
+        "CREATE TABLE test_protected_ddl (id BIGINT PRIMARY KEY) ENGINE=InnoDB",
+        "INSERT INTO test_protected_ddl (id) VALUES (1)",
+        "CREATE VIEW test_protected_ddl_view AS SELECT id FROM test_protected_ddl",
+        "ALTER TABLE test_protected_ddl ADD COLUMN note VARCHAR(50)",
+        "ALTER TABLE test_protected_ddl RENAME COLUMN note TO memo",
+        "ALTER TABLE test_protected_ddl ADD INDEX test_protected_ddl_idx_a (id)",
+        "CREATE INDEX test_protected_ddl_idx_b ON test_protected_ddl (id)",
+        "RENAME TABLE test_protected_ddl TO test_protected_ddl_two",
+        "ALTER TABLE test_protected_ddl_two RENAME TO test_protected_ddl_three",
+        "CREATE DATABASE test_protected_ddl_database",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    let results = mysql::execute_batch(&params, &statements, None, 1, None, None)
+        .await
+        .unwrap();
+    assert!(
+        results.iter().all(|result| result.error.is_none()),
+        "{results:?}"
+    );
+    let rollback_path = results[0]
+        .rollback_file
+        .as_ref()
+        .expect("DDL matrix must expose one rollback file");
+    assert!(results
+        .iter()
+        .all(|result| { result.rollback_file.as_deref() == Some(rollback_path.as_str()) }));
+
+    let rollback_sql = std::fs::read_to_string(rollback_path).unwrap();
+    let rollback_results = mysql::execute_batch(
+        &unprotected,
+        &split_generated_rollback_sql(&rollback_sql),
+        None,
+        1,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(
+        rollback_results.iter().all(|result| result.error.is_none()),
+        "{rollback_results:?}"
+    );
+
+    let remaining = mysql::execute_query(
+        &unprotected,
+        "SELECT
+            (SELECT COUNT(*) FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME IN ('test_protected_ddl', 'test_protected_ddl_two',
+                                  'test_protected_ddl_three', 'test_protected_ddl_view'))
+          + (SELECT COUNT(*) FROM information_schema.SCHEMATA
+             WHERE SCHEMA_NAME = 'test_protected_ddl_database')",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(remaining.rows[0][0].as_i64(), Some(0));
+    let _ = std::fs::remove_file(rollback_path);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_mysql_guard_mismatch_rolls_back_the_whole_dml_group() {
+    let mut params = get_mysql_params();
+    if !wait_for_mysql(&params).await {
+        eprintln!("SKIPPING: MySQL not reachable on 33060");
+        return;
+    }
+    params.connection_id = Some("integration-rollback-row-guard".to_string());
+    params.connection_name = Some("集成测试-行保护".to_string());
+    params.rollback_protection_enabled = Some(true);
+
+    let mut unprotected = params.clone();
+    unprotected.rollback_protection_enabled = None;
+    let _ = mysql::execute_query(
+        &unprotected,
+        "DROP TABLE IF EXISTS test_protected_row_guard",
+        None,
+        1,
+        None,
+    )
+    .await;
+    mysql::execute_query(
+        &unprotected,
+        "CREATE TABLE test_protected_row_guard (
+            id BIGINT PRIMARY KEY,
+            value_text VARCHAR(100) NOT NULL
+        ) ENGINE=InnoDB",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    mysql::execute_query(
+        &unprotected,
+        "INSERT INTO test_protected_row_guard (id, value_text)
+         VALUES (1, 'before-one'), (2, 'before-two')",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let results = mysql::execute_batch(
+        &params,
+        &[
+            "UPDATE test_protected_row_guard SET value_text = 'protected-one' WHERE id = 1"
+                .to_string(),
+            "UPDATE test_protected_row_guard SET value_text = 'protected-two' WHERE id = 2"
+                .to_string(),
+        ],
+        None,
+        1,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(results.iter().all(|result| result.error.is_none()));
+    let rollback_path = results[0].rollback_file.as_ref().unwrap();
+
+    mysql::execute_query(
+        &unprotected,
+        "UPDATE test_protected_row_guard SET value_text = 'external-change' WHERE id = 1",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    let rollback_sql = std::fs::read_to_string(rollback_path).unwrap();
+    let rollback_results = mysql::execute_batch(
+        &unprotected,
+        &split_generated_rollback_sql(&rollback_sql),
+        None,
+        1,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(rollback_results.iter().all(|result| result.error.is_none()));
+
+    let rows = mysql::execute_query(
+        &unprotected,
+        "SELECT id, value_text FROM test_protected_row_guard ORDER BY id",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(rows.rows[0][1].as_str(), Some("external-change"));
+    assert_eq!(
+        rows.rows[1][1].as_str(),
+        Some("protected-two"),
+        "the earlier inverse in the same transaction must not be partially committed"
+    );
+
+    let _ = mysql::execute_query(
+        &unprotected,
+        "DROP TABLE test_protected_row_guard",
+        None,
+        1,
+        None,
+    )
+    .await;
+    let _ = std::fs::remove_file(rollback_path);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_mysql_protected_batch_preflights_destructive_ddl_before_any_write() {
+    let mut params = get_mysql_params();
+    if !wait_for_mysql(&params).await {
+        eprintln!("SKIPPING: MySQL not reachable on 33060");
+        return;
+    }
+    params.connection_id = Some("integration-rollback-block-connection".to_string());
+    params.connection_name = Some("集成测试-预检阻断".to_string());
+    params.rollback_protection_enabled = Some(true);
+    let _ = mysql::execute_query(
+        &params,
+        "DROP TABLE IF EXISTS test_protected_block",
+        None,
+        1,
+        None,
+    )
+    .await;
+    mysql::execute_query(
+        &params,
+        "CREATE TABLE test_protected_block (
+            id BIGINT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL
+        ) ENGINE=InnoDB",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let blocked = mysql::execute_batch(
+        &params,
+        &[
+            "INSERT INTO test_protected_block (id, name) VALUES (1, 'must-not-run')".to_string(),
+            "DROP TABLE test_protected_block".to_string(),
+        ],
+        None,
+        1,
+        None,
+        None,
+    )
+    .await
+    .expect_err("DROP TABLE must block the whole protected batch");
+    assert!(blocked.contains("statement 2"));
+    assert!(blocked.contains("DROP TABLE"));
+
+    let rows = mysql::execute_query(
+        &params,
+        "SELECT COUNT(*) AS count FROM test_protected_block",
+        None,
+        1,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(rows.rows[0][0].as_i64(), Some(0));
+
+    let mut unprotected = params.clone();
+    unprotected.rollback_protection_enabled = None;
+    let legacy_results = mysql::execute_batch(
+        &unprotected,
+        &["DROP TABLE test_protected_block".to_string()],
+        None,
+        1,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(legacy_results[0].error.is_none());
+    assert!(legacy_results[0].rollback_file.is_none());
+}
+
 #[tokio::test]
 #[ignore] // Ignored by default in CI/local unless explicitly requested with --include-ignored
 async fn test_mysql_integration_flow() {
@@ -269,10 +989,8 @@ async fn test_mysql_batch_preserves_user_variable_and_last_insert_id() {
     );
 
     // Cleanup
-    let _ =
-        mysql::execute_query(&params, "DROP TABLE test_batch_child", None, 1, None).await;
-    let _ =
-        mysql::execute_query(&params, "DROP TABLE test_batch_parent", None, 1, None).await;
+    let _ = mysql::execute_query(&params, "DROP TABLE test_batch_child", None, 1, None).await;
+    let _ = mysql::execute_query(&params, "DROP TABLE test_batch_parent", None, 1, None).await;
 }
 
 /// Explicit `BEGIN`/`COMMIT` must span the batch — both inserts commit
@@ -286,8 +1004,8 @@ async fn test_mysql_batch_preserves_transaction_atomicity() {
         return;
     }
 
-    let _ = mysql::execute_query(&params, "DROP TABLE IF EXISTS test_batch_tx", None, 1, None)
-        .await;
+    let _ =
+        mysql::execute_query(&params, "DROP TABLE IF EXISTS test_batch_tx", None, 1, None).await;
 
     let queries: Vec<String> = [
         "CREATE TABLE test_batch_tx (id INT AUTO_INCREMENT PRIMARY KEY, val VARCHAR(20))",
@@ -401,14 +1119,8 @@ async fn test_mysql_affected_rows_reported_correctly() {
         return;
     }
 
-    let _ = mysql::execute_query(
-        &params,
-        "DROP TABLE IF EXISTS test_affected",
-        None,
-        1,
-        None,
-    )
-    .await;
+    let _ =
+        mysql::execute_query(&params, "DROP TABLE IF EXISTS test_affected", None, 1, None).await;
 
     let queries: Vec<String> = [
         "CREATE TABLE test_affected (id INT AUTO_INCREMENT PRIMARY KEY, v INT)",
@@ -476,14 +1188,8 @@ async fn test_postgres_affected_rows_reported_correctly() {
         return;
     }
 
-    let _ = postgres::execute_query(
-        &params,
-        "DROP TABLE IF EXISTS test_affected",
-        None,
-        1,
-        None,
-    )
-    .await;
+    let _ =
+        postgres::execute_query(&params, "DROP TABLE IF EXISTS test_affected", None, 1, None).await;
 
     let queries: Vec<String> = [
         "CREATE TABLE test_affected (id SERIAL PRIMARY KEY, v INT)",
@@ -545,13 +1251,15 @@ async fn test_concurrent_cancel_aborts_all_in_flight_queries() {
     let connection_id = "concurrent-cancel-test".to_string();
 
     let p_a = params.clone();
-    let task_a = tokio::spawn(async move {
-        mysql::execute_query(&p_a, "SELECT SLEEP(5)", None, 1, None).await
-    });
+    let task_a =
+        tokio::spawn(
+            async move { mysql::execute_query(&p_a, "SELECT SLEEP(5)", None, 1, None).await },
+        );
     let p_b = params.clone();
-    let task_b = tokio::spawn(async move {
-        mysql::execute_query(&p_b, "SELECT SLEEP(5)", None, 1, None).await
-    });
+    let task_b =
+        tokio::spawn(
+            async move { mysql::execute_query(&p_b, "SELECT SLEEP(5)", None, 1, None).await },
+        );
 
     let handle_a: Arc<AbortHandle> = Arc::new(task_a.abort_handle());
     let handle_b: Arc<AbortHandle> = Arc::new(task_b.abort_handle());

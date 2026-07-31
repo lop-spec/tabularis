@@ -6,6 +6,11 @@ import {
   getDatabaseList,
   getEffectiveDatabase,
   reconcileDatabaseSelection,
+  resolveExecutionScope,
+  resolveActiveDatabase,
+  changesDatabaseCatalog,
+  parseUseDatabaseStatement,
+  resolveUseDatabaseSwitch,
 } from '../../src/utils/database';
 import type { DriverCapabilities } from '../../src/types/plugins';
 
@@ -206,5 +211,88 @@ describe('getEffectiveDatabase', () => {
 
   it('returns the only element of a single-element array', () => {
     expect(getEffectiveDatabase(['only'])).toBe('only');
+  });
+});
+
+describe('resolveExecutionScope', () => {
+  it('keeps an explicitly pinned tab database ahead of global state', () => {
+    expect(
+      resolveExecutionScope('right_click_db', 'default_db', ['default_db', 'right_click_db'], true),
+    ).toBe('right_click_db');
+  });
+
+  it('uses the visible first database when a multi-database tab has no scope yet', () => {
+    expect(
+      resolveExecutionScope(undefined, null, ['visible_db', 'other_db'], true),
+    ).toBe('visible_db');
+  });
+
+  it('returns no scope instead of silently using a connection default', () => {
+    expect(resolveExecutionScope(undefined, null, [], true)).toBeUndefined();
+  });
+
+  it('keeps the active PostgreSQL schema for schema-capable drivers', () => {
+    expect(resolveExecutionScope(undefined, 'analytics', [], false)).toBe('analytics');
+  });
+});
+
+describe('resolveActiveDatabase', () => {
+  it('keeps the current database when it remains selected', () => {
+    expect(resolveActiveDatabase(['app', 'audit'], 'audit')).toBe('audit');
+  });
+
+  it('falls back to the first remaining database after the active one disappears', () => {
+    expect(resolveActiveDatabase(['audit', 'archive'], 'dropped_db')).toBe('audit');
+  });
+
+  it('returns null when no database remains', () => {
+    expect(resolveActiveDatabase([], 'dropped_db')).toBeNull();
+  });
+});
+
+describe('changesDatabaseCatalog', () => {
+  it('detects database catalog DDL', () => {
+    expect(changesDatabaseCatalog('DROP DATABASE archive')).toBe(true);
+    expect(changesDatabaseCatalog('CREATE SCHEMA analytics')).toBe(true);
+  });
+
+  it('does not classify ordinary table DDL as a database catalog change', () => {
+    expect(changesDatabaseCatalog('DROP TABLE archive')).toBe(false);
+  });
+});
+
+describe('parseUseDatabaseStatement', () => {
+  it('parses plain and quoted MySQL database identifiers', () => {
+    expect(parseUseDatabaseStatement('USE analytics')).toBe('analytics');
+    expect(parseUseDatabaseStatement('use `order-db`;')).toBe('order-db');
+    expect(parseUseDatabaseStatement('USE `odd``name`')).toBe('odd`name');
+  });
+
+  it('accepts leading SQL comments but rejects non-USE statements and trailing SQL', () => {
+    expect(parseUseDatabaseStatement('/* target */\n-- switch now\nUSE archive;')).toBe('archive');
+    expect(parseUseDatabaseStatement("SELECT 'USE archive'")).toBeNull();
+    expect(parseUseDatabaseStatement('USE archive SELECT 1')).toBeNull();
+  });
+});
+
+describe('resolveUseDatabaseSwitch', () => {
+  it('reports success without switching when the console already uses the database', () => {
+    expect(
+      resolveUseDatabaseSwitch('USE app', 'app', ['app', 'audit']),
+    ).toEqual({
+      database: 'app',
+      shouldSwitch: false,
+      shouldAddToSelection: false,
+    });
+  });
+
+  it('switches only the current console scope and keeps the database selectable', () => {
+    expect(
+      resolveUseDatabaseSwitch('USE `audit`', 'app', ['app']),
+    ).toEqual({
+      database: 'audit',
+      shouldSwitch: true,
+      shouldAddToSelection: true,
+    });
   });
 });

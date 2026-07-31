@@ -63,17 +63,20 @@ export function useConnectionCatalogue(): ConnectionCatalogue {
   }, [nonce]);
 
   const groups = useMemo(() => {
-    const builtinDrivers = registered
-      .filter((d) => d.is_builtin === true)
+    const builtinManifests = registered.filter((d) => d.is_builtin === true);
+    const builtinIds = new Set(builtinManifests.map((driver) => driver.id));
+    const builtinDrivers = builtinManifests
       .map((m) => {
-        const meta = BUILTIN_META[m.id] ?? { engine: m.id, paradigms: [] };
-        return builtinToCatalogueDriver(m, meta.engine, meta.paradigms);
+        const fallback = BUILTIN_META[m.id] ?? { engine: m.id, paradigms: [] };
+        return builtinToCatalogueDriver(
+          m,
+          m.engine || fallback.engine,
+          m.paradigms?.length ? m.paradigms : fallback.paradigms,
+        );
       });
     const registryDrivers = registry
       // built-ins are represented from manifests above; skip any registry echo.
-      // hasOwnProperty (not `in`) so plugin ids like "constructor"/"toString"
-      // aren't matched against Object.prototype and wrongly hidden.
-      .filter((p) => !Object.prototype.hasOwnProperty.call(BUILTIN_META, p.id))
+      .filter((plugin) => !builtinIds.has(plugin.id))
       .map(toCatalogueDriver);
     // Locally-installed plugin drivers the registry doesn't list (e.g.
     // `just dev-install`ed, not yet published). Without this they load and

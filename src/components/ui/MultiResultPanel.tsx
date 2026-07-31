@@ -258,7 +258,11 @@ export function MultiResultPanel({
   } | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [queryExpanded, setQueryExpanded] = useState(false);
-  const [viewMode, setViewMode] = useState<"tabs" | "stacked">("tabs");
+  const [viewModeOverride, setViewModeOverride] = useState<
+    "tabs" | "stacked" | null
+  >(null);
+  const viewMode =
+    viewModeOverride ?? (results.length > 1 ? "stacked" : "tabs");
   const [aiRenamingEntryId, setAiRenamingEntryId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const activeEntry = findActiveEntry(results, activeResultId);
@@ -345,7 +349,9 @@ export function MultiResultPanel({
 
   const viewToggle = results.length > 1 && (
     <button
-      onClick={() => setViewMode((v) => (v === "tabs" ? "stacked" : "tabs"))}
+      onClick={() =>
+        setViewModeOverride(viewMode === "tabs" ? "stacked" : "tabs")
+      }
       className="flex items-center justify-center w-8 h-full text-muted border-l border-default shrink-0 transition-colors hover:text-white hover:bg-surface-secondary"
       title={viewMode === "tabs" ? t("editor.multiResult.viewStacked") : t("editor.multiResult.viewTabs")}
     >

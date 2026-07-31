@@ -1006,6 +1006,8 @@ impl SqliteDriver {
                     readonly: false,
                     triggers: true,
                     supports_ssl: false,
+                    console_only: false,
+                    native_cli: None,
                     sql_dialect: SqlDialect::Sqlite,
                 },
                 is_builtin: true,

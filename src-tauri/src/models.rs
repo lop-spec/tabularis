@@ -203,6 +203,23 @@ pub struct ConnectionParams {
     // Set to `false` for servers that reject altering sql_mode, e.g. Vitess/PlanetScale.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pipes_as_concat: Option<bool>,
+    /// MySQL Run All opt-in. When true, supported writes are journaled to an
+    /// environment-bound rollback SQL file before they become durable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rollback_protection_enabled: Option<bool>,
+    /// One-shot decision for a protected Run All containing statements whose
+    /// exact inverse cannot be generated. This is supplied by the execution
+    /// dialog and must never be persisted with the connection.
+    #[serde(skip)]
+    pub rollback_unsupported_policy: Option<RollbackUnsupportedPolicy>,
+    /// Editor-tab identity used to pin an explicit MySQL/MariaDB transaction
+    /// to one physical connection across separate Run All invocations.
+    #[serde(skip)]
+    pub transaction_context_id: Option<String>,
+    /// One-shot acknowledgement that a DDL statement may close the pinned
+    /// transaction before the DDL is executed.
+    #[serde(skip)]
+    pub allow_implicit_transaction_commit: bool,
     // When true, `password` is a pre-signed RDS auth token (from
     // `aws rds generate-db-auth-token`) instead of a real password.
     // Requires TLS; only meaningful for the `mysql` driver.
@@ -253,9 +270,27 @@ pub struct ConnectionParams {
     /// pool hands out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub startup_script: Option<String>,
-    // Connection ID for stable pooling (not persisted, set at runtime)
+    /// Optional absolute path to the native mongosh/redis-cli executable.
+    /// When absent, Tabularis resolves a bundled sidecar, app-data runtime,
+    /// environment override, then PATH.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_cli_path: Option<String>,
+    /// Additional native CLI flags parsed into direct argv (never a shell).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_cli_args: Option<String>,
+    // Connection identity for stable pooling and user-facing rollback paths
+    // (not persisted, set at runtime).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RollbackUnsupportedPolicy {
+    Skip,
+    ExecuteUnprotected,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -446,6 +481,20 @@ pub struct BatchStatementResult {
     pub result: Option<QueryResult>,
     pub error: Option<String>,
     pub execution_time_ms: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rollback_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skipped: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rollback_unprotected: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transaction_active: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transaction_outcome: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transaction_recovery_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transaction_idle_timeout_seconds: Option<u64>,
 }
 
 impl BatchStatementResult {
@@ -460,12 +509,41 @@ impl BatchStatementResult {
                 result: Some(r),
                 error: None,
                 execution_time_ms,
+                rollback_file: None,
+                skipped: None,
+                rollback_unprotected: None,
+                transaction_active: None,
+                transaction_outcome: None,
+                transaction_recovery_file: None,
+                transaction_idle_timeout_seconds: None,
             },
             Err(e) => Self {
                 result: None,
                 error: Some(e),
                 execution_time_ms,
+                rollback_file: None,
+                skipped: None,
+                rollback_unprotected: None,
+                transaction_active: None,
+                transaction_outcome: None,
+                transaction_recovery_file: None,
+                transaction_idle_timeout_seconds: None,
             },
+        }
+    }
+
+    pub fn skipped(reason: impl Into<String>) -> Self {
+        Self {
+            result: None,
+            error: Some(reason.into()),
+            execution_time_ms: Some(0.0),
+            rollback_file: None,
+            skipped: Some(true),
+            rollback_unprotected: None,
+            transaction_active: None,
+            transaction_outcome: None,
+            transaction_recovery_file: None,
+            transaction_idle_timeout_seconds: None,
         }
     }
 }

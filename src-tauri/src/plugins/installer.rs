@@ -298,7 +298,9 @@ pub fn list_installed() -> Result<Vec<InstalledPluginInfo>, String> {
         }
 
         if let Ok(plugin) = read_plugin_info_from_dir(&path) {
-            plugins.push(plugin);
+            if !crate::native_cli::is_native_cli_driver(&plugin.id) {
+                plugins.push(plugin);
+            }
         }
     }
 

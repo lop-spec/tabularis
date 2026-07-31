@@ -187,9 +187,10 @@ fn token_matches(tok: &str, kw: &str) -> bool {
     }
     match tok.strip_prefix(kw) {
         None => false,
-        Some(rest) => rest.chars().next().map_or(true, |c| {
-            !(c.is_ascii_alphanumeric() || c == '_')
-        }),
+        Some(rest) => rest
+            .chars()
+            .next()
+            .map_or(true, |c| !(c.is_ascii_alphanumeric() || c == '_')),
     }
 }
 
@@ -227,4 +228,34 @@ pub(super) fn is_text_protocol_stmt(query: &str) -> bool {
         || starts_with_keywords(&head, &["CREATE", "OR", "REPLACE", "FUNCTION"])
         || is_create_definer_routine
         || is_create_or_replace_routine
+        // The editor submits literal SQL without bind parameters. These
+        // statements are rejected by MySQL's binary prepared-statement
+        // protocol (error 1295) and must be sent as COM_QUERY text instead.
+        // Keep this history-derived list explicit so ordinary DML can retain
+        // the prepared path and its existing behaviour.
+        || starts_with_keywords(&head, &["PREPARE"])
+        || starts_with_keywords(&head, &["EXECUTE"])
+        || starts_with_keywords(&head, &["DEALLOCATE", "PREPARE"])
+        || starts_with_keywords(&head, &["DROP", "PREPARE"])
+        || starts_with_keywords(&head, &["USE"])
+        || starts_with_keywords(&head, &["SHOW", "WARNINGS"])
+        || starts_with_keywords(&head, &["SHOW", "ERRORS"])
+        || starts_with_keywords(&head, &["CREATE", "EVENT"])
+        || starts_with_keywords(&head, &["ALTER", "EVENT"])
+        || starts_with_keywords(&head, &["DROP", "EVENT"])
+        || starts_with_keywords(&head, &["CREATE", "TRIGGER"])
+        || starts_with_keywords(&head, &["DROP", "TRIGGER"])
+        || starts_with_keywords(&head, &["ALTER", "VIEW"])
+        || starts_with_keywords(&head, &["SIGNAL"])
+        || starts_with_keywords(&head, &["RESIGNAL"])
+        || starts_with_keywords(&head, &["GET", "DIAGNOSTICS"])
+        || starts_with_keywords(&head, &["GET", "CURRENT", "DIAGNOSTICS"])
+}
+
+/// `EXECUTE` can return rows when the prepared SQL is a SELECT, but its
+/// result shape is not knowable from the statement text itself. Route it
+/// through the row-stream path; an UPDATE/DDL execution simply yields no rows.
+pub(super) fn text_protocol_stmt_may_return_rows(query: &str) -> bool {
+    let head = crate::drivers::common::strip_leading_sql_comments(query).to_uppercase();
+    starts_with_keywords(&head, &["EXECUTE"])
 }

@@ -114,6 +114,18 @@ pub async fn load_plugins_with_configs(
             continue;
         }
 
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(crate::native_cli::is_native_cli_driver)
+        {
+            log::info!(
+                "Ignoring retired MongoDB/Redis plugin directory {:?}; the built-in native CLI owns this connection type",
+                path
+            );
+            continue;
+        }
+
         if let Some(enabled) = enabled_ids {
             if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
                 if !enabled.iter().any(|id| id == dir_name) {
@@ -162,7 +174,7 @@ pub async fn load_plugin_from_dir(
     // "sqlite" would shadow the built-in driver and receive existing
     // connections' resolved credentials.
     let plugin_id = config.id.clone().unwrap_or_else(|| config.name.clone());
-    const BUILTIN_DRIVER_IDS: [&str; 3] = ["mysql", "postgres", "sqlite"];
+    const BUILTIN_DRIVER_IDS: [&str; 5] = ["mysql", "postgres", "sqlite", "mongodb", "redis"];
     if BUILTIN_DRIVER_IDS.contains(&plugin_id.as_str()) {
         return Err(format!(
             "Plugin id '{}' collides with a built-in driver and was refused",

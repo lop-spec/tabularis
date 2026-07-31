@@ -12,6 +12,14 @@ export type DatabaseDriver = string;
 export const BUILTIN_DRIVER_IDS = ["postgres", "mysql", "sqlite"] as const;
 export type BuiltinDriverId = (typeof BUILTIN_DRIVER_IDS)[number];
 
+/** Wait for persisted settings before deciding whether startup may reconnect. */
+export function shouldRestoreLastConnections(
+  settingsLoading: boolean,
+  autoConnectLastConnection: boolean | undefined,
+): boolean {
+  return !settingsLoading && autoConnectLastConnection !== false;
+}
+
 export interface ConnectionParams {
   driver: DatabaseDriver;
   host?: string;
@@ -43,6 +51,8 @@ export interface ConnectionParams {
   k8s_resource_type?: string;
   k8s_resource_name?: string;
   k8s_port?: number;
+  /** MySQL Run All opt-in for durable rollback SQL generation. */
+  rollback_protection_enabled?: boolean;
   /** SQL run on every new connection to this data source (e.g. SET / set_config). */
   startup_script?: string;
 }

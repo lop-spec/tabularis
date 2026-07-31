@@ -18,6 +18,16 @@ fn registry_base_url(config: &crate::config::AppConfig) -> &str {
         .unwrap_or(registry::DEFAULT_TABULARIUM_URL)
 }
 
+fn reject_native_cli_plugin(plugin_id: &str) -> Result<(), String> {
+    if crate::native_cli::is_native_cli_driver(plugin_id) {
+        return Err(format!(
+            "'{}' is a built-in native CLI connection and is not managed as a plugin",
+            plugin_id
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn fetch_plugin_registry(
     app: AppHandle,
@@ -36,6 +46,7 @@ pub async fn fetch_plugin_registry(
     let result: Vec<RegistryPluginWithStatus> = remote
         .plugins
         .into_iter()
+        .filter(|plugin| !crate::native_cli::is_native_cli_driver(&plugin.id))
         .map(|plugin| {
             let installed_version = installed
                 .iter()
@@ -157,6 +168,7 @@ pub async fn install_plugin(
     plugin_id: String,
     version: Option<String>,
 ) -> Result<(), String> {
+    reject_native_cli_plugin(&plugin_id)?;
     // Updating an installed plugin must stop the existing process first,
     // otherwise the OS may keep files locked while we replace the directory.
     crate::drivers::registry::unregister_driver(&plugin_id).await;
@@ -236,6 +248,7 @@ pub async fn install_plugin(
 
 #[tauri::command]
 pub async fn uninstall_plugin(plugin_id: String) -> Result<(), String> {
+    reject_native_cli_plugin(&plugin_id)?;
     // Unregister from in-memory driver registry first
     crate::drivers::registry::unregister_driver(&plugin_id).await;
     crate::drivers::registry::unregister_manifest(&plugin_id).await;
@@ -255,6 +268,7 @@ pub async fn get_installed_plugins() -> Result<Vec<InstalledPluginInfo>, String>
 /// The plugin files remain on disk and can be re-enabled with `enable_plugin`.
 #[tauri::command]
 pub async fn disable_plugin(plugin_id: String) -> Result<(), String> {
+    reject_native_cli_plugin(&plugin_id)?;
     crate::drivers::registry::unregister_driver(&plugin_id).await;
     crate::drivers::registry::unregister_manifest(&plugin_id).await;
     Ok(())
@@ -263,6 +277,7 @@ pub async fn disable_plugin(plugin_id: String) -> Result<(), String> {
 /// Loads the plugin from disk and registers its driver, starting the plugin process.
 #[tauri::command]
 pub async fn enable_plugin(app: AppHandle, plugin_id: String) -> Result<(), String> {
+    reject_native_cli_plugin(&plugin_id)?;
     let config = crate::config::load_config_internal(&app);
     let plugin_cfg = config.plugins.as_ref().and_then(|m| m.get(&plugin_id));
     let interpreter_override = plugin_cfg.and_then(|c| c.interpreter.clone());
@@ -281,6 +296,7 @@ pub async fn enable_plugin(app: AppHandle, plugin_id: String) -> Result<(), Stri
 /// Useful for retrieving setting definitions for disabled plugins.
 #[tauri::command]
 pub async fn get_plugin_manifest(plugin_id: String) -> Result<PluginManifest, String> {
+    reject_native_cli_plugin(&plugin_id)?;
     let plugins_dir = installer::get_plugins_dir()?;
     let plugin_dir = plugins_dir.join(&plugin_id);
 
@@ -308,6 +324,7 @@ pub async fn get_plugin_manifest(plugin_id: String) -> Result<PluginManifest, St
 /// Returns the absolute filesystem path of an installed plugin's directory.
 #[tauri::command]
 pub fn get_plugin_dir(plugin_id: String) -> Result<String, String> {
+    reject_native_cli_plugin(&plugin_id)?;
     let plugins_dir = installer::get_plugins_dir()?;
     let plugin_dir = plugins_dir.join(&plugin_id);
     if !plugin_dir.exists() {
@@ -338,6 +355,7 @@ pub async fn fetch_tabularium_plugin_preview(
     registry_url: Option<String>,
     version: Option<String>,
 ) -> Result<RegistryPluginWithStatus, String> {
+    reject_native_cli_plugin(&slug)?;
     let config = crate::config::load_config_internal(&app);
     let base = registry_url
         .as_deref()
@@ -374,6 +392,7 @@ pub async fn fetch_tabularium_plugin_preview(
 /// The `file_path` must be a relative path with no `..` components.
 #[tauri::command]
 pub fn read_plugin_file(plugin_id: String, file_path: String) -> Result<String, String> {
+    reject_native_cli_plugin(&plugin_id)?;
     if file_path.contains("..") || file_path.starts_with('/') || file_path.starts_with('\\') {
         return Err(
             "Invalid file path: must be relative and contain no '..' components".to_string(),

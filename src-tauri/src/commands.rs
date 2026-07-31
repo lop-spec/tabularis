@@ -11,9 +11,10 @@ use crate::credential_cache;
 use crate::keychain_utils;
 use crate::models::{
     BatchStatementResult, ColumnDefinition, ConnectionGroup, ConnectionParams, ConnectionsFile,
-    ExplainQueryOutput, ExportPayload, ForeignKey, Index, K8sConnection, K8sConnectionInput, QueryResult,
-    RoutineInfo, RoutineParameter, SavedConnection, SshConnection, SshConnectionInput, SshTestParams,
-    TableColumn, TableInfo, TestConnectionRequest, TriggerInfo,
+    ExplainQueryOutput, ExportPayload, ForeignKey, Index, K8sConnection, K8sConnectionInput,
+    QueryResult, RollbackUnsupportedPolicy, RoutineInfo, RoutineParameter, SavedConnection,
+    SshConnection, SshConnectionInput, SshTestParams, TableColumn, TableInfo,
+    TestConnectionRequest, TriggerInfo,
 };
 use crate::persistence;
 use crate::ssh_tunnel::{get_tunnels, SshTunnel};
@@ -450,6 +451,16 @@ pub fn resolve_connection_params_with_id(
 ) -> Result<ConnectionParams, String> {
     let mut resolved = resolve_connection_params(params)?;
     resolved.connection_id = Some(connection_id.to_string());
+    Ok(resolved)
+}
+
+fn resolve_connection_params_with_identity(
+    params: &ConnectionParams,
+    connection_id: &str,
+    connection_name: &str,
+) -> Result<ConnectionParams, String> {
+    let mut resolved = resolve_connection_params_with_id(params, connection_id)?;
+    resolved.connection_name = Some(connection_name.to_string());
     Ok(resolved)
 }
 
@@ -1404,6 +1415,7 @@ pub async fn get_connections<R: Runtime>(
 ) -> Result<Vec<SavedConnection>, String> {
     // Run migration if needed
     migrate_ssh_connections(&app).await.ok();
+    migrate_native_cli_connections(&app).await.ok();
 
     let path = get_config_path(&app)?;
     // Use persistence function that handles both old and new formats
@@ -1534,6 +1546,33 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
         "[Migration] Successfully migrated {} SSH connections",
         ssh_connections.len()
     );
+    Ok(())
+}
+
+/// Replace legacy Redis plugin ids with the built-in native redis-cli id.
+/// MongoDB already used `mongodb`, so existing Mongo connections migrate
+/// automatically when the built-in manifest takes ownership of that id.
+async fn migrate_native_cli_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let conn_path = get_config_path(app)?;
+    if !conn_path.exists() {
+        return Ok(());
+    }
+    let mut conn_file = persistence::load_connections_file(&conn_path)?;
+    let mut changed = false;
+    for connection in &mut conn_file.connections {
+        if let Some(canonical) =
+            crate::native_cli::canonical_driver_id(&connection.params.driver)
+        {
+            if connection.params.driver != canonical {
+                connection.params.driver = canonical.to_string();
+                changed = true;
+            }
+        }
+    }
+    if changed {
+        save_connections_and_invalidate(app, &conn_path, &conn_file)?;
+        log::info!("Migrated legacy MongoDB/Redis plugin connections to native CLI drivers");
+    }
     Ok(())
 }
 
@@ -2266,6 +2305,16 @@ pub async fn test_connection<R: Runtime>(
         resolved_params.port
     );
 
+    if crate::native_cli::is_native_cli_driver(&resolved_params.driver) {
+        let mut native_params = resolved_params;
+        if let Some(canonical) =
+            crate::native_cli::canonical_driver_id(&native_params.driver)
+        {
+            native_params.driver = canonical.to_string();
+        }
+        return crate::native_cli::test_connection(app, native_params).await;
+    }
+
     let drv = driver_for(&resolved_params.driver).await?;
 
     // For file-based drivers, verify the database file exists before attempting connection
@@ -2411,6 +2460,16 @@ mod tests {
 
         assert_eq!(error, "fictional connections.json failure");
         assert!(rolled_back.get());
+    }
+
+    #[test]
+    fn resolves_connection_identity_for_rollback_paths() {
+        let resolved =
+            resolve_connection_params_with_identity(&base_params(), "connection-id", "mysql-yy")
+                .unwrap();
+
+        assert_eq!(resolved.connection_id.as_deref(), Some("connection-id"));
+        assert_eq!(resolved.connection_name.as_deref(), Some("mysql-yy"));
     }
 
     fn saved_conn(id: &str, password: Option<&str>, save_in_keychain: bool) -> SavedConnection {
@@ -3981,6 +4040,9 @@ pub async fn execute_query_batch<R: Runtime>(
     page: Option<u32>,
     schema: Option<String>,
     batch_id: Option<String>,
+    rollback_unsupported_policy: Option<RollbackUnsupportedPolicy>,
+    transaction_context_id: Option<String>,
+    allow_implicit_transaction_commit: Option<bool>,
 ) -> Result<Vec<BatchStatementResult>, String> {
     log::info!(
         "Executing query batch on connection: {} | {} statement(s)",
@@ -4001,7 +4063,15 @@ pub async fn execute_query_batch<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_identity(
+        &expanded_params,
+        &connection_id,
+        &saved_conn.name,
+    )?;
+    params.rollback_unsupported_policy = rollback_unsupported_policy;
+    params.transaction_context_id = transaction_context_id;
+    params.allow_implicit_transaction_commit =
+        allow_implicit_transaction_commit.unwrap_or(false);
 
     let drv = driver_for(&saved_conn.params.driver).await?;
 
@@ -4073,6 +4143,47 @@ pub async fn execute_query_batch<R: Runtime>(
             Err("Query cancelled".into())
         }
     }
+}
+
+/// Compares selected protected Run All records against a separately supplied
+/// backup instance. Both connections are used read-only; the command only
+/// writes an isolated recovery SQL preview under `recovery-sql`.
+#[tauri::command]
+pub async fn generate_recovery_sql<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    selection: crate::recovery_history::RecoverySelection,
+    backup_params: ConnectionParams,
+) -> Result<crate::recovery_history::RecoveryCompareResponse, String> {
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    if !matches!(saved_conn.params.driver.as_str(), "mysql" | "mariadb") {
+        return Err("Recovery comparison currently supports MySQL and MariaDB".to_string());
+    }
+
+    let expanded_target = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_target = expand_k8s_connection_params(&app, &expanded_target).await?;
+    let target_params = resolve_connection_params_with_identity(
+        &expanded_target,
+        &connection_id,
+        &saved_conn.name,
+    )?;
+
+    let expanded_backup = expand_ssh_connection_params(&app, &backup_params).await?;
+    let expanded_backup = expand_k8s_connection_params(&app, &expanded_backup).await?;
+    let mut resolved_backup = resolve_connection_params(&expanded_backup)?;
+    let transient_id = format!("recovery-backup-{}", ulid::Ulid::new());
+    resolved_backup.connection_id = Some(transient_id.clone());
+    resolved_backup.connection_name = Some("Recovery backup (ephemeral)".to_string());
+
+    let result = crate::recovery_history::compare_and_generate(
+        &target_params,
+        &resolved_backup,
+        &connection_id,
+        selection,
+    )
+    .await;
+    crate::pool_manager::close_pool_with_id(&resolved_backup, Some(&transient_id)).await;
+    result
 }
 
 // --- Explain Query Plan ---
@@ -4857,6 +4968,91 @@ pub async fn get_active_connections() -> Vec<String> {
     crate::health_check::active_connections().await
 }
 
+/// Closes the physical MySQL/MariaDB connection pinned to one editor tab.
+/// If that tab has an explicit transaction, the transaction is rolled back
+/// before its unfinished rollback/recovery journals are discarded.
+#[tauri::command]
+pub async fn rollback_transaction_context(
+    connection_id: String,
+    transaction_context_id: String,
+) -> Result<bool, String> {
+    crate::drivers::mysql::rollback_transaction_context(
+        &connection_id,
+        &transaction_context_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn start_native_cli_session<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, Arc<crate::native_cli::NativeCliState>>,
+    connection_id: String,
+    session_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<crate::native_cli::NativeCliStartResponse, String> {
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(canonical) = crate::native_cli::canonical_driver_id(&params.driver) {
+        params.driver = canonical.to_string();
+    }
+    crate::native_cli::start_session(
+        &app,
+        Arc::clone(state.inner()),
+        connection_id,
+        session_id,
+        &params,
+        cols,
+        rows,
+    )
+}
+
+#[tauri::command]
+pub fn write_native_cli_session(
+    state: State<'_, Arc<crate::native_cli::NativeCliState>>,
+    session_id: String,
+    data: String,
+) -> Result<(), String> {
+    crate::native_cli::write_session(state.inner().as_ref(), &session_id, &data)
+}
+
+#[tauri::command]
+pub fn resize_native_cli_session(
+    state: State<'_, Arc<crate::native_cli::NativeCliState>>,
+    session_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    crate::native_cli::resize_session(state.inner().as_ref(), &session_id, cols, rows)
+}
+
+#[tauri::command]
+pub fn interrupt_native_cli_session(
+    state: State<'_, Arc<crate::native_cli::NativeCliState>>,
+    session_id: String,
+) -> Result<(), String> {
+    crate::native_cli::interrupt_session(state.inner().as_ref(), &session_id)
+}
+
+#[tauri::command]
+pub fn clear_native_cli_output(
+    state: State<'_, Arc<crate::native_cli::NativeCliState>>,
+    session_id: String,
+) -> Result<(), String> {
+    crate::native_cli::clear_session_output(state.inner().as_ref(), &session_id)
+}
+
+#[tauri::command]
+pub fn close_native_cli_session(
+    state: State<'_, Arc<crate::native_cli::NativeCliState>>,
+    session_id: String,
+) -> Result<bool, String> {
+    crate::native_cli::close_session(state.inner().as_ref(), &session_id)
+}
+
 /// Disconnect from a database connection by closing its connection pool
 #[tauri::command]
 pub async fn disconnect_connection<R: Runtime>(
@@ -4867,6 +5063,15 @@ pub async fn disconnect_connection<R: Runtime>(
 
     // Unregister from health check before closing the pool.
     crate::health_check::unregister_connection(&connection_id).await;
+
+    let native_cli_state = app.state::<Arc<crate::native_cli::NativeCliState>>();
+    crate::native_cli::close_connection_sessions(
+        native_cli_state.inner().as_ref(),
+        &connection_id,
+    );
+
+    let transaction_cleanup =
+        crate::drivers::mysql::rollback_connection_transactions(&connection_id).await;
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
@@ -4883,7 +5088,7 @@ pub async fn disconnect_connection<R: Runtime>(
         "Successfully disconnected from connection: {}",
         connection_id
     );
-    Ok(())
+    transaction_cleanup.map(|_| ())
 }
 
 // --- Type Registry ---
@@ -5064,9 +5269,7 @@ pub async fn save_keybindings<R: Runtime>(
 pub async fn get_driver_manifest(
     driver_id: String,
 ) -> Option<crate::drivers::driver_trait::PluginManifest> {
-    crate::drivers::registry::get_driver(&driver_id)
-        .await
-        .map(|d| d.manifest().clone())
+    crate::drivers::registry::get_manifest(&driver_id).await
 }
 
 // ==================== Connection Groups Management ====================
@@ -5085,6 +5288,7 @@ pub async fn get_connections_with_groups<R: Runtime>(
 ) -> Result<ConnectionsFile, String> {
     // Run migration if needed
     migrate_ssh_connections(&app).await.ok();
+    migrate_native_cli_connections(&app).await.ok();
 
     let path = get_config_path(&app)?;
     persistence::load_connections_file(&path)

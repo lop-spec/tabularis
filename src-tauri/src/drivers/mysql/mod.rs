@@ -5,8 +5,12 @@ pub mod types;
 mod explain;
 mod helpers;
 mod multi_result;
+mod rollback_guard;
 mod routines;
 mod stmt_classify;
+
+#[cfg(test)]
+mod rollback_guard_tests;
 
 #[cfg(test)]
 mod stmt_classify_tests;
@@ -27,7 +31,7 @@ use helpers::{
     mysql_bytes_literal, mysql_row_str, mysql_row_str_opt, mysql_string_literal,
 };
 use sqlx::{Column, Row};
-use stmt_classify::is_text_protocol_stmt;
+use stmt_classify::{is_text_protocol_stmt, text_protocol_stmt_may_return_rows};
 
 /// Whether this connection must avoid the prepared-statement protocol.
 ///
@@ -239,8 +243,15 @@ pub async fn get_schemas(_params: &ConnectionParams) -> Result<Vec<String>, Stri
 }
 
 pub async fn get_databases(params: &ConnectionParams) -> Result<Vec<String>, String> {
-    let pool = get_mysql_pool(params).await?;
-    let text = resolve_text_proto(&pool, params).await?;
+    // Catalog discovery must not depend on a database that may just have been
+    // dropped. Use a dedicated information_schema pool so the database selector
+    // can recover instead of remaining at NULL.
+    let mut catalog_params = params.clone();
+    catalog_params.database =
+        crate::models::DatabaseSelection::Single("information_schema".to_string());
+    catalog_params.connection_id = None;
+    let pool = get_mysql_pool(&catalog_params).await?;
+    let text = resolve_text_proto(&pool, &catalog_params).await?;
     let rows = fetch_all_rows(&pool, text, "SHOW DATABASES", &[]).await?;
     Ok(rows.iter().map(|r| mysql_row_str(r, 0)).collect())
 }
@@ -595,14 +606,11 @@ fn build_mysql_pk_where(
     if pk_map.is_empty() {
         return Err("pk_map must not be empty".into());
     }
-    let mut pairs: Vec<(String, serde_json::Value)> = pk_map
-        .iter()
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
+    let mut pairs: Vec<(String, serde_json::Value)> =
+        pk_map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     pairs.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(pairs)
 }
-
 
 pub async fn save_blob_column_to_file(
     params: &ConnectionParams,
@@ -670,7 +678,10 @@ async fn mysql_fetch_one_with_pk(
             .await
             .map_err(|e| e.to_string())
     } else {
-        qb3.build().fetch_one(&pool).await.map_err(|e| e.to_string())
+        qb3.build()
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -1220,13 +1231,21 @@ pub async fn get_routine_definition(
     Ok(definition)
 }
 
-/// Acquires a single MySQL connection from the pool, honouring the optional
-/// schema override (which routes to a per-database pool to avoid invalidating
-/// the prepared-statement cache via `USE`).
-async fn acquire_mysql_conn(
+pub(crate) fn mysql_database_scope_statement(database: &str) -> String {
+    format!("USE `{}`", escape_identifier(database))
+}
+
+/// Acquires a single MySQL connection from the pool and reasserts its exact
+/// database scope. The per-database pool prevents cross-database reuse; `USE`
+/// also repairs a checked-out connection whose default database was cleared by
+/// `DROP DATABASE` or changed by a previous session statement.
+pub(crate) async fn acquire_mysql_conn(
     params: &ConnectionParams,
     schema: Option<&str>,
 ) -> Result<sqlx::pool::PoolConnection<sqlx::MySql>, String> {
+    let schema = schema
+        .map(str::trim)
+        .filter(|database| !database.is_empty());
     let pool = if let Some(db) = schema {
         let mut p = params.clone();
         p.database = crate::models::DatabaseSelection::Single(db.to_string());
@@ -1234,7 +1253,15 @@ async fn acquire_mysql_conn(
     } else {
         get_mysql_pool(params).await?
     };
-    pool.acquire().await.map_err(|e| e.to_string())
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let database = schema.unwrap_or_else(|| params.database.primary()).trim();
+    if !database.is_empty() {
+        use sqlx::Executor;
+        conn.execute(sqlx::raw_sql(&mysql_database_scope_statement(database)))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(conn)
 }
 
 /// Executes one statement on an already-acquired connection. Used by both
@@ -1248,31 +1275,21 @@ async fn exec_on_mysql_conn(
     page: u32,
     text: TextProto,
 ) -> Result<QueryResult, String> {
-    // Transaction-control statements have to bypass the prepared-statement
-    // protocol — see `is_text_protocol_stmt`. They never return a result
-    // set, so we can short-circuit with an empty `QueryResult`.
-    if is_text_protocol_stmt(query) {
-        use sqlx::Executor;
-        let exec_result = conn
-            .execute(sqlx::raw_sql(query))
-            .await
-            .map_err(|e| e.to_string())?;
-        return Ok(QueryResult {
-            columns: vec![],
-            rows: vec![],
-            affected_rows: exec_result.rows_affected(),
-            truncated: false,
-            pagination: None,
-            additional_results: None,
-        });
-    }
+    // Some MySQL statements (PREPARE/EXECUTE/USE/Event DDL and others)
+    // cannot be submitted through COM_STMT_PREPARE. A bastion can also force
+    // text protocol globally. Resolve both cases once and use the same choice
+    // for execute and fetch paths so row-returning EXECUTE/SHOW statements are
+    // not accidentally discarded.
+    let use_text_protocol = text.enabled || is_text_protocol_stmt(query);
+    let returns_result_set = crate::drivers::common::returns_result_set(query)
+        || text_protocol_stmt_may_return_rows(query);
 
     // Non-result-set statements (INSERT / UPDATE / DELETE / DDL) go through
     // `execute()` so we can return the actual `rows_affected`. In text mode
     // they must use `raw_sql` (COM_QUERY) since the bastion rejects prepares.
-    if !crate::drivers::common::returns_result_set(query) {
+    if !returns_result_set {
         use sqlx::Executor;
-        let exec_result = if text.enabled {
+        let exec_result = if use_text_protocol {
             conn.execute(sqlx::raw_sql(query)).await
         } else {
             conn.execute(sqlx::query(query)).await
@@ -1321,7 +1338,7 @@ async fn exec_on_mysql_conn(
     {
         use futures::stream::StreamExt;
         use sqlx::Executor;
-        let mut event_stream = if text.enabled {
+        let mut event_stream = if use_text_protocol {
             (&mut *conn).fetch_many(sqlx::raw_sql(&final_query))
         } else {
             (&mut *conn).fetch_many(sqlx::query(&final_query))
@@ -1430,6 +1447,15 @@ pub async fn execute_query(
 /// — later statements still run, mirroring MySQL CLI's `--force` behaviour.
 /// When the script uses transactions, MySQL itself will refuse subsequent
 /// statements inside the aborted transaction, surfacing the error.
+fn should_use_rollback_guard(params: &ConnectionParams) -> bool {
+    let enabled = params.rollback_protection_enabled.unwrap_or(false);
+    let execute_unprotected = matches!(
+        params.rollback_unsupported_policy,
+        Some(crate::models::RollbackUnsupportedPolicy::ExecuteUnprotected)
+    );
+    enabled && (!execute_unprotected || params.transaction_context_id.is_some())
+}
+
 pub async fn execute_batch(
     params: &ConnectionParams,
     queries: &[String],
@@ -1438,6 +1464,23 @@ pub async fn execute_batch(
     schema: Option<&str>,
     on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
 ) -> Result<Vec<crate::models::BatchStatementResult>, String> {
+    let rollback_protection_enabled = params.rollback_protection_enabled.unwrap_or(false);
+    let execute_unprotected = rollback_protection_enabled
+        && matches!(
+            params.rollback_unsupported_policy,
+            Some(crate::models::RollbackUnsupportedPolicy::ExecuteUnprotected)
+        );
+    if should_use_rollback_guard(params) {
+        return rollback_guard::execute_protected_batch(
+            params,
+            queries,
+            limit,
+            page,
+            schema,
+            on_progress,
+        )
+        .await;
+    }
     let mut conn = acquire_mysql_conn(params, schema).await?;
     // See `execute_query`: statements run verbatim, so only the protocol flag
     // is needed here, not the literal-escaping mode.
@@ -1446,13 +1489,28 @@ pub async fn execute_batch(
     for (idx, q) in queries.iter().enumerate() {
         let start = std::time::Instant::now();
         let outcome = exec_on_mysql_conn(&mut *conn, q, limit, page, text).await;
-        let res = crate::models::BatchStatementResult::from_outcome(start, outcome);
+        let mut res =
+            crate::models::BatchStatementResult::from_outcome(start, outcome);
+        if execute_unprotected {
+            res.rollback_unprotected = Some(true);
+        }
         if let Some(cb) = on_progress {
             cb(idx, &res);
         }
         results.push(res);
     }
     Ok(results)
+}
+
+pub async fn rollback_transaction_context(
+    connection_id: &str,
+    context_id: &str,
+) -> Result<bool, String> {
+    rollback_guard::rollback_transaction_context(connection_id, context_id).await
+}
+
+pub async fn rollback_connection_transactions(connection_id: &str) -> Result<usize, String> {
+    rollback_guard::rollback_connection_transactions(connection_id).await
 }
 
 pub async fn get_triggers(
@@ -1631,6 +1689,8 @@ impl MysqlDriver {
                     readonly: false,
                     triggers: true,
                     supports_ssl: true,
+                    console_only: false,
+                    native_cli: None,
                     sql_dialect: SqlDialect::Mysql,
                 },
                 is_builtin: true,

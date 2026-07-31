@@ -58,11 +58,16 @@ export const ImportDatabaseModal = ({
     setElapsedTime(0);
 
     try {
+      const scopedDatabase = targetDatabase?.trim();
+      const scopedSchema = scopedDatabase || activeSchema?.trim();
+      if (!scopedSchema) {
+        throw new Error(t("newConnection.noDatabasesSelected"));
+      }
       await invoke("import_database", {
         connectionId,
         filePath,
-        ...(activeSchema ? { schema: activeSchema } : {}),
-        ...(targetDatabase ? { database: targetDatabase } : {}),
+        schema: scopedSchema,
+        ...(scopedDatabase ? { database: scopedDatabase } : {}),
       });
 
       setSuccess(true);
@@ -76,12 +81,11 @@ export const ImportDatabaseModal = ({
       setError(String(e));
       setIsImporting(false);
     }
-  }, [connectionId, filePath, activeSchema, targetDatabase, onSuccess]);
+  }, [connectionId, filePath, activeSchema, targetDatabase, onSuccess, t]);
 
   useEffect(() => {
     if (!isOpen) {
       // Reset state when modal closes
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsImporting(false);
       setProgress(null);
       setError(null);

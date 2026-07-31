@@ -7,6 +7,7 @@ import {
   generateConnectionName,
   connectionSubtitle,
   getCardClass,
+  shouldRestoreLastConnections,
   type ConnectionParams,
   type DatabaseDriver,
 } from '../../src/utils/connections';
@@ -493,6 +494,21 @@ describe('connections', () => {
     it('should use localhost when host is missing for remote driver', () => {
       const params: ConnectionParams = { driver: 'duckdb-remote', database: 'analytics' };
       expect(generateConnectionName(params, makeRemoteCaps())).toBe('analytics@localhost');
+    });
+  });
+
+  describe('shouldRestoreLastConnections', () => {
+    it('waits for persisted settings before restoring a connection', () => {
+      expect(shouldRestoreLastConnections(true, true)).toBe(false);
+    });
+
+    it('honors the disabled setting once settings are loaded', () => {
+      expect(shouldRestoreLastConnections(false, false)).toBe(false);
+    });
+
+    it('restores only after settings load with the option enabled', () => {
+      expect(shouldRestoreLastConnections(false, true)).toBe(true);
+      expect(shouldRestoreLastConnections(false, undefined)).toBe(true);
     });
   });
 });

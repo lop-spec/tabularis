@@ -67,11 +67,12 @@ export function scanToken(
       position,
       options.nestedBlockComments,
     );
-    // MySQL/MariaDB conditional comment `/*! ... */` is executable SQL,
-    // not a noop comment. Emit as `data` so it is treated as meaningful
-    // by the splitter and gets its own statement boundary.
+    // Conditional comments and optimizer hints affect execution. Emit them as
+    // data so comment cleanup never drops them.
     const isExecutable =
-      options.executableComments && source[position + 2] === '!';
+      source[position + 2] === '+' ||
+      (options.executableComments &&
+        (source[position + 2] === '!' || source.startsWith('/*M!', position)));
     return { kind: isExecutable ? 'data' : 'blockComment', length };
   }
 

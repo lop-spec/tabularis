@@ -1730,6 +1730,8 @@ impl PostgresDriver {
                     readonly: false,
                     triggers: true,
                     supports_ssl: true,
+                    console_only: false,
+                    native_cli: None,
                     sql_dialect: SqlDialect::Postgres,
                 },
                 is_builtin: true,

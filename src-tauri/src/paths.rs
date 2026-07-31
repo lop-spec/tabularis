@@ -1,7 +1,17 @@
 use directories::ProjectDirs;
 use std::path::{Path, PathBuf};
 
+fn non_empty_env_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
 pub fn get_app_config_dir() -> PathBuf {
+    if let Some(path) = non_empty_env_path("TABULARIS_CONFIG_DIR") {
+        return path;
+    }
+
     if let Some(proj_dirs) = ProjectDirs::from("", "", "tabularis") {
 
         #[cfg(target_os = "windows")]
@@ -16,6 +26,16 @@ pub fn get_app_config_dir() -> PathBuf {
         // Fallback for weird environments
         PathBuf::from(".config/tabularis")
     }
+}
+
+/// Resolve the shared data root, with an explicit override for isolated builds
+/// and smoke tests. Production launches do not set this variable and retain the
+/// existing platform directory.
+pub fn get_app_data_dir() -> Option<PathBuf> {
+    non_empty_env_path("TABULARIS_DATA_DIR").or_else(|| {
+        ProjectDirs::from("com", "debba", "tabularis")
+            .map(|project_dirs| project_dirs.data_dir().to_path_buf())
+    })
 }
 
 /// Resolve the connections file inside `config_dir`.

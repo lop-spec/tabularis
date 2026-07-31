@@ -45,6 +45,9 @@ import {
   getResultValueType,
   buildPkMap,
   serializePkKey,
+  extractGridCellRange,
+  isSingleGridCellRange,
+  type GridCellRange,
   type MergedRow,
 } from "../../utils/dataGrid";
 import { useSettings } from "../../hooks/useSettings";
@@ -222,6 +225,10 @@ export const DataGrid = React.memo(
       rowIndex: number;
       colIndex: number;
     } | null>(null);
+    const [cellSelection, setCellSelection] =
+      useState<GridCellRange | null>(null);
+    const cellDragSelectingRef = useRef(false);
+    const parentRef = useRef<HTMLDivElement>(null);
     const editInputRef = useRef<HTMLInputElement>(null);
     const focusTriggerRef = useRef(0);
     // Mirror of editingCell so the commit/keydown callbacks can read the latest
@@ -421,69 +428,35 @@ export const DataGrid = React.memo(
 
     const handleRowClick = useCallback(
       (index: number, event: React.MouseEvent) => {
-        let newSelected = new Set(selectedRowIndices);
+        parentRef.current?.focus({ preventScroll: true });
+        setFocusedCell(null);
+        setCellSelection(null);
+        onForeignKeyHidePanel?.();
+        const additive = event.ctrlKey || event.metaKey;
+        let newSelected: Set<number>;
 
         if (event.shiftKey && lastSelectedRowIndex !== null) {
-          // Range selection
+          newSelected = additive
+            ? new Set(selectedRowIndices)
+            : new Set<number>();
           const range = calculateSelectionRange(lastSelectedRowIndex, index);
-
-          // If NOT Ctrl/Cmd, clear previous selection first (standard OS behavior)
-          if (!event.ctrlKey && !event.metaKey) {
-            newSelected.clear();
-          }
-
           range.forEach((i) => newSelected.add(i));
-        } else if (event.ctrlKey || event.metaKey) {
-          // Toggle selection
-          newSelected = toggleSetValue(newSelected, index);
-          setLastSelectedRowIndex(index);
+        } else if (additive) {
+          newSelected = toggleSetValue(new Set(selectedRowIndices), index);
         } else {
-          // Single selection
-          newSelected.clear();
-          newSelected.add(index);
-          setLastSelectedRowIndex(index);
+          newSelected = new Set([index]);
         }
 
+        setLastSelectedRowIndex(index);
         updateSelection(newSelected);
       },
-      [selectedRowIndices, lastSelectedRowIndex, updateSelection],
+      [
+        selectedRowIndices,
+        lastSelectedRowIndex,
+        updateSelection,
+        onForeignKeyHidePanel,
+      ],
     );
-
-    const handleSelectAll = useCallback(() => {
-      setFocusedCell(null);
-      onForeignKeyHidePanel?.();
-      if (selectedRowIndices.size === mergedRows.length) {
-        updateSelection(new Set());
-      } else {
-        const allIndices = new Set(mergedRows.map((_, i) => i));
-        updateSelection(allIndices);
-        const allRows = mergedRows.map((r) => r.rowData);
-        const text = copyFormat === "json"
-          ? rowsToJSON(allRows, columns)
-          : copyFormat === "sql-insert"
-          ? rowsToSqlInsert(allRows, columns, tableName ?? "table")
-          : copyFormat === "markdown"
-          ? rowsToMarkdown(allRows, columns, "null", csvIncludeHeaders)
-          : csvIncludeHeaders
-          ? rowsToCSVWithHeaders(allRows, columns, "null", csvDelimiter)
-          : rowsToCSV(allRows, "null", csvDelimiter);
-        copyTextToClipboard(text).catch((e) => {
-          showAlert(t("common.error") + ": " + e, { title: t("common.error"), kind: "error" });
-        });
-      }
-    }, [
-      selectedRowIndices.size,
-      mergedRows,
-      updateSelection,
-      onForeignKeyHidePanel,
-      columns,
-      copyFormat,
-      csvDelimiter,
-      csvIncludeHeaders,
-      tableName,
-      showAlert,
-      t,
-    ]);
 
     useEffect(() => {
       if (editingCell && editInputRef.current) {
@@ -1059,7 +1032,6 @@ export const DataGrid = React.memo(
       ],
     );
 
-    const parentRef = useRef<HTMLDivElement>(null);
     const [parentViewportWidth, setParentViewportWidth] = useState(0);
 
     useEffect(() => {
@@ -1349,14 +1321,32 @@ export const DataGrid = React.memo(
     );
 
     const formatRows = useCallback(
-      (rows: unknown[][], withHeaders = false) => {
-        if (copyFormat === "json") return rowsToJSON(rows, columns);
+      (
+        rows: unknown[][],
+        withHeaders = false,
+        selectedColumns = columns,
+      ) => {
+        if (copyFormat === "json") return rowsToJSON(rows, selectedColumns);
         if (copyFormat === "sql-insert")
-          return rowsToSqlInsert(rows, columns, tableName ?? "table");
+          return rowsToSqlInsert(
+            rows,
+            selectedColumns,
+            tableName ?? "table",
+          );
         if (copyFormat === "markdown")
-          return rowsToMarkdown(rows, columns, "null", withHeaders && csvIncludeHeaders);
+          return rowsToMarkdown(
+            rows,
+            selectedColumns,
+            "null",
+            withHeaders && csvIncludeHeaders,
+          );
         if (withHeaders && csvIncludeHeaders)
-          return rowsToCSVWithHeaders(rows, columns, "null", csvDelimiter);
+          return rowsToCSVWithHeaders(
+            rows,
+            selectedColumns,
+            "null",
+            csvDelimiter,
+          );
         return rowsToCSV(rows, "null", csvDelimiter);
       },
       [columns, copyFormat, csvDelimiter, csvIncludeHeaders, tableName],
@@ -1392,12 +1382,37 @@ export const DataGrid = React.memo(
       setHeaderContextMenu(null);
     }, [headerContextMenu, tableName, copyToClipboard]);
 
-    const copySelectedCells = useCallback(async () => {
+    const copySelectedRows = useCallback(async () => {
       if (selectedRowIndices.size === 0) return;
-      await copyToClipboard(
-        formatRows(getSelectedRows(data, selectedRowIndices), true),
+      const selectedRows = getSelectedRows(
+        mergedRows.map((row) => row.rowData),
+        selectedRowIndices,
       );
-    }, [selectedRowIndices, data, formatRows, copyToClipboard]);
+      await copyToClipboard(
+        formatRows(selectedRows, true),
+      );
+    }, [selectedRowIndices, mergedRows, formatRows, copyToClipboard]);
+
+    const handleSelectAll = useCallback(async () => {
+      parentRef.current?.focus({ preventScroll: true });
+      setFocusedCell(null);
+      setCellSelection(null);
+      onForeignKeyHidePanel?.();
+      const allIndices = new Set(mergedRows.map((_, index) => index));
+      updateSelection(allIndices);
+      await copyToClipboard(
+        formatRows(
+          mergedRows.map((row) => row.rowData),
+          true,
+        ),
+      );
+    }, [
+      mergedRows,
+      updateSelection,
+      onForeignKeyHidePanel,
+      formatRows,
+      copyToClipboard,
+    ]);
 
     // Copies one column for the selected rows, or every visible row when
     // nothing is selected, using the same export format as other copy actions.
@@ -1460,33 +1475,131 @@ export const DataGrid = React.memo(
       setContextMenu(null);
     }, [contextMenu, copyCellValue]);
 
-    // Handle keyboard shortcuts
+    const copySelectedCellRange = useCallback(async () => {
+      if (!cellSelection) return;
+      const selected = extractGridCellRange(
+        mergedRows.map((row) => row.rowData),
+        columns,
+        cellSelection,
+      );
+      if (selected.rows.length === 0 || selected.columns.length === 0) return;
+      await copyToClipboard(
+        formatRows(selected.rows, true, selected.columns),
+      );
+    }, [cellSelection, mergedRows, columns, copyToClipboard, formatRows]);
+
+    const handleCellMouseDown = useCallback(
+      (
+        rowIndex: number,
+        colIndex: number,
+        event: React.MouseEvent<HTMLTableCellElement>,
+      ) => {
+        if (event.button !== 0) return;
+        const target = event.target as HTMLElement;
+        if (
+          target.closest(
+            "button, input, textarea, select, [contenteditable='true']",
+          )
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+        parentRef.current?.focus({ preventScroll: true });
+        const position = { rowIndex, colIndex };
+        setCellSelection((current) => ({
+          anchor: event.shiftKey && current ? current.anchor : position,
+          focus: position,
+        }));
+        setFocusedCell(position);
+        setLastSelectedRowIndex(null);
+        updateSelection(new Set());
+        cellDragSelectingRef.current = true;
+      },
+      [updateSelection],
+    );
+
+    const handleCellMouseEnter = useCallback(
+      (
+        rowIndex: number,
+        colIndex: number,
+        event: React.MouseEvent<HTMLTableCellElement>,
+      ) => {
+        if (!cellDragSelectingRef.current) return;
+        if ((event.buttons & 1) !== 1) {
+          cellDragSelectingRef.current = false;
+          return;
+        }
+        const position = { rowIndex, colIndex };
+        setCellSelection((current) =>
+          current ? { ...current, focus: position } : null,
+        );
+        setFocusedCell(position);
+      },
+      [],
+    );
+
     useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        // CMD/CTRL + C
-        if ((e.metaKey || e.ctrlKey) && e.key === "c") {
-          // Only handle if not editing a cell
-          if (!editingCell) {
-            if (focusedCell) {
-              e.preventDefault();
-              copyCellValue(focusedCell.rowIndex, focusedCell.colIndex);
-            } else if (selectedRowIndices.size > 0) {
-              e.preventDefault();
-              copySelectedCells();
+      const stopCellDrag = () => {
+        cellDragSelectingRef.current = false;
+      };
+      document.addEventListener("mouseup", stopCellDrag);
+      return () => document.removeEventListener("mouseup", stopCellDrag);
+    }, []);
+
+    const handleGridShortcut = useCallback(
+      (event: React.KeyboardEvent<HTMLDivElement>) => {
+        const target = event.target as HTMLElement;
+        if (
+          target.closest(
+            "input, textarea, select, [contenteditable='true']",
+          )
+        ) {
+          return;
+        }
+
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          event.key.toLowerCase() === "c" &&
+          !editingCell
+        ) {
+          if (cellSelection) {
+            event.preventDefault();
+            if (isSingleGridCellRange(cellSelection)) {
+              void copyCellValue(
+                cellSelection.focus.rowIndex,
+                cellSelection.focus.colIndex,
+              );
+            } else {
+              void copySelectedCellRange();
             }
+          } else if (selectedRowIndices.size > 0) {
+            event.preventDefault();
+            void copySelectedRows();
           }
         }
 
-        // Delete / Backspace — delete selected rows
-        if ((e.key === "Delete" || e.key === "Backspace") && !editingCell && !readonlyProp && selectedRowIndices.size > 0) {
-          e.preventDefault();
+        if (
+          (event.key === "Delete" || event.key === "Backspace") &&
+          !editingCell &&
+          !readonlyProp &&
+          selectedRowIndices.size > 0
+        ) {
+          event.preventDefault();
           deleteRowsByIndices(Array.from(selectedRowIndices));
         }
-      };
-
-      document.addEventListener("keydown", handleKeyDown);
-      return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [editingCell, selectedRowIndices, focusedCell, copyCellValue, copySelectedCells, readonlyProp, deleteRowsByIndices]);
+      },
+      [
+        editingCell,
+        cellSelection,
+        selectedRowIndices,
+        copyCellValue,
+        copySelectedCellRange,
+        copySelectedRows,
+        readonlyProp,
+        deleteRowsByIndices,
+      ],
+    );
 
     // Stable per-row dependency bundle. Memoizing it lets React.memo on MemoRow
     // skip re-rendering rows that didn't change during scroll.
@@ -1508,12 +1621,13 @@ export const DataGrid = React.memo(
         pkIndexMaps,
         parentViewportWidth,
         readonly: readonlyProp,
-        updateSelection,
-        setFocusedCell,
+        cellSelection,
         setExpandedCell,
         setEditingCell,
         openInSidebar,
         handleRowClick,
+        handleCellMouseDown,
+        handleCellMouseEnter,
         handleCellDoubleClick,
         handleContextMenu,
         handleEditCommit,
@@ -1544,12 +1658,13 @@ export const DataGrid = React.memo(
         pkIndexMaps,
         parentViewportWidth,
         readonlyProp,
-        updateSelection,
-        setFocusedCell,
+        cellSelection,
         setExpandedCell,
         setEditingCell,
         openInSidebar,
         handleRowClick,
+        handleCellMouseDown,
+        handleCellMouseEnter,
         handleCellDoubleClick,
         handleContextMenu,
         handleEditCommit,
@@ -1587,7 +1702,9 @@ export const DataGrid = React.memo(
       <>
         <div
           ref={parentRef}
-          className="h-full overflow-auto border border-default rounded bg-elevated relative"
+          tabIndex={0}
+          onKeyDown={handleGridShortcut}
+          className="h-full overflow-auto border border-default rounded bg-elevated relative outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/60"
         >
           <table className="w-full text-left border-collapse">
             <thead
@@ -1596,7 +1713,7 @@ export const DataGrid = React.memo(
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   <th
-                    onClick={handleSelectAll}
+                    onClick={() => void handleSelectAll()}
                     className="px-2 py-2 text-xs font-semibold text-muted border-b border-r border-default bg-base sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-elevated"
                   >
                     #

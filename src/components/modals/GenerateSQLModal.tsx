@@ -8,6 +8,7 @@ import { useDatabase } from "../../hooks/useDatabase";
 import { Modal } from "../ui/Modal";
 import { SqlPreview } from "../ui/SqlPreview";
 import { useAlert } from "../../hooks/useAlert";
+import type { QueryResult } from "../../types/editor";
 import {
   generateCreateTableSQL,
   type TableColumn,
@@ -15,17 +16,24 @@ import {
   type Index,
 } from "../../utils/sqlGenerator";
 import { toBindParamName } from "../../utils/queryParameters";
+import {
+  buildShowCreateTableQuery,
+  extractCreateTableSql,
+  supportsShowCreateTable,
+} from "../../utils/showCreateTable";
 
 interface GenerateSQLModalProps {
   isOpen: boolean;
   onClose: () => void;
   tableName: string;
+  schema?: string;
 }
 
 export const GenerateSQLModal = ({
   isOpen,
   onClose,
   tableName,
+  schema,
 }: GenerateSQLModalProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -38,6 +46,7 @@ export const GenerateSQLModal = ({
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const targetSchema = schema ?? activeSchema;
 
   useEffect(() => {
     if (!isOpen || !activeConnectionId || !tableName) return;
@@ -45,13 +54,30 @@ export const GenerateSQLModal = ({
     const generateSQL = async () => {
       setLoading(true);
       try {
-        const schemaParam = activeSchema ? { schema: activeSchema } : {};
+        const schemaParam = targetSchema ? { schema: targetSchema } : {};
+        const fetchedColumnsPromise = invoke<TableColumn[]>("get_columns", {
+          connectionId: activeConnectionId,
+          tableName,
+          ...schemaParam,
+        });
+
+        if (supportsShowCreateTable(activeDriver)) {
+          const [fetchedColumns, createTableResult] = await Promise.all([
+            fetchedColumnsPromise,
+            invoke<QueryResult>("execute_query", {
+              connectionId: activeConnectionId,
+              query: buildShowCreateTableQuery(tableName, targetSchema),
+              ...schemaParam,
+            }),
+          ]);
+
+          setColumns(fetchedColumns);
+          setSql(extractCreateTableSql(createTableResult));
+          return;
+        }
+
         const [fetchedColumns, foreignKeys, indexes] = await Promise.all([
-          invoke<TableColumn[]>("get_columns", {
-            connectionId: activeConnectionId,
-            tableName,
-            ...schemaParam,
-          }),
+          fetchedColumnsPromise,
           invoke<ForeignKey[]>("get_foreign_keys", {
             connectionId: activeConnectionId,
             tableName,
@@ -89,7 +115,7 @@ export const GenerateSQLModal = ({
     activeDriver,
     activeCapabilities,
     t,
-    activeSchema,
+    targetSchema,
     showAlert,
   ]);
 
@@ -127,7 +153,7 @@ export const GenerateSQLModal = ({
         queryName: `${tableName} – ${tab}`,
         undefined,
         preventAutoRun: true,
-        schema: activeSchema ?? undefined
+        schema: targetSchema ?? undefined
       },
     });
     onClose();

@@ -126,6 +126,11 @@ interface ConnectionParams {
   k8s_kubeconfig_path?: string;
   // SQL run on every new connection (e.g. SET / set_config)
   startup_script?: string;
+  // MySQL rollback/recovery protection (opt-in per connection).
+  rollback_protection_enabled?: boolean;
+  // Native MongoDB/Redis console overrides.
+  native_cli_path?: string;
+  native_cli_args?: string;
 }
 
 interface SavedConnection {
@@ -527,6 +532,9 @@ export const NewConnectionModal = ({
     !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
     !activeDriver?.capabilities?.folder_based;
+  const nativeCliKind = activeDriver?.capabilities?.native_cli;
+  const isNativeCli = activeDriver?.capabilities?.console_only === true;
+  const supportsTunnels = isNetworkDriver && !isNativeCli;
   const k8sDefaultPort = activeDriver?.default_port ?? undefined;
   // Derive K8s ports instead of seeding formData so edit flows with no saved port are covered.
   const getK8sAutoPort = (params: Partial<ConnectionParams>) =>
@@ -1506,15 +1514,27 @@ export const NewConnectionModal = ({
   }, [isOpen, initialConnection]);
 
   const handleDriverChange = (newDriver: string) => {
+    const nextDriver = drivers.find((d) => d.id === newDriver);
+    const nextNativeCli = nextDriver?.capabilities?.native_cli;
     setDriver(newDriver);
     setFormData({
       driver: newDriver,
-      host: "",
-      port: drivers.find((d) => d.id === newDriver)?.default_port ?? undefined,
+      host: nextNativeCli ? "localhost" : "",
+      port: nextDriver?.default_port ?? undefined,
       username: "",
       password: "",
-      database: "",
-      ssl_mode: "",
+      connection_uri: undefined,
+      connection_uri_in_keychain: false,
+      database:
+        nextNativeCli === "redis-cli"
+          ? "0"
+          : nextNativeCli === "mongosh"
+            ? "test"
+            : "",
+      ssl_mode: nextNativeCli ? "disabled" : "",
+      rollback_protection_enabled: undefined,
+      native_cli_path: undefined,
+      native_cli_args: undefined,
       ssh_enabled: false,
       ssh_connection_id: undefined,
       ssh_host: undefined,
@@ -1959,7 +1979,9 @@ export const NewConnectionModal = ({
         ...parsedFields,
       }));
 
-      void loadDatabases(parsedFields);
+      if (parsedDriver?.capabilities?.console_only !== true) {
+        void loadDatabases(parsedFields);
+      }
     } else {
       setConnectionStringError(result.error);
     }
@@ -2177,23 +2199,25 @@ export const NewConnectionModal = ({
                 <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
                   {t("newConnection.dbName")}
                 </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void loadDatabases();
-                  }}
-                  disabled={loadingDatabases || !formData.host}
-                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors"
-                >
-                  {loadingDatabases ? (
-                    <Loader2 size={11} className="animate-spin" />
-                  ) : (
-                    <Database size={11} />
-                  )}
-                  {loadingDatabases
-                    ? t("newConnection.loadingDatabases")
-                    : t("newConnection.loadDatabases")}
-                </button>
+                {!isNativeCli && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void loadDatabases();
+                    }}
+                    disabled={loadingDatabases || !formData.host}
+                    className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loadingDatabases ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <Database size={11} />
+                    )}
+                    {loadingDatabases
+                      ? t("newConnection.loadingDatabases")
+                      : t("newConnection.loadDatabases")}
+                  </button>
+                )}
               </div>
               {availableDatabases.length > 0 ? (
                 <Select
@@ -2251,20 +2275,22 @@ export const NewConnectionModal = ({
       )}
 
       {/* Detect JSON in text columns (per-connection opt-in) */}
-      <label className="flex items-start gap-2 cursor-pointer select-none w-fit">
-        <input
-          type="checkbox"
-          checked={detectJsonInTextColumns}
-          onChange={(e) => setDetectJsonInTextColumns(e.target.checked)}
-          className="accent-blue-500 w-3.5 h-3.5 rounded mt-0.5"
-        />
-        <span className="text-xs text-secondary leading-snug">
-          <span className="block">{t("settings.detectJsonInTextColumns")}</span>
-          <span className="block text-muted">
-            {t("settings.detectJsonInTextColumnsDesc")}
+      {!isNativeCli && (
+        <label className="flex items-start gap-2 cursor-pointer select-none w-fit">
+          <input
+            type="checkbox"
+            checked={detectJsonInTextColumns}
+            onChange={(e) => setDetectJsonInTextColumns(e.target.checked)}
+            className="accent-blue-500 w-3.5 h-3.5 rounded mt-0.5"
+          />
+          <span className="text-xs text-secondary leading-snug">
+            <span className="block">{t("settings.detectJsonInTextColumns")}</span>
+            <span className="block text-muted">
+              {t("settings.detectJsonInTextColumnsDesc")}
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+      )}
 
     </div>
   );
@@ -2315,31 +2341,144 @@ export const NewConnectionModal = ({
         </div>
       )}
 
-      <div className="space-y-2">
-        <label className="text-[10px] uppercase font-semibold tracking-wider text-muted block">
-          {t("newConnection.startupScript", { defaultValue: "Startup Script" })}
-        </label>
-      <p className="text-xs text-muted leading-snug">
-        {t("newConnection.startupScriptDescription", {
-          defaultValue:
-            "SQL run on every new connection to this data source. Use it for session settings such as SET / set_config (e.g. bypassing RLS). Separate statements with semicolons.",
-        })}
-      </p>
-      <div className="border border-strong rounded-md overflow-hidden h-48">
-        <SqlEditorWrapper
-          editorKey={`startup-script-${initialConnection?.id ?? "new"}`}
-          initialValue={formData.startup_script ?? ""}
-          onChange={(value) => updateField("startup_script", value)}
-          onRun={() => {}}
-          height="100%"
-          options={{
-            placeholder: t("newConnection.startupScriptPlaceholder", {
-              defaultValue: "SELECT set_config('app.bypass_rls', 'on', false);",
-            }),
-          }}
-        />
+      {driver === "mysql" && (
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              id="rollback-protection-toggle"
+              checked={formData.rollback_protection_enabled === true}
+              onChange={(e) =>
+                updateField(
+                  "rollback_protection_enabled",
+                  e.target.checked ? true : undefined,
+                )
+              }
+              className="accent-blue-500 w-3.5 h-3.5 rounded"
+            />
+            <span className="text-sm font-medium text-secondary">
+              {t("newConnection.rollbackProtection", {
+                defaultValue: "Protect Run All with rollback SQL",
+              })}
+            </span>
+          </label>
+          <p className="text-xs text-muted">
+            {t("newConnection.rollbackProtectionHint", {
+              defaultValue:
+                "Default off. Supported MySQL writes run only after a connection-isolated rollback file is durable; unsafe writes are blocked.",
+            })}
+          </p>
         </div>
-      </div>
+      )}
+
+      {isNativeCli && (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+              {t("newConnection.nativeCliPath", {
+                defaultValue: "Native CLI executable",
+              })}
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.native_cli_path ?? ""}
+                onChange={(event) =>
+                  updateField("native_cli_path", event.target.value || undefined)
+                }
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                spellCheck={false}
+                className="flex-1 px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted placeholder:italic focus:border-blue-500 focus:outline-none transition-colors font-mono"
+                placeholder={
+                  nativeCliKind === "mongosh"
+                    ? "Auto: bundled sidecar, TABULARIS_MONGOSH_PATH, PATH"
+                    : "Auto: bundled sidecar, TABULARIS_REDIS_CLI_PATH, PATH"
+                }
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const selected = await open({
+                    multiple: false,
+                    directory: false,
+                  });
+                  if (typeof selected === "string") {
+                    updateField("native_cli_path", selected);
+                  }
+                }}
+                className="px-3 py-2 bg-base hover:bg-surface-secondary border border-strong rounded-md text-muted hover:text-primary transition-colors"
+                title={t("newConnection.browseFile")}
+              >
+                <FolderOpen size={15} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
+              {t("newConnection.nativeCliArgs", {
+                defaultValue: "Additional CLI arguments",
+              })}
+            </label>
+            <input
+              type="text"
+              value={formData.native_cli_args ?? ""}
+              onChange={(event) =>
+                updateField("native_cli_args", event.target.value || undefined)
+              }
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted placeholder:italic focus:border-blue-500 focus:outline-none transition-colors font-mono"
+              placeholder={
+                nativeCliKind === "mongosh"
+                  ? "--authenticationDatabase admin --authenticationMechanism SCRAM-SHA-256"
+                  : "--tls --insecure"
+              }
+            />
+            <p className="text-xs text-muted">
+              {t("newConnection.nativeCliArgsHint", {
+                defaultValue:
+                  "Parsed as direct argv with quote support; no command shell is involved.",
+              })}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isNativeCli && (
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase font-semibold tracking-wider text-muted block">
+            {t("newConnection.startupScript", {
+              defaultValue: "Startup Script",
+            })}
+          </label>
+          <p className="text-xs text-muted leading-snug">
+            {t("newConnection.startupScriptDescription", {
+              defaultValue:
+                "SQL run on every new connection to this data source. Use it for session settings such as SET / set_config (e.g. bypassing RLS). Separate statements with semicolons.",
+            })}
+          </p>
+          <div className="border border-strong rounded-md overflow-hidden h-48">
+            <SqlEditorWrapper
+              editorKey={`startup-script-${initialConnection?.id ?? "new"}`}
+              initialValue={formData.startup_script ?? ""}
+              onChange={(value) => updateField("startup_script", value)}
+              onRun={() => {}}
+              height="100%"
+              options={{
+                placeholder: t("newConnection.startupScriptPlaceholder", {
+                  defaultValue:
+                    "SELECT set_config('app.bypass_rls', 'on', false);",
+                }),
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -2789,7 +2928,7 @@ export const NewConnectionModal = ({
   );
 
   // ── rendered SSH tab content ──
-  const sshTabContent = !isNetworkDriver ? (
+  const sshTabContent = !supportsTunnels ? (
     <p className="text-xs text-muted italic">
       {t("newConnection.sshNotAvailable", {
         defaultValue: "SSH is not available for this driver.",
@@ -2996,7 +3135,7 @@ export const NewConnectionModal = ({
   );
 
   // ── rendered K8s tab content ──
-  const k8sTabContent = !isNetworkDriver ? (
+  const k8sTabContent = !supportsTunnels ? (
     <p className="text-xs text-muted italic">
       {t("newConnection.k8sNotAvailable", {
         defaultValue: "Kubernetes is not available for this driver.",
@@ -3470,8 +3609,8 @@ export const NewConnectionModal = ({
                   ...(activeDriver?.capabilities?.supports_ssl && isNetworkDriver
                     ? [{ id: "ssl", label: "SSL" }]
                     : []),
-                  ...(isNetworkDriver ? [{ id: "ssh", label: "SSH" }] : []),
-                  ...(isNetworkDriver ? [{ id: "k8s", label: "Kubernetes" }] : []),
+                  ...(supportsTunnels ? [{ id: "ssh", label: "SSH" }] : []),
+                  ...(supportsTunnels ? [{ id: "k8s", label: "Kubernetes" }] : []),
                   {
                     id: "advanced",
                     label: t("newConnection.advanced", {

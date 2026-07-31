@@ -1,5 +1,7 @@
 import { splitInto } from './splitter';
 import { collectNonCodeSpans } from './nonCodeSpans';
+import { scanToken } from './tokenizer';
+import type { TokenizerState } from './tokenizer';
 
 export type Dialect =
   | 'postgres'
@@ -287,7 +289,50 @@ export function splitQueries(
   sql: string,
   dialect?: Dialect | string,
 ): string[] {
-  return splitStatements(sql, dialect).map((s) => s.text);
+  const options = dialectOptions(normalizeDialect(dialect));
+  return splitInto(sql, options)
+    .map((statement) => stripOrdinaryComments(statement.text, options))
+    .filter((query) => query.length > 0);
+}
+
+/**
+ * Remove comments that have no execution semantics before SQL is submitted.
+ * Conditional comments and optimizer hints are emitted as data tokens by the
+ * tokenizer, so they remain intact.
+ */
+function stripOrdinaryComments(
+  sql: string,
+  options: DialectOptions,
+): string {
+  const state: TokenizerState = { delimiter: ';', lineLeading: true };
+  const output: string[] = [];
+  let position = 0;
+
+  while (position < sql.length) {
+    const token = scanToken(sql, position, options, state);
+    if (token === null) break;
+
+    const end = position + token.length;
+    if (token.kind === 'blockComment') {
+      // Keep adjacent SQL tokens separated after the comment is removed.
+      output.push(' ');
+    } else if (token.kind !== 'lineComment') {
+      output.push(sql.slice(position, end));
+    }
+
+    if (token.kind === 'eoln') {
+      state.lineLeading = true;
+    } else if (token.kind !== 'whitespace') {
+      state.lineLeading = false;
+    }
+    if (token.kind === 'setDelimiter' && token.value !== undefined) {
+      state.delimiter = token.value;
+    }
+
+    position = end;
+  }
+
+  return output.join('').trim();
 }
 
 /**

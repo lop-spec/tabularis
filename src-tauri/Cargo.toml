@@ -92,6 +92,7 @@ aes-gcm = "0.10"
 # AES/MD5 decryption (DBeaver, Beekeeper) reuses the existing `openssl` dep.
 plist = "1.7"
 roxmltree = "0.20"
+portable-pty = "0.9.0"
 
 # GTK dependencies for Wayland window title workaround (Linux only)
 [target.'cfg(target_os = "linux")'.dependencies]

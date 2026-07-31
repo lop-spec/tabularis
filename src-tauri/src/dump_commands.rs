@@ -6,10 +6,10 @@ use crate::commands::{
 use crate::drivers::{mysql, postgres, sqlite};
 use crate::dump_utils::{drop_table_if_exists, format_table_ref, insert_into_statement};
 use crate::models::ConnectionParams;
-use crate::pool_manager::{get_mysql_pool, get_postgres_pool, get_sqlite_pool};
+use crate::pool_manager::{get_postgres_pool, get_sqlite_pool};
 use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
+use sqlx::{Acquire, Row};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::sync::{Arc, Mutex};
@@ -365,6 +365,61 @@ impl<R: BufRead> SqlStatementStream<R> {
     }
 }
 
+fn strip_leading_sql_comments(mut statement: &str) -> &str {
+    loop {
+        statement = statement.trim_start();
+        if statement.starts_with("--") || statement.starts_with('#') {
+            statement = statement
+                .find('\n')
+                .map(|newline| &statement[newline + 1..])
+                .unwrap_or("");
+            continue;
+        }
+        if let Some(comment) = statement.strip_prefix("/*") {
+            statement = comment
+                .find("*/")
+                .map(|end| &comment[end + 2..])
+                .unwrap_or("");
+            continue;
+        }
+        return statement;
+    }
+}
+
+/// Database-level directives embedded in a dump must never override the
+/// database selected in the import UI. They are replaced with the authoritative
+/// target scope while ordinary statements are executed inside that scope.
+fn is_mysql_import_scope_statement(statement: &str) -> bool {
+    let mut words = strip_leading_sql_comments(statement).split_whitespace();
+    let first = words.next().unwrap_or_default().trim_end_matches(';');
+    let second = words.next().unwrap_or_default().trim_end_matches(';');
+
+    first.eq_ignore_ascii_case("USE")
+        || (["CREATE", "DROP", "ALTER"]
+            .iter()
+            .any(|keyword| first.eq_ignore_ascii_case(keyword))
+            && (["DATABASE", "SCHEMA"]
+                .iter()
+                .any(|keyword| second.eq_ignore_ascii_case(keyword))))
+}
+
+#[cfg(test)]
+mod import_scope_tests {
+    use super::is_mysql_import_scope_statement;
+
+    #[test]
+    fn mysql_import_database_directives_cannot_escape_the_selected_target() {
+        assert!(is_mysql_import_scope_statement("USE `default_db`;"));
+        assert!(is_mysql_import_scope_statement(
+            "/* dump header */\nCREATE DATABASE original_db;"
+        ));
+        assert!(is_mysql_import_scope_statement("DROP SCHEMA original_db;"));
+        assert!(!is_mysql_import_scope_statement(
+            "INSERT INTO audit_log(message) VALUES ('USE default_db')"
+        ));
+    }
+}
+
 // Helper macro for streaming execution with progress
 macro_rules! execute_statements_streaming {
     ($executor_macro:ident, $stream:expr, $app:expr) => {{
@@ -458,7 +513,8 @@ pub async fn import_database<R: Runtime>(
         params.database = crate::models::DatabaseSelection::Single(db);
     }
     let driver = saved_conn.params.driver.clone();
-    let pg_schema = schema.unwrap_or_else(|| "public".to_string());
+    let target_scope = schema;
+    let pg_schema = target_scope.clone().unwrap_or_else(|| "public".to_string());
     let app_handle = app.clone();
     let conn_id = connection_id.clone();
 
@@ -483,8 +539,14 @@ pub async fn import_database<R: Runtime>(
         // Execute with transaction and optimizations for speed
         match driver.as_str() {
             "mysql" => {
-                let pool = get_mysql_pool(&params).await?;
-                let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+                let target_database = target_scope
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|database| !database.is_empty())
+                    .ok_or_else(|| "A target database is required for MySQL import".to_string())?;
+                let scope_statement = mysql::mysql_database_scope_statement(target_database);
+                let mut conn = mysql::acquire_mysql_conn(&params, Some(target_database)).await?;
+                let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
 
                 // Performance optimizations for MySQL
                 sqlx::query("SET FOREIGN_KEY_CHECKS=0")
@@ -502,7 +564,15 @@ pub async fn import_database<R: Runtime>(
 
                 macro_rules! execute_statement {
                     ($stmt:expr) => {
-                        sqlx::query($stmt).execute(&mut *tx)
+                        async {
+                            use sqlx::Executor;
+                            (&mut *tx).execute(sqlx::raw_sql(&scope_statement)).await?;
+                            if is_mysql_import_scope_statement($stmt) {
+                                (&mut *tx).execute(sqlx::raw_sql(&scope_statement)).await
+                            } else {
+                                sqlx::query($stmt).execute(&mut *tx).await
+                            }
+                        }
                     };
                 }
 

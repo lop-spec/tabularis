@@ -53,6 +53,20 @@ export interface BatchStatementResult {
   result: QueryResult | null;
   error: string | null;
   execution_time_ms: number | null;
+  rollback_file?: string;
+  skipped?: boolean;
+  rollback_unprotected?: boolean;
+  transaction_active?: boolean;
+  transaction_outcome?:
+    | "opened"
+    | "active"
+    | "committed"
+    | "rolled_back"
+    | "auto_rolled_back"
+    | "ddl_implicit_commit"
+    | "unknown";
+  transaction_recovery_file?: string;
+  transaction_idle_timeout_seconds?: number;
 }
 
 export interface QueryResultEntry {
@@ -119,6 +133,9 @@ export interface Tab {
   materialized?: boolean; // Grid data is read-only (e.g. materialized views: only REFRESH writes)
   results?: QueryResultEntry[];
   activeResultId?: string;
+  transactionActive?: boolean;
+  transactionRecoveryFile?: string;
+  transactionIdleTimeoutSeconds?: number;
   notebookId?: string; // Reference to notebook file in config dir
   notebookState?: NotebookState; // Deprecated: kept for migration of old tabs
 }

@@ -2,6 +2,7 @@
 mod tests {
     use crate::models::{
         single_db_before_multi_transition, ConnectionParams, DatabaseSelection,
+        RollbackUnsupportedPolicy,
     };
 
     #[test]
@@ -138,5 +139,42 @@ mod tests {
             Some("mongodb+srv://user:pass@cluster0.example.invalid/")
         );
         assert_eq!(params.connection_uri_in_keychain, Some(true));
+    }
+
+    #[test]
+    fn rollback_protection_is_backward_compatible_and_defaults_off() {
+        let params: ConnectionParams =
+            serde_json::from_str(r#"{"driver":"mysql","database":"app"}"#).unwrap();
+        assert_eq!(params.rollback_protection_enabled, None);
+        assert!(!params.rollback_protection_enabled.unwrap_or(false));
+    }
+
+    #[test]
+    fn rollback_protection_round_trips_per_connection() {
+        let params: ConnectionParams = serde_json::from_str(
+            r#"{"driver":"mysql","database":"app","rollback_protection_enabled":true}"#,
+        )
+        .unwrap();
+        assert_eq!(params.rollback_protection_enabled, Some(true));
+        let serialized = serde_json::to_value(params).unwrap();
+        assert_eq!(serialized["rollback_protection_enabled"], true);
+    }
+
+    #[test]
+    fn rollback_unsupported_policy_is_ephemeral_and_not_persisted() {
+        let mut params: ConnectionParams =
+            serde_json::from_str(r#"{"driver":"mysql","database":"app"}"#).unwrap();
+        params.rollback_unsupported_policy = Some(RollbackUnsupportedPolicy::ExecuteUnprotected);
+
+        let serialized = serde_json::to_value(params).unwrap();
+        assert!(serialized.get("rollback_unsupported_policy").is_none());
+        assert_eq!(
+            serde_json::from_str::<RollbackUnsupportedPolicy>(r#""skip""#).unwrap(),
+            RollbackUnsupportedPolicy::Skip
+        );
+        assert_eq!(
+            serde_json::from_str::<RollbackUnsupportedPolicy>(r#""execute_unprotected""#).unwrap(),
+            RollbackUnsupportedPolicy::ExecuteUnprotected
+        );
     }
 }

@@ -8,7 +8,9 @@ import {
   getResultValueType,
   buildPkMap,
   serializePkKey,
+  isGridCellInRange,
   type ColumnDisplayInfo,
+  type GridCellRange,
   type MergedRow,
 } from "../../utils/dataGrid";
 import { isGeometricType } from "../../utils/geometry";
@@ -62,10 +64,7 @@ export interface RowCtx {
   pkIndexMaps: number[];
   parentViewportWidth: number;
   readonly: boolean | undefined;
-  updateSelection: (s: Set<number>) => void;
-  setFocusedCell: React.Dispatch<
-    React.SetStateAction<{ rowIndex: number; colIndex: number } | null>
-  >;
+  cellSelection: GridCellRange | null;
   setExpandedCell: React.Dispatch<
     React.SetStateAction<{
       rowIndex: number;
@@ -83,6 +82,16 @@ export interface RowCtx {
   >;
   openInSidebar: (rowIndex: number, focusField?: string) => void;
   handleRowClick: (index: number, e: React.MouseEvent) => void;
+  handleCellMouseDown: (
+    rowIndex: number,
+    colIndex: number,
+    event: React.MouseEvent<HTMLTableCellElement>,
+  ) => void;
+  handleCellMouseEnter: (
+    rowIndex: number,
+    colIndex: number,
+    event: React.MouseEvent<HTMLTableCellElement>,
+  ) => void;
   handleCellDoubleClick: (
     rowIndex: number,
     colIndex: number,
@@ -168,12 +177,13 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
     pkIndexMaps,
     parentViewportWidth,
     readonly: readonlyProp,
-    updateSelection,
-    setFocusedCell,
+    cellSelection,
     setExpandedCell,
     setEditingCell,
     openInSidebar,
     handleRowClick,
+    handleCellMouseDown,
+    handleCellMouseEnter,
     handleCellDoubleClick,
     handleContextMenu,
     handleEditCommit,
@@ -212,9 +222,10 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
     <>
       <tr
         style={{ height: 35 }}
+        aria-selected={isSelected}
         className={`transition-colors group ${
           isSelected
-            ? "bg-blue-900/20 border-l-4 border-blue-400"
+            ? "bg-blue-500/15 border-l-4 border-blue-400"
             : isInsertion
               ? "bg-green-500/8 border-l-4 border-green-400"
               : isPendingDelete
@@ -224,8 +235,6 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
       >
         <td
           onClick={(e) => {
-            setFocusedCell(null);
-            onForeignKeyHidePanel?.();
             handleRowClick(rowIndex, e);
           }}
           onDoubleClick={() => {
@@ -236,12 +245,12 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
           className={`px-2 py-1.5 text-xs text-center border-b border-r border-default sticky left-0 z-10 cursor-pointer select-none w-[50px] min-w-[50px] ${
             isInsertion
               ? isSelected
-                ? "bg-blue-900/40 text-blue-200 font-bold"
+                ? "bg-blue-500/30 text-blue-100 font-bold ring-1 ring-inset ring-blue-400/70"
                 : "bg-green-950/30 text-green-300 font-bold"
               : isPendingDelete
                 ? "bg-red-950/50 text-red-500 line-through"
                 : isSelected
-                  ? "bg-blue-900/40 text-blue-200 font-bold"
+                  ? "bg-blue-500/30 text-blue-100 font-bold ring-1 ring-inset ring-blue-400/70"
                   : "bg-base text-muted hover:bg-surface-secondary"
           }`}
         >
@@ -319,6 +328,14 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
           const isFocused =
             focusedCell?.rowIndex === rowIndex &&
             focusedCell?.colIndex === colIndex;
+          const isCellSelected = isGridCellInRange(
+            cellSelection,
+            rowIndex,
+            colIndex,
+          );
+          const isSelectionAnchor =
+            cellSelection?.anchor.rowIndex === rowIndex &&
+            cellSelection.anchor.colIndex === colIndex;
 
           const fkForPreview = getForeignKeyForPreview(
             colName,
@@ -339,15 +356,19 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
           return (
             <td
               key={colName}
+              aria-selected={isCellSelected}
+              onMouseDown={(event) =>
+                handleCellMouseDown(rowIndex, colIndex, event)
+              }
+              onMouseEnter={(event) =>
+                handleCellMouseEnter(rowIndex, colIndex, event)
+              }
               onClick={(e) => {
                 // Don't handle row click if clicking on a button
                 const target = e.target as HTMLElement;
                 if (target.closest("button")) {
                   return;
                 }
-                setFocusedCell({ rowIndex, colIndex });
-                updateSelection(new Set());
-
                 if (fkForPreview && onForeignKeyShowPanel) {
                   onForeignKeyShowPanel(fkForPreview, rawCellValue);
                 } else {
@@ -367,7 +388,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
               onContextMenu={(e) =>
                 handleContextMenu(e, rowOriginal, rowIndex, colIndex, colName)
               }
-              className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} ${fkForPreview ? "cursor-pointer" : "cursor-text"} ${stateClass} ${isFocused ? "ring-2 ring-inset ring-blue-400" : ""}`}
+              className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px] select-none"} ${fkForPreview ? "cursor-pointer" : "cursor-cell"} ${stateClass} ${isCellSelected ? "bg-blue-500/25 ring-1 ring-inset ring-blue-400/70" : ""} ${isFocused || isSelectionAnchor ? "outline outline-2 outline-blue-300 outline-offset-[-2px]" : ""}`}
               title={
                 !isEditing ? truncateCellPreview(formattedDisplay).text : ""
               }

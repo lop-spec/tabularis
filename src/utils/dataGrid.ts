@@ -49,6 +49,84 @@ function cellValuesEqual(a: unknown, b: unknown): boolean {
 
 export type SortDirection = "asc" | "desc" | null;
 
+export interface GridCellPosition {
+  rowIndex: number;
+  colIndex: number;
+}
+
+export interface GridCellRange {
+  anchor: GridCellPosition;
+  focus: GridCellPosition;
+}
+
+export interface NormalizedGridCellRange {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+}
+
+export function normalizeGridCellRange(
+  range: GridCellRange,
+): NormalizedGridCellRange {
+  return {
+    startRow: Math.min(range.anchor.rowIndex, range.focus.rowIndex),
+    endRow: Math.max(range.anchor.rowIndex, range.focus.rowIndex),
+    startCol: Math.min(range.anchor.colIndex, range.focus.colIndex),
+    endCol: Math.max(range.anchor.colIndex, range.focus.colIndex),
+  };
+}
+
+export function isGridCellInRange(
+  range: GridCellRange | null,
+  rowIndex: number,
+  colIndex: number,
+): boolean {
+  if (!range) return false;
+  const normalized = normalizeGridCellRange(range);
+  return (
+    rowIndex >= normalized.startRow &&
+    rowIndex <= normalized.endRow &&
+    colIndex >= normalized.startCol &&
+    colIndex <= normalized.endCol
+  );
+}
+
+export function extractGridCellRange<TColumn>(
+  rows: unknown[][],
+  columns: TColumn[],
+  range: GridCellRange,
+): { rows: unknown[][]; columns: TColumn[] } {
+  if (rows.length === 0 || columns.length === 0) {
+    return { rows: [], columns: [] };
+  }
+
+  const normalized = normalizeGridCellRange(range);
+  const startRow = Math.max(0, normalized.startRow);
+  const endRow = Math.min(rows.length - 1, normalized.endRow);
+  const startCol = Math.max(0, normalized.startCol);
+  const endCol = Math.min(columns.length - 1, normalized.endCol);
+
+  if (startRow > endRow || startCol > endCol) {
+    return { rows: [], columns: [] };
+  }
+
+  return {
+    columns: columns.slice(startCol, endCol + 1),
+    rows: rows
+      .slice(startRow, endRow + 1)
+      .map((row) => row.slice(startCol, endCol + 1)),
+  };
+}
+
+export function isSingleGridCellRange(range: GridCellRange | null): boolean {
+  if (!range) return false;
+  return (
+    range.anchor.rowIndex === range.focus.rowIndex &&
+    range.anchor.colIndex === range.focus.colIndex
+  );
+}
+
 /** Represents a merged row combining existing data and pending insertions */
 export interface MergedRow {
   type: "existing" | "insertion";

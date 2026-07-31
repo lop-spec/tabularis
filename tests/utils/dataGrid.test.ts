@@ -10,6 +10,9 @@ import {
   getCellStateClass,
   buildPkMap,
   serializePkKey,
+  normalizeGridCellRange,
+  isGridCellInRange,
+  extractGridCellRange,
   type ColumnDisplayInfo,
   type CellClassParams,
 } from '../../src/utils/dataGrid';
@@ -232,6 +235,49 @@ describe('dataGrid utils', () => {
     it('should handle consecutive indices', () => {
       expect(calculateSelectionRange(5, 6)).toEqual([5, 6]);
       expect(calculateSelectionRange(6, 5)).toEqual([5, 6]);
+    });
+  });
+
+  describe('grid cell range selection', () => {
+    const reverseRange = {
+      anchor: { rowIndex: 2, colIndex: 2 },
+      focus: { rowIndex: 0, colIndex: 1 },
+    };
+
+    it('normalizes a reverse drag into inclusive bounds', () => {
+      expect(normalizeGridCellRange(reverseRange)).toEqual({
+        startRow: 0,
+        endRow: 2,
+        startCol: 1,
+        endCol: 2,
+      });
+    });
+
+    it('detects cells inside and outside the rectangular selection', () => {
+      expect(isGridCellInRange(reverseRange, 1, 1)).toBe(true);
+      expect(isGridCellInRange(reverseRange, 2, 2)).toBe(true);
+      expect(isGridCellInRange(reverseRange, 1, 0)).toBe(false);
+    });
+
+    it('extracts only the selected columns and rows for formatted copy', () => {
+      expect(
+        extractGridCellRange(
+          [
+            [1, 'Alice', 'admin'],
+            [2, 'Bob', 'viewer'],
+            [3, 'Carol', 'editor'],
+          ],
+          ['id', 'name', 'role'],
+          reverseRange,
+        ),
+      ).toEqual({
+        columns: ['name', 'role'],
+        rows: [
+          ['Alice', 'admin'],
+          ['Bob', 'viewer'],
+          ['Carol', 'editor'],
+        ],
+      });
     });
   });
 

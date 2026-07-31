@@ -203,7 +203,10 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     isOpen: boolean;
     tableName: string;
   }>({ isOpen: false, tableName: "" });
-  const [generateSQLModal, setGenerateSQLModal] = useState<string | null>(null);
+  const [generateSQLModal, setGenerateSQLModal] = useState<{
+    tableName: string;
+    schema?: string;
+  } | null>(null);
   const setSidebarTab = onSidebarTabChange;
   const [historyToFavoriteSQL, setHistoryToFavoriteSQL] = useState<string | null>(null);
   const [historyToFavoriteDB, setHistoryToFavoriteDB] = useState<string | null>(null);
@@ -512,6 +515,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   };
 
   const handleImportDatabase = async (database?: string) => {
+    const targetDatabase =
+      database ?? activeSchema ?? selectedDatabases[0] ?? activeDatabaseName ?? "";
+    if (!targetDatabase) {
+      showAlert(t("newConnection.noDatabasesSelected"), { kind: "warning" });
+      return;
+    }
     const file = await open({
       filters: [{ name: "SQL / Zip File", extensions: ["sql", "zip"] }],
     });
@@ -521,7 +530,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
         { title: t("dump.importDatabase"), kind: "warning" },
       );
       if (!confirmed) return;
-      setImportModal({ filePath: file, database: database ?? activeDatabaseName ?? "" });
+      setImportModal({ filePath: file, database: targetDatabase });
     }
   };
 
@@ -1912,7 +1921,11 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     supportsManageTables(activeCapabilities) ? {
                       label: t("sidebar.generateSQL"),
                       icon: FileCode,
-                      action: () => setGenerateSQLModal(contextMenu.id),
+                      action: () =>
+                        setGenerateSQLModal({
+                          tableName: contextMenu.id,
+                          schema: ctxSchema,
+                        }),
                     } : null,
                     supportsManageTables(activeCapabilities) ? {
                       label: t("clipboardImport.contextMenuLabel"),
@@ -2575,7 +2588,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
       {generateSQLModal && (
         <GenerateSQLModal
           isOpen={true}
-          tableName={generateSQLModal}
+          tableName={generateSQLModal.tableName}
+          schema={generateSQLModal.schema}
           onClose={() => setGenerateSQLModal(null)}
         />
       )}
@@ -2600,10 +2614,18 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           onClose={() => setImportModal(null)}
           connectionId={activeConnectionId}
           databaseName={importModal.database || activeDatabaseName || "Database"}
-          targetDatabase={importModal.database || activeDatabaseName || undefined}
+          targetDatabase={
+            isMultiDatabaseCapable(activeCapabilities)
+              ? importModal.database || activeDatabaseName || undefined
+              : undefined
+          }
           filePath={importModal.filePath}
           onSuccess={() => {
-            if (refreshTables) refreshTables();
+            if (isMultiDatabaseCapable(activeCapabilities)) {
+              refreshDatabaseData(importModal.database);
+            } else if (refreshTables) {
+              refreshTables();
+            }
           }}
         />
       )}

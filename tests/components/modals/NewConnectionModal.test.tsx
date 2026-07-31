@@ -177,6 +177,10 @@ vi.mock("../../../src/components/modals/NewConnectionModal/AppearanceSection", (
   AppearanceSection: () => null,
 }));
 
+vi.mock("../../../src/components/ui/SqlEditorWrapper", () => ({
+  SqlEditorWrapper: () => <div data-testid="sql-editor" />,
+}));
+
 vi.mock("../../../src/components/modals/SshConnectionsModal", () => ({
   SshConnectionsModal: () => null,
 }));
@@ -445,6 +449,67 @@ describe("NewConnectionModal K8s port defaults", () => {
         }),
       );
     });
+  });
+});
+
+describe("NewConnectionModal rollback protection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    driverState.defaultPort = 3306;
+    vi.mocked(invoke).mockResolvedValue({ id: "saved-connection" });
+    sshMocks.loadSshConnections.mockResolvedValue([]);
+    k8sMocks.loadK8sConnections.mockResolvedValue([]);
+  });
+
+  it("defaults off and persists only after the connection toggle is enabled", async () => {
+    renderModal();
+    pickEngineFromCatalogue();
+    fireEvent.change(screen.getByPlaceholderText("newConnection.namePlaceholder"), {
+      target: { value: "Protected MySQL" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("newConnection.dbNamePlaceholder"), {
+      target: { value: "app" },
+    });
+    fireEvent.click(screen.getByText("newConnection.advanced"));
+
+    const toggle = document.getElementById(
+      "rollback-protection-toggle",
+    ) as HTMLInputElement;
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+
+    fireEvent.click(screen.getByText("newConnection.save"));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "save_connection",
+        expect.objectContaining({
+          params: expect.objectContaining({
+            rollback_protection_enabled: true,
+          }),
+        }),
+      );
+    });
+  });
+
+  it("restores the saved per-connection toggle when editing", async () => {
+    vi.mocked(invoke).mockImplementation((command) =>
+      command === "get_connection_by_id"
+        ? Promise.reject(new Error("use initial params"))
+        : Promise.resolve("ok"),
+    );
+    renderModal(
+      createInitialConnection({
+        rollback_protection_enabled: true,
+      }),
+    );
+    await waitFor(() => {
+      expect(sshMocks.loadSshConnections).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByText("newConnection.advanced"));
+    expect(
+      document.getElementById("rollback-protection-toggle"),
+    ).toBeChecked();
   });
 });
 

@@ -83,6 +83,7 @@ describe("MultiResultPanel", () => {
     connectionId: "conn-1",
     copyFormat: "csv" as const,
     csvDelimiter: ",",
+    csvIncludeHeaders: true,
     onSelectResult: mockOnSelectResult,
     onRerunEntry: mockOnRerunEntry,
     onPageChange: mockOnPageChange,
@@ -94,10 +95,22 @@ describe("MultiResultPanel", () => {
     onRenameEntry: mockOnRenameEntry,
   };
 
-  it("renders tab buttons for each result entry", () => {
+  it("defaults multiple results to stacked view and can switch to tabs", () => {
     const results = [
-      makeEntry({ id: "r-0", queryIndex: 0, query: "SELECT 1" }),
-      makeEntry({ id: "r-1", queryIndex: 1, query: "SELECT 2" }),
+      makeEntry({
+        id: "r-0",
+        queryIndex: 0,
+        query: "SELECT 1",
+        isLoading: false,
+        result: makeResult([[1]]),
+      }),
+      makeEntry({
+        id: "r-1",
+        queryIndex: 1,
+        query: "SELECT 2",
+        isLoading: false,
+        result: makeResult([[2]]),
+      }),
     ];
     render(
       <MultiResultPanel
@@ -106,9 +119,45 @@ describe("MultiResultPanel", () => {
         activeResultId="r-0"
       />,
     );
-    // i18n mock interpolates {{index}} so we get "editor.multiResult.query" with index values
+
+    expect(screen.getAllByTestId("data-grid")).toHaveLength(2);
+    fireEvent.click(screen.getByTitle("editor.multiResult.viewTabs"));
+
     const tabTexts = screen.getAllByText(/editor\.multiResult\.query/);
     expect(tabTexts).toHaveLength(2);
+  });
+
+  it("switches to the stacked default when a second result arrives", () => {
+    const first = makeEntry({
+      id: "r-0",
+      queryIndex: 0,
+      isLoading: false,
+      result: makeResult([[1]]),
+    });
+    const second = makeEntry({
+      id: "r-1",
+      queryIndex: 1,
+      query: "SELECT 2",
+      isLoading: false,
+      result: makeResult([[2]]),
+    });
+    const { rerender } = render(
+      <MultiResultPanel
+        {...defaultProps}
+        results={[first]}
+        activeResultId="r-0"
+      />,
+    );
+
+    rerender(
+      <MultiResultPanel
+        {...defaultProps}
+        results={[first, second]}
+        activeResultId="r-0"
+      />,
+    );
+
+    expect(screen.getAllByTestId("data-grid")).toHaveLength(2);
   });
 
   it("shows loading spinner for loading entries", () => {

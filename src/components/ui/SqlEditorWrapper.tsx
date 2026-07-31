@@ -35,6 +35,10 @@ interface SqlEditorWrapperProps {
    * the button with its actual target. Requires `dialect`.
    */
   onRunContextChange?: (context: RunContext) => void;
+  /** Monaco language used by this editor surface. */
+  language?: string;
+  /** Disable SQL-only actions when the editor hosts a native CLI language. */
+  enableSqlTools?: boolean;
 }
 
 // Internal component that resets when key changes
@@ -47,7 +51,9 @@ const SqlEditorInternal = ({
   options,
   dialect,
   onRunAll,
-  onRunContextChange
+  onRunContextChange,
+  language = "sql",
+  enableSqlTools = true,
 }: SqlEditorWrapperProps & { editorKey: string }) => {
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -275,7 +281,7 @@ const SqlEditorInternal = ({
       );
 
       // Format SQL action (Shift+Alt+F) — uses the existing formatSql utility
-      editor.addAction({
+      if (enableSqlTools) editor.addAction({
         id: 'tabularis.formatSql',
         label: 'Format SQL',
         contextMenuGroupId: '1_modification',
@@ -433,7 +439,7 @@ const SqlEditorInternal = ({
     return (
       <MonacoEditor
         height={height}
-        defaultLanguage="sql"
+        language={language}
         theme={editorTheme.id}
         defaultValue={initialValue}
         onChange={handleChange}

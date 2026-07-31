@@ -39,6 +39,7 @@ import type { SavedConnection } from "../contexts/DatabaseContext";
 import { flattenGroupTree } from "../utils/groupTree";
 import { toErrorMessage } from "../utils/errors";
 import { fuzzyFilter } from "../utils/fuzzy";
+import { shouldRestoreLastConnections } from "../utils/connections";
 import { useOpenConnectionInNewWindow } from "../hooks/useOpenConnectionInNewWindow";
 import { GroupHeader } from "../components/connections/GroupHeader";
 import { ConnectionCard } from "../components/connections/ConnectionCard";
@@ -51,7 +52,7 @@ let autoConnectAttempted = false;
 
 export const Connections = () => {
   const { t } = useTranslation();
-  const { settings } = useSettings();
+  const { settings, isLoading: settingsLoading } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const {
@@ -143,7 +144,14 @@ export const Connections = () => {
   useEffect(() => {
     if (autoConnectAttempted) return;
     if (connections.length === 0) return;
-    if (settings.autoConnectLastConnection === false) return;
+    if (
+      !shouldRestoreLastConnections(
+        settingsLoading,
+        settings.autoConnectLastConnection,
+      )
+    ) {
+      return;
+    }
     autoConnectAttempted = true;
     void (async () => {
       try {
@@ -180,6 +188,7 @@ export const Connections = () => {
     })();
   }, [
     connections,
+    settingsLoading,
     settings.autoConnectLastConnection,
     isConnectionOpen,
     connect,

@@ -1,4 +1,6 @@
-use super::stmt_classify::{find_first_top_level_object_keyword, is_text_protocol_stmt};
+use super::stmt_classify::{
+    find_first_top_level_object_keyword, is_text_protocol_stmt, text_protocol_stmt_may_return_rows,
+};
 
 #[test]
 fn find_first_top_level_object_keyword_skips_current_user_parentheses() {
@@ -47,4 +49,33 @@ fn keeps_repeated_whitespace_definer_views_out_of_text_protocol() {
             "repeated-whitespace definer view must not route through text protocol: {sql}"
         );
     }
+}
+
+#[test]
+fn routes_history_observed_mysql_1295_statements_through_text_protocol() {
+    for sql in [
+        "PREPARE workflow2_guard_stmt FROM @workflow2_guard_sql",
+        "EXECUTE workflow2_guard_stmt",
+        "DEALLOCATE PREPARE workflow2_guard_stmt",
+        "USE `csr_sync_hub`",
+        "SHOW WARNINGS",
+        "CREATE EVENT IF NOT EXISTS mysql.ev_truncate_general_log_daily ON SCHEDULE EVERY 1 DAY DO TRUNCATE TABLE mysql.general_log",
+        "DROP EVENT IF EXISTS mysql.ev_general_log_backup_7d",
+        "RESIGNAL",
+    ] {
+        assert!(
+            is_text_protocol_stmt(sql),
+            "history-observed statement must use MySQL text protocol: {sql}"
+        );
+    }
+}
+
+#[test]
+fn execute_statement_uses_result_stream_path() {
+    assert!(text_protocol_stmt_may_return_rows(
+        "-- dynamic SELECT\nEXECUTE workflow2_verify_stmt"
+    ));
+    assert!(!text_protocol_stmt_may_return_rows(
+        "PREPARE stmt FROM @sql"
+    ));
 }

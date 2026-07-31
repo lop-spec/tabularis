@@ -1051,6 +1051,10 @@ mod tests {
             ssl_key: None,
             enable_cleartext_plugin: None,
             pipes_as_concat: None,
+            rollback_protection_enabled: None,
+            rollback_unsupported_policy: None,
+            transaction_context_id: None,
+            allow_implicit_transaction_commit: false,
             ssh_enabled: None,
             ssh_connection_id: None,
             ssh_host: None,
@@ -1071,8 +1075,11 @@ mod tests {
             k8s_kubectl_path: None,
             k8s_kubeconfig_path: None,
             startup_script: None,
+            native_cli_path: None,
+            native_cli_args: None,
             use_iam_auth: None,
             connection_id: Some("conn-1".to_string()),
+            connection_name: None,
         }
     }
 

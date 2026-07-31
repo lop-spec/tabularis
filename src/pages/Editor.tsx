@@ -3,7 +3,14 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
-import { getTableDataChangeScope, isMultiDatabaseCapable } from "../utils/database";
+import {
+  changesDatabaseCatalog,
+  getTableDataChangeScope,
+  isMultiDatabaseCapable,
+  resolveActiveDatabase,
+  resolveExecutionScope,
+  resolveUseDatabaseSwitch,
+} from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
@@ -55,9 +62,11 @@ import {
   ExternalLink,
   CheckCircle2,
   WrapText,
+  Lock,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
+import { join } from "@tauri-apps/api/path";
 import { TableToolbar } from "../components/ui/TableToolbar";
 import { DataGrid } from "../components/ui/DataGrid";
 import { MultiResultPanel } from "../components/ui/MultiResultPanel";
@@ -65,6 +74,7 @@ import { ErrorDisplay } from "../components/ui/ErrorDisplay";
 import { NewRowModal } from "../components/modals/NewRowModal";
 import { QuerySelectionModal } from "../components/modals/QuerySelectionModal";
 import { ConfirmModal } from "../components/modals/ConfirmModal";
+import { RollbackRiskModal } from "../components/modals/RollbackRiskModal";
 import { ExplainSelectionModal } from "../components/modals/ExplainSelectionModal";
 import { TabSwitcherModal } from "../components/modals/TabSwitcherModal";
 import { QueryModal } from "../components/modals/QueryModal";
@@ -105,11 +115,17 @@ import {
   type ResultsClosedPayload,
 } from "../utils/resultsWindowSync";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
+import { NativeCliTerminal } from "../components/ui/NativeCliTerminal";
+import {
+  findNativeCliCommandAtOffset,
+  splitNativeCliCommands,
+  type NativeCliKind,
+} from "../utils/nativeCli";
 import { NotebookView } from "../components/notebook/NotebookView";
 import { useSqlAutocompleteRegistration } from "../hooks/useSqlAutocompleteRegistration";
 import { createNotebook, renameNotebook } from "../utils/notebookStore";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { useAlert } from "../hooks/useAlert";
 import { useDatabase } from "../hooks/useDatabase";
 import { useDrivers } from "../hooks/useDrivers";
@@ -138,6 +154,17 @@ import {
   isFocusedPane,
 } from "../utils/tabScroll";
 import clsx from "clsx";
+import {
+  buildBatchExportFileName,
+  getExportableResultEntries,
+} from "../utils/batchExport";
+import {
+  parseRollbackRiskReview,
+  requiresRollbackProtectedExecution,
+  type RollbackRiskDecision,
+  type RollbackRiskReview,
+  type RollbackUnsupportedPolicy,
+} from "../utils/rollbackProtection";
 
 interface EditorState {
   initialQuery?: string;
@@ -154,6 +181,8 @@ interface EditorState {
 interface ExportProgress {
   rows_processed: number;
 }
+
+type EditorCopyFormat = "csv" | "json" | "sql-insert" | "markdown";
 
 const CHEVRON_SELECT_STYLE: React.CSSProperties = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
@@ -175,6 +204,12 @@ function getStatementAtCursor(
   return findStatementAtOffset(statements, offset);
 }
 
+function isExplicitTransactionControl(sql: string): boolean {
+  return /^(?:START\s+TRANSACTION|BEGIN(?:\s+WORK)?|COMMIT(?:\s+WORK)?|ROLLBACK(?:\s+WORK)?)$/i.test(
+    sql.trim().replace(/;\s*$/, ""),
+  );
+}
+
 export const Editor = () => {
   const { t } = useTranslation();
   const {
@@ -188,6 +223,7 @@ export const Editor = () => {
     selectedDatabases,
     activeConnectionName,
     activeDatabaseName,
+    setSelectedDatabases,
   } = useDatabase();
   const { allDrivers } = useDrivers();
   const { explorerConnectionId } = useConnectionLayoutContext();
@@ -213,9 +249,32 @@ export const Editor = () => {
   const { showAlert } = useAlert();
   const navigate = useNavigate();
 
+  const isMultiDatabaseDriver = isMultiDatabaseCapable(activeCapabilities);
+  const getExecutionScopeForTab = useCallback(
+    (tab: Pick<Tab, "schema"> | null | undefined) =>
+      resolveExecutionScope(
+        tab?.schema,
+        activeSchema,
+        selectedDatabases,
+        isMultiDatabaseDriver,
+      ),
+    [activeSchema, selectedDatabases, isMultiDatabaseDriver],
+  );
+
   const driverReadonly = isReadonly(activeCapabilities);
   const driverSupportsExplain = supportsExplain(activeCapabilities);
   const activeDialect = activeCapabilities?.sql_dialect;
+  const nativeCliKind: NativeCliKind | undefined =
+    activeCapabilities?.native_cli === "mongosh" ||
+    activeCapabilities?.native_cli === "redis-cli"
+      ? activeCapabilities.native_cli
+      : undefined;
+  const isNativeCli =
+    activeCapabilities?.console_only === true && nativeCliKind !== undefined;
+  const rollbackProtectionEnabled =
+    (activeDriver === "mysql" || activeDriver === "mariadb") &&
+    connections.find((connection) => connection.id === activeConnectionId)
+      ?.params.rollback_protection_enabled === true;
 
   const [tabContextMenu, setTabContextMenu] = useState<{
     x: number;
@@ -313,6 +372,7 @@ export const Editor = () => {
         title: `Console - ${tab.title}`,
         query: query,
         connectionId: tab.connectionId,
+        schema: tab.schema,
       });
     },
     [addTab, activeDriver, activeCapabilities?.schemas],
@@ -347,6 +407,9 @@ export const Editor = () => {
   // in split view every pane mounts its own Editor
   const editorRootRef = useRef<HTMLDivElement>(null);
   const [isResultsCollapsed, setIsResultsCollapsed] = useState(false);
+  useEffect(() => {
+    if (isNativeCli) setIsResultsCollapsed(false);
+  }, [activeTabId, isNativeCli]);
   // Ids of tabs whose results are detached into their own separate windows (one
   // window per tab). Each window keeps showing its tab even when the user
   // switches tabs in the main window.
@@ -386,6 +449,32 @@ export const Editor = () => {
     guardQuery: guardDangerousQuery,
     resolve: resolveDangerousQuery,
   } = useDangerousQueryGuard();
+  const [rollbackRiskReview, setRollbackRiskReview] =
+    useState<RollbackRiskReview | null>(null);
+  const rollbackRiskResolverRef = useRef<
+    ((choice: RollbackRiskDecision | null) => void) | null
+  >(null);
+  const requestRollbackRiskDecision = useCallback(
+    (review: RollbackRiskReview) => {
+      if (rollbackRiskResolverRef.current) {
+        return Promise.resolve<RollbackRiskDecision | null>(null);
+      }
+      return new Promise<RollbackRiskDecision | null>((resolve) => {
+        rollbackRiskResolverRef.current = resolve;
+        setRollbackRiskReview(review);
+      });
+    },
+    [],
+  );
+  const resolveRollbackRiskDecision = useCallback(
+    (choice: RollbackRiskDecision | null) => {
+      const resolve = rollbackRiskResolverRef.current;
+      rollbackRiskResolverRef.current = null;
+      setRollbackRiskReview(null);
+      resolve?.(choice);
+    },
+    [],
+  );
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
   const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
@@ -420,31 +509,39 @@ export const Editor = () => {
   const [tempPage, setTempPage] = useState("1");
   const [isCountLoading, setIsCountLoading] = useState(false);
   const [applyToAll, setApplyToAll] = useState(false);
-  const [copyFormat, setCopyFormat] = useState<"csv" | "json" | "sql-insert" | "markdown">(
-    settings.copyFormat ?? "csv",
-  );
-  const [csvDelimiter, setCsvDelimiter] = useState(
-    settings.csvDelimiter ?? ",",
-  );
-  const [csvIncludeHeaders, setCsvIncludeHeaders] = useState(
-    settings.csvIncludeHeaders ?? true,
-  );
+  const [copyFormatOverride, setCopyFormatOverride] =
+    useState<EditorCopyFormat | null>(null);
+  const [csvDelimiterOverride, setCsvDelimiterOverride] = useState<
+    string | null
+  >(null);
+  const [csvIncludeHeadersOverride, setCsvIncludeHeadersOverride] = useState<
+    boolean | null
+  >(null);
+  const copyFormat = copyFormatOverride ?? settings.copyFormat ?? "csv";
+  const csvDelimiter = csvDelimiterOverride ?? settings.csvDelimiter ?? ",";
+  const csvIncludeHeaders =
+    csvIncludeHeadersOverride ?? settings.csvIncludeHeaders ?? true;
+  const exportableResultEntries = getExportableResultEntries(activeTab?.results);
 
   const activeTabType = activeTab?.type;
   const activeTabQuery = activeTab?.query;
   const isTableTab = activeTab?.type === "table";
   const isNotebookTab = activeTab?.type === "notebook";
-  const isMultiDb =
-    isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
+  const isMultiDb = isMultiDatabaseDriver && selectedDatabases.length > 1;
   const isEditorOpen =
     !isTableTab && (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
+      if (isNativeCli) {
+        void invoke("close_native_cli_session", { sessionId: tabId }).catch(
+          (error) => console.debug("Native CLI session was already closed:", error),
+        );
+      }
       delete editorsRef.current[tabId];
       closeTab(tabId);
     },
-    [closeTab],
+    [closeTab, isNativeCli],
   );
 
   // Update window title when the active tab changes
@@ -460,7 +557,8 @@ export const Editor = () => {
           let dbDisplay: string;
           if (isMultiDb) {
             dbDisplay =
-              activeTab?.schema ?? selectedDatabases[0] ?? activeDatabaseName;
+              getExecutionScopeForTab({ schema: activeTab?.schema }) ??
+              activeDatabaseName;
           } else {
             dbDisplay = activeDatabaseName;
           }
@@ -481,6 +579,7 @@ export const Editor = () => {
     activeCapabilities,
     isMultiDb,
     selectedDatabases,
+    getExecutionScopeForTab,
   ]);
 
   // Define updateActiveTab first to be used in handleQueryChange
@@ -646,7 +745,15 @@ export const Editor = () => {
       tabSchema?: string,
     ) => {
       if (!activeConnectionId) return;
-      const effectiveSchema = tabSchema ?? activeSchema;
+      const targetTab = tabId
+        ? tabsRef.current.find((tab) => tab.id === tabId)
+        : activeTab;
+      const effectiveSchema = resolveExecutionScope(
+        tabSchema ?? targetTab?.schema,
+        activeSchema,
+        selectedDatabases,
+        isMultiDatabaseDriver,
+      );
       const targetId = tabId || activeTabId;
       // A newer runQuery on this tab may have started (and kicked off its own
       // fetchPkColumn) while this call was still in flight — e.g. running two
@@ -705,18 +812,111 @@ export const Editor = () => {
           });
       }
     },
-    [activeConnectionId, activeTabId, updateTab, activeSchema],
+    [
+      activeConnectionId,
+      activeTabId,
+      activeTab,
+      updateTab,
+      activeSchema,
+      selectedDatabases,
+      isMultiDatabaseDriver,
+    ],
   );
 
   const stopQuery = useCallback(async () => {
     if (!activeConnectionId) return;
     try {
+      if (isNativeCli && activeTabId) {
+        await invoke("interrupt_native_cli_session", {
+          sessionId: activeTabId,
+        });
+        updateActiveTab({ isLoading: false });
+        return;
+      }
       await invoke("cancel_query", { connectionId: activeConnectionId });
       updateActiveTab({ isLoading: false });
     } catch (e) {
       console.error("Failed to stop:", e);
     }
-  }, [activeConnectionId, updateActiveTab]);
+  }, [activeConnectionId, activeTabId, isNativeCli, updateActiveTab]);
+
+  const reconcileDatabaseCatalog = useCallback(
+    async (statements: readonly string[], targetTabId: string) => {
+      if (
+        !isMultiDatabaseDriver ||
+        !activeConnectionId ||
+        !statements.some(changesDatabaseCatalog)
+      ) {
+        return;
+      }
+
+      try {
+        const available = await invoke<string[]>("get_available_databases", {
+          connectionId: activeConnectionId,
+        });
+        const availableSet = new Set(available);
+        const remaining = selectedDatabases.filter((database) =>
+          availableSet.has(database),
+        );
+        if (
+          remaining.length === selectedDatabases.length &&
+          remaining.every((database, index) => database === selectedDatabases[index])
+        ) {
+          return;
+        }
+
+        const nextDatabase = resolveActiveDatabase(remaining, activeSchema);
+        setSelectedDatabases(remaining);
+        const targetTab = tabsRef.current.find((tab) => tab.id === targetTabId);
+        if (targetTab?.schema && !availableSet.has(targetTab.schema)) {
+          updateTab(targetTabId, { schema: nextDatabase ?? undefined });
+        }
+        if (!nextDatabase) {
+          showAlert(t("newConnection.noDatabasesSelected"), { kind: "warning" });
+        }
+      } catch (error) {
+        console.error("Failed to reconcile database catalog:", error);
+      }
+    },
+    [
+      activeConnectionId,
+      activeSchema,
+      isMultiDatabaseDriver,
+      selectedDatabases,
+      setSelectedDatabases,
+      showAlert,
+      t,
+      updateTab,
+    ],
+  );
+
+  const applySuccessfulUseDatabase = useCallback(
+    (
+      statement: string,
+      targetTabId: string,
+      currentDatabase: string | null | undefined,
+      knownDatabases: readonly string[],
+    ) => {
+      const targetTab = tabsRef.current.find((tab) => tab.id === targetTabId);
+      if (!isMultiDatabaseDriver || targetTab?.type !== "console") return null;
+
+      const decision = resolveUseDatabaseSwitch(
+        statement,
+        currentDatabase,
+        knownDatabases,
+      );
+      if (!decision) return null;
+
+      if (decision.shouldSwitch) {
+        updateTab(targetTabId, { schema: decision.database });
+      }
+      if (decision.shouldAddToSelection) {
+        setSelectedDatabases([...knownDatabases, decision.database]);
+      }
+      return decision;
+    },
+    [isMultiDatabaseDriver, setSelectedDatabases, updateTab],
+  );
 
   const runQuery = useCallback(
     async (
@@ -806,6 +1006,21 @@ export const Editor = () => {
         textToRun = interpolateQueryParams(textToRun, storedParams, activeDialect);
       }
 
+      if (
+        rollbackProtectionEnabled &&
+        (targetTab.transactionActive ||
+          isExplicitTransactionControl(textToRun) ||
+          requiresRollbackProtectedExecution(textToRun))
+      ) {
+        void runMultipleQueriesRef.current(
+          [textToRun],
+          undefined,
+          undefined,
+          true,
+        );
+        return;
+      }
+
       // Automatically open the results panel when running a query — but only
       // for the main window; a detached run must not re-expand the main panel.
       if (!isDetached) {
@@ -838,7 +1053,13 @@ export const Editor = () => {
       const shouldRecordHistory =
         targetTab?.type === "console" || targetTab?.type === "query_builder";
 
-      const schema = targetTab?.schema ?? activeSchema;
+      const schema = getExecutionScopeForTab(targetTab);
+      if (isMultiDatabaseDriver && !schema) {
+        const message = t("newConnection.noDatabasesSelected");
+        updateTab(targetTabId, { error: message, isLoading: false });
+        showAlert(message, { kind: "warning" });
+        return;
+      }
       // For history: fall back to activeDatabaseName for multi-db connections
       // where schema may not be set on the tab
       const historyDb = schema
@@ -860,6 +1081,7 @@ export const Editor = () => {
           page: pageNum,
           ...(schema ? { schema } : {}),
         });
+        await reconcileDatabaseCatalog([textToRun], targetTabId);
         const end = performance.now();
 
         // A single statement can return several result sets (e.g. a MySQL
@@ -942,7 +1164,14 @@ export const Editor = () => {
         // newer one's displayed result/table.
         const isStaleRun = queryGenerationRef.current[targetTabId] !== generation;
 
+        let successfulUseDatabase: string | undefined;
         if (!isStaleRun) {
+          successfulUseDatabase = applySuccessfulUseDatabase(
+            textToRun,
+            targetTabId,
+            schema,
+            selectedDatabases,
+          )?.database;
           updateTab(targetTabId, {
             result: resultWithCount,
             executionTime: end - start,
@@ -965,7 +1194,7 @@ export const Editor = () => {
             "success",
             res.pagination?.total_rows ?? null,
             null,
-            historyDb,
+            successfulUseDatabase ?? historyDb,
           );
         }
       } catch (err) {
@@ -995,7 +1224,9 @@ export const Editor = () => {
       fetchPkColumn,
       t,
       activeDriver,
-      activeSchema,
+      getExecutionScopeForTab,
+      isMultiDatabaseDriver,
+      showAlert,
       activeCapabilities?.schemas,
       views,
       materializedViews,
@@ -1004,18 +1235,33 @@ export const Editor = () => {
       addHistoryEntry,
       guardDangerousQuery,
       activeDialect,
+      reconcileDatabaseCatalog,
+      applySuccessfulUseDatabase,
+      selectedDatabases,
+      rollbackProtectionEnabled,
     ],
   );
 
   const runMultipleQueries = useCallback(
-    async (queries: string[], paramsOverride?: Record<string, string>) => {
+    async (
+      queries: string[],
+      paramsOverride?: Record<string, string>,
+      rollbackUnsupportedPolicy?: RollbackUnsupportedPolicy,
+      dangerousGuardAlreadyPassed = false,
+      allowImplicitTransactionCommit = false,
+    ) => {
       const targetTabId = activeTabIdRef.current;
       if (!activeConnectionId || !targetTabId) return;
 
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
 
-      if (!(await guardDangerousQuery(queries))) return;
+      if (
+        !dangerousGuardAlreadyPassed &&
+        !(await guardDangerousQuery(queries))
+      ) {
+        return;
+      }
 
       // Collect all unique parameters across all queries
       const allParams = [
@@ -1050,7 +1296,13 @@ export const Editor = () => {
         settings.resultPageSize && settings.resultPageSize > 0
           ? settings.resultPageSize
           : 100;
-      const schema = targetTab?.schema ?? activeSchema;
+      const schema = getExecutionScopeForTab(targetTab);
+      if (isMultiDatabaseDriver && !schema) {
+        const message = t("newConnection.noDatabasesSelected");
+        updateTab(targetTabId, { error: message, isLoading: false });
+        showAlert(message, { kind: "warning" });
+        return;
+      }
       const historyDb = schema
         || (isMultiDb ? activeDatabaseName : undefined)
         || undefined;
@@ -1070,6 +1322,9 @@ export const Editor = () => {
       const shouldRecordHistory =
         targetTab?.type === "console" || targetTab?.type === "query_builder";
 
+      let batchDatabase = schema;
+      let batchSelectedDatabases = [...selectedDatabases];
+
       // Resolves a single result tab the moment its statement finishes:
       // records history and patches that entry in place (no whole-array
       // rewrite) so the UI shows per-statement status in real time instead of
@@ -1079,6 +1334,16 @@ export const Editor = () => {
         const entry = entries[index];
         if (!entry) return;
         const execTime = item?.execution_time_ms ?? null;
+        if (item?.skipped) {
+          patchResultEntry(targetTabId, entry.id, {
+            error: t("editor.rollbackRiskSkippedResult", {
+              reason: item.error ?? "",
+            }),
+            executionTime: execTime,
+            isLoading: false,
+          });
+          return;
+        }
         if (item?.error) {
           if (shouldRecordHistory) {
             addHistoryEntry(
@@ -1087,7 +1352,7 @@ export const Editor = () => {
               "error",
               null,
               item.error,
-              historyDb,
+              batchDatabase ?? historyDb,
             );
           }
           patchResultEntry(targetTabId, entry.id, {
@@ -1099,6 +1364,21 @@ export const Editor = () => {
         }
         const res = item?.result ?? null;
         const tableName = extractTableName(entry.query) ?? null;
+        const useDecision = applySuccessfulUseDatabase(
+          entry.query,
+          targetTabId,
+          batchDatabase,
+          batchSelectedDatabases,
+        );
+        if (useDecision) {
+          batchDatabase = useDecision.database;
+          if (useDecision.shouldAddToSelection) {
+            batchSelectedDatabases = [
+              ...batchSelectedDatabases,
+              useDecision.database,
+            ];
+          }
+        }
         if (shouldRecordHistory) {
           addHistoryEntry(
             entry.query,
@@ -1106,7 +1386,7 @@ export const Editor = () => {
             "success",
             res?.pagination?.total_rows ?? null,
             null,
-            historyDb,
+            batchDatabase ?? historyDb,
           );
         }
         patchResultEntry(targetTabId, entry.id, {
@@ -1146,11 +1426,55 @@ export const Editor = () => {
             limit: pageSize,
             page: 1,
             batchId,
+            transactionContextId: targetTabId,
+            ...(rollbackUnsupportedPolicy
+              ? { rollbackUnsupportedPolicy }
+              : {}),
+            ...(allowImplicitTransactionCommit
+              ? { allowImplicitTransactionCommit: true }
+              : {}),
             ...(schema ? { schema } : {}),
           },
         );
+        await reconcileDatabaseCatalog(queries, targetTabId);
       } catch (err) {
         unlisten();
+        const parsedReview = parseRollbackRiskReview(err);
+        const review =
+          parsedReview?.kind === "unsupported" && rollbackUnsupportedPolicy
+            ? null
+            : parsedReview?.kind === "implicit_commit" &&
+                allowImplicitTransactionCommit
+              ? null
+              : parsedReview;
+        if (review) {
+          updateTab(targetTabId, {
+            results: undefined,
+            activeResultId: undefined,
+            isLoading: false,
+          });
+          const choice = await requestRollbackRiskDecision(review);
+          if (choice) {
+            if (choice === "allow_implicit_commit") {
+              void runMultipleQueriesRef.current(
+                queries,
+                paramsOverride,
+                rollbackUnsupportedPolicy,
+                true,
+                true,
+              );
+            } else {
+              void runMultipleQueriesRef.current(
+                queries,
+                paramsOverride,
+                choice,
+                true,
+                allowImplicitTransactionCommit,
+              );
+            }
+          }
+          return;
+        }
         // Batch-level failure (e.g. connection acquisition, cancellation):
         // mark only the entries that haven't already resolved via a live event
         // as failed, so statements that completed first keep their results.
@@ -1187,9 +1511,105 @@ export const Editor = () => {
         applied.add(idx);
         applyStatement(idx, item);
       });
-      updateTab(targetTabId, { isLoading: false });
+      const rollbackFile = batchResults.find(
+        (item) => item.rollback_file,
+      )?.rollback_file;
+      const transactionResult = [...batchResults]
+        .reverse()
+        .find((item) => item.transaction_active !== undefined);
+      const transactionActive = transactionResult?.transaction_active === true;
+      const transactionOutcome = transactionResult?.transaction_outcome;
+      const transactionRecoveryFile =
+        transactionResult?.transaction_recovery_file;
+      const transactionIdleTimeoutSeconds =
+        transactionResult?.transaction_idle_timeout_seconds;
+      const unprotectedCount = batchResults.filter(
+        (item) => item.rollback_unprotected,
+      ).length;
+      const skippedCount = batchResults.filter((item) => item.skipped).length;
+      if (transactionActive) {
+        showAlert(
+          t("editor.transactionPinned", {
+            minutes: Math.max(
+              1,
+              Math.round((transactionIdleTimeoutSeconds ?? 900) / 60),
+            ),
+            path:
+              transactionRecoveryFile ??
+              t("editor.transactionNoWritesRecorded"),
+          }),
+          { kind: "info" },
+        );
+      } else if (transactionOutcome === "unknown") {
+        showAlert(t("editor.transactionOutcomeUnknown"), { kind: "warning" });
+      } else if (
+        transactionOutcome === "rolled_back" ||
+        transactionOutcome === "auto_rolled_back"
+      ) {
+        showAlert(t("editor.transactionRolledBack"), { kind: "info" });
+      } else if (unprotectedCount > 0) {
+        showAlert(
+          t("editor.rollbackRiskUnprotectedSummary", {
+            count: unprotectedCount,
+            path:
+              rollbackFile ??
+              t("editor.rollbackRiskNoProtectedRollbackFile"),
+          }),
+          { kind: "warning" },
+        );
+      } else if (skippedCount > 0) {
+        showAlert(
+          t("editor.rollbackRiskSkippedSummary", {
+            count: skippedCount,
+            path:
+              rollbackFile ??
+              t("editor.rollbackRiskNoProtectedRollbackFile"),
+          }),
+          { kind: "info" },
+        );
+      } else if (rollbackFile) {
+        showAlert(
+          t("editor.rollbackFileReady", {
+            path: rollbackFile,
+            defaultValue: `Rollback SQL saved: ${rollbackFile}`,
+          }),
+          { kind: "info" },
+        );
+      }
+      updateTab(targetTabId, {
+        isLoading: false,
+        ...(transactionResult
+          ? {
+              transactionActive,
+              transactionRecoveryFile: transactionActive
+                ? transactionRecoveryFile
+                : undefined,
+              transactionIdleTimeoutSeconds: transactionActive
+                ? transactionIdleTimeoutSeconds
+                : undefined,
+            }
+          : {}),
+      });
     },
-    [activeConnectionId, updateTab, patchResultEntry, settings.resultPageSize, activeSchema, t, isMultiDb, activeDatabaseName, addHistoryEntry, guardDangerousQuery, activeDialect],
+    [
+      activeConnectionId,
+      updateTab,
+      patchResultEntry,
+      settings.resultPageSize,
+      getExecutionScopeForTab,
+      isMultiDatabaseDriver,
+      showAlert,
+      t,
+      isMultiDb,
+      activeDatabaseName,
+      addHistoryEntry,
+      guardDangerousQuery,
+      activeDialect,
+      reconcileDatabaseCatalog,
+      applySuccessfulUseDatabase,
+      selectedDatabases,
+      requestRollbackRiskDecision,
+    ],
   );
 
   // Auto-run entry point for navigation-initiated executions (sidebar "open
@@ -1216,13 +1636,24 @@ export const Editor = () => {
 
       const currentTab = tabsRef.current.find((t) => t.id === targetTabId);
       const entry = currentTab?.results?.find((r) => r.id === entryId);
-      if (!entry) return;
+      if (!currentTab || !entry) return;
 
       const pageSize =
         settings.resultPageSize && settings.resultPageSize > 0
           ? settings.resultPageSize
           : 100;
-      const schema = currentTab?.schema ?? activeSchema;
+      const schema = getExecutionScopeForTab(currentTab);
+      if (isMultiDatabaseDriver && !schema) {
+        const message = t("newConnection.noDatabasesSelected");
+        updateTab(targetTabId, {
+          results: updateResultEntry(currentTab.results ?? [], entryId, {
+            error: message,
+            isLoading: false,
+          }),
+        });
+        showAlert(message, { kind: "warning" });
+        return;
+      }
 
       // Mark this entry as loading
       if (currentTab?.results) {
@@ -1283,7 +1714,15 @@ export const Editor = () => {
         }
       }
     },
-    [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t],
+    [
+      activeConnectionId,
+      updateTab,
+      settings.resultPageSize,
+      getExecutionScopeForTab,
+      isMultiDatabaseDriver,
+      showAlert,
+      t,
+    ],
   );
 
   const loadCount = useCallback(
@@ -1314,7 +1753,7 @@ export const Editor = () => {
         const total = await invoke<number>("count_query", {
           connectionId: activeConnectionId,
           query: countTarget,
-          schema: tab.schema ?? activeSchema,
+          schema: getExecutionScopeForTab(tab),
         });
         const latest = tabsRef.current.find((t) => t.id === tab.id) ?? tab;
         if (!latest.result?.pagination) return;
@@ -1331,7 +1770,7 @@ export const Editor = () => {
     [
       activeTab,
       activeConnectionId,
-      activeSchema,
+      getExecutionScopeForTab,
       activeDriver,
       activeCapabilities?.schemas,
       updateTab,
@@ -1580,6 +2019,73 @@ export const Editor = () => {
       ? `${runButtonBase} · ${t("editor.runAll")} (${isMac ? "Cmd+Shift+Enter" : "Ctrl+Shift+Enter"})`
       : runButtonBase;
 
+  const submitNativeCliCommand = useCallback(
+    async (command: string, tabId?: string) => {
+      const targetTabId = tabId ?? activeTab?.id;
+      if (
+        !isNativeCli ||
+        !nativeCliKind ||
+        !activeConnectionId ||
+        !targetTabId ||
+        !command.trim()
+      ) {
+        return;
+      }
+
+      const startedAt = performance.now();
+      setIsResultsCollapsed(false);
+      updateTab(targetTabId, {
+        error: "",
+        isLoading: false,
+        result: null,
+        results: undefined,
+        activeResultId: undefined,
+      });
+
+      try {
+        await invoke("start_native_cli_session", {
+          connectionId: activeConnectionId,
+          sessionId: targetTabId,
+          cols: 80,
+          rows: 24,
+        });
+        const normalized = command.replace(/\r?\n/g, "\r");
+        await invoke("write_native_cli_session", {
+          sessionId: targetTabId,
+          data: normalized.endsWith("\r") ? normalized : `${normalized}\r`,
+        });
+        await addHistoryEntry(
+          command,
+          performance.now() - startedAt,
+          "success",
+          null,
+          null,
+          activeDatabaseName,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        updateTab(targetTabId, { error: message, isLoading: false });
+        await addHistoryEntry(
+          command,
+          null,
+          "error",
+          null,
+          message,
+          activeDatabaseName,
+        );
+      }
+    },
+    [
+      activeConnectionId,
+      activeDatabaseName,
+      activeTab?.id,
+      addHistoryEntry,
+      isNativeCli,
+      nativeCliKind,
+      updateTab,
+    ],
+  );
+
   const handleRunAll = useCallback(() => {
     if (!activeTab) return;
     // Prefer the live editor content — activeTab.query lags behind by the
@@ -1587,13 +2093,61 @@ export const Editor = () => {
     const editor = editorsRef.current[activeTab.id];
     const text = (editor?.getModel()?.getValue() ?? activeTab.query ?? "").trim();
     if (!text) return;
+    if (isNativeCli) {
+      void submitNativeCliCommand(text, activeTab.id);
+      return;
+    }
     const queries = splitQueries(text, activeDialect);
-    if (queries.length <= 1) runQuery(queries[0] || text, 1);
-    else runMultipleQueries(queries);
-  }, [activeTab, activeDialect, runQuery, runMultipleQueries]);
+    runMultipleQueries(queries.length > 0 ? queries : [text]);
+  }, [
+    activeTab,
+    activeDialect,
+    isNativeCli,
+    runMultipleQueries,
+    submitNativeCliCommand,
+  ]);
 
   const handleRunButton = useCallback(() => {
     if (!activeTab) return;
+
+    if (isNativeCli && nativeCliKind) {
+      const editor = editorsRef.current[activeTab.id];
+      if (!editor) {
+        if (activeTab.query?.trim()) {
+          void submitNativeCliCommand(activeTab.query, activeTab.id);
+        }
+        return;
+      }
+
+      const selection = editor.getSelection();
+      const selectedText =
+        selection && !selection.isEmpty()
+          ? editor.getModel()?.getValueInRange(selection)
+          : undefined;
+      if (selectedText?.trim()) {
+        void submitNativeCliCommand(selectedText, activeTab.id);
+        return;
+      }
+
+      const text = editor.getValue();
+      if (!text.trim()) return;
+      if (settings.runStatementUnderCursor !== false) {
+        const model = editor.getModel();
+        const position = editor.getPosition();
+        if (model && position) {
+          const command = findNativeCliCommandAtOffset(
+            splitNativeCliCommands(text, nativeCliKind),
+            model.getOffsetAt(position),
+          );
+          if (command) {
+            void submitNativeCliCommand(command.text, activeTab.id);
+            return;
+          }
+        }
+      }
+      void submitNativeCliCommand(text, activeTab.id);
+      return;
+    }
 
     // Table Tab: run query with filter/sort/limit from activeTab
     if (activeTab.type === "table") {
@@ -1611,12 +2165,14 @@ export const Editor = () => {
 
     // Monaco Editor: handle selection and multi-query
     if (!editorsRef.current[activeTab.id]) {
-      // Fallback: no cursor context available (editor ref not mounted, e.g.
-      // after tab restore) — run everything, same precedent as runAutoQuery.
+      // Fallback: use saved query when editor ref is not available (e.g. after tab restore)
       if (activeTab.query?.trim()) {
         const queries = splitQueries(activeTab.query, activeDialect);
         if (queries.length <= 1) runQuery(queries[0] || activeTab.query, 1);
-        else runMultipleQueries(queries);
+        else {
+          setSelectableQueries(queries);
+          setIsQuerySelectionModalOpen(true);
+        }
       }
       return;
     }
@@ -1664,7 +2220,16 @@ export const Editor = () => {
         setIsQuerySelectionModalOpen(true);
         return;
     }
-  }, [activeTab, activeDialect, runQuery, runMultipleQueries, settings.runStatementUnderCursor]);
+  }, [
+    activeTab,
+    activeDialect,
+    isNativeCli,
+    nativeCliKind,
+    runQuery,
+    runMultipleQueries,
+    settings.runStatementUnderCursor,
+    submitNativeCliCommand,
+  ]);
 
   const openExplainForQuery = useCallback((query: string) => {
     setVisualExplainQuery(query);
@@ -1792,7 +2357,12 @@ export const Editor = () => {
 
       if (matchesShortcut(e, "new_tab")) {
         e.preventDefault();
-        addTab({ type: "console" });
+        addTab({
+          type: "console",
+          ...(isMultiDatabaseDriver
+            ? { schema: getExecutionScopeForTab(undefined) }
+            : {}),
+        });
         return;
       }
 
@@ -1838,6 +2408,8 @@ export const Editor = () => {
     addTab,
     handleCloseTab,
     runQuery,
+    getExecutionScopeForTab,
+    isMultiDatabaseDriver,
   ]);
 
   const handleRefresh = useCallback(() => {
@@ -2228,13 +2800,18 @@ export const Editor = () => {
       });
       return;
     }
+    const executionScope = getExecutionScopeForTab(activeTab);
+    if (isMultiDatabaseDriver && !executionScope) {
+      showAlert(t("newConnection.noDatabasesSelected"), { kind: "warning" });
+      return;
+    }
 
     try {
       // Fetch table columns
       const columns = await invoke<TableColumn[]>("get_columns", {
         connectionId: activeConnectionId,
         tableName: activeTab.activeTable,
-        ...(activeSchema ? { schema: activeSchema } : {}),
+        ...(executionScope ? { schema: executionScope } : {}),
       });
 
       if (!columns || columns.length === 0) {
@@ -2339,12 +2916,18 @@ export const Editor = () => {
     updateTab,
     t,
     settings.resultPageSize,
-    activeSchema,
+    getExecutionScopeForTab,
+    isMultiDatabaseDriver,
     showAlert,
   ]);
 
   const handleSubmitChanges = useCallback(async () => {
     if (!activeTab || !activeTab.activeTable || !activeConnectionId) return;
+    const executionScope = getExecutionScopeForTab(activeTab);
+    if (isMultiDatabaseDriver && !executionScope) {
+      showAlert(t("newConnection.noDatabasesSelected"), { kind: "warning" });
+      return;
+    }
 
     // pkColumns is required for updates/deletions but not for insertions-only
     const hasPkColumns = !!(activeTab.pkColumns && activeTab.pkColumns.length > 0);
@@ -2402,7 +2985,7 @@ export const Editor = () => {
         const columns = await invoke<TableColumn[]>("get_columns", {
           connectionId: activeConnectionId,
           tableName: activeTable,
-          ...(activeSchema ? { schema: activeSchema } : {}),
+          ...(executionScope ? { schema: executionScope } : {}),
         });
 
         const selectedDisplayIndices = new Set<number>();
@@ -2583,8 +3166,10 @@ export const Editor = () => {
     runQuery,
     t,
     applyToAll,
-    activeSchema,
     activeCapabilities,
+    activeSchema,
+    getExecutionScopeForTab,
+    isMultiDatabaseDriver,
     showAlert,
   ]);
 
@@ -2750,6 +3335,7 @@ export const Editor = () => {
     // Focus the editor when a console tab is opened (Ctrl+T / new console)
     const mountedTab = tabsRef.current.find((t) => t.id === tabId);
     if (mountedTab?.type === "console") editor.focus();
+    if (isNativeCli) return;
     editor.addAction({
       id: "run-selection",
       label: "Execute Selection",
@@ -2798,8 +3384,8 @@ export const Editor = () => {
 
   useSqlAutocompleteRegistration(activeConnectionId, {
     monaco: monacoInstance,
-    schema: activeSchema,
-    enabled: !isNotebookTab,
+    schema: getExecutionScopeForTab(activeTab),
+    enabled: !isNotebookTab && !isNativeCli,
   });
 
   useEffect(() => {
@@ -2960,54 +3546,90 @@ export const Editor = () => {
     const effectiveSchema =
       activeCapabilities?.schemas === true ? activeTab.schema : undefined;
     const tabForQuery = { ...activeTab, schema: effectiveSchema };
-    const query =
+    const fallbackQuery =
       activeTab.type === "table" && activeTab.activeTable
         ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
         : activeTab.query;
+    const resultEntries = getExportableResultEntries(activeTab.results);
+    const singleQuery = resultEntries[0]?.query || fallbackQuery;
 
-    if (!query || !query.trim()) return;
+    if (resultEntries.length === 0 && (!singleQuery || !singleQuery.trim())) return;
 
     try {
       const extension = format === "markdown" ? "md" : format;
-      const filePath = await save({
-        filters: [
-          {
-            name: format === "markdown" ? "Markdown" : format.toUpperCase(),
-            extensions: [extension],
-          },
-        ],
-        defaultPath: `result_${Date.now()}.${extension}`,
-      });
-
-      if (!filePath) return;
-
-      setExportState({
-        isOpen: true,
-        status: "exporting",
-        rowsProcessed: 0,
-        fileName: filePath.split(/[/\\]/).pop() || filePath, // Show only filename
-      });
-      setExportMenuOpen(false);
-
       // On multi-database connections (e.g. MySQL) scope the export to the
       // selected database so the query runs against the database the user is
       // viewing rather than the connection's primary database. The tab may not
       // carry its own schema (e.g. a console query), so fall back to the active
       // database — mirroring how execute_query resolves the schema.
-      const targetDatabase = activeTab?.schema ?? activeSchema ?? undefined;
+      const targetDatabase = getExecutionScopeForTab(activeTab);
       const databaseParam =
         isMultiDatabaseCapable(activeCapabilities) && targetDatabase
           ? { database: targetDatabase }
           : {};
 
-      await invoke("export_query_to_file", {
-        connectionId: activeConnectionId,
-        query,
-        filePath,
-        format,
-        csvDelimiter: format === "csv" ? csvDelimiter : undefined,
-        ...databaseParam,
-      });
+      if (resultEntries.length > 1) {
+        const directory = await open({ directory: true, multiple: false });
+        if (typeof directory !== "string") return;
+
+        setExportMenuOpen(false);
+        setExportState({
+          isOpen: true,
+          status: "exporting",
+          rowsProcessed: 0,
+          fileName: buildBatchExportFileName(
+            resultEntries[0],
+            0,
+            extension,
+          ),
+        });
+
+        for (let index = 0; index < resultEntries.length; index += 1) {
+          const entry = resultEntries[index];
+          const fileName = buildBatchExportFileName(entry, index, extension);
+          const filePath = await join(directory, fileName);
+          setExportState((prev) => ({
+            ...prev,
+            rowsProcessed: 0,
+            fileName: `${index + 1}/${resultEntries.length} ${fileName}`,
+          }));
+          await invoke("export_query_to_file", {
+            connectionId: activeConnectionId,
+            query: entry.query,
+            filePath,
+            format,
+            csvDelimiter: format === "csv" ? csvDelimiter : undefined,
+            ...databaseParam,
+          });
+        }
+      } else {
+        const filePath = await save({
+          filters: [
+            {
+              name: format === "markdown" ? "Markdown" : format.toUpperCase(),
+              extensions: [extension],
+            },
+          ],
+          defaultPath: `result_${Date.now()}.${extension}`,
+        });
+        if (!filePath || !singleQuery) return;
+
+        setExportMenuOpen(false);
+        setExportState({
+          isOpen: true,
+          status: "exporting",
+          rowsProcessed: 0,
+          fileName: filePath.split(/[/\\]/).pop() || filePath,
+        });
+        await invoke("export_query_to_file", {
+          connectionId: activeConnectionId,
+          query: singleQuery,
+          filePath,
+          format,
+          csvDelimiter: format === "csv" ? csvDelimiter : undefined,
+          ...databaseParam,
+        });
+      }
 
       // Success: update modal state instead of showing toast
       setExportState((prev) => ({
@@ -3040,22 +3662,43 @@ export const Editor = () => {
             : undefined;
 
           if (selectedText && selection && !selection.isEmpty()) {
-            const queries = splitQueries(selectedText, activeDialect);
+            const queries =
+              isNativeCli && nativeCliKind
+                ? splitNativeCliCommands(selectedText, nativeCliKind).map(
+                    (command) => command.text,
+                  )
+                : splitQueries(selectedText, activeDialect);
             setSelectableQueries(queries);
           } else {
             const text = editor.getValue();
-            const queries = splitQueries(text, activeDialect);
+            const queries =
+              isNativeCli && nativeCliKind
+                ? splitNativeCliCommands(text, nativeCliKind).map(
+                    (command) => command.text,
+                  )
+                : splitQueries(text, activeDialect);
             setSelectableQueries(queries);
           }
         } else if (activeTab.query?.trim()) {
           // Fallback: use saved query when editor ref is not available
-          const queries = splitQueries(activeTab.query, activeDialect);
+          const queries =
+            isNativeCli && nativeCliKind
+              ? splitNativeCliCommands(activeTab.query, nativeCliKind).map(
+                  (command) => command.text,
+                )
+              : splitQueries(activeTab.query, activeDialect);
           setSelectableQueries(queries);
         }
       }
     }
     setIsRunDropdownOpen((prev) => !prev);
-  }, [isRunDropdownOpen, activeTab, activeDialect]);
+  }, [
+    isRunDropdownOpen,
+    activeTab,
+    activeDialect,
+    isNativeCli,
+    nativeCliKind,
+  ]);
 
   if (!activeTab) {
     return (
@@ -3065,7 +3708,14 @@ export const Editor = () => {
           <div className="text-center">
             <p className="mb-4">{t("editor.noTabs")}</p>
             <button
-              onClick={() => addTab({ type: "console" })}
+              onClick={() =>
+                addTab({
+                  type: "console",
+                  ...(isMultiDatabaseDriver
+                    ? { schema: getExecutionScopeForTab(undefined) }
+                    : {}),
+                })
+              }
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
             >
               {t("editor.newConsole")}
@@ -3203,7 +3853,7 @@ export const Editor = () => {
                   <span className="truncate">{tab.title}</span>
                   {tab.type === "console" && isMultiDb && (
                     <span className="text-muted shrink-0">
-                      ({tab.schema || selectedDatabases[0]})
+                      ({getExecutionScopeForTab(tab)})
                     </span>
                   )}
                 </span>
@@ -3237,7 +3887,9 @@ export const Editor = () => {
           onClick={() =>
             addTab({
               type: "console",
-              ...(isMultiDb ? { schema: selectedDatabases[0] } : {}),
+              ...(isMultiDb
+                ? { schema: getExecutionScopeForTab(undefined) }
+                : {}),
             })
           }
           className="flex items-center justify-center w-9 h-full text-muted hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
@@ -3245,29 +3897,36 @@ export const Editor = () => {
         >
           <Plus size={16} />
         </button>
-        <button
-          onClick={() => addTab({ type: "query_builder" })}
-          className="flex items-center justify-center w-9 h-full text-purple-500 hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
-          title={t("editor.newVisualQuery")}
-        >
-          <Network size={16} />
-        </button>
-        <button
-          onClick={async () => {
-            if (!activeConnectionId) return;
-            const title = "Notebook";
-            const { notebookId } = await createNotebook(title, activeConnectionId);
-            addTab({
-              type: "notebook",
-              notebookId,
-              ...(isMultiDb ? { schema: selectedDatabases[0] } : {}),
-            });
-          }}
-          className="flex items-center justify-center w-9 h-full text-orange-400 hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
-          title={t("editor.newNotebook")}
-        >
-          <BookOpen size={16} />
-        </button>
+        {!isNativeCli && (
+          <>
+            <button
+              onClick={() => addTab({ type: "query_builder" })}
+              className="flex items-center justify-center w-9 h-full text-purple-500 hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
+              title={t("editor.newVisualQuery")}
+            >
+              <Network size={16} />
+            </button>
+            <button
+              onClick={async () => {
+                if (!activeConnectionId) return;
+                const title = "Notebook";
+                const { notebookId } = await createNotebook(
+                  title,
+                  activeConnectionId,
+                );
+                addTab({
+                  type: "notebook",
+                  notebookId,
+                  ...(isMultiDb ? { schema: selectedDatabases[0] } : {}),
+                });
+              }}
+              className="flex items-center justify-center w-9 h-full text-orange-400 hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
+              title={t("editor.newNotebook")}
+            >
+              <BookOpen size={16} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Toolbar — hidden for notebook tabs. A size container so buttons can
@@ -3329,7 +3988,9 @@ export const Editor = () => {
                       </div>
                     ) : (
                       dropdownQueries.map((q, i) => {
-                        const label = statementLabel(q);
+                        const label = isNativeCli
+                          ? q.split(/\r?\n/, 1)[0]
+                          : statementLabel(q);
                         return (
                         <div
                           key={i}
@@ -3337,7 +3998,11 @@ export const Editor = () => {
                         >
                           <button
                             onClick={() => {
-                              runQuery(q, 1);
+                              if (isNativeCli) {
+                                void submitNativeCliCommand(q, activeTab.id);
+                              } else {
+                                runQuery(q, 1);
+                              }
                               setIsRunDropdownOpen(false);
                             }}
                             className="text-left px-4 py-2 text-xs font-mono text-secondary hover:text-white flex-1 truncate"
@@ -3345,7 +4010,7 @@ export const Editor = () => {
                           >
                             {label}
                           </button>
-                          <button
+                          {!isNativeCli && <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setIsRunDropdownOpen(false);
@@ -3355,7 +4020,7 @@ export const Editor = () => {
                             title={t("editor.saveThisQuery")}
                           >
                             <Save size={14} />
-                          </button>
+                          </button>}
                         </div>
                         );
                       })
@@ -3367,8 +4032,30 @@ export const Editor = () => {
           </div>
         ) : null}
 
+        {activeTab.transactionActive && (
+          <div
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-300 text-xs font-medium shrink-0"
+            title={t("editor.transactionActiveTooltip", {
+              minutes: Math.max(
+                1,
+                Math.round(
+                  (activeTab.transactionIdleTimeoutSeconds ?? 900) / 60,
+                ),
+              ),
+              path:
+                activeTab.transactionRecoveryFile ??
+                t("editor.transactionNoWritesRecorded"),
+            })}
+          >
+            <Lock size={13} />
+            <span className="hidden @[560px]:inline whitespace-nowrap">
+              {t("editor.transactionActive")}
+            </span>
+          </div>
+        )}
+
         {/* Params Button */}
-        {!isTableTab && (
+        {!isTableTab && !isNativeCli && (
           <button
             onClick={handleEditParams}
             disabled={!hasQueryParams}
@@ -3385,7 +4072,7 @@ export const Editor = () => {
         )}
 
         {/* Format SQL Button */}
-        {!isTableTab && (
+        {!isTableTab && !isNativeCli && (
           <button
             onClick={() => {
               const editor = editorsRef.current[activeTab.id];
@@ -3404,10 +4091,19 @@ export const Editor = () => {
           </button>
         )}
 
-        <div ref={exportMenuRef} className="relative ml-auto shrink-0">
+        <div
+          ref={exportMenuRef}
+          className={clsx(
+            "relative ml-auto shrink-0",
+            isNativeCli && "hidden",
+          )}
+        >
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
-            disabled={!activeTab.result || activeTab.result.rows.length === 0}
+            disabled={
+              exportableResultEntries.length === 0 &&
+              !activeTab.result?.columns.length
+            }
             aria-haspopup="menu"
             aria-expanded={exportMenuOpen}
             title={t("editor.export")}
@@ -3422,6 +4118,11 @@ export const Editor = () => {
             <span className="hidden @[640px]:inline whitespace-nowrap">
               {t("editor.export")}
             </span>
+            {exportableResultEntries.length > 1 && (
+              <span className="rounded bg-blue-500/20 px-1.5 text-[10px] font-semibold text-blue-300">
+                {exportableResultEntries.length}
+              </span>
+            )}
             <ChevronDown
               size={14}
               className={clsx(
@@ -3474,7 +4175,7 @@ export const Editor = () => {
             >
               <Database size={12} className="text-muted shrink-0" />
               <span className="max-w-[72px] @[640px]:max-w-[120px] truncate">
-                {activeTab.schema || selectedDatabases[0]}
+                {getExecutionScopeForTab(activeTab)}
               </span>
               <ChevronDown size={12} className="text-muted shrink-0" />
             </button>
@@ -3489,7 +4190,7 @@ export const Editor = () => {
                     }}
                     className={clsx(
                       "text-left px-3 py-1.5 text-xs hover:bg-surface transition-colors flex items-center gap-2",
-                      (activeTab.schema || selectedDatabases[0]) === db
+                      getExecutionScopeForTab(activeTab) === db
                         ? "text-white font-medium"
                         : "text-secondary",
                     )}
@@ -3549,7 +4250,15 @@ export const Editor = () => {
               <SqlEditorWrapper
                 height="100%"
                 initialValue={tab.query}
-                dialect={activeDialect}
+                dialect={isNativeCli ? undefined : activeDialect}
+                language={
+                  nativeCliKind === "mongosh"
+                    ? "javascript"
+                    : nativeCliKind === "redis-cli"
+                      ? "plaintext"
+                      : "sql"
+                }
+                enableSqlTools={!isNativeCli}
                 onChange={(val) => {
                   if (isActive) updateTab(tab.id, { query: val });
                 }}
@@ -3570,7 +4279,7 @@ export const Editor = () => {
             )}
 
             {/* Editor overlay buttons — bottom-right */}
-            {tab.type !== "query_builder" && (
+            {tab.type !== "query_builder" && !isNativeCli && (
               <div className="absolute bottom-2 right-6 z-10 flex items-center gap-1">
                 {/* Visual Explain — hidden for read-only definition tabs and drivers without EXPLAIN support */}
                 {!tab.readOnly && driverSupportsExplain && (
@@ -3626,7 +4335,7 @@ export const Editor = () => {
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 {/* Detach results into a separate window */}
-                <button
+                {!isNativeCli && <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDetachResults();
@@ -3636,7 +4345,7 @@ export const Editor = () => {
                   title={t("editor.results.detach")}
                 >
                   <ExternalLink size={14} />
-                </button>
+                </button>}
                 {/* Minimize (collapse the results panel) */}
                 <button
                   onClick={(e) => {
@@ -3684,7 +4393,13 @@ export const Editor = () => {
 
           {/* Results Panel */}
           <div className="flex-1 overflow-hidden bg-elevated flex flex-col min-h-0">
-            {detachedTabIds.has(activeTab.id) ? (
+            {isNativeCli && nativeCliKind && activeConnectionId ? (
+              <NativeCliTerminal
+                connectionId={activeConnectionId}
+                sessionId={activeTab.id}
+                kind={nativeCliKind}
+              />
+            ) : detachedTabIds.has(activeTab.id) ? (
               <div className="flex flex-col items-center justify-center h-full text-muted gap-3">
                 <ExternalLink size={28} className="opacity-60" />
                 <p className="text-sm">{t("editor.results.detached")}</p>
@@ -4026,7 +4741,9 @@ export const Editor = () => {
                       <select
                         value={copyFormat}
                         onChange={(e) =>
-                          setCopyFormat(e.target.value as "csv" | "json" | "sql-insert" | "markdown")
+                          setCopyFormatOverride(
+                            e.target.value as EditorCopyFormat,
+                          )
                         }
                         className="bg-transparent border-none text-[11px] text-secondary hover:text-primary focus:outline-none cursor-pointer appearance-none pr-3 font-medium uppercase tracking-wide"
                         title={t("settings.copyFormat")}
@@ -4040,7 +4757,9 @@ export const Editor = () => {
                       {copyFormat === "csv" && (
                         <select
                           value={csvDelimiter}
-                          onChange={(e) => setCsvDelimiter(e.target.value)}
+                          onChange={(e) =>
+                            setCsvDelimiterOverride(e.target.value)
+                          }
                           className="bg-transparent border-none text-[11px] text-secondary hover:text-primary focus:outline-none cursor-pointer appearance-none pr-3 font-medium tracking-wide"
                           title={t("settings.csvDelimiter")}
                           style={CHEVRON_SELECT_STYLE}
@@ -4068,7 +4787,7 @@ export const Editor = () => {
                             type="checkbox"
                             checked={csvIncludeHeaders}
                             onChange={(e) =>
-                              setCsvIncludeHeaders(e.target.checked)
+                              setCsvIncludeHeadersOverride(e.target.checked)
                             }
                             className="w-3 h-3 cursor-pointer accent-blue-500"
                           />
@@ -4259,6 +4978,20 @@ export const Editor = () => {
         variant="danger"
         confirmDelaySeconds={5}
       />
+      {rollbackRiskReview && (
+        <RollbackRiskModal
+          isOpen
+          review={rollbackRiskReview}
+          onCancel={() => resolveRollbackRiskDecision(null)}
+          onSkip={() => resolveRollbackRiskDecision("skip")}
+          onExecuteUnprotected={() =>
+            resolveRollbackRiskDecision("execute_unprotected")
+          }
+          onAllowImplicitCommit={() =>
+            resolveRollbackRiskDecision("allow_implicit_commit")
+          }
+        />
+      )}
       <TabSwitcherModal
         isOpen={isTabSwitcherOpen}
         tabs={tabs}
@@ -4277,9 +5010,15 @@ export const Editor = () => {
             setSaveQueryModal({ ...saveQueryModal, isOpen: false })
           }
           initialSql={saveQueryModal.sql}
-          initialDatabase={activeTab?.schema ?? activeSchema ?? activeDatabaseName}
+          initialDatabase={getExecutionScopeForTab(activeTab) ?? activeDatabaseName}
           databases={isMultiDb ? selectedDatabases : undefined}
-          onSave={async (name, sql, database) => await saveQuery(name, sql, database ?? activeTab?.schema ?? activeSchema ?? activeDatabaseName)}
+          onSave={async (name, sql, database) =>
+            await saveQuery(
+              name,
+              sql,
+              database ?? getExecutionScopeForTab(activeTab) ?? activeDatabaseName,
+            )
+          }
           title={t("editor.saveQuery")}
         />
       )}
@@ -4287,7 +5026,7 @@ export const Editor = () => {
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
         connectionId={activeConnectionId ?? undefined}
-        schema={activeTab?.schema ?? activeSchema ?? undefined}
+        schema={getExecutionScopeForTab(activeTab)}
         onInsert={(q) => {
           updateActiveTab({ query: q });
           runQuery(q, 1);
@@ -4306,7 +5045,7 @@ export const Editor = () => {
         }}
         query={visualExplainQuery ?? activeTab?.query ?? ""}
         connectionId={activeConnectionId ?? ""}
-        schema={activeTab?.schema ?? activeSchema ?? undefined}
+        schema={getExecutionScopeForTab(activeTab)}
       />
       <ExplainSelectionModal
         isOpen={isExplainSelectionOpen}

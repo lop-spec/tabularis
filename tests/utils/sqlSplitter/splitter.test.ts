@@ -70,7 +70,38 @@ describe('splitStatements', () => {
 
     it('ignores semicolons inside block comments', () => {
       const result = splitQueries('SELECT 1 /* ; */; SELECT 2');
-      expect(result).toEqual(['SELECT 1 /* ; */', 'SELECT 2']);
+      expect(result).toEqual(['SELECT 1', 'SELECT 2']);
+    });
+
+    it('omits ordinary comments from executable query text', () => {
+      const sql = [
+        '-- release header',
+        'SELECT 1; -- trailing note',
+        '/* between statements */',
+        'SELECT /* inline note */ 2;',
+      ].join('\n');
+
+      expect(splitQueries(sql, 'mysql')).toEqual(['SELECT 1', 'SELECT   2']);
+    });
+
+    it('omits MySQL hash comments', () => {
+      expect(splitQueries('# header\nSELECT 1; # tail', 'mysql')).toEqual([
+        'SELECT 1',
+      ]);
+    });
+
+    it('preserves MySQL executable comments and optimizer hints', () => {
+      const sql = [
+        '/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;',
+        '/*M!100100 SET @mariadb = 1 */;',
+        'SELECT /*+ MAX_EXECUTION_TIME(1000) */ 1;',
+      ].join('\n');
+
+      expect(splitQueries(sql, 'mysql')).toEqual([
+        '/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */',
+        '/*M!100100 SET @mariadb = 1 */',
+        'SELECT /*+ MAX_EXECUTION_TIME(1000) */ 1',
+      ]);
     });
   });
 
@@ -109,8 +140,8 @@ describe('splitStatements', () => {
       // Old regex pulled `[^\n\r]+`, swallowing the comment as part of
       // the delimiter value. With the new `\S+` rule the delimiter is
       // the bare `//`, so subsequent `SELECT 1//` actually splits. The
-      // line comment trails inside the following segment, which is the
-      // expected fold behaviour (NEXT-meaningful wins).
+      // line comment trails inside the following segment; executable output
+      // should omit it after the delimiter has been parsed.
       const sql = [
         'DELIMITER //  -- switch to slashes',
         'SELECT 1//',
@@ -118,9 +149,31 @@ describe('splitStatements', () => {
       ].join('\n');
       const result = splitQueries(sql, 'mysql');
       expect(result).toHaveLength(2);
-      expect(result[0]).toContain('SELECT 1');
-      expect(result[0]).toContain('-- switch to slashes');
+      expect(result[0]).toBe('SELECT 1');
       expect(result[1]).toBe('SELECT 2');
+    });
+
+    it('keeps a history-style event body as one executable statement', () => {
+      const sql = [
+        'DELIMITER $$',
+        'CREATE EVENT mysql.ev_general_log_backup_7d',
+        'ON SCHEDULE EVERY 1 DAY',
+        'DO',
+        'BEGIN',
+        '  DECLARE v_old_log_state TINYINT DEFAULT 0;',
+        '  IF v_old_log_state = 1 THEN',
+        '    SET GLOBAL general_log = ON;',
+        '  END IF;',
+        'END$$',
+        'DELIMITER ;',
+      ].join('\n');
+
+      const result = splitQueries(sql, 'mysql');
+      expect(result).toHaveLength(1);
+      expect(result[0]).toContain('CREATE EVENT mysql.ev_general_log_backup_7d');
+      expect(result[0]).toContain('DECLARE v_old_log_state TINYINT DEFAULT 0;');
+      expect(result[0]).toContain('END IF;');
+      expect(result[0]).not.toContain('DELIMITER');
     });
   });
 

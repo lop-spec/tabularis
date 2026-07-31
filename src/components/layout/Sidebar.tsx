@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plug2, Settings, Cpu, PanelLeft, Layers, Star, Clock, BookOpen } from "lucide-react";
+import { Plug2, Settings, Cpu, PanelLeft, Layers, Star, Clock, BookOpen, RotateCcw } from "lucide-react";
 import { DiscordIcon } from "../icons/DiscordIcon";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { DISCORD_URL } from "../../config/links";
@@ -198,6 +198,7 @@ export const Sidebar = () => {
       location.pathname === "/" ||
       location.pathname === "/connections" ||
       location.pathname === "/mcp" ||
+      location.pathname === "/recovery" ||
       location.pathname === "/settings"
     ) {
       navigate("/editor");
@@ -239,6 +240,7 @@ export const Sidebar = () => {
     !!explorerConnId &&
     location.pathname !== "/settings" &&
     location.pathname !== "/mcp" &&
+    location.pathname !== "/recovery" &&
     location.pathname !== "/connections";
 
   return (
@@ -335,6 +337,12 @@ export const Sidebar = () => {
             to="/mcp"
             icon={Cpu}
             label={t("sidebar.mcpServer")}
+          />
+
+          <NavItem
+            to="/recovery"
+            icon={RotateCcw}
+            label={t("recovery.title")}
           />
 
           <NavItem

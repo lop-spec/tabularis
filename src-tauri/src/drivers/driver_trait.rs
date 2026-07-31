@@ -151,6 +151,15 @@ pub struct DriverCapabilities {
     /// Defaults to `false`.
     #[serde(default)]
     pub readonly: bool,
+    /// This connection is backed by a native interactive CLI rather than the
+    /// SQL/query driver interface. Console-only drivers skip schema discovery
+    /// and render a PTY terminal in the existing results pane.
+    #[serde(default)]
+    pub console_only: bool,
+    /// Native CLI implementation selected for this connection. `None` keeps
+    /// the existing SQL editor/query-result behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_cli: Option<String>,
     /// SQL dialect for the statement splitter / classifier. Plugins that
     /// omit the field fall back to `postgres` (matches pre-existing
     /// behavior shipped via the previous `postgreSplitterOptions`).

@@ -1,4 +1,5 @@
 import type { DriverCapabilities } from '../types/plugins';
+import { stripLeadingSqlComments } from './sql';
 
 export interface TableDataChangeScope {
   schema?: string;
@@ -12,6 +13,7 @@ export interface TableDataChangeScope {
 export function isMultiDatabaseCapable(capabilities: DriverCapabilities | null | undefined): boolean {
   if (!capabilities) return false;
   if (capabilities.no_connection_required) return false;
+  if (capabilities.console_only) return false;
   // A flat single-database store (e.g. Meilisearch) has nothing to select.
   if (capabilities.single_database) return false;
   return (
@@ -87,4 +89,81 @@ export function reconcileDatabaseSelection(
     }
   }
   return { selection, removed };
+}
+
+function nonBlank(value: string | null | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+/**
+ * Resolve the scope shown by the editor and sent to the backend from the same
+ * precedence chain. A tab opened for a specific database is authoritative;
+ * multi-database tabs without a pinned scope use the current/visible database,
+ * never an implicit connection default.
+ */
+export function resolveExecutionScope(
+  tabScope: string | null | undefined,
+  activeScope: string | null | undefined,
+  selectedDatabases: readonly string[],
+  isMultiDatabase: boolean,
+): string | undefined {
+  const pinned = nonBlank(tabScope);
+  if (pinned) return pinned;
+
+  const active = nonBlank(activeScope);
+  if (active) return active;
+
+  if (isMultiDatabase) {
+    return selectedDatabases.map(nonBlank).find((database) => database !== undefined);
+  }
+
+  return undefined;
+}
+
+/** Keep the active database valid when the selected database set changes. */
+export function resolveActiveDatabase(
+  selectedDatabases: readonly string[],
+  currentDatabase: string | null | undefined,
+): string | null {
+  const current = nonBlank(currentDatabase);
+  if (current && selectedDatabases.includes(current)) return current;
+  return selectedDatabases.map(nonBlank).find((database) => database !== undefined) ?? null;
+}
+
+/** Whether successful SQL can add, remove, or rename a database catalog entry. */
+export function changesDatabaseCatalog(sql: string): boolean {
+  return /\b(?:CREATE|DROP|ALTER)\s+(?:DATABASE|SCHEMA)\b/i.test(sql);
+}
+
+/** Extract the target from a standalone MySQL `USE db_name` statement. */
+export function parseUseDatabaseStatement(sql: string): string | null {
+  const statement = stripLeadingSqlComments(sql).trim();
+  const match = /^USE\s+(?:`((?:``|[^`\r\n])+)`|([A-Za-z0-9_$]+))\s*;?\s*$/i.exec(
+    statement,
+  );
+  if (!match) return null;
+  return match[1] !== undefined ? match[1].replace(/``/g, '`') : match[2];
+}
+
+export interface UseDatabaseSwitch {
+  database: string;
+  shouldSwitch: boolean;
+  shouldAddToSelection: boolean;
+}
+
+/** Decide how a successful `USE` statement updates only its current console. */
+export function resolveUseDatabaseSwitch(
+  sql: string,
+  currentDatabase: string | null | undefined,
+  selectedDatabases: readonly string[],
+): UseDatabaseSwitch | null {
+  const database = parseUseDatabaseStatement(sql);
+  if (!database) return null;
+
+  return {
+    database,
+    shouldSwitch: nonBlank(currentDatabase) !== database,
+    shouldAddToSelection: !selectedDatabases.includes(database),
+  };
 }

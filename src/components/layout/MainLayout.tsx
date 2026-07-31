@@ -19,6 +19,7 @@ export const MainLayout = () => {
 		isSplitVisible &&
 		location.pathname !== "/" &&
 		location.pathname !== "/connections" &&
+		location.pathname !== "/recovery" &&
 		location.pathname !== "/settings";
 
 	return (
