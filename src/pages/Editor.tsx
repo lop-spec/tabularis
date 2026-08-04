@@ -4962,7 +4962,6 @@ export const Editor = () => {
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
       />
       {rollbackRiskReview && (
         <RollbackRiskModal

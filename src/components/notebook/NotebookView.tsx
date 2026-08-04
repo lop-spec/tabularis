@@ -856,7 +856,6 @@ export function NotebookView({
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
       />
       <NotebookToolbar {...toolbarProps} />
       {showHistory && (
