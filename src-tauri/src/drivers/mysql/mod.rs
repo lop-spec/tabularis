@@ -1456,6 +1456,28 @@ fn should_use_rollback_guard(params: &ConnectionParams) -> bool {
     enabled && (!execute_unprotected || params.transaction_context_id.is_some())
 }
 
+/// Per-statement time budget for the protected (rollback-guard) path.
+///
+/// The guard path holds the pinned-session and context locks for the whole
+/// batch and has no statement-level timeouts, so a server-side stall (an MDL
+/// wait, a lock queue, a dead tunnel) used to leave the frontend on
+/// "executing" forever — and, worse, the watchdog and disconnect cleanup
+/// block on the same locks. A batch-level ceiling turns that into an error:
+/// when it fires the whole guard future is dropped, which releases the locks
+/// and lets the existing recovery paths do their job (the next run closes the
+/// interrupted pinned transaction; the idle watchdog reaps abandoned ones;
+/// a dropped pool connection is health-checked before reuse).
+const PROTECTED_STATEMENT_TIMEOUT_SECONDS: u64 = 120;
+
+fn protected_batch_budget(statement_count: usize) -> std::time::Duration {
+    let per_statement = std::env::var("TABULARIS_PROTECTED_STATEMENT_TIMEOUT_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(PROTECTED_STATEMENT_TIMEOUT_SECONDS);
+    std::time::Duration::from_secs(per_statement.saturating_mul(statement_count.max(1) as u64))
+}
+
 pub async fn execute_batch(
     params: &ConnectionParams,
     queries: &[String],
@@ -1471,15 +1493,30 @@ pub async fn execute_batch(
             Some(crate::models::RollbackUnsupportedPolicy::ExecuteUnprotected)
         );
     if should_use_rollback_guard(params) {
-        return rollback_guard::execute_protected_batch(
-            params,
-            queries,
-            limit,
-            page,
-            schema,
-            on_progress,
+        let budget = protected_batch_budget(queries.len());
+        return match tokio::time::timeout(
+            budget,
+            rollback_guard::execute_protected_batch(
+                params,
+                queries,
+                limit,
+                page,
+                schema,
+                on_progress,
+            ),
         )
-        .await;
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(format!(
+                "Protected execution exceeded its {}s time budget and was cancelled. \
+                 A statement is most likely blocked inside MySQL (metadata lock, lock \
+                 wait, or an unreachable server) — check SHOW PROCESSLIST from another \
+                 connection. The pinned transaction is closed safely on your next run, \
+                 and any rollback/recovery SQL written so far remains on disk.",
+                budget.as_secs()
+            )),
+        };
     }
     let mut conn = acquire_mysql_conn(params, schema).await?;
     // See `execute_query`: statements run verbatim, so only the protocol flag

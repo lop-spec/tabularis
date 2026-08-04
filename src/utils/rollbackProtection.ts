@@ -26,11 +26,14 @@ const CLEARLY_READ_ONLY_KEYWORDS = new Set([
   "SHOW",
   "DESCRIBE",
   "DESC",
-  "EXPLAIN",
   "VALUES",
   "TABLE",
   "PRAGMA",
 ]);
+
+// `SELECT … INTO OUTFILE/DUMPFILE` writes server-side files; the backend
+// planner blocks it, so it must not slip through the read-only fast path.
+const SELECT_FILE_WRITE = /\bINTO\s+(?:OUTFILE|DUMPFILE)\b/i;
 
 /**
  * Returns whether a single statement must use the rollback-aware batch path.
@@ -38,10 +41,15 @@ const CLEARLY_READ_ONLY_KEYWORDS = new Set([
  * The allow-list is intentionally narrow: ambiguous families such as WITH,
  * CALL, SET, USE, and unknown vendor statements are delegated to the backend
  * rollback planner, which can classify them accurately and fail closed.
+ * EXPLAIN is NOT on the list: MySQL 8.0.18+ `EXPLAIN ANALYZE UPDATE …`
+ * really executes the write, so only the backend planner may clear it.
  */
 export function requiresRollbackProtectedExecution(sql: string): boolean {
   const keyword = leadingKeyword(sql);
-  if (keyword) return !CLEARLY_READ_ONLY_KEYWORDS.has(keyword);
+  if (keyword) {
+    if (!CLEARLY_READ_ONLY_KEYWORDS.has(keyword)) return true;
+    return SELECT_FILE_WRITE.test(sql);
+  }
 
   // MySQL executable comments are meaningful statements, but the generic
   // leading-keyword helper deliberately treats block comments as non-code.

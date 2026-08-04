@@ -10,9 +10,10 @@ describe("requiresRollbackProtectedExecution", () => {
     for (const sql of [
       "SELECT * FROM users",
       "-- header\nSHOW TABLES",
-      "/* header */ EXPLAIN SELECT * FROM users",
       "DESCRIBE users",
       "VALUES ROW(1)",
+      // INTO a user variable is not a file write.
+      "SELECT id INTO @last_id FROM users LIMIT 1",
       "",
       "-- comment only",
     ]) {
@@ -33,6 +34,18 @@ describe("requiresRollbackProtectedExecution", () => {
       "WITH changed AS (SELECT 1) UPDATE users SET active = 1",
       "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */",
       "VENDOR_WRITE users",
+    ]) {
+      expect(requiresRollbackProtectedExecution(sql)).toBe(true);
+    }
+  });
+
+  it("never lets EXPLAIN or file-writing SELECT bypass the planner", () => {
+    for (const sql of [
+      // EXPLAIN ANALYZE really executes the statement on MySQL 8.0.18+.
+      "EXPLAIN ANALYZE UPDATE users SET active = 0",
+      "/* header */ EXPLAIN SELECT * FROM users",
+      "SELECT * FROM users INTO OUTFILE '/tmp/u.csv'",
+      "SELECT * INTO\tDUMPFILE '/tmp/u.bin' FROM users LIMIT 1",
     ]) {
       expect(requiresRollbackProtectedExecution(sql)).toBe(true);
     }
