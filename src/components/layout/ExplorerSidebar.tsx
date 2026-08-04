@@ -1041,7 +1041,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                 className="fixed inset-0 z-40"
                                 onClick={() => setIsSchemaFilterOpen(false)}
                               />
-                              <div className="absolute right-0 top-8 bg-elevated border border-default rounded-lg shadow-lg z-40 py-2 min-w-[200px] max-h-[300px] flex flex-col">
+                              <div className="absolute right-0 top-8 bg-elevated border border-default rounded-lg shadow-lg z-40 py-2 min-w-[200px] max-w-[240px] max-h-[300px] flex flex-col">
                                 <div className="flex items-center justify-between px-3 pb-2 border-b border-default">
                                   <span className="text-xs font-semibold text-secondary">
                                     {t("sidebar.editSchemas")}
@@ -1093,7 +1093,10 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                             <Square size={14} />
                                           )}
                                         </div>
-                                        <span className="text-sm truncate select-none">
+                                        <span
+                                          className="text-sm truncate select-none"
+                                          title={schemaName}
+                                        >
                                           {schemaName}
                                         </span>
                                       </div>
@@ -1255,7 +1258,10 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             className="fixed inset-0 z-40"
                             onClick={() => setIsDbManagerOpen(false)}
                           />
-                          <div className="absolute right-0 top-8 bg-elevated border border-default rounded-lg shadow-lg z-40 py-2 min-w-[200px] max-h-[320px] flex flex-col">
+                          {/* max-w keeps the panel from growing past the window's
+                              left edge: it is right-anchored, so an unbounded
+                              width pushes long database names out of view. */}
+                          <div className="absolute right-0 top-8 bg-elevated border border-default rounded-lg shadow-lg z-40 py-2 min-w-[200px] max-w-[240px] max-h-[320px] flex flex-col">
                             <div className="flex items-center justify-between px-3 pb-2 border-b border-default">
                               <span className="text-xs font-semibold text-secondary">
                                 {t("sidebar.manageDatabases")}
@@ -1302,7 +1308,9 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                     <div className={`w-4 h-4 flex items-center justify-center shrink-0 ${isSelected ? "text-blue-500" : "text-muted"}`}>
                                       {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
                                     </div>
-                                    <span className="text-sm truncate select-none">{dbName}</span>
+                                    <span className="text-sm truncate select-none" title={dbName}>
+                                      {dbName}
+                                    </span>
                                   </div>
                                 );
                               })}
