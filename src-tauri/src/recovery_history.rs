@@ -204,6 +204,21 @@ impl RecoveryJournal {
         Ok(self.path)
     }
 
+    /// Marks the run as interrupted (e.g. a COMMIT whose outcome is unknown)
+    /// instead of leaving it in "recording" forever. Interrupted runs stay
+    /// visible and comparable — that is exactly the situation where the
+    /// operator needs the recovery history most.
+    pub fn interrupt(mut self, reason: &str) -> Result<PathBuf, String> {
+        self.run.status = "interrupted".to_string();
+        self.run.finished_at = Some(chrono::Utc::now().to_rfc3339());
+        log::warn!(
+            "Recovery run {} marked interrupted: {reason}",
+            self.run.short_id
+        );
+        self.persist()?;
+        Ok(self.path)
+    }
+
     pub fn discard(self) -> Result<(), String> {
         match fs::remove_file(&self.path) {
             Ok(()) => Ok(()),
@@ -216,29 +231,36 @@ impl RecoveryJournal {
     }
 
     fn persist(&self) -> Result<(), String> {
-        let payload = serde_json::to_vec_pretty(&self.run)
-            .map_err(|error| format!("Could not serialize recovery history: {error}"))?;
-        let temporary = self
-            .path
-            .with_extension(format!("json.tmp-{}", ulid::Ulid::new()));
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temporary)
-            .map_err(|error| format!("Could not create recovery history revision: {error}"))?;
-        file.write_all(&payload)
-            .map_err(|error| format!("Could not write recovery history revision: {error}"))?;
-        file.flush()
-            .map_err(|error| format!("Could not flush recovery history revision: {error}"))?;
-        file.sync_all()
-            .map_err(|error| format!("Could not sync recovery history revision: {error}"))?;
-        drop(file);
+        // fsync-backed writes run on the caller's thread while the pinned
+        // session lock is held — hand them to a blocking-safe context so a
+        // large batch cannot starve the async workers.
+        crate::rollback_sql::run_blocking(|| {
+            let payload = serde_json::to_vec_pretty(&self.run)
+                .map_err(|error| format!("Could not serialize recovery history: {error}"))?;
+            let temporary = self
+                .path
+                .with_extension(format!("json.tmp-{}", ulid::Ulid::new()));
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temporary)
+                .map_err(|error| {
+                    format!("Could not create recovery history revision: {error}")
+                })?;
+            file.write_all(&payload)
+                .map_err(|error| format!("Could not write recovery history revision: {error}"))?;
+            file.flush()
+                .map_err(|error| format!("Could not flush recovery history revision: {error}"))?;
+            file.sync_all()
+                .map_err(|error| format!("Could not sync recovery history revision: {error}"))?;
+            drop(file);
 
-        if let Err(error) = fs::rename(&temporary, &self.path) {
-            let _ = fs::remove_file(&temporary);
-            return Err(format!("Could not publish recovery history: {error}"));
-        }
-        Ok(())
+            if let Err(error) = fs::rename(&temporary, &self.path) {
+                let _ = fs::remove_file(&temporary);
+                return Err(format!("Could not publish recovery history: {error}"));
+            }
+            Ok(())
+        })
     }
 }
 
@@ -391,9 +413,12 @@ pub async fn compare_and_generate(
                     run.short_id
                 ));
             }
-            if run.status != "complete" {
+            // "interrupted" runs (COMMIT outcome unknown) are precisely the
+            // ones an operator needs to compare; only a run still actively
+            // "recording" is untrustworthy.
+            if run.status != "complete" && run.status != "interrupted" {
                 return Err(format!(
-                    "Recovery run {} is not complete and cannot be compared",
+                    "Recovery run {} is still recording and cannot be compared",
                     run.short_id
                 ));
             }
@@ -569,9 +594,14 @@ async fn compare_selected_statements(
     for work in row_work.values() {
         let backup_schema =
             mapped_backup_schema(&work.schema, base_database, &backup_probe.database);
+        // One round-trip per batch instead of two per key: thousands of rows
+        // would otherwise mean thousands of sequential single-row SELECTs.
+        let keys: Vec<&Vec<String>> = work.keys.iter().collect();
+        let current_rows = fetch_rows_batch(target, &work.schema, work, &keys).await?;
+        let desired_rows = fetch_rows_batch(backup, &backup_schema, work, &keys).await?;
         for key in &work.keys {
-            let current = fetch_row(target, &work.schema, work, key).await?;
-            let desired = fetch_row(backup, &backup_schema, work, key).await?;
+            let current = current_rows.get(key).cloned();
+            let desired = desired_rows.get(key).cloned();
             let source = work
                 .source_ids
                 .iter()
@@ -697,17 +727,12 @@ fn row_key(
         .collect()
 }
 
-async fn fetch_row(
-    conn: &mut sqlx::MySqlConnection,
-    schema: &str,
-    work: &RowWork,
-    key: &[String],
-) -> Result<Option<RecoveryRow>, String> {
-    if work.primary_key.len() != key.len() {
-        return Err("Recovery primary-key arity mismatch".to_string());
-    }
-    let projection = work
-        .columns
+/// Keys per SELECT when comparing. Each key expands to an OR'd conjunction of
+/// `CAST(col AS BINARY) <=> X'..'` terms, so the batch size bounds SQL length.
+const COMPARE_FETCH_BATCH: usize = 200;
+
+fn recovery_row_projection(work: &RowWork) -> String {
+    work.columns
         .iter()
         .enumerate()
         .map(|(index, column)| {
@@ -718,45 +743,71 @@ async fn fetch_row(
             )
         })
         .collect::<Vec<_>>()
-        .join(", ");
-    let key_condition = work
-        .primary_key
+        .join(", ")
+}
+
+fn key_condition(work: &RowWork, key: &[String]) -> String {
+    work.primary_key
         .iter()
         .zip(key)
         .map(|(column, value)| {
             format!("CAST({} AS BINARY) <=> {}", quote_identifier(column), value)
         })
         .collect::<Vec<_>>()
-        .join(" AND ");
-    let sql = format!(
-        "SELECT {projection} FROM {}.{} WHERE {key_condition} LIMIT 2",
-        quote_identifier(schema),
-        quote_identifier(&work.table)
-    );
-    let rows = (&mut *conn)
-        .fetch_all(sqlx::raw_sql(&sql))
-        .await
-        .map_err(|error| {
-            format!(
-                "Could not read {}.{} during recovery comparison: {error}",
-                schema, work.table
-            )
-        })?;
-    if rows.len() > 1 {
-        return Err(format!(
-            "Primary key lookup returned multiple rows for {}.{}",
-            schema, work.table
-        ));
+        .join(" AND ")
+}
+
+/// Fetches all requested rows in batches and returns them keyed by primary
+/// key. A key that maps to more than one row (should be impossible for a PK
+/// lookup) is reported as an error, matching the old single-row behaviour.
+async fn fetch_rows_batch(
+    conn: &mut sqlx::MySqlConnection,
+    schema: &str,
+    work: &RowWork,
+    keys: &[&Vec<String>],
+) -> Result<std::collections::HashMap<Vec<String>, RecoveryRow>, String> {
+    for key in keys {
+        if work.primary_key.len() != key.len() {
+            return Err("Recovery primary-key arity mismatch".to_string());
+        }
     }
-    rows.into_iter()
-        .next()
-        .map(|row| {
+    let projection = recovery_row_projection(work);
+    let mut fetched = std::collections::HashMap::new();
+    for chunk in keys.chunks(COMPARE_FETCH_BATCH) {
+        let condition = chunk
+            .iter()
+            .map(|key| format!("({})", key_condition(work, key)))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let sql = format!(
+            "SELECT {projection} FROM {}.{} WHERE {condition}",
+            quote_identifier(schema),
+            quote_identifier(&work.table)
+        );
+        let rows = (&mut *conn)
+            .fetch_all(sqlx::raw_sql(&sql))
+            .await
+            .map_err(|error| {
+                format!(
+                    "Could not read {}.{} during recovery comparison: {error}",
+                    schema, work.table
+                )
+            })?;
+        for row in rows {
             let values = (0..work.columns.len())
                 .map(|index| mysql_text(&row, index))
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(RecoveryRow { values })
-        })
-        .transpose()
+                .collect::<Result<Vec<_>, String>>()?;
+            let row = RecoveryRow { values };
+            let key = row_key(&work.columns, &work.primary_key, &row)?;
+            if fetched.insert(key, row).is_some() {
+                return Err(format!(
+                    "Primary key lookup returned multiple rows for {}.{}",
+                    schema, work.table
+                ));
+            }
+        }
+    }
+    Ok(fetched)
 }
 
 fn build_update_sql(
@@ -1204,12 +1255,21 @@ fn recovery_files(root: &Path) -> Result<Vec<PathBuf>, String> {
                     .is_some_and(|name| name.ends_with(".recovery.json"))
                 {
                     files.push(path);
-                    if files.len() >= MAX_HISTORY_FILES {
-                        return Ok(files);
-                    }
                 }
             }
         }
+    }
+    // Cap by NEWEST first: truncating in directory-walk order could hide the
+    // most recent runs — the ones an operator actually needs.
+    if files.len() > MAX_HISTORY_FILES {
+        files.sort_by_cached_key(|path| {
+            std::cmp::Reverse(
+                fs::metadata(path)
+                    .and_then(|meta| meta.modified())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            )
+        });
+        files.truncate(MAX_HISTORY_FILES);
     }
     Ok(files)
 }

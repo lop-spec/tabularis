@@ -3,6 +3,23 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+/// Runs fsync-heavy journal IO without starving the async runtime.
+///
+/// Journal writes happen while the pinned-session mutex is held, on a tokio
+/// worker thread. `block_in_place` moves the worker out of the scheduler for
+/// the duration; outside a multi-thread runtime (unit tests) the closure just
+/// runs inline.
+pub(crate) fn run_blocking<T>(work: impl FnOnce() -> T) -> T {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle)
+            if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread =>
+        {
+            tokio::task::block_in_place(work)
+        }
+        _ => work(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerIdentity {
     Uuid(String),
@@ -177,21 +194,23 @@ impl RollbackJournal {
     }
 
     fn persist_current_revision(&mut self, previous: Option<&Path>) -> Result<(), String> {
-        let rendered = render_rollback_sql(&self.environment, &self.steps);
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&self.current_revision_path)
-            .map_err(|error| format!("Could not create rollback SQL revision: {error}"))?;
-        file.write_all(rendered.as_bytes())
-            .map_err(|error| format!("Could not write rollback SQL revision: {error}"))?;
-        file.flush()
-            .map_err(|error| format!("Could not flush rollback SQL revision: {error}"))?;
-        file.sync_all()
-            .map_err(|error| format!("Could not sync rollback SQL revision: {error}"))?;
-        drop(file);
-        self.remove_stale_revisions(previous);
-        Ok(())
+        run_blocking(|| {
+            let rendered = render_rollback_sql(&self.environment, &self.steps);
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&self.current_revision_path)
+                .map_err(|error| format!("Could not create rollback SQL revision: {error}"))?;
+            file.write_all(rendered.as_bytes())
+                .map_err(|error| format!("Could not write rollback SQL revision: {error}"))?;
+            file.flush()
+                .map_err(|error| format!("Could not flush rollback SQL revision: {error}"))?;
+            file.sync_all()
+                .map_err(|error| format!("Could not sync rollback SQL revision: {error}"))?;
+            drop(file);
+            self.remove_stale_revisions(previous);
+            Ok(())
+        })
     }
 
     fn remove_stale_revisions(&self, keep_previous: Option<&Path>) {

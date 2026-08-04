@@ -569,12 +569,21 @@ fn spawn_pinned_transaction_watchdog(key: TransactionContextKey, session_id: Str
             let Some(slot) = get_pinned_transaction_slot(&key) else {
                 return;
             };
-            let remaining = {
-                let session = slot.lock().await;
-                if session.session_id != session_id {
-                    return;
+            // try_lock, never lock().await: a batch stuck mid-execution holds
+            // this mutex, and a blocked watchdog can reap nothing. The batch
+            // timeout in execute_batch guarantees the lock frees eventually;
+            // until then just re-check on a short interval.
+            let remaining = match slot.try_lock() {
+                Ok(session) => {
+                    if session.session_id != session_id {
+                        return;
+                    }
+                    timeout.saturating_sub(session.last_activity.elapsed())
                 }
-                timeout.saturating_sub(session.last_activity.elapsed())
+                Err(_) => {
+                    delay = std::time::Duration::from_secs(60);
+                    continue;
+                }
             };
             if !remaining.is_zero() {
                 delay = remaining;
@@ -632,7 +641,24 @@ async fn close_pinned_transaction_context(
     reason: &str,
 ) -> Result<bool, String> {
     let context_lock = transaction_context_lock(key);
-    let _context_guard = context_lock.lock().await;
+    // Bounded wait: this runs from disconnect/cleanup paths, and a batch that
+    // is stuck inside MySQL holds the context lock. Waiting forever would
+    // make "disconnect" hang alongside the stuck batch (hang contagion).
+    let _context_guard = match tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        context_lock.lock(),
+    )
+    .await
+    {
+        Ok(guard) => guard,
+        Err(_) => {
+            return Err(format!(
+                "Pinned transaction {}/{} is still executing; close it again \
+                 after the running batch finishes or times out ({reason})",
+                key.connection_id, key.context_id
+            ));
+        }
+    };
     let Some(slot) = get_pinned_transaction_slot(key) else {
         return Ok(false);
     };
@@ -797,6 +823,39 @@ pub(super) async fn execute_protected_batch(
     }
 }
 
+/// Creates the rollback + recovery journals for a pinned session that is
+/// about to run its first write. Split out so the caller can reset
+/// `execution_in_flight` on failure (see call site).
+async fn init_pinned_journals(
+    session: &mut PinnedTransactionSession,
+    params: &ConnectionParams,
+) -> Result<(), String> {
+    let connection_id = params
+        .connection_id
+        .clone()
+        .ok_or_else(|| "Rollback protection requires a stable connection ID".to_string())?;
+    let connection_name = params
+        .connection_name
+        .clone()
+        .filter(|name| !name.trim().is_empty())
+        .ok_or_else(|| "Rollback protection requires a connection name".to_string())?;
+    let environment = {
+        let conn = session
+            .conn
+            .as_mut()
+            .ok_or_else(|| "Pinned transaction lost its physical connection".to_string())?;
+        read_rollback_environment(conn, connection_id, connection_name).await?
+    };
+    session.recovery_journal = Some(RecoveryJournal::create(
+        environment.connection_id.clone(),
+        environment.connection_name.clone(),
+        environment.database.clone(),
+        recovery_server_identity_label(&environment.server),
+    )?);
+    session.journal = Some(RollbackJournal::create(environment)?);
+    Ok(())
+}
+
 async fn execute_pinned_protected_batch(
     params: &ConnectionParams,
     queries: &[String],
@@ -892,29 +951,14 @@ async fn execute_pinned_protected_batch(
     session.execution_in_flight = true;
 
     if has_writes && session.journal.is_none() {
-        let connection_id = params
-            .connection_id
-            .clone()
-            .ok_or_else(|| "Rollback protection requires a stable connection ID".to_string())?;
-        let connection_name = params
-            .connection_name
-            .clone()
-            .filter(|name| !name.trim().is_empty())
-            .ok_or_else(|| "Rollback protection requires a connection name".to_string())?;
-        let environment = {
-            let conn = session
-                .conn
-                .as_mut()
-                .ok_or_else(|| "Pinned transaction lost its physical connection".to_string())?;
-            read_rollback_environment(conn, connection_id, connection_name).await?
-        };
-        session.recovery_journal = Some(RecoveryJournal::create(
-            environment.connection_id.clone(),
-            environment.connection_name.clone(),
-            environment.database.clone(),
-            recovery_server_identity_label(&environment.server),
-        )?);
-        session.journal = Some(RollbackJournal::create(environment)?);
+        // A failure here (missing permission, journal IO error) must not
+        // leave execution_in_flight=true behind: the next run would then hit
+        // the "interrupted previous Run All" recovery instead of just seeing
+        // this error once.
+        if let Err(error) = init_pinned_journals(&mut session, params).await {
+            session.execution_in_flight = false;
+            return Err(error);
+        }
     }
 
     let mut results = Vec::with_capacity(queries.len());
@@ -1188,6 +1232,18 @@ async fn execute_pinned_protected_batch(
                 .to_string()
         });
         let conn = session.conn.take();
+        // The rollback revision survives on disk by construction. The recovery
+        // history must not be dropped mid-"recording": mark it interrupted so
+        // RecoveryPage can still show and compare it — the unknown-COMMIT case
+        // is exactly when the operator needs it.
+        session.journal.take();
+        if let Some(recovery_journal) = session.recovery_journal.take() {
+            if let Err(error) =
+                recovery_journal.interrupt("transaction boundary outcome unknown")
+            {
+                log::warn!("Could not mark recovery run interrupted: {error}");
+            }
+        }
         remove_pinned_transaction_slot(&key);
         drop(session);
         if let Some(conn) = conn {
@@ -2492,6 +2548,20 @@ async fn auto_increment_insert_condition(
     Ok(conditions.join(" OR "))
 }
 
+/// Default before-image cap. An unbounded UPDATE/DELETE on a big table would
+/// otherwise lock the whole table with `FOR UPDATE`, hex-encode every row into
+/// memory (~2x data size) and rewrite the journal per statement. Fail closed
+/// and tell the user to batch instead.
+const ROLLBACK_CAPTURE_ROW_LIMIT: usize = 100_000;
+
+fn rollback_capture_row_limit() -> usize {
+    std::env::var("TABULARIS_ROLLBACK_CAPTURE_LIMIT")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(ROLLBACK_CAPTURE_ROW_LIMIT)
+}
+
 async fn capture_rows(
     conn: &mut sqlx::MySqlConnection,
     metadata: &TableMetadata,
@@ -2513,14 +2583,26 @@ async fn capture_rows(
     let where_clause = condition
         .map(|condition| format!(" WHERE {condition}"))
         .unwrap_or_default();
+    let limit = rollback_capture_row_limit();
+    // LIMIT cap+1: seeing cap+1 rows proves the statement exceeds the budget
+    // without counting the whole table first.
     let sql = format!(
-        "SELECT {projection} FROM {}{where_clause} FOR UPDATE",
-        metadata.qualified_name()
+        "SELECT {projection} FROM {}{where_clause} LIMIT {} FOR UPDATE",
+        metadata.qualified_name(),
+        limit + 1
     );
     let rows = conn
         .fetch_all(sqlx::raw_sql(&sql))
         .await
         .map_err(|error| format!("Could not capture row image: {error}"))?;
+    if rows.len() > limit {
+        return Err(format!(
+            "Rollback protection refused to capture more than {limit} rows from {} \
+             (set TABULARIS_ROLLBACK_CAPTURE_LIMIT to raise the cap, split the \
+             statement into smaller batches, or run it with protection disabled)",
+            metadata.qualified_name()
+        ));
+    }
     rows.into_iter()
         .map(|row| {
             let values = (0..columns.len())
