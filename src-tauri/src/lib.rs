@@ -249,6 +249,32 @@ pub fn run() {
                 }
             }
 
+            // Opt-in warm-instance mode: closing the main window hides it
+            // instead of exiting, so the next launch is a millisecond-level
+            // window activation rather than a cold WebView2 + bundle load.
+            // Gated on an env var set by the local dev launchers — official
+            // builds and `--explain` runs (which close main deliberately)
+            // keep the stock quit-on-close behaviour.
+            if std::env::var("TABULARIS_CLOSE_TO_HIDE").as_deref() == Ok("1")
+                && args.explain.is_none()
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    let hide_target = window.clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                            if let Err(e) = hide_target.hide() {
+                                log::warn!("Close-to-hide failed, window stays open: {e}");
+                            } else {
+                                log::info!(
+                                    "Main window hidden (close-to-hide); process stays warm for instant relaunch"
+                                );
+                            }
+                        }
+                    });
+                }
+            }
+
             // If the user launched with `--explain <FILE>`, spawn the Visual
             // Explain window and hide the main app window: the CLI flag is
             // meant to be a dedicated plan viewer, not a full app launch.
