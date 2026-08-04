@@ -107,6 +107,13 @@ portable-pty = "0.9.0"
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
 
+# WebView2 COM access for suspending the hidden main window (close-to-hide
+# keeps the process warm; suspending drops most of the WebView's memory).
+# Versions pinned to what wry 0.54 already pulls in — no new tree entries.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows-core = "0.61"
+
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
 

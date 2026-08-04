@@ -6289,7 +6289,9 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "webview2-com",
  "which",
+ "windows-core 0.61.2",
  "zip",
 ]
 
