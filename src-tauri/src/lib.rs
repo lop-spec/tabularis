@@ -232,8 +232,20 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             log::info!("Duplicate launch detected — forwarded to existing instance");
             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
+                // This is also the warm-relaunch path for close-to-hide: the
+                // launcher just starts a second instance and we bring the
+                // window back HERE, in-process. External ShowWindowAsync pokes
+                // are queued messages that can land after a later hide and
+                // "resurrect" the window — so the launcher must never poke.
+                let was_hidden = !win.is_visible().unwrap_or(true);
+                let _ = win.show();
                 let _ = win.unminimize();
                 let _ = win.set_focus();
+                if was_hidden {
+                    log::info!("Warm relaunch: hidden main window shown again");
+                    #[cfg(windows)]
+                    set_main_webview_suspended(&win, false);
+                }
             }
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
