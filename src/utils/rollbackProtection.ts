@@ -1,4 +1,5 @@
 import { leadingKeyword } from "./sqlSplitter/classify";
+import { splitQueries, type Dialect } from "./sqlSplitter";
 
 export const ROLLBACK_RISK_REVIEW_PREFIX =
   "TABULARIS_ROLLBACK_RISK_REVIEW:";
@@ -47,7 +48,7 @@ const SET_USER_VARIABLE_ONLY =
   /^SET\s+@(?!@)[A-Za-z0-9_$-￿]+\s*(?::?=)/i;
 
 /**
- * Returns whether a single statement must use the rollback-aware batch path.
+ * Returns whether one statement must use the rollback-aware batch path.
  *
  * The allow-list is intentionally narrow: ambiguous families such as WITH,
  * CALL, USE, and unknown vendor statements are delegated to the backend
@@ -56,7 +57,7 @@ const SET_USER_VARIABLE_ONLY =
  * really executes the write, so only the backend planner may clear it.
  * `SET` is delegated too, except for plain user-variable assignment.
  */
-export function requiresRollbackProtectedExecution(sql: string): boolean {
+function statementRequiresProtection(sql: string): boolean {
   const keyword = leadingKeyword(sql);
   if (keyword) {
     if (keyword === "SET") {
@@ -69,6 +70,30 @@ export function requiresRollbackProtectedExecution(sql: string): boolean {
   // MySQL executable comments are meaningful statements, but the generic
   // leading-keyword helper deliberately treats block comments as non-code.
   return /\/\*!/.test(sql);
+}
+
+/**
+ * Returns whether the editor selection must use the rollback-aware batch path.
+ *
+ * Callers hand over the whole selection, so every statement in it is judged
+ * and any one of them is enough to protect the batch. Reading only the leading
+ * keyword would clear `SELECT 1; UPDATE …` — the write rides in behind the
+ * read and executes with no rollback journal.
+ *
+ * Passing `dialect` matters: the generic preset misreads MySQL's `'a\'b'` as
+ * an unterminated string. That errs toward over-splitting, and a fragment
+ * rarely starts with a read-only keyword, so the batch gets protected rather
+ * than cleared — safe, but noisier than it needs to be.
+ */
+export function requiresRollbackProtectedExecution(
+  sql: string,
+  dialect?: Dialect | string,
+): boolean {
+  const statements = splitQueries(sql, dialect);
+  // Comment-only input splits to nothing; judge the original text so an
+  // executable comment (`/*! … */`) is still caught.
+  if (statements.length === 0) return statementRequiresProtection(sql);
+  return statements.some(statementRequiresProtection);
 }
 
 function errorMessage(error: unknown): string | null {

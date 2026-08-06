@@ -1005,7 +1005,7 @@ export const Editor = () => {
         rollbackProtectionEnabled &&
         (targetTab.transactionActive ||
           isExplicitTransactionControl(textToRun) ||
-          requiresRollbackProtectedExecution(textToRun))
+          requiresRollbackProtectedExecution(textToRun, activeDialect))
       ) {
         void runMultipleQueriesRef.current(
           [textToRun],
