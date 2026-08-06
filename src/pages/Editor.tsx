@@ -1519,7 +1519,16 @@ export const Editor = () => {
       const transactionIdleTimeoutSeconds =
         transactionResult?.transaction_idle_timeout_seconds;
       const skippedCount = batchResults.filter((item) => item.skipped).length;
-      if (transactionActive) {
+      // Only announce a transaction that this run actually opened. While one
+      // stays pinned every later statement — including read-only SELECTs —
+      // reports `transaction_active: true`, which used to re-alert on each
+      // run. The amber "transaction active" badge in the toolbar already
+      // shows the state (with the same tooltip text) for as long as it lasts.
+      const hadTransactionBefore =
+        tabsRef.current.find((tab) => tab.id === targetTabId)
+          ?.transactionActive === true;
+      const transactionJustOpened = transactionActive && !hadTransactionBefore;
+      if (transactionJustOpened) {
         showAlert(
           t("editor.transactionPinned", {
             minutes: Math.max(
