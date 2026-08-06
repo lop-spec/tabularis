@@ -35,18 +35,33 @@ const CLEARLY_READ_ONLY_KEYWORDS = new Set([
 // planner blocks it, so it must not slip through the read-only fast path.
 const SELECT_FILE_WRITE = /\bINTO\s+(?:OUTFILE|DUMPFILE)\b/i;
 
+// `SET @var = …` only assigns a user variable: no data changes, nothing to
+// roll back. Every other SET form (GLOBAL/SESSION/PERSIST, NAMES, autocommit,
+// TRANSACTION …) alters server or session behaviour and stays protected, so
+// the match is anchored to `@` and rejects `@@system_variables`.
+//
+// Without this, a batch that merely primed a few counters for a read-only
+// pre-flight check pulled the entire batch — the SELECTs included — into the
+// pinned-transaction path and raised a risk prompt.
+const SET_USER_VARIABLE_ONLY =
+  /^SET\s+@(?!@)[A-Za-z0-9_$-￿]+\s*(?::?=)/i;
+
 /**
  * Returns whether a single statement must use the rollback-aware batch path.
  *
  * The allow-list is intentionally narrow: ambiguous families such as WITH,
- * CALL, SET, USE, and unknown vendor statements are delegated to the backend
+ * CALL, USE, and unknown vendor statements are delegated to the backend
  * rollback planner, which can classify them accurately and fail closed.
  * EXPLAIN is NOT on the list: MySQL 8.0.18+ `EXPLAIN ANALYZE UPDATE …`
  * really executes the write, so only the backend planner may clear it.
+ * `SET` is delegated too, except for plain user-variable assignment.
  */
 export function requiresRollbackProtectedExecution(sql: string): boolean {
   const keyword = leadingKeyword(sql);
   if (keyword) {
+    if (keyword === "SET") {
+      return !SET_USER_VARIABLE_ONLY.test(sql.trim());
+    }
     if (!CLEARLY_READ_ONLY_KEYWORDS.has(keyword)) return true;
     return SELECT_FILE_WRITE.test(sql);
   }
