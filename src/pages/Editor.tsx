@@ -1518,9 +1518,6 @@ export const Editor = () => {
         transactionResult?.transaction_recovery_file;
       const transactionIdleTimeoutSeconds =
         transactionResult?.transaction_idle_timeout_seconds;
-      const unprotectedCount = batchResults.filter(
-        (item) => item.rollback_unprotected,
-      ).length;
       const skippedCount = batchResults.filter((item) => item.skipped).length;
       if (transactionActive) {
         showAlert(
@@ -1542,17 +1539,12 @@ export const Editor = () => {
         transactionOutcome === "auto_rolled_back"
       ) {
         showAlert(t("editor.transactionRolledBack"), { kind: "info" });
-      } else if (unprotectedCount > 0) {
-        showAlert(
-          t("editor.rollbackRiskUnprotectedSummary", {
-            count: unprotectedCount,
-            path:
-              rollbackFile ??
-              t("editor.rollbackRiskNoProtectedRollbackFile"),
-          }),
-          { kind: "warning" },
-        );
-      } else if (skippedCount > 0) {
+      }
+      // Deliberately no notice for statements executed by explicit risk
+      // choice: the user already accepted them in the risk dialog, so
+      // restating it afterwards is pure noise. The result rows still carry
+      // `rollback_unprotected`, and Recovery covers what is restorable.
+      else if (skippedCount > 0) {
         showAlert(
           t("editor.rollbackRiskSkippedSummary", {
             count: skippedCount,
