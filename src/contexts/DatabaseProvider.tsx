@@ -1007,14 +1007,55 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   // Track the set of connections open anywhere (across all windows). Seed from
   // the backend snapshot, then keep in sync via the broadcast event.
   useEffect(() => {
+    // Normalize to an array: a null/undefined payload would otherwise poison
+    // every `.includes` / `.length` reader of this state.
     invoke<string[]>('get_active_connections')
-      .then(setGloballyOpenConnectionIds)
+      .then((ids) => setGloballyOpenConnectionIds(ids ?? []))
       .catch(() => {});
     const unlisten = listen<string[]>('connections:active-changed', (event) => {
-      setGloballyOpenConnectionIds(event.payload);
+      setGloballyOpenConnectionIds(event.payload ?? []);
     });
     return () => { unlisten.then(fn => fn()); };
   }, []);
+
+  // Adopt orphaned connections.
+  //
+  // The backend registry is per-PROCESS, not per-window: a pool can outlive the
+  // frontend state that opened it (webview reload, or the process staying warm
+  // while the window is hidden). The connection then shows as "Open" on the
+  // Connections page while this window has no session — and clicking it hits
+  // the "open in another window" branch, which tries to focus a window that
+  // does not exist. The connection becomes unusable.
+  //
+  // The main window claims those pools on mount: it is the one window that is
+  // always present, so anything left over belongs to it.
+  const adoptedOrphansRef = useRef(false);
+  useEffect(() => {
+    if (adoptedOrphansRef.current) return;
+    if (openConnectionIds.length > 0) return;
+    if (globallyOpenConnectionIds.length === 0) return;
+    if (getCurrentWindow().label !== 'main') return;
+    // Deliberately not gated on `connections`: that list is loaded lazily by
+    // the Connections page, so requiring it would postpone adoption until the
+    // user navigates there — exactly when they are already stuck. `connect`
+    // resolves the connection details itself and rejects for unknown ids.
+    adoptedOrphansRef.current = true;
+
+    const orphans = [...globallyOpenConnectionIds];
+    void (async () => {
+      for (const id of orphans) {
+        try {
+          // `connect` is idempotent against an existing pool; it rebuilds this
+          // window's view of the session (tables, views, routines).
+          await connect(id);
+        } catch (error) {
+          console.error(`Could not adopt orphaned connection ${id}:`, error);
+        }
+      }
+    })();
+    // `connect` is recreated every render; the ref guard keeps this one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openConnectionIds, globallyOpenConnectionIds]);
 
   // A `DROP DATABASE` that succeeded inside the app leaves the stored selection
   // stale; the backend now says so instead of making the user press refresh

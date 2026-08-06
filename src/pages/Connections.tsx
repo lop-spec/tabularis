@@ -463,9 +463,19 @@ export const Connections = () => {
       return;
     }
     // Open in another window: focus that window instead of opening a duplicate.
+    // The backend registry is per-process, so a pool can also be an orphan left
+    // by a reloaded frontend — in that case there is no window to focus and we
+    // must fall through to a normal connect, otherwise the card is permanently
+    // stuck showing "Open" while being unusable.
     if (isConnectionOpenAnywhere(conn.id)) {
-      await openConnectionInNewWindow(conn.id, conn.name);
-      return;
+      try {
+        await openConnectionInNewWindow(conn.id, conn.name);
+        return;
+      } catch (e) {
+        // No window owns this pool (or it could not be focused): fall through
+        // and connect here rather than leaving the card unusable.
+        console.error("Could not open the owning window, connecting here:", e);
+      }
     }
     setConnectingId(conn.id);
     try {

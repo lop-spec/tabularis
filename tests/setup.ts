@@ -27,6 +27,8 @@ vi.mock("@tauri-apps/api/window", () => ({
     Informational: 2,
   },
   getCurrentWindow: () => ({
+    // Orphan-connection adoption only runs in the main window.
+    label: "main",
     isAlwaysOnTop: vi.fn().mockResolvedValue(false),
     isVisible: vi.fn().mockResolvedValue(true),
     isMinimized: vi.fn().mockResolvedValue(false),

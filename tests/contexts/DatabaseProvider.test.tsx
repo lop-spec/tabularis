@@ -154,6 +154,32 @@ describe('DatabaseProvider', () => {
     });
   });
 
+  it('adopts pools the backend still holds after the frontend lost its state', async () => {
+    // The backend registry is per-process: a pool can outlive the frontend
+    // state that opened it (webview reload / warm hidden window). Without
+    // adoption the card shows "Open" while the editor has no session, and
+    // clicking it tries to focus a window that does not exist.
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_connections') return Promise.resolve(mockConnections);
+      if (cmd === 'get_active_connections') return Promise.resolve(['conn-123']);
+      if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
+      if (cmd === 'get_tables') return Promise.resolve(mockTables);
+      if (cmd === 'get_views') return Promise.resolve(mockViews);
+      if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
+      return Promise.resolve(undefined);
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(DatabaseProvider, null, children);
+
+    const { result } = renderHook(() => useDatabase(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.activeConnectionId).toBe('conn-123');
+      expect(result.current.isConnectionOpen('conn-123')).toBe(true);
+    });
+  });
+
   it('should disconnect and reset state', async () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === 'get_connections') return Promise.resolve(mockConnections);
