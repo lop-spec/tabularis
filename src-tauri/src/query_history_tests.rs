@@ -16,6 +16,8 @@ mod tests {
             rows_affected: None,
             error: None,
             database: database.map(|s| s.into()),
+            connection_id: None,
+            connection_name: None,
         }
     }
 

@@ -7,6 +7,13 @@ export interface QueryHistoryEntry {
   rowsAffected: number | null;
   error: string | null;
   database: string | null;
+  /**
+   * Which connection ran this statement. Absent for the per-connection
+   * queries, where it is implied; present when history is read across all
+   * connections, since the rows are interleaved there.
+   */
+  connectionId?: string;
+  connectionName?: string;
 }
 
 export interface QueryHistoryResponse {

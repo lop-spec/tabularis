@@ -24,6 +24,19 @@ export interface QueryHistoryContextType {
   refreshHistory: () => Promise<void>;
   /** Searches the full on-disk log, not just the loaded page. */
   searchHistory: (query: string, limit?: number) => Promise<QueryHistoryEntry[]>;
+  /**
+   * Newest entries across every connection, not just the active one.
+   *
+   * The sidebar is scoped to the current connection because it is contextual;
+   * the history page is not, and requiring a selection there just hides
+   * statements the user is looking for.
+   */
+  loadAllHistory: (limit?: number) => Promise<QueryHistoryEntry[]>;
+  /** Same scope as {@link loadAllHistory}, filtered by substring. */
+  searchAllHistory: (
+    query: string,
+    limit?: number,
+  ) => Promise<QueryHistoryEntry[]>;
 }
 
 export const QueryHistoryContext = createContext<

@@ -22,6 +22,14 @@ pub struct QueryHistoryEntry {
     pub error: Option<String>,
     #[serde(default)]
     pub database: Option<String>,
+    /// Which connection produced this entry. Never written to disk — the log
+    /// file is already per-connection — but filled in when history is read
+    /// across all connections, where the caller cannot otherwise tell them
+    /// apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection_name: Option<String>,
 }
 
 /// Response shape for `get_query_history`. `recovered_backup_path` is set
@@ -433,6 +441,135 @@ pub async fn search_query_history<R: Runtime>(
     })
 }
 
+/// Connection ids that have a history log on disk, newest-written first.
+fn logged_connection_ids<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<String>, String> {
+    let dir = get_history_dir(app)?;
+    let mut ids = Vec::new();
+    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            ids.push(stem.to_string());
+        }
+    }
+    Ok(ids)
+}
+
+/// Best-effort display name for a connection that history was logged under.
+/// A deleted connection keeps its history, so falling back to the id matters.
+fn connection_label<R: Runtime>(app: &AppHandle<R>, connection_id: &str) -> Option<String> {
+    crate::commands::find_connection_by_id(app, connection_id)
+        .ok()
+        .map(|conn| conn.name)
+}
+
+fn tag_source<R: Runtime>(
+    app: &AppHandle<R>,
+    connection_id: &str,
+    entries: &mut [QueryHistoryEntry],
+) {
+    let label = connection_label(app, connection_id);
+    for entry in entries.iter_mut() {
+        entry.connection_id = Some(connection_id.to_string());
+        entry.connection_name = label.clone();
+    }
+}
+
+/// Newest entries across every connection, merged by execution time.
+///
+/// History is global: which connection happens to be selected in the UI says
+/// nothing about which statements the user wants to find again.
+#[tauri::command]
+pub async fn get_recent_query_history_all<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, QueryHistoryState>,
+    limit: Option<usize>,
+) -> Result<QueryHistoryResponse, String> {
+    let limit = limit.unwrap_or(UI_HISTORY_PAGE).clamp(1, 5_000);
+    let mut merged: Vec<QueryHistoryEntry> = Vec::new();
+    for connection_id in logged_connection_ids(&app)? {
+        let lock = acquire_lock(&state, &connection_id).await;
+        let _guard = lock.lock().await;
+        // Each log is already newest-last, so its own tail is enough; the
+        // merge below picks the global newest from those candidates.
+        let mut entries = read_log_tail(&app, &connection_id, limit)?;
+        tag_source(&app, &connection_id, &mut entries);
+        merged.append(&mut entries);
+    }
+    merged.sort_by(|a, b| b.executed_at.cmp(&a.executed_at));
+    merged.truncate(limit);
+    Ok(QueryHistoryResponse {
+        entries: merged,
+        recovered_backup_path: None,
+    })
+}
+
+/// Substring search across every connection's log, newest first.
+#[tauri::command]
+pub async fn search_query_history_all<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, QueryHistoryState>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<QueryHistoryResponse, String> {
+    let limit = limit.unwrap_or(UI_HISTORY_PAGE).clamp(1, 5_000);
+    let needle = query.trim().to_lowercase();
+    let mut merged: Vec<QueryHistoryEntry> = Vec::new();
+
+    for connection_id in logged_connection_ids(&app)? {
+        let lock = acquire_lock(&state, &connection_id).await;
+        let _guard = lock.lock().await;
+        let path = log_path(&app, &connection_id)?;
+        if !path.exists() {
+            continue;
+        }
+        let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+        let reader = std::io::BufReader::new(file);
+        let mut hits: Vec<QueryHistoryEntry> = Vec::new();
+        for line in std::io::BufRead::lines(reader) {
+            let Ok(line) = line else { continue };
+            if line.trim().is_empty() {
+                continue;
+            }
+            // Cheap pre-filter on the raw line before paying for JSON parsing.
+            if !needle.is_empty() && !line.to_lowercase().contains(&needle) {
+                continue;
+            }
+            let Ok(entry) = serde_json::from_str::<QueryHistoryEntry>(&line) else {
+                continue;
+            };
+            if needle.is_empty()
+                || entry.sql.to_lowercase().contains(&needle)
+                || entry
+                    .database
+                    .as_deref()
+                    .is_some_and(|db| db.to_lowercase().contains(&needle))
+                || entry
+                    .error
+                    .as_deref()
+                    .is_some_and(|err| err.to_lowercase().contains(&needle))
+            {
+                hits.push(entry);
+                if hits.len() > limit {
+                    hits.remove(0);
+                }
+            }
+        }
+        tag_source(&app, &connection_id, &mut hits);
+        merged.append(&mut hits);
+    }
+
+    merged.sort_by(|a, b| b.executed_at.cmp(&a.executed_at));
+    merged.truncate(limit);
+    Ok(QueryHistoryResponse {
+        entries: merged,
+        recovered_backup_path: None,
+    })
+}
+
 #[tauri::command]
 pub async fn add_query_history_entry<R: Runtime>(
     app: AppHandle<R>,
@@ -458,6 +595,9 @@ pub async fn add_query_history_entry<R: Runtime>(
         rows_affected,
         error,
         database,
+        // Written per-connection, so the source is implied on disk.
+        connection_id: None,
+        connection_name: None,
     };
 
     // Append-only: cost is independent of how much history exists. The old
@@ -589,6 +729,8 @@ mod log_tests {
             rows_affected: Some(1),
             error: None,
             database: Some("testdb".to_string()),
+            connection_id: None,
+            connection_name: None,
         }
     }
 

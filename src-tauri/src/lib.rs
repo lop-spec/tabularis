@@ -569,6 +569,8 @@ pub fn run() {
             query_history::get_query_history,
             query_history::get_recent_query_history,
             query_history::search_query_history,
+            query_history::get_recent_query_history_all,
+            query_history::search_query_history_all,
             query_history::add_query_history_entry,
             query_history::delete_query_history_entry,
             query_history::clear_query_history,

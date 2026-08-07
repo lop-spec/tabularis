@@ -149,6 +149,41 @@ export const QueryHistoryProvider = ({
     [activeConnectionId],
   );
 
+  // Not scoped to activeConnectionId: history outlives the current selection,
+  // and the entries carry their own connection label so the page can show
+  // where each statement came from.
+  const loadAllHistory = useCallback(
+    async (limit = UI_HISTORY_PAGE): Promise<QueryHistoryEntry[]> => {
+      try {
+        const result = await invoke<QueryHistoryResponse>(
+          "get_recent_query_history_all",
+          { limit },
+        );
+        return result.entries;
+      } catch (e) {
+        console.error("Failed to load query history across connections:", e);
+        return [];
+      }
+    },
+    [],
+  );
+
+  const searchAllHistory = useCallback(
+    async (query: string, limit = 500): Promise<QueryHistoryEntry[]> => {
+      try {
+        const result = await invoke<QueryHistoryResponse>(
+          "search_query_history_all",
+          { query, limit },
+        );
+        return result.entries;
+      } catch (e) {
+        console.error("Failed to search query history across connections:", e);
+        return [];
+      }
+    },
+    [],
+  );
+
   return (
     <QueryHistoryContext.Provider
       value={{
@@ -161,6 +196,8 @@ export const QueryHistoryProvider = ({
         clearHistory,
         refreshHistory,
         searchHistory,
+        loadAllHistory,
+        searchAllHistory,
       }}
     >
       {children}

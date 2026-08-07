@@ -1,26 +1,46 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { History, Search, X, Loader2, AlertCircle } from "lucide-react";
-import { useDatabase } from "../hooks/useDatabase";
 import { useQueryHistory } from "../hooks/useQueryHistory";
 import type { QueryHistoryEntry } from "../contexts/QueryHistoryContext";
 import { formatDuration } from "../utils/formatTime";
 
 /**
- * Full execution history.
+ * Full execution history, across every connection.
  *
- * The sidebar section shows only the newest page so it stays responsive; this
- * page searches the complete on-disk log (up to the per-connection cap), which
- * is also what Recovery reads.
+ * Deliberately not scoped to the active connection: the sidebar section is the
+ * contextual view, and this page exists to find a statement again regardless
+ * of which connection is currently selected — including ones run under a
+ * connection that has since been removed. Each row names its source.
+ *
+ * Only the newest page is loaded up front; searching streams the complete
+ * on-disk logs, which is also what Recovery reads.
  */
 export const HistoryPage = () => {
   const { t } = useTranslation();
-  const { activeConnectionId, activeConnectionName } = useDatabase();
-  const { entries, isLoading, searchHistory } = useQueryHistory();
+  const { loadAllHistory, searchAllHistory } = useQueryHistory();
 
   const [query, setQuery] = useState("");
+  const [recent, setRecent] = useState<QueryHistoryEntry[]>([]);
   const [results, setResults] = useState<QueryHistoryEntry[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setIsLoading(true);
+      try {
+        const entries = await loadAllHistory();
+        if (!cancelled) setRecent(entries);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadAllHistory]);
 
   const runSearch = useCallback(
     async (value: string) => {
@@ -31,12 +51,12 @@ export const HistoryPage = () => {
       }
       setIsSearching(true);
       try {
-        setResults(await searchHistory(trimmed, 500));
+        setResults(await searchAllHistory(trimmed, 500));
       } finally {
         setIsSearching(false);
       }
     },
-    [searchHistory],
+    [searchAllHistory],
   );
 
   // Debounce so typing does not stream a file scan per keystroke.
@@ -45,25 +65,16 @@ export const HistoryPage = () => {
     return () => clearTimeout(id);
   }, [query, runSearch]);
 
-  const shown = results ?? entries;
+  const shown = results ?? recent;
   const isSearchMode = results !== null;
 
-  const summary = useMemo(() => {
-    if (!activeConnectionId) return t("history.noConnection");
-    if (isSearchMode) {
-      return t("history.searchSummary", { count: shown.length });
-    }
-    return t("history.recentSummary", { count: shown.length });
-  }, [activeConnectionId, isSearchMode, shown.length, t]);
-
-  if (!activeConnectionId) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-secondary">
-        <History size={48} className="mb-4 opacity-20" />
-        <p>{t("history.noConnection")}</p>
-      </div>
-    );
-  }
+  const summary = useMemo(
+    () =>
+      isSearchMode
+        ? t("history.searchSummary", { count: shown.length })
+        : t("history.recentSummary", { count: shown.length }),
+    [isSearchMode, shown.length, t],
+  );
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -73,11 +84,6 @@ export const HistoryPage = () => {
           <h1 className="text-lg font-semibold text-primary">
             {t("history.title")}
           </h1>
-          {activeConnectionName && (
-            <span className="text-xs text-muted truncate">
-              · {activeConnectionName}
-            </span>
-          )}
         </div>
         <p className="text-xs text-muted">{summary}</p>
 
@@ -135,6 +141,11 @@ export const HistoryPage = () => {
                     : t("history.statusSuccess")}
                 </span>
                 <span>{new Date(entry.executedAt).toLocaleString()}</span>
+                {entry.connectionName && (
+                  <span className="text-secondary">
+                    · {entry.connectionName}
+                  </span>
+                )}
                 {entry.database && <span>· {entry.database}</span>}
                 {entry.executionTimeMs != null && (
                   <span>· {formatDuration(entry.executionTimeMs)}</span>
