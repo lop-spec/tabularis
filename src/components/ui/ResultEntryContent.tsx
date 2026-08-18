@@ -105,6 +105,11 @@ export function ResultEntryContent({
     );
   }
 
+  // Both grids below intentionally omit selectedRows/onSelectionChange:
+  // pinning them to an empty Set with a no-op handler made every selection
+  // action (the `#` select-all header, row clicks, Cmd/Ctrl+A) silently do
+  // nothing. Unset, the grid manages selection internally; readonly still
+  // guards against destructive actions.
   if (compact) {
     const gridHeight = getStackedGridHeight(entry.result.rows.length);
     return (
@@ -116,8 +121,6 @@ export function ResultEntryContent({
           tableName={null}
           pkColumns={null}
           connectionId={connectionId}
-          selectedRows={new Set()}
-          onSelectionChange={() => {}}
           copyFormat={copyFormat}
           csvDelimiter={csvDelimiter}
           csvIncludeHeaders={csvIncludeHeaders}
@@ -164,8 +167,6 @@ export function ResultEntryContent({
           tableName={null}
           pkColumns={null}
           connectionId={connectionId}
-          selectedRows={new Set()}
-          onSelectionChange={() => {}}
           copyFormat={copyFormat}
           csvDelimiter={csvDelimiter}
           csvIncludeHeaders={csvIncludeHeaders}

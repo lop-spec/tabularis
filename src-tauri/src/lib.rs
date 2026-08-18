@@ -110,6 +110,15 @@ fn close_devtools(window: tauri::WebviewWindow) {
     log::info!("DevTools closed");
 }
 
+/// Real exit for close-to-hide mode: closing the window only hides it, so the
+/// frontend offers Ctrl/Cmd+Q which lands here. Runs the normal RunEvent::Exit
+/// path (exit backup, SSH tunnel shutdown) — nothing is skipped.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    log::info!("Quit requested (Ctrl/Cmd+Q)");
+    app.exit(0);
+}
+
 /// Suspends or resumes the hidden main window's WebView2 (close-to-hide mode).
 ///
 /// Suspending asks WebView2 to shed most of its memory: the memory-usage
@@ -134,6 +143,16 @@ fn set_main_webview_suspended(window: &tauri::WebviewWindow, suspend: bool) {
                 return;
             }
         };
+
+        // Tauri's window.hide() hides the Win32 window but leaves the
+        // controller's IsVisible true, and TrySuspend rejects visible
+        // webviews with ERROR_INVALID_STATE (0x8007139F). Follow the
+        // documented sequence: IsVisible=false, then TrySuspend; and on the
+        // way back IsVisible=true unconditionally so the window can never
+        // come back as a blank surface.
+        if let Err(error) = controller.SetIsVisible(!suspend) {
+            log::warn!("Controller SetIsVisible failed: {error}");
+        }
 
         // Memory target: 0 = Normal, 1 = Low (matches wry's mapping).
         if let Ok(webview19) = core.cast::<ICoreWebView2_19>() {
@@ -387,8 +406,24 @@ pub fn run() {
                                 log::info!(
                                     "Main window hidden (close-to-hide); process stays warm for instant relaunch"
                                 );
+                                // TrySuspend rejects with ERROR_INVALID_STATE
+                                // (0x8007139F) while the hide is still being
+                                // processed — give it a beat, then skip if the
+                                // user already brought the window back.
                                 #[cfg(windows)]
-                                set_main_webview_suspended(&hide_target, true);
+                                {
+                                    let suspend_target = hide_target.clone();
+                                    tauri::async_runtime::spawn(async move {
+                                        tokio::time::sleep(
+                                            std::time::Duration::from_millis(800),
+                                        )
+                                        .await;
+                                        if suspend_target.is_visible().unwrap_or(true) {
+                                            return;
+                                        }
+                                        set_main_webview_suspended(&suspend_target, true);
+                                    });
+                                }
                             }
                         }
                         tauri::WindowEvent::Focused(true) => {
@@ -422,6 +457,7 @@ pub fn run() {
             is_debug_mode,
             open_devtools,
             close_devtools,
+            quit_app,
             commands::get_registered_drivers,
             commands::get_driver_manifest,
             commands::get_keybindings,

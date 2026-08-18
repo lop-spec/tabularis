@@ -81,6 +81,19 @@ export function App() {
     };
   }, [isDebugMode]);
 
+  // Ctrl/Cmd+Q quits for real. In close-to-hide mode the window's X button
+  // only hides the app (warm relaunch), so this is the supported way out.
+  useEffect(() => {
+    const handleQuit = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "q") {
+        e.preventDefault();
+        void invoke("quit_app");
+      }
+    };
+    document.addEventListener("keydown", handleQuit);
+    return () => document.removeEventListener("keydown", handleQuit);
+  }, []);
+
   return (
     <>
       <AlertProvider>
