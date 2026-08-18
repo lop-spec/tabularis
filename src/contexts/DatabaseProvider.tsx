@@ -631,9 +631,10 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(errorMsg);
       }
 
-      // Native mongosh/redis-cli connections are interactive console sessions,
-      // not metadata/query drivers. Their real process starts in the Console
-      // output pane, so schema discovery and SQL health polling do not apply.
+      // console_only drivers are interactive console sessions rather than
+      // metadata/query drivers, so schema discovery and SQL health polling do
+      // not apply. No bundled driver sets this today; the branch stays because
+      // it is part of the driver capability contract.
       if (capabilities?.console_only === true) {
         updateConnectionData(connectionId, {
           selectedDatabases: [],
