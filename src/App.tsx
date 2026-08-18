@@ -5,8 +5,6 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { ConnectionLayoutProvider } from "./contexts/ConnectionLayoutProvider";
 import { RightSidebarProvider } from "./contexts/RightSidebarProvider";
 import { KeybindingsProvider } from "./contexts/KeybindingsProvider";
-import { PluginSlotProvider } from "./contexts/PluginSlotProvider";
-import { PluginModalProvider } from "./contexts/PluginModalProvider";
 import { AlertProvider } from "./contexts/AlertProvider";
 import { Connections } from "./pages/Connections";
 import { Editor } from "./pages/Editor";
@@ -22,13 +20,9 @@ import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { EditorErrorBoundary } from "./components/ui/EditorErrorBoundary";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
 import { WhatsNewModal } from "./components/modals/WhatsNewModal";
-import { AiApprovalGate } from "./components/modals/AiApprovalGate";
-import { PluginInstallConfirmModal } from "./components/modals/PluginInstallConfirmModal";
 import { SshAskpassGate } from "./components/modals/SshAskpassGate";
 import { useUpdate } from "./hooks/useUpdate";
 import { useChangelog } from "./hooks/useChangelog";
-import { useSettings } from "./hooks/useSettings";
-import { useDeepLinkInstall } from "./hooks/useDeepLinkInstall";
 import { useResultTypeColors } from "./hooks/useResultTypeColors";
 import { APP_VERSION } from "./version";
 import { isVersionAtMost, isVersionNewer } from "./utils/versionCompare";
@@ -44,10 +38,8 @@ export function App() {
     dismissUpdate,
     error: updateError,
   } = useUpdate();
-  const { settings } = useSettings();
   useResultTypeColors();
   const [isDebugMode, setIsDebugMode] = useState(false);
-  const deepLinkInstall = useDeepLinkInstall();
   const lastSeenVersion = localStorage.getItem(WHATS_NEW_VERSION_KEY);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(
     () => lastSeenVersion !== null && isVersionNewer(APP_VERSION, lastSeenVersion),
@@ -108,47 +100,43 @@ export function App() {
         <BrowserRouter>
           <ConnectionHealthMonitor />
           <KeybindingsProvider>
-            <PluginSlotProvider>
-              <PluginModalProvider>
-                <ConnectionLayoutProvider>
-                  <RightSidebarProvider>
-                  <Routes>
-                    <Route path="/" element={<MainLayout />}>
-                      <Route
-                        index
-                        element={<Navigate to="/connections" replace />}
-                      />
-                      <Route path="connections" element={<Connections />} />
-                      <Route
-                        path="editor"
-                        element={
-                          <EditorErrorBoundary>
-                            <Editor />
-                          </EditorErrorBoundary>
-                        }
-                      />
-                      {/* lop fork: no MCP page — its sidebar slot now holds
-                          the full execution history. */}
-                      <Route path="history" element={<HistoryPage />} />
-                      <Route path="recovery" element={<RecoveryPage />} />
-                      <Route path="settings" element={<Settings />} />
-                    </Route>
+            <ConnectionLayoutProvider>
+              <RightSidebarProvider>
+                <Routes>
+                  <Route path="/" element={<MainLayout />}>
                     <Route
-                      path="/schema-diagram"
-                      element={<SchemaDiagramPage />}
+                      index
+                      element={<Navigate to="/connections" replace />}
                     />
-                    <Route path="/task-manager" element={<TaskManagerPage />} />
-                    <Route path="/visual-explain" element={<VisualExplainPage />} />
-                    <Route path="/json-viewer" element={<JsonViewerPage />} />
+                    <Route path="connections" element={<Connections />} />
                     <Route
-                      path="/results-window"
-                      element={<ResultsWindowPage />}
+                      path="editor"
+                      element={
+                        <EditorErrorBoundary>
+                          <Editor />
+                        </EditorErrorBoundary>
+                      }
                     />
-                  </Routes>
-                  </RightSidebarProvider>
-                </ConnectionLayoutProvider>
-              </PluginModalProvider>
-            </PluginSlotProvider>
+                    {/* lop fork: no MCP page — its sidebar slot now holds
+                        the full execution history. */}
+                    <Route path="history" element={<HistoryPage />} />
+                    <Route path="recovery" element={<RecoveryPage />} />
+                    <Route path="settings" element={<Settings />} />
+                  </Route>
+                  <Route
+                    path="/schema-diagram"
+                    element={<SchemaDiagramPage />}
+                  />
+                  <Route path="/task-manager" element={<TaskManagerPage />} />
+                  <Route path="/visual-explain" element={<VisualExplainPage />} />
+                  <Route path="/json-viewer" element={<JsonViewerPage />} />
+                  <Route
+                    path="/results-window"
+                    element={<ResultsWindowPage />}
+                  />
+                </Routes>
+              </RightSidebarProvider>
+            </ConnectionLayoutProvider>
           </KeybindingsProvider>
         </BrowserRouter>
       </AlertProvider>
@@ -170,25 +158,7 @@ export function App() {
         isLoading={isChangelogLoading}
       />
 
-      <AiApprovalGate />
       <SshAskpassGate />
-
-      <PluginInstallConfirmModal
-        key={
-          deepLinkInstall.pending
-            ? `${deepLinkInstall.pending.slug}@${deepLinkInstall.pending.version ?? ""}@${deepLinkInstall.pending.registry ?? ""}`
-            : "idle"
-        }
-        request={deepLinkInstall.pending}
-        busy={deepLinkInstall.busy}
-        error={deepLinkInstall.error}
-        onConfirm={() => {
-          void deepLinkInstall.confirm();
-        }}
-        onCancel={deepLinkInstall.cancel}
-        configuredRegistry={settings.tabulariumRegistryUrl ?? null}
-      />
-
     </>
   );
 }
