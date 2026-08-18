@@ -454,10 +454,7 @@ pub fn resolve_connection_params_with_id(
     Ok(resolved)
 }
 
-/// Resolves with both the id and the name. Recovery journalling requires the
-/// name, so any path that performs writes has to use this rather than
-/// [`resolve_connection_params_with_id`], or its changes go unrecorded.
-pub fn resolve_connection_params_with_identity(
+fn resolve_connection_params_with_identity(
     params: &ConnectionParams,
     connection_id: &str,
     connection_name: &str,
@@ -3561,13 +3558,7 @@ pub async fn delete_record<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    // With the name: recovery journalling is gated on it, so a grid edit
-    // resolved by id alone left no record of the row it changed.
-    let mut params = resolve_connection_params_with_identity(
-        &expanded_params,
-        &connection_id,
-        &saved_conn.name,
-    )?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
     }
@@ -3598,13 +3589,7 @@ pub async fn update_record<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    // With the name: recovery journalling is gated on it, so a grid edit
-    // resolved by id alone left no record of the row it changed.
-    let mut params = resolve_connection_params_with_identity(
-        &expanded_params,
-        &connection_id,
-        &saved_conn.name,
-    )?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
     }
@@ -3857,13 +3842,7 @@ pub async fn insert_record<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    // With the name: recovery journalling is gated on it, so a grid edit
-    // resolved by id alone left no record of the row it changed.
-    let mut params = resolve_connection_params_with_identity(
-        &expanded_params,
-        &connection_id,
-        &saved_conn.name,
-    )?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
     }
@@ -3953,15 +3932,7 @@ pub async fn execute_query<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    // Carries the connection name, not just the id: recovery journalling is
-    // gated on the name being present, so resolving without it made
-    // `journal_unprotected_changes` a no-op for every single-statement run —
-    // editor Run, sidebar DROP TABLE, column changes, notebooks.
-    let params = resolve_connection_params_with_identity(
-        &expanded_params,
-        &connection_id,
-        &saved_conn.name,
-    )?;
+    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     // Detected before the spawn, which takes ownership of `sanitized_query`.
     // Cheap: only allocates when the statement really is a DROP DATABASE.

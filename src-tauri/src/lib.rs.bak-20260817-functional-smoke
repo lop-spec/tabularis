@@ -1,17 +1,18 @@
 pub mod askpass;
+pub mod audit_outbox;
 pub mod backup;
 pub mod cli;
 pub mod clipboard_import;
 pub mod commands;
+pub mod config;
 pub mod connection_appearance;
-pub mod connection_import;
-pub mod connection_import_commands;
 #[cfg(test)]
 pub mod connection_appearance_tests;
-pub mod config;
 pub mod connection_cache;
 #[cfg(test)]
 pub mod connection_cache_tests;
+pub mod connection_import;
+pub mod connection_import_commands;
 pub mod connection_window;
 #[cfg(test)]
 pub mod connection_window_tests;
@@ -27,24 +28,18 @@ pub mod export;
 pub mod export_crypto;
 #[cfg(test)]
 pub mod export_import_tests;
-pub mod health_check;
 #[cfg(test)]
 pub mod group_tree_tests;
+pub mod health_check;
 pub mod json_viewer;
-pub mod keychain_utils;
-pub mod native_cli;
-pub mod recovery_history;
-pub mod recovery_objects;
-#[cfg(test)]
-pub mod recovery_objects_tests;
-pub mod results_window;
-pub mod rollback_sql;
 pub mod k8s_tunnel;
+pub mod keychain_utils;
 pub mod log_commands;
 pub mod logger;
 pub mod models;
 #[cfg(test)]
 pub mod models_tests;
+pub mod native_cli;
 pub mod notebooks;
 pub mod paths; // Added
 pub mod persistence;
@@ -55,14 +50,17 @@ pub mod preferences;
 pub mod query_history;
 #[cfg(test)]
 pub mod query_history_tests;
-pub mod sql_database_statements;
+pub mod recovery_history;
+pub mod results_window;
+pub mod rollback_sql;
 pub mod saved_queries;
 #[cfg(test)]
 pub mod saved_queries_tests;
-pub mod ssh_tunnel;
+pub mod sql_database_statements;
 pub mod sqlite_database;
 #[cfg(test)]
 pub mod sqlite_database_tests;
+pub mod ssh_tunnel;
 pub mod task_manager;
 pub mod theme_commands;
 pub mod theme_models;
@@ -76,7 +74,7 @@ pub mod drivers {
     pub mod sqlite;
 }
 
-use logger::{create_log_buffer, init_logger, SharedLogBuffer};
+use logger::{SharedLogBuffer, create_log_buffer, init_logger};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
 
@@ -107,63 +105,6 @@ fn open_devtools(window: tauri::WebviewWindow) {
 fn close_devtools(window: tauri::WebviewWindow) {
     window.close_devtools();
     log::info!("DevTools closed");
-}
-
-/// Suspends or resumes the hidden main window's WebView2 (close-to-hide mode).
-///
-/// Suspending asks WebView2 to shed most of its memory: the memory-usage
-/// target drops to Low (same call wry exposes as `set_memory_usage_level`)
-/// and `TrySuspend` pauses script/rendering. WebView2 resumes automatically
-/// when the window becomes visible again; the explicit Resume + Normal on
-/// focus is a belt-and-braces measure. Failures only cost memory savings,
-/// never correctness, so they are logged and ignored.
-#[cfg(windows)]
-fn set_main_webview_suspended(window: &tauri::WebviewWindow, suspend: bool) {
-    let outcome = window.with_webview(move |platform_webview| unsafe {
-        use webview2_com::Microsoft::Web::WebView2::Win32::{
-            ICoreWebView2_19, ICoreWebView2_3, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL,
-        };
-        use windows_core::Interface;
-
-        let controller = platform_webview.controller();
-        let core = match controller.CoreWebView2() {
-            Ok(core) => core,
-            Err(error) => {
-                log::warn!("WebView suspend skipped, no CoreWebView2: {error}");
-                return;
-            }
-        };
-
-        // Memory target: 0 = Normal, 1 = Low (matches wry's mapping).
-        if let Ok(webview19) = core.cast::<ICoreWebView2_19>() {
-            let level = COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL(i32::from(suspend));
-            if let Err(error) = webview19.SetMemoryUsageTargetLevel(level) {
-                log::warn!("SetMemoryUsageTargetLevel failed: {error}");
-            }
-        }
-
-        if let Ok(webview3) = core.cast::<ICoreWebView2_3>() {
-            if suspend {
-                let handler = webview2_com::TrySuspendCompletedHandler::create(Box::new(
-                    |result, suspended| {
-                        log::info!(
-                            "WebView TrySuspend completed: result={result:?} suspended={suspended:?}"
-                        );
-                        Ok(())
-                    },
-                ));
-                if let Err(error) = webview3.TrySuspend(&handler) {
-                    log::warn!("WebView TrySuspend failed: {error}");
-                }
-            } else if let Err(error) = webview3.Resume() {
-                // Resuming a non-suspended webview reports an error; harmless.
-                log::debug!("WebView Resume no-op/failed: {error}");
-            }
-        }
-    });
-    if let Err(error) = outcome {
-        log::warn!("with_webview failed while toggling suspend: {error}");
-    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -235,20 +176,8 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             log::info!("Duplicate launch detected — forwarded to existing instance");
             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
-                // This is also the warm-relaunch path for close-to-hide: the
-                // launcher just starts a second instance and we bring the
-                // window back HERE, in-process. External ShowWindowAsync pokes
-                // are queued messages that can land after a later hide and
-                // "resurrect" the window — so the launcher must never poke.
-                let was_hidden = !win.is_visible().unwrap_or(true);
-                let _ = win.show();
                 let _ = win.unminimize();
                 let _ = win.set_focus();
-                if was_hidden {
-                    log::info!("Warm relaunch: hidden main window shown again");
-                    #[cfg(windows)]
-                    set_main_webview_suspended(&win, false);
-                }
             }
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -274,6 +203,13 @@ pub fn run() {
         .manage(results_window::ResultsWindowStore::default())
         .manage(query_history::QueryHistoryState::default())
         .setup(move |app| {
+            let audit_root =
+                audit_outbox::audit_root(&app.handle()).map_err(std::io::Error::other)?;
+            let audit_state =
+                audit_outbox::AuditState::new(audit_root).map_err(std::io::Error::other)?;
+            app.manage(std::sync::Arc::new(audit_state));
+            audit_outbox::spawn_sync_worker(app.handle().clone());
+
             // Allow the SSH tunnel code (which runs without a Tauri context)
             // to bridge askpass prompts to the frontend.
             askpass::set_app_handle(app.handle().clone());
@@ -321,52 +257,12 @@ pub fn run() {
                 }
             }
 
-            // Opt-in warm-instance mode: closing the main window hides it
-            // instead of exiting, so the next launch is a millisecond-level
-            // window activation rather than a cold WebView2 + bundle load.
-            // Gated on an env var set by the local dev launchers — official
-            // builds and `--explain` runs (which close main deliberately)
-            // keep the stock quit-on-close behaviour.
-            //
-            // While hidden the WebView is suspended (Windows), which releases
-            // most of its memory; WebView2 auto-resumes when the window is
-            // shown again, and the Focused handler resumes explicitly as a
-            // belt-and-braces measure.
-            if std::env::var("TABULARIS_CLOSE_TO_HIDE").as_deref() == Ok("1")
-                && args.explain.is_none()
-            {
-                if let Some(window) = app.get_webview_window("main") {
-                    let hide_target = window.clone();
-                    window.on_window_event(move |event| match event {
-                        tauri::WindowEvent::CloseRequested { api, .. } => {
-                            api.prevent_close();
-                            if let Err(e) = hide_target.hide() {
-                                log::warn!("Close-to-hide failed, window stays open: {e}");
-                            } else {
-                                log::info!(
-                                    "Main window hidden (close-to-hide); process stays warm for instant relaunch"
-                                );
-                                #[cfg(windows)]
-                                set_main_webview_suspended(&hide_target, true);
-                            }
-                        }
-                        tauri::WindowEvent::Focused(true) => {
-                            #[cfg(windows)]
-                            set_main_webview_suspended(&hide_target, false);
-                        }
-                        _ => {}
-                    });
-                }
-            }
-
             // If the user launched with `--explain <FILE>`, spawn the Visual
             // Explain window and hide the main app window: the CLI flag is
             // meant to be a dedicated plan viewer, not a full app launch.
             if let Some(path) = args.explain.clone() {
                 log::info!("CLI --explain received: {path}");
-                if let Err(e) =
-                    explain_import::spawn_visual_explain_window(app, Some(path))
-                {
+                if let Err(e) = explain_import::spawn_visual_explain_window(app, Some(path)) {
                     log::error!("Failed to open Visual Explain window: {e}");
                 }
                 // Close the default main window only AFTER visual-explain is

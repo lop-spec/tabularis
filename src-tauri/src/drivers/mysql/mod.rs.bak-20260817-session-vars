@@ -705,31 +705,12 @@ async fn mysql_execute_with_pk(
         push_pk_value(&mut qb, val, text)?;
         first = false;
     }
-    let journalled = qb.sql().to_string();
     let result = if text.enabled {
         exec_stmt(&pool, text, &qb.into_sql()).await?
     } else {
         qb.build().execute(&pool).await.map_err(|e| e.to_string())?
     };
-    journal_record_mutation(&pool, params, &journalled).await;
     Ok(result.rows_affected())
-}
-
-/// Journals a grid-editor mutation.
-///
-/// These go straight to the pool through QueryBuilder, so they never reach
-/// `execute_query`/`execute_batch` and were invisible to recovery: editing a
-/// hundred cells left a hundred writes with no record of the rows they
-/// touched. Best-effort, exactly like the batch path — never fails the write.
-///
-/// When the statement is parameterised the SQL still carries `?` placeholders.
-/// That is enough: these are `exact: false` entries whose restore is
-/// table-level, and the table name is present either way.
-async fn journal_record_mutation(pool: &sqlx::MySqlPool, params: &ConnectionParams, sql: &str) {
-    let Ok(mut conn) = pool.acquire().await else {
-        return;
-    };
-    journal_unprotected_changes(&mut conn, params, None, &[(0, sql)]).await;
 }
 
 pub async fn delete_record(
@@ -850,13 +831,11 @@ pub async fn update_record(
         first = false;
     }
 
-    let journalled = qb.sql().to_string();
     let result = if text.enabled {
         exec_stmt(&pool, text, &qb.into_sql()).await?
     } else {
         qb.build().execute(&pool).await.map_err(|e| e.to_string())?
     };
-    journal_record_mutation(&pool, params, &journalled).await;
     Ok(result.rows_affected())
 }
 
@@ -973,13 +952,11 @@ pub async fn insert_record(
         qb
     };
 
-    let journalled = qb.sql().to_string();
     let result = if text.enabled {
         exec_stmt(&pool, text, &qb.into_sql()).await?
     } else {
         qb.build().execute(&pool).await.map_err(|e| e.to_string())?
     };
-    journal_record_mutation(&pool, params, &journalled).await;
     Ok(result.rows_affected())
 }
 
@@ -1479,28 +1456,6 @@ fn should_use_rollback_guard(params: &ConnectionParams) -> bool {
     enabled && (!execute_unprotected || params.transaction_context_id.is_some())
 }
 
-/// Per-statement time budget for the protected (rollback-guard) path.
-///
-/// The guard path holds the pinned-session and context locks for the whole
-/// batch and has no statement-level timeouts, so a server-side stall (an MDL
-/// wait, a lock queue, a dead tunnel) used to leave the frontend on
-/// "executing" forever — and, worse, the watchdog and disconnect cleanup
-/// block on the same locks. A batch-level ceiling turns that into an error:
-/// when it fires the whole guard future is dropped, which releases the locks
-/// and lets the existing recovery paths do their job (the next run closes the
-/// interrupted pinned transaction; the idle watchdog reaps abandoned ones;
-/// a dropped pool connection is health-checked before reuse).
-const PROTECTED_STATEMENT_TIMEOUT_SECONDS: u64 = 120;
-
-fn protected_batch_budget(statement_count: usize) -> std::time::Duration {
-    let per_statement = std::env::var("TABULARIS_PROTECTED_STATEMENT_TIMEOUT_SECONDS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(PROTECTED_STATEMENT_TIMEOUT_SECONDS);
-    std::time::Duration::from_secs(per_statement.saturating_mul(statement_count.max(1) as u64))
-}
-
 pub async fn execute_batch(
     params: &ConnectionParams,
     queries: &[String],
@@ -1516,30 +1471,15 @@ pub async fn execute_batch(
             Some(crate::models::RollbackUnsupportedPolicy::ExecuteUnprotected)
         );
     if should_use_rollback_guard(params) {
-        let budget = protected_batch_budget(queries.len());
-        return match tokio::time::timeout(
-            budget,
-            rollback_guard::execute_protected_batch(
-                params,
-                queries,
-                limit,
-                page,
-                schema,
-                on_progress,
-            ),
+        return rollback_guard::execute_protected_batch(
+            params,
+            queries,
+            limit,
+            page,
+            schema,
+            on_progress,
         )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(format!(
-                "Protected execution exceeded its {}s time budget and was cancelled. \
-                 A statement is most likely blocked inside MySQL (metadata lock, lock \
-                 wait, or an unreachable server) — check SHOW PROCESSLIST from another \
-                 connection. The pinned transaction is closed safely on your next run, \
-                 and any rollback/recovery SQL written so far remains on disk.",
-                budget.as_secs()
-            )),
-        };
+        .await;
     }
     let mut conn = acquire_mysql_conn(params, schema).await?;
     // See `execute_query`: statements run verbatim, so only the protocol flag
@@ -1549,13 +1489,12 @@ pub async fn execute_batch(
     for (idx, q) in queries.iter().enumerate() {
         let start = std::time::Instant::now();
         let outcome = exec_on_mysql_conn(&mut *conn, q, limit, page, text).await;
-        let mut res =
-            crate::models::BatchStatementResult::from_outcome(start, outcome);
+        let mut res = crate::models::BatchStatementResult::from_outcome(start, outcome);
         if execute_unprotected {
             res.rollback_unprotected = Some(true);
         }
         if let Some(cb) = on_progress {
-            cb(idx, &res);
+            cb(idx, &res)?;
         }
         results.push(res);
     }

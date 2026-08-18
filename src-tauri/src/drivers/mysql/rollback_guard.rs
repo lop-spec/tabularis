@@ -1151,6 +1151,21 @@ async fn execute_pinned_protected_batch(
                     }
                 }
                 ProtectedStatement::Unsupported(_) => {
+                    // MySQL commits implicitly around DDL. The Ddl branch
+                    // above clears the checkpoint for that reason; an
+                    // Unsupported statement that is also DDL — DROP TABLE,
+                    // TRUNCATE, the destructive ones a user accepts the
+                    // risk on — commits identically but left the
+                    // checkpoint standing, so a later ROLLBACK rewound the
+                    // journal past changes that were already permanent and
+                    // erased the only record of them.
+                    if explicit_transaction_checkpoint.is_some()
+                        && causes_implicit_commit(query)
+                    {
+                        *explicit_transaction_checkpoint = None;
+                        transaction_outcome =
+                            Some("unsupported_implicit_commit".to_string());
+                    }
                     super::exec_on_mysql_conn(conn, query, limit, page, text).await
                 }
             };

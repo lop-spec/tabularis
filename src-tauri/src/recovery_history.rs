@@ -3,7 +3,7 @@ use crate::models::ConnectionParams;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{Executor, Row};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -262,6 +262,231 @@ impl RecoveryJournal {
             Ok(())
         })
     }
+}
+
+/// Object extraction for a change statement, so that even SQL we cannot
+/// invert (DROP/TRUNCATE/complex ALTER, or anything executed without
+/// rollback protection) still lands in the journal with enough shape for the
+/// backup-based restore to act on.
+///
+/// Lives in [`crate::recovery_objects`]; re-exported here because both this
+/// module and the MySQL rollback guard call it by this path.
+pub use crate::recovery_objects::parse_change_objects;
+
+/// Journals change statements executed OUTSIDE rollback protection, so the
+/// backup-based restore can still target the affected objects. Row images are
+/// not captured (that is what protection is for) — these entries carry
+/// `exact: false` and drive table-level restore from the backup connection.
+pub async fn record_unprotected_changes(
+    conn: &mut sqlx::MySqlConnection,
+    connection_id: &str,
+    connection_name: &str,
+    database: &str,
+    statements: &[(usize, &str)],
+) -> Result<(), String> {
+    if statements.is_empty() {
+        return Ok(());
+    }
+    let probe = probe_instance(conn).await?;
+    let mut journal = RecoveryJournal::create(
+        connection_id.to_string(),
+        connection_name.to_string(),
+        database.to_string(),
+        probe.server_key.clone(),
+    )?;
+    // `PREPARE s FROM @ddl` resolved here, so the later `EXECUTE s` inherits
+    // the objects instead of journalling a statement with no target.
+    let mut prepared: HashMap<String, Vec<RecoveryObject>> = HashMap::new();
+    for (index, sql) in statements {
+        let (operation, mut objects) = parse_change_objects(sql);
+        // A dynamic statement names at most the routine it invokes, never the
+        // tables that routine writes, so it is resolved even when the static
+        // pass already produced something.
+        if objects.is_empty() || crate::recovery_objects::dynamic_source(sql).is_some() {
+            objects.extend(resolve_dynamic_objects(conn, database, sql, &mut prepared).await);
+            objects.sort_by(|a, b| {
+                (&a.kind, &a.schema, &a.name).cmp(&(&b.kind, &b.schema, &b.name))
+            });
+            objects.dedup();
+        }
+        journal.add_statement(RecoveryStatement {
+            id: String::new(),
+            index: *index,
+            executed_at: String::new(),
+            sql: sql.trim().to_string(),
+            category: "unprotected".to_string(),
+            operation,
+            objects,
+            affected_columns: Vec::new(),
+            condition: None,
+            columns: Vec::new(),
+            primary_key: Vec::new(),
+            before_rows: Vec::new(),
+            after_rows: Vec::new(),
+            inverse_sql: None,
+            exact: false,
+        })?;
+    }
+    journal.finalize()?;
+    Ok(())
+}
+
+/// Names the objects behind a statement that carries none in its own text.
+///
+/// Runs on the same connection that just executed the batch
+/// (`drivers/mysql/mod.rs`, `journal_unprotected_changes`), which is what
+/// makes this possible at all: the user variable a `PREPARE` read from still
+/// holds its value, and the routine a `CALL` invoked is still resolvable.
+/// Everything issued here is read-only.
+///
+/// Best-effort by design — an empty result just leaves the statement flagged
+/// as an unrecoverable conflict, exactly as before.
+pub(crate) async fn resolve_dynamic_objects(
+    conn: &mut sqlx::MySqlConnection,
+    database: &str,
+    sql: &str,
+    prepared: &mut HashMap<String, Vec<RecoveryObject>>,
+) -> Vec<RecoveryObject> {
+    let Some(source) = crate::recovery_objects::dynamic_source(sql) else {
+        return Vec::new();
+    };
+
+    match source {
+        crate::recovery_objects::DynamicSource::Literal { statement, sql } => {
+            let (_, objects) = parse_change_objects(&sql);
+            prepared.insert(statement, objects.clone());
+            objects
+        }
+        crate::recovery_objects::DynamicSource::UserVariable {
+            statement,
+            variable,
+        } => {
+            let objects = match read_user_variable(conn, &variable).await {
+                Some(text) => parse_change_objects(&text).1,
+                None => Vec::new(),
+            };
+            prepared.insert(statement, objects.clone());
+            objects
+        }
+        crate::recovery_objects::DynamicSource::Execute { statement } => {
+            prepared.get(&statement).cloned().unwrap_or_default()
+        }
+        crate::recovery_objects::DynamicSource::Call {
+            schema,
+            routine,
+            string_args,
+        } => {
+            let routine_schema = if schema.is_empty() { database } else { &schema };
+            let mut objects = Vec::new();
+            // Helper routines take the target as a string argument
+            // (`CALL add_column_if_missing('orders', …)`), so any argument
+            // that names a real table is treated as touched.
+            for arg in &string_args {
+                if let Some(object) = match_existing_table(conn, database, arg).await {
+                    objects.push(object);
+                }
+            }
+            // A no-argument routine hides its targets in its body instead.
+            if let Some(body) = read_routine_body(conn, routine_schema, &routine).await {
+                objects.extend(objects_in_routine_body(&body, database));
+            }
+            objects.sort_by(|a, b| (&a.schema, &a.name).cmp(&(&b.schema, &b.name)));
+            objects.dedup();
+            objects
+        }
+    }
+}
+
+async fn read_user_variable(
+    conn: &mut sqlx::MySqlConnection,
+    variable: &str,
+) -> Option<String> {
+    // The name came out of the tokenizer as an identifier; re-quoting it
+    // keeps a hostile name from breaking out of the SELECT.
+    let row = conn
+        .fetch_optional(sqlx::raw_sql(&format!(
+            "SELECT @{}",
+            quote_identifier(variable)
+        )))
+        .await
+        .ok()??;
+    mysql_text(&row, 0).ok().filter(|text| !text.is_empty())
+}
+
+/// Returns the argument as an object when it names a table that exists.
+/// Accepts `db.table` as well as a bare name in the current database.
+async fn match_existing_table(
+    conn: &mut sqlx::MySqlConnection,
+    database: &str,
+    candidate: &str,
+) -> Option<RecoveryObject> {
+    let trimmed = candidate.trim().trim_matches('`');
+    // Anything with whitespace or a quote is a DDL fragment, not a name.
+    if trimmed.is_empty()
+        || trimmed.len() > 64
+        || trimmed.contains(|c: char| c.is_whitespace() || c == '`' || c == '(' || c == ',')
+    {
+        return None;
+    }
+    let (schema, table) = match trimmed.split_once('.') {
+        Some((s, t)) => (s.to_string(), t.to_string()),
+        None => (database.to_string(), trimmed.to_string()),
+    };
+    let row = conn
+        .fetch_optional(
+            sqlx::query(
+                "SELECT 1 FROM information_schema.TABLES \
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1",
+            )
+            .bind(&schema)
+            .bind(&table),
+        )
+        .await
+        .ok()??;
+    let _ = row;
+    Some(RecoveryObject {
+        kind: crate::recovery_objects::KIND_TABLE.to_string(),
+        schema,
+        name: table,
+    })
+}
+
+async fn read_routine_body(
+    conn: &mut sqlx::MySqlConnection,
+    schema: &str,
+    routine: &str,
+) -> Option<String> {
+    let row = conn
+        .fetch_optional(
+            sqlx::query(
+                "SELECT ROUTINE_DEFINITION FROM information_schema.ROUTINES \
+                 WHERE ROUTINE_SCHEMA = ? AND ROUTINE_NAME = ? LIMIT 1",
+            )
+            .bind(schema)
+            .bind(routine),
+        )
+        .await
+        .ok()??;
+    mysql_text(&row, 0).ok().filter(|body| !body.is_empty())
+}
+
+/// Objects named by the change statements inside a routine body.
+///
+/// The body is split on `;` rather than properly parsed: a routine that
+/// builds its DDL with CONCAT still hides its target, but the statements
+/// written out in full are recovered, which is better than nothing.
+fn objects_in_routine_body(body: &str, database: &str) -> Vec<RecoveryObject> {
+    let mut objects = Vec::new();
+    for fragment in body.split(';') {
+        let (_, mut found) = parse_change_objects(fragment);
+        for object in &mut found {
+            if object.schema.is_empty() && object.kind == crate::recovery_objects::KIND_TABLE {
+                object.schema = database.to_string();
+            }
+        }
+        objects.extend(found);
+    }
+    objects
 }
 
 #[tauri::command]
@@ -537,10 +762,121 @@ async fn compare_selected_statements(
 ) -> Result<(Vec<RecoverySqlStep>, usize, Vec<String>), String> {
     let mut row_work: BTreeMap<(String, String), RowWork> = BTreeMap::new();
     let mut ddl_statements = Vec::new();
+    // Objects touched by statements with no exact image (DROP/TRUNCATE,
+    // anything run without protection): restored table-by-table from the
+    // backup connection instead of being silently skipped.
+    // Per table: the statement ids that touched it, and the verbs they used.
+    let mut table_restores: BTreeMap<(String, String), (BTreeSet<String>, BTreeSet<String>)> =
+        BTreeMap::new();
+    // Views, routines, triggers and events restore from their backup
+    // definition (`SHOW CREATE …`) rather than by comparing rows.
+    let mut routine_restores: BTreeMap<(String, String, String), BTreeSet<String>> =
+        BTreeMap::new();
+    // Databases that have to exist again before their tables can be restored.
+    let mut database_recreates: BTreeSet<String> = BTreeSet::new();
+    let mut restore_conflicts: Vec<String> = Vec::new();
     let base_database = &runs[0].database;
 
     for (sequence, (_, statement)) in statements.iter().copied().enumerate() {
         if !statement.exact {
+            if statement.objects.is_empty() {
+                restore_conflicts.push(format!(
+                    "{}: no exact image and no recognizable object — restore its scope manually (SQL: {})",
+                    statement.id,
+                    statement.sql.chars().take(120).collect::<String>()
+                ));
+            }
+            for object in &statement.objects {
+                match object.kind.as_str() {
+                    "table" => {
+                        let schema = if object.schema.is_empty() {
+                            runs[0].database.clone()
+                        } else {
+                            object.schema.clone()
+                        };
+                        let entry = table_restores.entry((schema, object.name.clone())).or_default();
+                        entry.0.insert(statement.id.clone());
+                        // Whether "missing from the backup" means "this
+                        // statement created it" depends on the verb: for
+                        // CREATE it does, for TRUNCATE/DELETE/ALTER it means
+                        // the backup is incomplete, and dropping the table
+                        // would destroy what we were asked to restore.
+                        entry.1.insert(statement.operation.clone());
+                    }
+                    "database" => {
+                        // A dropped database is restorable: recreate it, then
+                        // put every table the backup still holds back into it.
+                        // Creating one is not auto-reversed — emitting DROP
+                        // DATABASE would be a far bigger action than the
+                        // operator asked for.
+                        if statement.operation.starts_with("drop ") {
+                            let tables = backup_database_tables(
+                                backup,
+                                &mapped_backup_schema(
+                                    &object.schema,
+                                    base_database,
+                                    &backup_probe.database,
+                                ),
+                            )
+                            .await;
+                            match tables {
+                                Ok(tables) if !tables.is_empty() => {
+                                    database_recreates.insert(object.schema.clone());
+                                    for table in tables {
+                                        let entry = table_restores
+                                            .entry((object.schema.clone(), table))
+                                            .or_default();
+                                        entry.0.insert(statement.id.clone());
+                                        entry.1.insert(statement.operation.clone());
+                                    }
+                                }
+                                Ok(_) => restore_conflicts.push(format!(
+                                    "{}: dropped database {} has no tables in the backup — nothing to restore beyond recreating it",
+                                    statement.id, object.schema
+                                )),
+                                Err(error) => restore_conflicts.push(format!(
+                                    "{}: could not list the backup copy of database {} ({error}) — restore it from a dump",
+                                    statement.id, object.schema
+                                )),
+                            }
+                        } else {
+                            restore_conflicts.push(format!(
+                                "{}: {} on database {} is not auto-reversed — review whether the database should be dropped or altered back",
+                                statement.id, statement.operation, object.schema
+                            ));
+                        }
+                    }
+                    kind @ ("view" | "procedure" | "function" | "trigger" | "event") => {
+                        // A CALL names the routine it invoked, not one it
+                        // changed. Restoring it would DROP and recreate a
+                        // live helper procedure that was never modified —
+                        // the tables it wrote are the actual targets, and
+                        // they arrive separately as "table" objects.
+                        if statement.operation == "call" {
+                            continue;
+                        }
+                        let schema = if object.schema.is_empty() {
+                            runs[0].database.clone()
+                        } else {
+                            object.schema.clone()
+                        };
+                        routine_restores
+                            .entry((kind.to_string(), schema, object.name.clone()))
+                            .or_default()
+                            .insert(statement.id.clone());
+                    }
+                    // Session-scoped: gone the moment the connection closed,
+                    // so there is nothing to put back.
+                    "temporary table" => {}
+                    // A kind with no restore path must be reported, never
+                    // dropped: silence here reads as "nothing to recover".
+                    other => restore_conflicts.push(format!(
+                        "{}: touches {} {}.{}, which has no automated restore path — recreate it manually",
+                        statement.id, other, object.schema, object.name
+                    )),
+                }
+            }
+            let _ = sequence;
             continue;
         }
         if statement.category == "ddl" {
@@ -592,13 +928,42 @@ async fn compare_selected_statements(
     let mut unchanged_rows = 0;
     let mut conflicts = Vec::new();
     for work in row_work.values() {
+        // A table already scheduled for a full restore is rebuilt from the
+        // backup wholesale. Row-level steps on top of it would run against
+        // rows the restore just replaced, so their full-row guards match
+        // nothing, report 0 affected rows against a non-zero expectation, and
+        // read as a failed recovery.
+        if table_restores.contains_key(&(work.schema.clone(), work.table.clone())) {
+            conflicts.push(format!(
+                "{}.{}: row-level steps skipped because the whole table is restored from the backup",
+                work.schema, work.table
+            ));
+            continue;
+        }
         let backup_schema =
             mapped_backup_schema(&work.schema, base_database, &backup_probe.database);
         // One round-trip per batch instead of two per key: thousands of rows
         // would otherwise mean thousands of sequential single-row SELECTs.
         let keys: Vec<&Vec<String>> = work.keys.iter().collect();
-        let current_rows = fetch_rows_batch(target, &work.schema, work, &keys).await?;
-        let desired_rows = fetch_rows_batch(backup, &backup_schema, work, &keys).await?;
+        // A table the backup cannot answer for (renamed column, missing
+        // table) is reported and skipped. Propagating the error would throw
+        // away every other table's recovery SQL and write no file at all.
+        let rows = match (
+            fetch_rows_batch(target, &work.schema, work, &keys).await,
+            fetch_rows_batch(backup, &backup_schema, work, &keys).await,
+        ) {
+            (Ok(current), Ok(desired)) => Some((current, desired)),
+            (Err(error), _) | (_, Err(error)) => {
+                conflicts.push(format!(
+                    "{}.{}: could not be compared against the backup ({error}) — restore this table from a dump",
+                    work.schema, work.table
+                ));
+                None
+            }
+        };
+        let Some((current_rows, desired_rows)) = rows else {
+            continue;
+        };
         for key in &work.keys {
             let current = current_rows.get(key).cloned();
             let desired = desired_rows.get(key).cloned();
@@ -675,16 +1040,574 @@ async fn compare_selected_statements(
         }
     }
 
-    for (_, statement) in statements {
-        if !statement.exact {
-            conflicts.push(format!(
-                "{} was executed without an exact row/schema image",
-                statement.id
-            ));
+    // Table-level restore from the backup connection for everything without
+    // an exact image. Emitted with the highest order so structure comes back
+    // before any row-level fixes run (steps execute in descending order).
+    conflicts.extend(restore_conflicts);
+    let same_instance = _target_probe.server_key == backup_probe.server_key;
+    let mut restore_order = usize::MAX;
+
+    // Ordered ahead of every table restore, since the tables land inside it.
+    for database in &database_recreates {
+        steps.push(RecoverySqlStep {
+            order: restore_order,
+            sql: format!("CREATE DATABASE IF NOT EXISTS {}", quote_identifier(database)),
+            expected_affected_rows: None,
+            source: format!("recreate dropped database {database}"),
+        });
+        restore_order = restore_order.saturating_sub(1);
+    }
+    for ((schema, table), (source_ids, operations)) in &table_restores {
+        let source = source_ids.iter().cloned().collect::<Vec<_>>().join(", ");
+        // Only a statement that creates the table justifies restoring it by
+        // dropping it.
+        let created_here = operations
+            .iter()
+            .all(|op| op.starts_with("create table") || op.starts_with("create temporary"));
+        match build_table_restore(
+            target,
+            backup,
+            base_database,
+            &backup_probe.database,
+            same_instance,
+            schema,
+            table,
+            restore_order,
+            &source,
+            created_here,
+        )
+        .await
+        {
+            Ok((mut restore_steps, mut restore_notes)) => {
+                steps.append(&mut restore_steps);
+                conflicts.append(&mut restore_notes);
+            }
+            Err(error) => conflicts.push(format!(
+                "{}.{} could not be prepared for backup restore: {error} (source: {source})",
+                schema, table
+            )),
         }
     }
+
+    for ((kind, schema, name), source_ids) in &routine_restores {
+        let source = source_ids.iter().cloned().collect::<Vec<_>>().join(", ");
+        match build_routine_restore(
+            backup,
+            base_database,
+            &backup_probe.database,
+            kind,
+            schema,
+            name,
+            restore_order,
+            &source,
+        )
+        .await
+        {
+            Ok(mut restore_steps) => steps.append(&mut restore_steps),
+            Err(error) => conflicts.push(format!(
+                "{} {}.{} could not be prepared for backup restore: {error} (source: {source})",
+                kind, schema, name
+            )),
+        }
+        restore_order = restore_order.saturating_sub(1);
+    }
+
     steps.sort_by(|left, right| right.order.cmp(&left.order));
     Ok((steps, unchanged_rows, conflicts))
+}
+
+/// Base tables the backup still holds for a database, so a dropped database
+/// can be rebuilt table by table. Views are excluded — they come back through
+/// their own restore path.
+async fn backup_database_tables(
+    backup: &mut sqlx::MySqlConnection,
+    backup_schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = backup
+        .fetch_all(
+            sqlx::query(
+                "SELECT TABLE_NAME FROM information_schema.TABLES \
+                 WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' \
+                 ORDER BY TABLE_NAME",
+            )
+            .bind(backup_schema),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    rows.iter().map(|row| mysql_text(row, 0)).collect()
+}
+
+/// Rebuilds a view, routine, trigger or event from the backup's definition.
+///
+/// These carry no rows, so there is nothing to compare — the definition in
+/// the backup either exists (recreate it) or does not (drop it on the
+/// target). Emitted as manual DDL like every other structure change.
+#[allow(clippy::too_many_arguments)]
+async fn build_routine_restore(
+    backup: &mut sqlx::MySqlConnection,
+    base_database: &str,
+    backup_database: &str,
+    kind: &str,
+    schema: &str,
+    name: &str,
+    order: usize,
+    source: &str,
+) -> Result<Vec<RecoverySqlStep>, String> {
+    let backup_schema = mapped_backup_schema(schema, base_database, backup_database);
+    let qualified = format!(
+        "{}.{}",
+        quote_identifier(&backup_schema),
+        quote_identifier(name)
+    );
+    // `SHOW CREATE` puts the statement in a different column per object kind.
+    let (show, column) = match kind {
+        "view" => (format!("SHOW CREATE VIEW {qualified}"), 1usize),
+        "procedure" => (format!("SHOW CREATE PROCEDURE {qualified}"), 2),
+        "function" => (format!("SHOW CREATE FUNCTION {qualified}"), 2),
+        "trigger" => (format!("SHOW CREATE TRIGGER {qualified}"), 2),
+        "event" => (format!("SHOW CREATE EVENT {qualified}"), 3),
+        other => return Err(format!("unsupported object kind {other}")),
+    };
+    let drop_sql = format!(
+        "DROP {} IF EXISTS {}.{}",
+        kind.to_uppercase(),
+        quote_identifier(schema),
+        quote_identifier(name)
+    );
+
+    let mut steps = vec![RecoverySqlStep {
+        order,
+        sql: drop_sql,
+        expected_affected_rows: None,
+        source: source.to_string(),
+    }];
+
+    // Absent from the backup means it did not exist before the change, so
+    // dropping it on the target is the whole restore.
+    let Some(row) = backup
+        .fetch_optional(sqlx::raw_sql(&show))
+        .await
+        .map_err(|error| format!("backup has no usable copy: {error}"))?
+    else {
+        return Ok(steps);
+    };
+    let create_sql = mysql_text(&row, column)?;
+    if create_sql.trim().is_empty() {
+        return Ok(steps);
+    }
+
+    steps.push(RecoverySqlStep {
+        order,
+        // The definition names the backup schema when it qualifies anything;
+        // the operator reviews this statement before running it, and DEFINER
+        // clauses may need adjusting on the target.
+        sql: create_sql,
+        expected_affected_rows: None,
+        source: source.to_string(),
+    });
+    Ok(steps)
+}
+
+/// Rows above this are not inlined as INSERT literals when target and backup
+/// are different servers; the operator is pointed at a dump tool instead.
+const CROSS_INSTANCE_RESTORE_ROW_LIMIT: u64 = 50_000;
+
+/// Batch size for inlined INSERT statements on cross-instance restore.
+const RESTORE_INSERT_BATCH: usize = 500;
+
+/// Builds a full table restore from the backup: recreate structure, then
+/// repopulate. Same-instance backups use INSERT..SELECT; cross-instance
+/// backups inline the rows as literals up to a row cap.
+#[allow(clippy::too_many_arguments)]
+async fn build_table_restore(
+    target: &mut sqlx::MySqlConnection,
+    backup: &mut sqlx::MySqlConnection,
+    base_database: &str,
+    backup_database: &str,
+    same_instance: bool,
+    schema: &str,
+    table: &str,
+    order: usize,
+    source: &str,
+    created_here: bool,
+) -> Result<(Vec<RecoverySqlStep>, Vec<String>), String> {
+    let mut steps = Vec::new();
+    let mut notes = Vec::new();
+    let backup_schema = mapped_backup_schema(schema, base_database, backup_database);
+
+    // A table absent from the backup did not exist before the change — the
+    // statement created it — so the restore is to drop it again. Checking
+    // existence first matters because `SHOW CREATE TABLE` on a missing table
+    // is an error, which used to surface as "backup has no usable copy" and
+    // left every CREATE TABLE unrecoverable.
+    let exists = (&mut *backup)
+        .fetch_optional(
+            sqlx::query(
+                "SELECT 1 FROM information_schema.TABLES \
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1",
+            )
+            .bind(&backup_schema)
+            .bind(table),
+        )
+        .await
+        .map_err(|error| format!("could not look up the backup copy: {error}"))?
+        .is_some();
+    if !exists {
+        if !created_here {
+            // The statement modified an existing table, so the backup should
+            // have held a copy. Dropping the table here would delete the very
+            // data the restore exists to bring back.
+            return Err(format!(
+                "the backup has no copy of this table, but the change was not a CREATE — the backup predates the table or is incomplete; restore it from a dump before running any recovery for {}.{}",
+                schema, table
+            ));
+        }
+        steps.push(RecoverySqlStep {
+            order,
+            sql: format!(
+                "DROP TABLE IF EXISTS {}.{}",
+                quote_identifier(schema),
+                quote_identifier(table)
+            ),
+            expected_affected_rows: None,
+            source: source.to_string(),
+        });
+        notes.push(format!(
+            "{}.{}: created by this change and absent from the backup, so the restore drops it (source: {})",
+            schema, table, source
+        ));
+        return Ok((steps, notes));
+    }
+
+    // The target's counter is read before the table is dropped: the backup's
+    // AUTO_INCREMENT is from an earlier point in time, so restoring it as-is
+    // would re-issue ids the target already handed out.
+    let target_auto_increment = (&mut *target)
+        .fetch_optional(
+            sqlx::query(
+                "SELECT AUTO_INCREMENT FROM information_schema.TABLES \
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND AUTO_INCREMENT IS NOT NULL",
+            )
+            .bind(schema)
+            .bind(table),
+        )
+        .await
+        .ok()
+        .flatten()
+        .and_then(|row| row.try_get::<u64, _>(0).ok());
+
+    // 1) Structure from the backup.
+    let create_row = (&mut *backup)
+        .fetch_one(sqlx::raw_sql(&format!(
+            "SHOW CREATE TABLE {}.{}",
+            quote_identifier(&backup_schema),
+            quote_identifier(table)
+        )))
+        .await
+        .map_err(|error| format!("backup has no usable copy: {error}"))?;
+    let create_sql = mysql_text(&create_row, 1)?;
+    // SHOW CREATE emits an unqualified name; qualify it for the target.
+    let qualified = format!(
+        "CREATE TABLE {}.{}",
+        quote_identifier(schema),
+        quote_identifier(table)
+    );
+    let create_sql = create_sql.replacen(
+        &format!("CREATE TABLE {}", quote_identifier(table)),
+        &qualified,
+        1,
+    );
+
+    steps.push(RecoverySqlStep {
+        order,
+        sql: format!(
+            "DROP TABLE IF EXISTS {}.{}",
+            quote_identifier(schema),
+            quote_identifier(table)
+        ),
+        expected_affected_rows: None,
+        source: source.to_string(),
+    });
+    steps.push(RecoverySqlStep {
+        order,
+        sql: create_sql,
+        expected_affected_rows: None,
+        source: source.to_string(),
+    });
+
+    let count_row = (&mut *backup)
+        .fetch_one(sqlx::raw_sql(&format!(
+            "SELECT COUNT(*) FROM {}.{}",
+            quote_identifier(&backup_schema),
+            quote_identifier(table)
+        )))
+        .await
+        .map_err(|error| format!("could not count backup rows: {error}"))?;
+    let row_count = count_row
+        .try_get::<i64, _>(0)
+        .map_err(|error| error.to_string())? as u64;
+
+    // Column metadata drives both restore paths. `SHOW COLUMNS` was not
+    // enough: it does not separate generated columns, and writing one
+    // explicitly fails the whole INSERT with
+    // ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN.
+    let column_rows = (&mut *backup)
+        .fetch_all(
+            sqlx::query(
+                "SELECT COLUMN_NAME, DATA_TYPE, EXTRA FROM information_schema.COLUMNS \
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
+            )
+            .bind(&backup_schema)
+            .bind(table),
+        )
+        .await
+        .map_err(|error| format!("could not list backup columns: {error}"))?;
+    let mut columns: Vec<(String, String)> = Vec::new();
+    let mut generated: Vec<String> = Vec::new();
+    for row in &column_rows {
+        let name = mysql_text(row, 0)?;
+        let data_type = mysql_text(row, 1)?;
+        let extra = mysql_text(row, 2)?.to_ascii_uppercase();
+        if extra.contains("GENERATED") {
+            generated.push(name);
+            continue;
+        }
+        columns.push((name, data_type));
+    }
+    if columns.is_empty() {
+        return Err("backup table reports no writable columns".to_string());
+    }
+    if !generated.is_empty() {
+        notes.push(format!(
+            "{}.{}: generated column(s) {} are recomputed by the server and not written back (source: {})",
+            schema,
+            table,
+            generated.join(", "),
+            source
+        ));
+    }
+    let insertable: Vec<String> = columns
+        .iter()
+        .map(|(name, _)| quote_identifier(name))
+        .collect();
+
+    // 2) Data.
+    if same_instance {
+        steps.push(RecoverySqlStep {
+            order,
+            // Naming the columns keeps the copy correct when the backup has a
+            // different column order, and skips generated columns, which
+            // reject an explicit value (ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN).
+            sql: format!(
+                "INSERT INTO {}.{} ({}) SELECT {} FROM {}.{}",
+                quote_identifier(schema),
+                quote_identifier(table),
+                insertable.join(", "),
+                insertable.join(", "),
+                quote_identifier(&backup_schema),
+                quote_identifier(table)
+            ),
+            // Carrying the row count makes this an executable, verified step.
+            // Left as None it rendered as commented-out manual DDL, so a
+            // same-instance restore produced a file that did nothing at all.
+            expected_affected_rows: Some(row_count),
+            source: source.to_string(),
+        });
+        append_trigger_restores(
+            backup,
+            &backup_schema,
+            schema,
+            table,
+            order,
+            source,
+            &mut steps,
+        )
+        .await?;
+        append_auto_increment_reset(
+            schema,
+            table,
+            target_auto_increment,
+            order,
+            source,
+            &mut steps,
+        );
+        return Ok((steps, notes));
+    }
+    if row_count > CROSS_INSTANCE_RESTORE_ROW_LIMIT {
+        // Emitting DROP + CREATE with no data would leave the operator
+        // holding an empty table between running this file and finishing a
+        // manual import. Better to hand back nothing executable and say so.
+        steps.clear();
+        notes.push(format!(
+            "{}.{}: {} rows exceed the {}-row inline limit for a cross-instance restore — no SQL generated on purpose (dropping the table here would empty it until a manual import finished). Restore it with mysqldump from the backup instead (source: {})",
+            schema, table, row_count, CROSS_INSTANCE_RESTORE_ROW_LIMIT, source
+        ));
+        return Ok((steps, notes));
+    }
+
+    // Durable literals via the same HEX technique the row comparison uses,
+    // so binary data round-trips exactly.
+    let projection = columns
+        .iter()
+        .enumerate()
+        .map(|(index, (column, _))| {
+            let quoted = quote_identifier(column);
+            format!(
+                "CASE WHEN {quoted} IS NULL THEN 'NULL' \
+                 ELSE CONCAT('X''', HEX(CAST({quoted} AS BINARY)), '''') END AS `v{index}`"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let data_rows = (&mut *backup)
+        .fetch_all(sqlx::raw_sql(&format!(
+            "SELECT {projection} FROM {}.{}",
+            quote_identifier(&backup_schema),
+            quote_identifier(table)
+        )))
+        .await
+        .map_err(|error| format!("could not read backup rows: {error}"))?;
+
+    let column_list = insertable.clone().join(", ");
+    for chunk in data_rows.chunks(RESTORE_INSERT_BATCH) {
+        let mut tuples = Vec::with_capacity(chunk.len());
+        for row in chunk {
+            let values = columns
+                .iter()
+                .enumerate()
+                .map(|(index, (name, data_type))| {
+                    let raw = mysql_text(row, index)?;
+                    // Same typing rules the row-level path uses: a HEX blob
+                    // assigned straight into a JSON column fails with
+                    // "Cannot create a JSON value from a string in CHARACTER
+                    // SET 'binary'", which used to sink the whole batch.
+                    Ok::<String, String>(restoration_literal(
+                        &RecoveryColumn {
+                            name: name.clone(),
+                            data_type: data_type.clone(),
+                        },
+                        &raw,
+                    ))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            tuples.push(format!("({})", values.join(", ")));
+        }
+        steps.push(RecoverySqlStep {
+            order,
+            sql: format!(
+                "INSERT INTO {}.{} ({}) VALUES\n{}",
+                quote_identifier(schema),
+                quote_identifier(table),
+                column_list,
+                tuples.join(",\n")
+            ),
+            expected_affected_rows: Some(chunk.len() as u64),
+            source: source.to_string(),
+        });
+    }
+    append_trigger_restores(
+        backup,
+        &backup_schema,
+        schema,
+        table,
+        order,
+        source,
+        &mut steps,
+    )
+    .await?;
+    append_auto_increment_reset(schema, table, target_auto_increment, order, source, &mut steps);
+    Ok((steps, notes))
+}
+
+/// Restores the target's own AUTO_INCREMENT counter after a rebuild.
+///
+/// Skipped when the target had none (no auto-increment column, or the table
+/// did not exist), in which case the backup's value is already correct.
+fn append_auto_increment_reset(
+    schema: &str,
+    table: &str,
+    target_auto_increment: Option<u64>,
+    order: usize,
+    source: &str,
+    steps: &mut Vec<RecoverySqlStep>,
+) {
+    let Some(next_id) = target_auto_increment else {
+        return;
+    };
+    steps.push(RecoverySqlStep {
+        order,
+        sql: format!(
+            "ALTER TABLE {}.{} AUTO_INCREMENT = {}",
+            quote_identifier(schema),
+            quote_identifier(table),
+            next_id
+        ),
+        expected_affected_rows: None,
+        source: source.to_string(),
+    });
+}
+
+/// Recreates the triggers a table carried in the backup.
+///
+/// `SHOW CREATE TABLE` does not include them, so rebuilding a table from it
+/// silently drops every trigger it owned. Appended after the data so the
+/// refill does not fire them.
+#[allow(clippy::too_many_arguments)]
+async fn append_trigger_restores(
+    backup: &mut sqlx::MySqlConnection,
+    backup_schema: &str,
+    schema: &str,
+    table: &str,
+    order: usize,
+    source: &str,
+    steps: &mut Vec<RecoverySqlStep>,
+) -> Result<(), String> {
+    let rows = backup
+        .fetch_all(
+            sqlx::query(
+                "SELECT TRIGGER_NAME FROM information_schema.TRIGGERS \
+                 WHERE EVENT_OBJECT_SCHEMA = ? AND EVENT_OBJECT_TABLE = ? \
+                 ORDER BY TRIGGER_NAME",
+            )
+            .bind(backup_schema)
+            .bind(table),
+        )
+        .await
+        .map_err(|error| format!("could not list backup triggers: {error}"))?;
+
+    for row in &rows {
+        let name = mysql_text(row, 0)?;
+        let created = backup
+            .fetch_optional(sqlx::raw_sql(&format!(
+                "SHOW CREATE TRIGGER {}.{}",
+                quote_identifier(backup_schema),
+                quote_identifier(&name)
+            )))
+            .await
+            .map_err(|error| format!("could not read backup trigger {name}: {error}"))?;
+        let Some(created) = created else { continue };
+        let create_sql = mysql_text(&created, 2)?;
+        if create_sql.trim().is_empty() {
+            continue;
+        }
+        steps.push(RecoverySqlStep {
+            order,
+            sql: format!(
+                "DROP TRIGGER IF EXISTS {}.{}",
+                quote_identifier(schema),
+                quote_identifier(&name)
+            ),
+            expected_affected_rows: None,
+            source: source.to_string(),
+        });
+        steps.push(RecoverySqlStep {
+            order,
+            sql: create_sql,
+            expected_affected_rows: None,
+            source: source.to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn comparable_indexes(work: &RowWork) -> Vec<usize> {
@@ -925,6 +1848,14 @@ async fn begin_read_only_snapshot(
     conn: &mut sqlx::MySqlConnection,
     label: &str,
 ) -> Result<(), String> {
+    // Target and backup are separate sessions, possibly on servers with
+    // different @@time_zone. TIMESTAMP values render in session time, so
+    // without a shared zone identical rows compare as different and the
+    // "restored" value is written back shifted. UTC on both sides removes it.
+    (&mut *conn)
+        .execute(sqlx::raw_sql("SET time_zone = '+00:00'"))
+        .await
+        .map_err(|error| format!("Could not pin the {label} session time zone: {error}"))?;
     (&mut *conn)
         .execute(sqlx::raw_sql(
             "START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY",
@@ -1122,6 +2053,16 @@ fn render_recovery_sql(
         ));
     }
     output.push('\n');
+
+    if !steps.is_empty() {
+        // Both sides were read with the session pinned to UTC
+        // (`begin_read_only_snapshot`), so every TIMESTAMP literal below is
+        // UTC text. Executing this file in another zone would shift them.
+        output.push_str(
+            "-- Row images below were captured in UTC; this keeps TIMESTAMP values identical on write.\n",
+        );
+        output.push_str("SET time_zone = '+00:00';\n\n");
+    }
 
     let mut transaction_open = false;
     for (index, step) in steps.iter().enumerate() {

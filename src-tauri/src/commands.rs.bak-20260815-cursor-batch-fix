@@ -32,6 +32,151 @@ async fn driver_for(
 const DEFAULT_MYSQL_PORT: u16 = 3306;
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
 
+const FUNCTIONAL_TEST_GUARD_ENV: &str = "TABULARIS_AGENT_FUNCTIONAL_TEST";
+const FUNCTIONAL_TEST_HOST: &str = "192.0.2.130";
+const FUNCTIONAL_TEST_PRIMARY_PORT: u16 = 13309;
+const FUNCTIONAL_TEST_FALLBACK_PORT: u16 = 13305;
+const FUNCTIONAL_TEST_PRIMARY_UNAVAILABLE_TTL: std::time::Duration =
+    std::time::Duration::from_secs(15 * 60);
+
+static FUNCTIONAL_TEST_PRIMARY_UNAVAILABLE_AT: std::sync::OnceLock<
+    Mutex<Option<std::time::Instant>>,
+> = std::sync::OnceLock::new();
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FunctionalTestOutcome {
+    Success,
+    PrimaryUnavailable,
+    OtherFailure,
+}
+
+fn functional_test_guard_enabled() -> bool {
+    std::env::var_os(FUNCTIONAL_TEST_GUARD_ENV)
+        .is_some_and(|value| !value.is_empty() && value != "0")
+}
+
+fn functional_test_primary_unavailable_at() -> &'static Mutex<Option<std::time::Instant>> {
+    FUNCTIONAL_TEST_PRIMARY_UNAVAILABLE_AT.get_or_init(|| Mutex::new(None))
+}
+
+fn functional_test_target(params: &ConnectionParams) -> Result<(String, u16), String> {
+    if let Some(value) = params
+        .connection_uri
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let uri = url::Url::parse(value).map_err(|_| {
+            "Tabularis functional-test guard could not parse the connection URI".to_string()
+        })?;
+        let host = uri.host_str().ok_or_else(|| {
+            "Tabularis functional-test guard requires an explicit URI host".to_string()
+        })?;
+        let port = uri.port_or_known_default().ok_or_else(|| {
+            "Tabularis functional-test guard requires an explicit URI port".to_string()
+        })?;
+        return Ok((host.to_string(), port));
+    }
+
+    let host = params.host.as_deref().ok_or_else(|| {
+        "Tabularis functional-test guard requires an explicit database host".to_string()
+    })?;
+    let port = params.port.ok_or_else(|| {
+        "Tabularis functional-test guard requires an explicit database port".to_string()
+    })?;
+    Ok((host.to_string(), port))
+}
+
+fn validate_functional_test_target_for_mode(
+    params: &ConnectionParams,
+    guard_enabled: bool,
+) -> Result<u16, String> {
+    if !guard_enabled {
+        return Ok(params.port.unwrap_or_default());
+    }
+
+    if params.ssh_enabled.unwrap_or(false) || params.k8s_enabled.unwrap_or(false) {
+        return Err(
+            "Tabularis functional-test guard prohibits SSH and Kubernetes tunnels".to_string(),
+        );
+    }
+
+    let (host, port) = functional_test_target(params)?;
+    if host != FUNCTIONAL_TEST_HOST
+        || ![FUNCTIONAL_TEST_PRIMARY_PORT, FUNCTIONAL_TEST_FALLBACK_PORT].contains(&port)
+    {
+        return Err(format!(
+            "Tabularis functional-test guard blocked database target {host}:{port}"
+        ));
+    }
+
+    let now = std::time::Instant::now();
+    let mut unavailable_at = functional_test_primary_unavailable_at().lock().unwrap();
+    if port == FUNCTIONAL_TEST_PRIMARY_PORT {
+        // Starting any new primary attempt invalidates older fallback evidence.
+        *unavailable_at = None;
+    } else if !unavailable_at.is_some_and(|recorded| {
+        now.duration_since(recorded) <= FUNCTIONAL_TEST_PRIMARY_UNAVAILABLE_TTL
+    }) {
+        *unavailable_at = None;
+        return Err(
+            "Tabularis functional-test guard blocked 192.0.2.130:13305: test 13309 first and confirm a network-unavailable result"
+                .to_string(),
+        );
+    }
+
+    Ok(port)
+}
+
+fn validate_functional_test_target(params: &ConnectionParams) -> Result<u16, String> {
+    validate_functional_test_target_for_mode(params, functional_test_guard_enabled())
+}
+
+fn is_explicit_network_unavailable(error: &str) -> bool {
+    let lower = error.to_ascii_lowercase();
+    let generic_network_error = [
+        "econnrefused",
+        "ehostunreach",
+        "enetunreach",
+        "no route to host",
+        "network is unreachable",
+        "connection refused",
+        "actively refused",
+        "error 2003",
+        "connect timed out",
+        "connection timed out",
+        "connection timeout",
+        "etimedout",
+    ]
+    .iter()
+    .any(|signature| lower.contains(signature));
+    let mysql_socket_error = (lower.contains("can't connect to mysql server")
+        || lower.contains("can't connect to mariadb server"))
+        && (lower.contains("10060") || lower.contains("10061"));
+
+    generic_network_error || mysql_socket_error
+}
+
+fn record_functional_test_outcome_for_mode(
+    port: u16,
+    outcome: FunctionalTestOutcome,
+    guard_enabled: bool,
+) {
+    if !guard_enabled {
+        return;
+    }
+
+    let mut unavailable_at = functional_test_primary_unavailable_at().lock().unwrap();
+    match (port, outcome) {
+        (FUNCTIONAL_TEST_PRIMARY_PORT, FunctionalTestOutcome::PrimaryUnavailable) => {
+            *unavailable_at = Some(std::time::Instant::now());
+        }
+        (FUNCTIONAL_TEST_PRIMARY_PORT, _) | (FUNCTIONAL_TEST_FALLBACK_PORT, _) => {
+            *unavailable_at = None;
+        }
+        _ => {}
+    }
+}
+
 /// Per-slot collection of abort handles for in-flight cancellable tasks.
 /// Used by `QueryCancellationState`, `ExportCancellationState`, and
 /// `DumpCancellationState`.
@@ -178,6 +323,7 @@ pub async fn expand_ssh_connection_params<R: Runtime>(
     app: &AppHandle<R>,
     params: &ConnectionParams,
 ) -> Result<ConnectionParams, String> {
+    validate_functional_test_target(params)?;
     let mut expanded_params = params.clone();
 
     // If ssh_connection_id is set and SSH is enabled, load the SSH connection and merge it
@@ -292,10 +438,7 @@ fn build_tunnel_map_key(
 
 /// Resolve K8s tunnel params synchronously (no saved-connection lookup; uses inline fields only).
 fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
-    let context = params
-        .k8s_context
-        .as_deref()
-        .ok_or("Missing K8s context")?;
+    let context = params.k8s_context.as_deref().ok_or("Missing K8s context")?;
     let namespace = params
         .k8s_namespace
         .as_deref()
@@ -338,7 +481,11 @@ fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, Str
 
     log::info!(
         "Creating new K8s tunnel for {}/{} in {}:{} (context: {})",
-        resource_type, resource_name, namespace, port, context
+        resource_type,
+        resource_name,
+        namespace,
+        port,
+        context
     );
 
     let tunnel = crate::k8s_tunnel::K8sTunnel::new(
@@ -370,10 +517,12 @@ fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, Str
 }
 
 pub fn resolve_connection_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
+    validate_functional_test_target(params)?;
+
     // K8s and SSH are mutually exclusive
     if params.k8s_enabled.unwrap_or(false) && params.ssh_enabled.unwrap_or(false) {
         return Err(
-            "Kubernetes and SSH tunnel cannot both be enabled for the same connection".to_string()
+            "Kubernetes and SSH tunnel cannot both be enabled for the same connection".to_string(),
         );
     }
 
@@ -454,10 +603,7 @@ pub fn resolve_connection_params_with_id(
     Ok(resolved)
 }
 
-/// Resolves with both the id and the name. Recovery journalling requires the
-/// name, so any path that performs writes has to use this rather than
-/// [`resolve_connection_params_with_id`], or its changes go unrecorded.
-pub fn resolve_connection_params_with_identity(
+fn resolve_connection_params_with_identity(
     params: &ConnectionParams,
     connection_id: &str,
     connection_name: &str,
@@ -613,13 +759,12 @@ pub fn find_connection_by_id<R: Runtime>(
     app: &AppHandle<R>,
     id: &str,
 ) -> Result<SavedConnection, String> {
-    let conn_cache =
-        app.state::<std::sync::Arc<crate::connection_cache::ConnectionCache>>();
+    let conn_cache = app.state::<std::sync::Arc<crate::connection_cache::ConnectionCache>>();
 
     let mut conn = match conn_cache.lookup(id) {
         crate::connection_cache::CacheLookup::Hit(c) => c,
         crate::connection_cache::CacheLookup::Miss => {
-            return Err("Connection not found".to_string())
+            return Err("Connection not found".to_string());
         }
         crate::connection_cache::CacheLookup::Cold => {
             let path = get_config_path(app)?;
@@ -640,9 +785,7 @@ pub fn find_connection_by_id<R: Runtime>(
     // cold miss = keychain call + cache). Skip IAM-auth connections: their
     // 15-min tokens must come from the `password` field, never the keychain,
     // so a stale token from an older release can't be surfaced in the modal.
-    if conn.params.save_in_keychain.unwrap_or(false)
-        && !conn.params.use_iam_auth.unwrap_or(false)
-    {
+    if conn.params.save_in_keychain.unwrap_or(false) && !conn.params.use_iam_auth.unwrap_or(false) {
         match credential_cache::get_db_password_cached(&cache, &conn.id) {
             Ok(pwd) => conn.params.password = Some(pwd),
             Err(e) => eprintln!(
@@ -1074,7 +1217,11 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
 
     // Clean up query history for this connection
     if let Err(e) = crate::query_history::remove_history_for_connection(&app, &id).await {
-        log::warn!("Failed to remove query history for connection {}: {}", id, e);
+        log::warn!(
+            "Failed to remove query history for connection {}: {}",
+            id,
+            e
+        );
     }
 
     if deleted {
@@ -1190,26 +1337,16 @@ pub async fn update_connection<R: Runtime>(
 
     // On single→multi transition, associate existing favorites/history (with no
     // database set) to the original single database name.
-    if let Some(previous_db) = crate::models::single_db_before_multi_transition(
-        &original_db_selection,
-        &params.database,
-    ) {
-        if let Err(e) = crate::saved_queries::backfill_missing_database_for_connection(
-            &app,
-            &id,
-            &previous_db,
-        ) {
-            log::warn!(
-                "Failed to backfill saved query database for {}: {}",
-                id,
-                e
-            );
+    if let Some(previous_db) =
+        crate::models::single_db_before_multi_transition(&original_db_selection, &params.database)
+    {
+        if let Err(e) =
+            crate::saved_queries::backfill_missing_database_for_connection(&app, &id, &previous_db)
+        {
+            log::warn!("Failed to backfill saved query database for {}: {}", id, e);
         }
-        if let Err(e) = crate::query_history::backfill_missing_database_for_connection(
-            &app,
-            &id,
-            &previous_db,
-        )
+        if let Err(e) =
+            crate::query_history::backfill_missing_database_for_connection(&app, &id, &previous_db)
         .await
         {
             log::warn!(
@@ -1335,7 +1472,9 @@ pub async fn duplicate_connection<R: Runtime>(
         if let Some(ref mut a) = app_earance {
             if let Some(crate::models::IconOverride::Image { ref path }) = a.icon.clone() {
                 if let Ok(app_data) = app.path().app_data_dir() {
-                    match crate::connection_appearance::copy_icon_for_duplicate(&app_data, path, &new_id) {
+                    match crate::connection_appearance::copy_icon_for_duplicate(
+                        &app_data, path, &new_id,
+                    ) {
                         Ok(new_path) => {
                             a.icon = Some(crate::models::IconOverride::Image { path: new_path });
                         }
@@ -1537,9 +1676,7 @@ async fn migrate_native_cli_connections<R: Runtime>(app: &AppHandle<R>) -> Resul
     let mut conn_file = persistence::load_connections_file(&conn_path)?;
     let mut changed = false;
     for connection in &mut conn_file.connections {
-        if let Some(canonical) =
-            crate::native_cli::canonical_driver_id(&connection.params.driver)
-        {
+        if let Some(canonical) = crate::native_cli::canonical_driver_id(&connection.params.driver) {
             if connection.params.driver != canonical {
                 connection.params.driver = canonical.to_string();
                 changed = true;
@@ -1867,9 +2004,7 @@ fn validate_k8s_connection_paths(k8s: &K8sConnectionInput) -> Result<(), String>
 }
 
 /// Load K8s connections synchronously from the config file.
-fn load_k8s_connections_sync<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<Vec<K8sConnection>, String> {
+fn load_k8s_connections_sync<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<K8sConnection>, String> {
     let path = get_k8s_config_path(app)?;
     if !path.exists() {
         return Ok(vec![]);
@@ -1899,8 +2034,7 @@ pub async fn get_k8s_connections<R: Runtime>(
         return Ok(vec![]);
     }
     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let connections: Vec<K8sConnection> =
-        serde_json::from_str(&content).unwrap_or_default();
+    let connections: Vec<K8sConnection> = serde_json::from_str(&content).unwrap_or_default();
     Ok(connections)
 }
 
@@ -1932,8 +2066,7 @@ pub async fn save_k8s_connection<R: Runtime>(
     };
 
     connections.push(connection.clone());
-    let json =
-        serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())?;
 
     Ok(connection)
@@ -1972,8 +2105,7 @@ pub async fn update_k8s_connection<R: Runtime>(
     };
 
     connections[idx] = connection.clone();
-    let json =
-        serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())?;
 
     Ok(connection)
@@ -1993,8 +2125,7 @@ pub async fn delete_k8s_connection<R: Runtime>(
     };
 
     connections.retain(|c| c.id != id);
-    let json =
-        serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(&connections).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())?;
 
     Ok(())
@@ -2080,6 +2211,7 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
     app: &AppHandle<R>,
     params: &ConnectionParams,
 ) -> Result<ConnectionParams, String> {
+    validate_functional_test_target(params)?;
     if !params.k8s_enabled.unwrap_or(false) {
         return Ok(params.clone());
     }
@@ -2087,7 +2219,7 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
     // Mutual exclusion: K8s and SSH cannot both be active
     if params.ssh_enabled.unwrap_or(false) {
         return Err(
-            "Kubernetes and SSH tunnel cannot both be enabled for the same connection".to_string()
+            "Kubernetes and SSH tunnel cannot both be enabled for the same connection".to_string(),
         );
     }
 
@@ -2154,10 +2286,7 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
     {
         let tunnels = crate::k8s_tunnel::get_tunnels().lock().unwrap();
         if let Some(tunnel) = tunnels.get(&map_key) {
-            log::debug!(
-                "Reusing existing K8s tunnel on port {}",
-                tunnel.local_port
-            );
+            log::debug!("Reusing existing K8s tunnel on port {}", tunnel.local_port);
             let mut new_params = params.clone();
             new_params.k8s_enabled = Some(false);
             new_params.host = Some("127.0.0.1".to_string());
@@ -2214,8 +2343,7 @@ async fn get_k8s_connection_by_id<R: Runtime>(
         return Err(format!("K8s connection with ID {} not found", k8s_id));
     }
     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let connections: Vec<K8sConnection> =
-        serde_json::from_str(&content).unwrap_or_default();
+    let connections: Vec<K8sConnection> = serde_json::from_str(&content).unwrap_or_default();
     connections
         .into_iter()
         .find(|c| c.id == k8s_id)
@@ -2232,6 +2360,11 @@ pub async fn test_connection<R: Runtime>(
         request.params.database
     );
 
+    let guard_enabled = functional_test_guard_enabled();
+    let functional_test_port =
+        validate_functional_test_target_for_mode(&request.params, guard_enabled)?;
+
+    let result: Result<String, String> = async {
     let mut expanded_params = expand_ssh_connection_params(&app, &request.params).await?;
     expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
 
@@ -2271,6 +2404,7 @@ pub async fn test_connection<R: Runtime>(
         }
     }
 
+        validate_functional_test_target_for_mode(&expanded_params, guard_enabled)?;
     let resolved_params = if let Some(conn_id) = &request.connection_id {
         resolve_connection_params_with_id(&expanded_params, conn_id)?
     } else {
@@ -2284,14 +2418,11 @@ pub async fn test_connection<R: Runtime>(
 
     if crate::native_cli::is_native_cli_driver(&resolved_params.driver) {
         let mut native_params = resolved_params;
-        if let Some(canonical) =
-            crate::native_cli::canonical_driver_id(&native_params.driver)
-        {
+            if let Some(canonical) = crate::native_cli::canonical_driver_id(&native_params.driver) {
             native_params.driver = canonical.to_string();
         }
-        return crate::native_cli::test_connection(app, native_params).await;
-    }
-
+            crate::native_cli::test_connection(app, native_params).await
+        } else {
     let drv = driver_for(&resolved_params.driver).await?;
 
     // For file-based drivers, verify the database file exists before attempting connection
@@ -2305,19 +2436,42 @@ pub async fn test_connection<R: Runtime>(
         }
     }
 
-    drv.test_connection(&resolved_params).await.map_err(|e| {
-        log::warn!(
-            "Connection test failed for database {}: {e}",
-            request.params.database
-        );
-        e
-    })?;
+            drv.test_connection(&resolved_params)
+                .await
+                .map(|()| "Connection successful!".to_string())
+        }
+    }
+    .await;
 
+    match result {
+        Ok(message) => {
+            record_functional_test_outcome_for_mode(
+                functional_test_port,
+                FunctionalTestOutcome::Success,
+                guard_enabled,
+            );
     log::info!(
         "Connection test successful for database: {}",
         request.params.database
     );
-    Ok("Connection successful!".to_string())
+            Ok(message)
+        }
+        Err(error) => {
+            let outcome = if functional_test_port == FUNCTIONAL_TEST_PRIMARY_PORT
+                && is_explicit_network_unavailable(&error)
+            {
+                FunctionalTestOutcome::PrimaryUnavailable
+            } else {
+                FunctionalTestOutcome::OtherFailure
+            };
+            record_functional_test_outcome_for_mode(functional_test_port, outcome, guard_enabled);
+            log::warn!(
+                "Connection test failed for database {}: {error}",
+                request.params.database
+            );
+            Err(error)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2334,6 +2488,149 @@ mod tests {
             database: DatabaseSelection::Single("testdb".to_string()),
             ..Default::default()
         }
+    }
+
+    fn reset_functional_test_state() {
+        *functional_test_primary_unavailable_at().lock().unwrap() = None;
+    }
+
+    #[test]
+    fn functional_test_guard_is_disabled_for_normal_user_sessions() {
+        reset_functional_test_state();
+        let params = ConnectionParams {
+            host: Some("db.example.invalid".to_string()),
+            port: Some(3306),
+            ..base_params()
+        };
+
+        assert_eq!(
+            validate_functional_test_target_for_mode(&params, false),
+            Ok(3306)
+        );
+    }
+
+    #[test]
+    fn functional_test_guard_blocks_non_allowlisted_targets() {
+        reset_functional_test_state();
+        let params = ConnectionParams {
+            host: Some("db.example.invalid".to_string()),
+            port: Some(FUNCTIONAL_TEST_PRIMARY_PORT),
+            ..base_params()
+        };
+
+        assert!(
+            validate_functional_test_target_for_mode(&params, true)
+                .unwrap_err()
+                .contains("blocked database target")
+        );
+    }
+
+    #[test]
+    fn functional_test_guard_requires_primary_before_fallback() {
+        reset_functional_test_state();
+        let params = ConnectionParams {
+            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
+            port: Some(FUNCTIONAL_TEST_FALLBACK_PORT),
+            ..base_params()
+        };
+
+        assert!(
+            validate_functional_test_target_for_mode(&params, true)
+                .unwrap_err()
+                .contains("test 13309 first")
+        );
+    }
+
+    #[test]
+    fn functional_test_guard_allows_fallback_only_after_primary_unavailable() {
+        reset_functional_test_state();
+        record_functional_test_outcome_for_mode(
+            FUNCTIONAL_TEST_PRIMARY_PORT,
+            FunctionalTestOutcome::PrimaryUnavailable,
+            true,
+        );
+        let params = ConnectionParams {
+            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
+            port: Some(FUNCTIONAL_TEST_FALLBACK_PORT),
+            ..base_params()
+        };
+
+        assert!(validate_functional_test_target_for_mode(&params, true).is_ok());
+        reset_functional_test_state();
+    }
+
+    #[test]
+    fn functional_test_guard_clears_fallback_after_non_network_primary_failure() {
+        reset_functional_test_state();
+        record_functional_test_outcome_for_mode(
+            FUNCTIONAL_TEST_PRIMARY_PORT,
+            FunctionalTestOutcome::PrimaryUnavailable,
+            true,
+        );
+        record_functional_test_outcome_for_mode(
+            FUNCTIONAL_TEST_PRIMARY_PORT,
+            FunctionalTestOutcome::OtherFailure,
+            true,
+        );
+        let params = ConnectionParams {
+            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
+            port: Some(FUNCTIONAL_TEST_FALLBACK_PORT),
+            ..base_params()
+        };
+
+        assert!(validate_functional_test_target_for_mode(&params, true).is_err());
+    }
+
+    #[test]
+    fn functional_test_guard_checks_connection_uri_target() {
+        reset_functional_test_state();
+        let params = ConnectionParams {
+            connection_uri: Some(
+                "mysql://fixture:fixture@db.example.invalid:13309/app".to_string(),
+            ),
+            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
+            port: Some(FUNCTIONAL_TEST_PRIMARY_PORT),
+            ..base_params()
+        };
+
+        assert!(
+            validate_functional_test_target_for_mode(&params, true)
+                .unwrap_err()
+                .contains("db.example.invalid:13309")
+        );
+    }
+
+    #[test]
+    fn functional_test_guard_blocks_tunnels_before_subprocess_start() {
+        reset_functional_test_state();
+        let params = ConnectionParams {
+            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
+            port: Some(FUNCTIONAL_TEST_PRIMARY_PORT),
+            ssh_enabled: Some(true),
+            ..base_params()
+        };
+
+        assert!(
+            validate_functional_test_target_for_mode(&params, true)
+                .unwrap_err()
+                .contains("prohibits SSH and Kubernetes tunnels")
+        );
+    }
+
+    #[test]
+    fn functional_test_unavailable_signatures_exclude_authentication_and_bare_socket_codes() {
+        assert!(is_explicit_network_unavailable(
+            "ERROR 2003 (HY000): Can't connect to MySQL server (10061)"
+        ));
+        assert!(!is_explicit_network_unavailable(
+            "Access denied for user 'fixture' (using password: YES)"
+        ));
+        assert!(!is_explicit_network_unavailable(
+            "unrelated driver failure 10060"
+        ));
+        assert!(!is_explicit_network_unavailable(
+            "unrelated driver failure 10061"
+        ));
     }
 
     #[test]
@@ -2489,7 +2786,9 @@ mod tests {
             detect_json_in_text_columns: None,
             appearance: Some(ConnectionAppearance {
                 accent_color: Some("#ff0000".to_string()),
-                icon: Some(IconOverride::Emoji { value: "🐘".to_string() }),
+                icon: Some(IconOverride::Emoji {
+                    value: "🐘".to_string(),
+                }),
             }),
         };
 
@@ -2506,13 +2805,19 @@ mod tests {
             appearance: original_appearance,
         };
 
-        let app = updated.appearance.as_ref().expect("appearance must be preserved");
+        let app = updated
+            .appearance
+            .as_ref()
+            .expect("appearance must be preserved");
         assert_eq!(app.accent_color.as_deref(), Some("#ff0000"));
         assert!(matches!(&app.icon, Some(IconOverride::Emoji { value }) if value == "🐘"));
     }
 
     /// Helper: build a minimal ConnectionsFile with one connection.
-    fn one_conn_file(id: &str, appearance: Option<crate::models::ConnectionAppearance>) -> ConnectionsFile {
+    fn one_conn_file(
+        id: &str,
+        appearance: Option<crate::models::ConnectionAppearance>,
+    ) -> ConnectionsFile {
         let conn = SavedConnection {
             id: id.to_string(),
             name: "Test".to_string(),
@@ -2535,12 +2840,17 @@ mod tests {
         let mut file = one_conn_file("conn-1", None);
         let new_appearance = ConnectionAppearance {
             accent_color: Some("#00ff00".to_string()),
-            icon: Some(IconOverride::Emoji { value: "🦀".to_string() }),
+            icon: Some(IconOverride::Emoji {
+                value: "🦀".to_string(),
+            }),
         };
 
         set_appearance_impl(&mut file, "conn-1", Some(new_appearance)).unwrap();
 
-        let app = file.connections[0].appearance.as_ref().expect("appearance must be set");
+        let app = file.connections[0]
+            .appearance
+            .as_ref()
+            .expect("appearance must be set");
         assert_eq!(app.accent_color.as_deref(), Some("#00ff00"));
         assert!(matches!(&app.icon, Some(IconOverride::Emoji { value }) if value == "🦀"));
     }
@@ -2551,7 +2861,9 @@ mod tests {
 
         let existing_appearance = ConnectionAppearance {
             accent_color: Some("#ff0000".to_string()),
-            icon: Some(IconOverride::Pack { id: "server".to_string() }),
+            icon: Some(IconOverride::Pack {
+                id: "server".to_string(),
+            }),
         };
         let mut file = one_conn_file("conn-2", Some(existing_appearance));
 
@@ -3067,8 +3379,8 @@ mod tests {
 
     mod cancellation_state {
         use super::super::{
-            cancel_query_impl, register_abort_handle, unregister_abort_handle,
-            QueryCancellationState,
+            QueryCancellationState, cancel_query_impl, register_abort_handle,
+            unregister_abort_handle,
         };
         use std::sync::Arc;
         use std::time::Duration;
@@ -3144,7 +3456,9 @@ mod tests {
 
             {
                 let remaining = state.handles.lock().unwrap();
-                let slot = remaining.get("conn-1").expect("slot kept while B in flight");
+                let slot = remaining
+                    .get("conn-1")
+                    .expect("slot kept while B in flight");
                 assert_eq!(slot.len(), 1);
                 assert!(Arc::ptr_eq(&slot[0], &handle_b));
             }
@@ -3320,7 +3634,10 @@ mod tests {
             group("drop", Some("root")),
         ];
         let subtree = crate::models::collect_group_subtree(&groups, "drop");
-        assert_eq!(subtree, std::collections::HashSet::from(["drop".to_string()]));
+        assert_eq!(
+            subtree,
+            std::collections::HashSet::from(["drop".to_string()])
+        );
         assert!(!subtree.contains("root"));
         assert!(!subtree.contains("keep"));
     }
@@ -3329,7 +3646,10 @@ mod tests {
     fn collect_group_subtree_for_unknown_id_is_singleton() {
         let groups = vec![group("a", None)];
         let subtree = crate::models::collect_group_subtree(&groups, "missing");
-        assert_eq!(subtree, std::collections::HashSet::from(["missing".to_string()]));
+        assert_eq!(
+            subtree,
+            std::collections::HashSet::from(["missing".to_string()])
+        );
     }
 
     #[test]
@@ -3561,13 +3881,7 @@ pub async fn delete_record<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    // With the name: recovery journalling is gated on it, so a grid edit
-    // resolved by id alone left no record of the row it changed.
-    let mut params = resolve_connection_params_with_identity(
-        &expanded_params,
-        &connection_id,
-        &saved_conn.name,
-    )?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
     }
@@ -3598,13 +3912,7 @@ pub async fn update_record<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    // With the name: recovery journalling is gated on it, so a grid edit
-    // resolved by id alone left no record of the row it changed.
-    let mut params = resolve_connection_params_with_identity(
-        &expanded_params,
-        &connection_id,
-        &saved_conn.name,
-    )?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
     }
@@ -3665,13 +3973,7 @@ pub async fn fetch_blob_as_data_url<R: Runtime>(
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     let wire = drv
-        .fetch_blob_as_data_url(
-            &params,
-            &table,
-            &col_name,
-            &pk_map,
-            schema.as_deref(),
-        )
+        .fetch_blob_as_data_url(&params, &table, &col_name, &pk_map, schema.as_deref())
         .await?;
     // Convert the BLOB wire format to a data: URL
     // wire format: "BLOB:<size>:<mime>:<base64>"
@@ -3857,13 +4159,7 @@ pub async fn insert_record<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    // With the name: recovery journalling is gated on it, so a grid edit
-    // resolved by id alone left no record of the row it changed.
-    let mut params = resolve_connection_params_with_identity(
-        &expanded_params,
-        &connection_id,
-        &saved_conn.name,
-    )?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     if let Some(db) = database {
         params.database = crate::models::DatabaseSelection::Single(db);
     }
@@ -3951,23 +4247,18 @@ pub async fn execute_query<R: Runtime>(
     let sanitized_query = sanitize_user_query(&query);
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let audit_target = crate::audit_outbox::audit_target(&saved_conn, schema.as_deref());
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    // Carries the connection name, not just the id: recovery journalling is
-    // gated on the name being present, so resolving without it made
-    // `journal_unprotected_changes` a no-op for every single-statement run —
-    // editor Run, sidebar DROP TABLE, column changes, notebooks.
-    let params = resolve_connection_params_with_identity(
-        &expanded_params,
-        &connection_id,
-        &saved_conn.name,
-    )?;
+    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     // Detected before the spawn, which takes ownership of `sanitized_query`.
     // Cheap: only allocates when the statement really is a DROP DATABASE.
     let dropped = crate::sql_database_statements::dropped_database(&sanitized_query);
+    let audit_sql = sanitized_query.clone();
 
     let drv = driver_for(&saved_conn.params.driver).await?;
+    let audit_started_epoch_us = crate::audit_outbox::now_epoch_us();
     let task = tokio::spawn(async move {
         drv.execute_query(
             &params,
@@ -3992,6 +4283,25 @@ pub async fn execute_query<R: Runtime>(
                 "Query executed successfully, returned {} rows",
                 query_result.rows.len()
             );
+            if let Some(target) = &audit_target {
+                let event = crate::audit_outbox::AuditEvent::new(
+                    target,
+                    &audit_sql,
+                    audit_started_epoch_us,
+                    crate::audit_outbox::now_epoch_us(),
+                    crate::audit_outbox::AuditExecutionStatus::Success,
+                    query_result.affected_rows,
+                    "",
+                    None,
+                    None,
+                    None,
+                );
+                if let Err(error) = crate::audit_outbox::append_required(&app, &event) {
+                    log::error!(
+                        "Query succeeded but its audit event could not be persisted: {error}"
+                    );
+                }
+            }
             if let Some(database) = &dropped {
                 emit_database_dropped(&app, &connection_id, database);
             }
@@ -3999,11 +4309,50 @@ pub async fn execute_query<R: Runtime>(
         }
         Ok(Err(e)) => {
             log::error!("Query execution failed: {}", e);
+            if let Some(target) = &audit_target {
+                let event = crate::audit_outbox::AuditEvent::new(
+                    target,
+                    &audit_sql,
+                    audit_started_epoch_us,
+                    crate::audit_outbox::now_epoch_us(),
+                    crate::audit_outbox::AuditExecutionStatus::Failed,
+                    0,
+                    &e,
+                    None,
+                    None,
+                    None,
+                );
+                if let Err(error) = crate::audit_outbox::append_required(&app, &event) {
+                    log::error!(
+                        "Query failed and its audit event could not be persisted: {error}; original error: {e}"
+                    );
+                }
+            }
             Err(e)
         }
         Err(_) => {
             log::warn!("Query was cancelled");
-            Err("Query cancelled".into())
+            let cancelled = "Query cancelled";
+            if let Some(target) = &audit_target {
+                let event = crate::audit_outbox::AuditEvent::new(
+                    target,
+                    &audit_sql,
+                    audit_started_epoch_us,
+                    crate::audit_outbox::now_epoch_us(),
+                    crate::audit_outbox::AuditExecutionStatus::Cancelled,
+                    0,
+                    cancelled,
+                    None,
+                    None,
+                    None,
+                );
+                if let Err(error) = crate::audit_outbox::append_required(&app, &event) {
+                    log::error!(
+                        "Query was cancelled but its audit event could not be persisted: {error}"
+                    );
+                }
+            }
+            Err(cancelled.into())
         }
     }
 }
@@ -4054,6 +4403,13 @@ pub async fn execute_query_batch<R: Runtime>(
     );
 
     let sanitized_queries: Vec<String> = queries.iter().map(|q| sanitize_user_query(q)).collect();
+    let audit_queries = sanitized_queries.clone();
+    let audit_event_ids: Vec<String> = sanitized_queries
+        .iter()
+        .map(|_| crate::audit_outbox::new_event_id())
+        .collect();
+    let audit_batch_id = batch_id.clone();
+    let audit_transaction_context_id = transaction_context_id.clone();
 
     // One entry per statement, computed before the spawn takes ownership of
     // `sanitized_queries`. Index-aligned with the results returned below, the
@@ -4064,6 +4420,7 @@ pub async fn execute_query_batch<R: Runtime>(
         .collect();
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let audit_target = crate::audit_outbox::audit_target(&saved_conn, schema.as_deref());
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let mut params = resolve_connection_params_with_identity(
@@ -4073,29 +4430,57 @@ pub async fn execute_query_batch<R: Runtime>(
     )?;
     params.rollback_unsupported_policy = rollback_unsupported_policy;
     params.transaction_context_id = transaction_context_id;
-    params.allow_implicit_transaction_commit =
-        allow_implicit_transaction_commit.unwrap_or(false);
+    params.allow_implicit_transaction_commit = allow_implicit_transaction_commit.unwrap_or(false);
 
     let drv = driver_for(&saved_conn.params.driver).await?;
 
     // Build a Tauri-agnostic progress sink the driver invokes per statement.
-    // Each invocation emits one event so result tabs resolve as they finish.
+    // Audit persistence is attempted before the UI event is emitted so the
+    // callback cannot report an executed statement while silently dropping its
+    // durable audit identity.
+    let audited_statement_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let progress: Option<Arc<crate::drivers::driver_trait::BatchProgressFn>> =
-        batch_id.map(|bid| {
+        if audit_target.is_some() || batch_id.is_some() {
             let app = app.clone();
+            let target = audit_target.clone();
+            let queries = audit_queries.clone();
+            let event_ids = audit_event_ids.clone();
+            let audit_batch_id = audit_batch_id.clone();
+            let transaction_context_id = audit_transaction_context_id.clone();
+            let ui_batch_id = batch_id.clone();
+            let completed = audited_statement_count.clone();
             let cb: Arc<crate::drivers::driver_trait::BatchProgressFn> =
                 Arc::new(move |index, statement: &BatchStatementResult| {
+                    if let Some(target) = &target {
+                        if crate::audit_outbox::persist_statement_outcome(
+                            &app,
+                            &event_ids[index],
+                            target,
+                            &queries[index],
+                            statement,
+                            audit_batch_id.as_deref(),
+                            index,
+                            transaction_context_id.as_deref(),
+                        )? {
+                            completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                    if let Some(bid) = &ui_batch_id {
                     let _ = app.emit(
                         "batch-statement-complete",
                         BatchStatementEvent {
-                            batch_id: &bid,
+                                batch_id: bid,
                             index,
                             statement,
                         },
                     );
+                    }
+                    Ok(())
                 });
-            cb
-        });
+            Some(cb)
+        } else {
+            None
+        };
 
     let task = tokio::spawn(async move {
         drv.execute_batch(
@@ -4138,12 +4523,43 @@ pub async fn execute_query_batch<R: Runtime>(
             Ok(batch_results)
         }
         Ok(Err(e)) => {
-            log::error!("Batch execution failed at setup: {}", e);
+            log::error!("Batch execution failed: {}", e);
             Err(e)
         }
-        Err(_) => {
+        Err(join_error) if join_error.is_cancelled() => {
             log::warn!("Batch was cancelled");
+            if let Some(target) = &audit_target {
+                let cancelled = "Query cancelled";
+                let finished_epoch_us = crate::audit_outbox::now_epoch_us();
+                let completed_count =
+                    audited_statement_count.load(std::sync::atomic::Ordering::Relaxed);
+                if completed_count < audit_queries.len() {
+                    let index = completed_count;
+                    let event = crate::audit_outbox::AuditEvent::with_planned_id(
+                        &audit_event_ids[index],
+                        target,
+                        &audit_queries[index],
+                        finished_epoch_us,
+                        finished_epoch_us,
+                        crate::audit_outbox::AuditExecutionStatus::Cancelled,
+                        0,
+                        cancelled,
+                        audit_batch_id.as_deref(),
+                        Some(index),
+                        audit_transaction_context_id.as_deref(),
+                    );
+                    crate::audit_outbox::append_required(&app, &event).map_err(|error| {
+                        format!(
+                            "Batch was cancelled but its audit event could not be persisted: {error}"
+                        )
+                    })?;
+                }
+            }
             Err("Query cancelled".into())
+        }
+        Err(join_error) => {
+            log::error!("Batch execution task failed: {join_error}");
+            Err(format!("Batch execution task failed: {join_error}"))
         }
     }
 }
@@ -4715,7 +5131,10 @@ pub async fn get_materialized_views<R: Runtime>(
     connection_id: String,
     schema: Option<String>,
 ) -> Result<Vec<crate::models::ViewInfo>, String> {
-    log::info!("Fetching materialized views for connection: {}", connection_id);
+    log::info!(
+        "Fetching materialized views for connection: {}",
+        connection_id
+    );
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
@@ -4979,10 +5398,7 @@ pub async fn rollback_transaction_context(
     connection_id: String,
     transaction_context_id: String,
 ) -> Result<bool, String> {
-    crate::drivers::mysql::rollback_transaction_context(
-        &connection_id,
-        &transaction_context_id,
-    )
+    crate::drivers::mysql::rollback_transaction_context(&connection_id, &transaction_context_id)
     .await
 }
 
@@ -5068,10 +5484,7 @@ pub async fn disconnect_connection<R: Runtime>(
     crate::health_check::unregister_connection(&connection_id).await;
 
     let native_cli_state = app.state::<Arc<crate::native_cli::NativeCliState>>();
-    crate::native_cli::close_connection_sessions(
-        native_cli_state.inner().as_ref(),
-        &connection_id,
-    );
+    crate::native_cli::close_connection_sessions(native_cli_state.inner().as_ref(), &connection_id);
 
     let transaction_cleanup =
         crate::drivers::mysql::rollback_connection_transactions(&connection_id).await;
@@ -5524,7 +5937,10 @@ pub(crate) fn reject_if_would_create_cycle(
             None => return Ok(()),
         }
     }
-    Err("Connection-group tree is deeper than the number of groups; refusing to modify it".to_string())
+    Err(
+        "Connection-group tree is deeper than the number of groups; refusing to modify it"
+            .to_string(),
+    )
 }
 
 #[tauri::command]
@@ -5548,8 +5964,11 @@ pub async fn delete_connection_group<R: Runtime>(
     let to_delete = crate::models::collect_group_subtree(&file.groups, &id);
 
     file.groups.retain(|g| !to_delete.contains(&g.id));
-    file.connections
-        .retain(|c| !c.group_id.as_ref().is_some_and(|gid| to_delete.contains(gid)));
+    file.connections.retain(|c| {
+        !c.group_id
+            .as_ref()
+            .is_some_and(|gid| to_delete.contains(gid))
+    });
 
     save_connections_and_invalidate(&app, &path, &file)?;
 
@@ -5672,8 +6091,7 @@ pub async fn export_connections_payload<R: Runtime>(
     // before password resolution so unselected credentials never leave the
     // keychain.
     if let Some(ids) = &connection_ids {
-        let selected: std::collections::HashSet<&str> =
-            ids.iter().map(String::as_str).collect();
+        let selected: std::collections::HashSet<&str> = ids.iter().map(String::as_str).collect();
         conn_file
             .connections
             .retain(|c| selected.contains(c.id.as_str()));

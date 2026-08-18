@@ -2,7 +2,7 @@ use std::sync::Arc;
 use crate::{
     commands::{
         expand_k8s_connection_params, expand_ssh_connection_params, find_connection_by_id,
-        resolve_connection_params_with_id,
+        resolve_connection_params_with_identity,
     },
     drivers::{driver_trait::DatabaseDriver, registry::get_driver},
     models::ColumnDefinition,
@@ -81,7 +81,10 @@ pub async fn execute_clipboard_import<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &req.connection_id)?;
     let expanded = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded = expand_k8s_connection_params(&app, &expanded).await?;
-    let params = resolve_connection_params_with_id(&expanded, &req.connection_id)?;
+    // With the name, so the DROP TABLE / CREATE TABLE / INSERT batches this
+    // import runs are journalled for recovery.
+    let params =
+        resolve_connection_params_with_identity(&expanded, &req.connection_id, &saved_conn.name)?;
     let drv: Arc<dyn DatabaseDriver> = get_driver(&saved_conn.params.driver)
         .await
         .ok_or_else(|| format!("Unsupported driver: {}", saved_conn.params.driver))?;

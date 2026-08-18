@@ -744,3 +744,50 @@ fn blocks_unproven_stored_or_udf_calls_that_can_hide_writes() {
         );
     }
 }
+
+#[test]
+fn online_ddl_execution_options_do_not_make_an_alter_multi_clause() {
+    // How every online DDL in a real change script is written. The trailing
+    // comma before ALGORITHM/LOCK used to read as "multi-clause", pushing a
+    // plain ADD COLUMN onto the whole-table-rebuild recovery path.
+    for sql in [
+        "ALTER TABLE `csr`.`biz_shop` ADD COLUMN `note` varchar(64) NULL, ALGORITHM=INSTANT",
+        "ALTER TABLE users ADD COLUMN note VARCHAR(255), ALGORITHM = INPLACE, LOCK = NONE",
+        "ALTER TABLE users ADD INDEX users_name_idx (name), ALGORITHM=INPLACE, LOCK=NONE",
+        "ALTER TABLE users ADD COLUMN note VARCHAR(255), LOCK=NONE",
+        "ALTER TABLE users ADD COLUMN note VARCHAR(255), ALGORITHM=COPY, WITH VALIDATION",
+    ] {
+        assert_eq!(
+            classify_for_rollback(sql).class,
+            ProtectionClass::SupportedDdl,
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn a_genuine_multi_clause_alter_is_still_fail_closed() {
+    // Two real column actions must stay blocked: only the execution hints
+    // are allowed to sit behind a top-level comma.
+    for sql in [
+        "ALTER TABLE users ADD COLUMN a INT, ADD COLUMN b INT",
+        "ALTER TABLE users ADD COLUMN a INT, DROP COLUMN b",
+        "ALTER TABLE users MODIFY COLUMN a INT, MODIFY COLUMN b INT",
+        "ALTER TABLE users ADD COLUMN a INT, ALGORITHM=INSTANT, ADD COLUMN b INT",
+    ] {
+        assert_ne!(
+            classify_for_rollback(sql).class,
+            ProtectionClass::SupportedDdl,
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn a_column_list_comma_is_not_a_clause_separator() {
+    // Commas inside parentheses were already handled; keep them that way.
+    assert_eq!(
+        classify_for_rollback("ALTER TABLE users ADD INDEX ix (a, b, c), ALGORITHM=INPLACE").class,
+        ProtectionClass::SupportedDdl
+    );
+}
