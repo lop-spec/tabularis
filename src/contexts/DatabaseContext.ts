@@ -51,8 +51,6 @@ export interface SavedConnection {
     k8s_connection_id?: string;
     rollback_protection_enabled?: boolean;
     startup_script?: string;
-    native_cli_path?: string;
-    native_cli_args?: string;
   };
   group_id?: string;
   sort_order?: number;

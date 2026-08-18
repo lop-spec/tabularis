@@ -1,17 +1,18 @@
 pub mod askpass;
+pub mod audit_outbox;
 pub mod backup;
 pub mod cli;
 pub mod clipboard_import;
 pub mod commands;
+pub mod config;
 pub mod connection_appearance;
-pub mod connection_import;
-pub mod connection_import_commands;
 #[cfg(test)]
 pub mod connection_appearance_tests;
-pub mod config;
 pub mod connection_cache;
 #[cfg(test)]
 pub mod connection_cache_tests;
+pub mod connection_import;
+pub mod connection_import_commands;
 pub mod connection_window;
 #[cfg(test)]
 pub mod connection_window_tests;
@@ -27,16 +28,12 @@ pub mod export;
 pub mod export_crypto;
 #[cfg(test)]
 pub mod export_import_tests;
-pub mod health_check;
 #[cfg(test)]
 pub mod group_tree_tests;
+pub mod health_check;
 pub mod json_viewer;
-pub mod keychain_utils;
-pub mod native_cli;
-pub mod recovery_history;
-pub mod results_window;
-pub mod rollback_sql;
 pub mod k8s_tunnel;
+pub mod keychain_utils;
 pub mod log_commands;
 pub mod logger;
 pub mod models;
@@ -52,14 +49,18 @@ pub mod preferences;
 pub mod query_history;
 #[cfg(test)]
 pub mod query_history_tests;
-pub mod sql_database_statements;
+pub mod recovery_history;
+pub mod results_window;
+pub mod rollback_sql;
 pub mod saved_queries;
 #[cfg(test)]
 pub mod saved_queries_tests;
-pub mod ssh_tunnel;
+pub mod session_vars;
+pub mod sql_database_statements;
 pub mod sqlite_database;
 #[cfg(test)]
 pub mod sqlite_database_tests;
+pub mod ssh_tunnel;
 pub mod task_manager;
 pub mod theme_commands;
 pub mod theme_models;
@@ -73,7 +74,7 @@ pub mod drivers {
     pub mod sqlite;
 }
 
-use logger::{create_log_buffer, init_logger, SharedLogBuffer};
+use logger::{SharedLogBuffer, create_log_buffer, init_logger};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
 
@@ -195,13 +196,21 @@ pub fn run() {
         .manage(std::sync::Arc::new(
             connection_cache::ConnectionCache::default(),
         ))
-        .manage(std::sync::Arc::new(native_cli::NativeCliState::default()))
         .manage(connection_import_commands::ImportEnvelopeCache::default())
         .manage(explain_import::PendingExplainFile::default())
         .manage(json_viewer::JsonViewerStore::default())
         .manage(results_window::ResultsWindowStore::default())
         .manage(query_history::QueryHistoryState::default())
         .setup(move |app| {
+            let audit_root =
+                audit_outbox::audit_root(&app.handle()).map_err(std::io::Error::other)?;
+            let audit_state =
+                audit_outbox::AuditState::new(audit_root).map_err(std::io::Error::other)?;
+            app.manage(std::sync::Arc::new(audit_state));
+            if !args.functional_test_audit_smoke {
+                audit_outbox::spawn_sync_worker(app.handle().clone());
+            }
+
             // Allow the SSH tunnel code (which runs without a Tauri context)
             // to bridge askpass prompts to the frontend.
             askpass::set_app_handle(app.handle().clone());
@@ -211,8 +220,40 @@ pub fn run() {
                 drivers::registry::register_driver(drivers::mysql::MysqlDriver::new()).await;
                 drivers::registry::register_driver(drivers::postgres::PostgresDriver::new()).await;
                 drivers::registry::register_driver(drivers::sqlite::SqliteDriver::new()).await;
-                native_cli::register_manifests().await;
             });
+
+            if args.functional_test_audit_smoke {
+                let handle = app.handle().clone();
+                let primary = args
+                    .functional_test_primary
+                    .clone()
+                    .ok_or_else(|| std::io::Error::other("missing functional-test primary ID"))?;
+                let fallback = args
+                    .functional_test_fallback
+                    .clone()
+                    .ok_or_else(|| std::io::Error::other("missing functional-test fallback ID"))?;
+                tauri::async_runtime::spawn(async move {
+                    let state = handle.state::<commands::QueryCancellationState>();
+                    let outcome = commands::run_functional_test_audit_smoke(
+                        handle.clone(),
+                        state,
+                        &primary,
+                        &fallback,
+                    )
+                    .await;
+                    let exit_code = match outcome {
+                        Ok(()) => {
+                            log::info!("Tabularis functional-test audit smoke completed");
+                            0
+                        }
+                        Err(error) => {
+                            log::error!("Tabularis functional-test audit smoke failed: {error}");
+                            1
+                        }
+                    };
+                    handle.exit(exit_code);
+                });
+            }
 
             // Start connection health-check ping loop.
             {
@@ -254,9 +295,7 @@ pub fn run() {
             // meant to be a dedicated plan viewer, not a full app launch.
             if let Some(path) = args.explain.clone() {
                 log::info!("CLI --explain received: {path}");
-                if let Err(e) =
-                    explain_import::spawn_visual_explain_window(app, Some(path))
-                {
+                if let Err(e) = explain_import::spawn_visual_explain_window(app, Some(path)) {
                     log::error!("Failed to open Visual Explain window: {e}");
                 }
                 // Close the default main window only AFTER visual-explain is
@@ -353,12 +392,8 @@ pub fn run() {
             commands::read_file_as_data_url,
             commands::execute_query,
             commands::execute_query_batch,
-            commands::start_native_cli_session,
-            commands::write_native_cli_session,
-            commands::resize_native_cli_session,
-            commands::interrupt_native_cli_session,
-            commands::clear_native_cli_output,
-            commands::close_native_cli_session,
+            commands::list_session_variables,
+            commands::clear_session_variables,
             commands::rollback_transaction_context,
             commands::get_server_now,
             commands::explain_query_plan,

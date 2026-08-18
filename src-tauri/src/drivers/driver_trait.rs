@@ -18,8 +18,10 @@ use crate::models::{
 /// immediately, instead of waiting for the whole batch to return. Pass `None`
 /// to run without progress reporting (the full `Vec` is still returned either
 /// way). Kept Tauri-agnostic so drivers stay decoupled from the event layer;
-/// the command layer supplies a closure that emits a Tauri event.
-pub type BatchProgressFn = dyn Fn(usize, &BatchStatementResult) + Send + Sync;
+/// the command layer supplies a closure that durably records the outcome and
+/// emits a Tauri event. A callback error stops the batch so an executed
+/// statement cannot be reported while its required audit record is missing.
+pub type BatchProgressFn = dyn Fn(usize, &BatchStatementResult) -> Result<(), String> + Send + Sync;
 
 /// SQL dialect declaration used by the frontend statement splitter
 /// (`src/utils/sqlSplitter/`) to pick per-dialect tokenizer rules:
@@ -156,10 +158,6 @@ pub struct DriverCapabilities {
     /// and render a PTY terminal in the existing results pane.
     #[serde(default)]
     pub console_only: bool,
-    /// Native CLI implementation selected for this connection. `None` keeps
-    /// the existing SQL editor/query-result behavior.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub native_cli: Option<String>,
     /// SQL dialect for the statement splitter / classifier. Plugins that
     /// omit the field fall back to `postgres` (matches pre-existing
     /// behavior shipped via the previous `postgreSplitterOptions`).
@@ -576,7 +574,7 @@ pub trait DatabaseDriver: Send + Sync {
             let outcome = self.execute_query(params, q, limit, page, schema).await;
             let res = BatchStatementResult::from_outcome(start, outcome);
             if let Some(cb) = on_progress {
-                cb(idx, &res);
+                cb(idx, &res)?;
             }
             results.push(res);
         }

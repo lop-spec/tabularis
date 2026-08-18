@@ -380,6 +380,9 @@ export function NotebookView({
           query: resolvedSql,
           limit: pageSize,
           page: 1,
+          // Cells of one notebook share the tab's session state, so a `SET`
+          // in an earlier cell still applies to the cells below it.
+          sessionContextId: tab.id,
           ...(cellSchema ? { schema: cellSchema } : {}),
         });
         const elapsed = performance.now() - start;
@@ -428,6 +431,7 @@ export function NotebookView({
       params,
       activeDriver,
       guardDangerousQuery,
+      tab.id,
     ],
   );
 
@@ -856,7 +860,6 @@ export function NotebookView({
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
       />
       <NotebookToolbar {...toolbarProps} />
       {showHistory && (

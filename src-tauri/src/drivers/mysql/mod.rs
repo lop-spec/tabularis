@@ -1261,7 +1261,75 @@ pub(crate) async fn acquire_mysql_conn(
             .await
             .map_err(|e| e.to_string())?;
     }
+    replay_session_preamble(&mut conn, params).await?;
     Ok(conn)
+}
+
+/// Re-applies the editor window's remembered `SET` statements on a freshly
+/// acquired connection (see `crate::session_vars`). Runs after the database is
+/// selected so a remembered statement can override anything the scope
+/// statement set.
+///
+/// A failure aborts the query instead of being logged and swallowed: a query
+/// whose `SET @cutoff` silently did not apply returns confidently wrong rows,
+/// which is worse than an error naming the statement that failed.
+async fn replay_session_preamble(
+    conn: &mut sqlx::MySqlConnection,
+    params: &ConnectionParams,
+) -> Result<(), String> {
+    let Some(preamble) = params.session_preamble.as_ref() else {
+        return Ok(());
+    };
+    use sqlx::Executor;
+    for statement in &preamble.setup {
+        conn.execute(sqlx::raw_sql(statement))
+            .await
+            .map_err(|e| format!("Failed to restore session statement `{statement}`: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Undoes what [`replay_session_preamble`] applied, then returns the connection
+/// to the pool.
+///
+/// Required for correctness, not tidiness: the pool hands this connection to
+/// every other window and to background metadata queries, and a leftover
+/// `SET @cutoff` would feed them a value they never set. Reading an undefined
+/// user variable yields NULL in MySQL, so assigning NULL restores exactly that;
+/// session settings go back to the server default.
+///
+/// If the undo fails the connection is dropped rather than returned, so a dirty
+/// session can never be handed to someone else — the pool just opens a fresh
+/// one.
+async fn release_session_scoped_conn(
+    mut conn: sqlx::pool::PoolConnection<sqlx::MySql>,
+    params: &ConnectionParams,
+) {
+    let Some(preamble) = params.session_preamble.as_ref() else {
+        return;
+    };
+    let mut assignments: Vec<String> = preamble
+        .user_variables
+        .iter()
+        .map(|name| format!("{name} = NULL"))
+        .collect();
+    assignments.extend(
+        preamble
+            .session_settings
+            .iter()
+            .map(|name| format!("@@session.{name} = DEFAULT")),
+    );
+    if assignments.is_empty() {
+        return;
+    }
+
+    use sqlx::Executor;
+    let undo = format!("SET {}", assignments.join(", "));
+    if let Err(error) = conn.execute(sqlx::raw_sql(&undo)).await {
+        log::warn!("Discarding connection: could not reset session state ({error})");
+        // `detach` takes the connection out of the pool; dropping it closes it.
+        drop(conn.detach());
+    }
 }
 
 /// Executes one statement on an already-acquired connection. Used by both
@@ -1435,7 +1503,9 @@ pub async fn execute_query(
     // `exec_on_mysql_conn` runs the user's SQL verbatim (no literal inlining),
     // so it only needs to know whether to use the text protocol.
     let text = TextProto::protocol_only(force_text_protocol(params));
-    exec_on_mysql_conn(&mut *conn, query, limit, page, text).await
+    let outcome = exec_on_mysql_conn(&mut *conn, query, limit, page, text).await;
+    release_session_scoped_conn(conn, params).await;
+    outcome
 }
 
 /// Runs a sequence of statements on a single pooled connection so that
@@ -1489,16 +1559,22 @@ pub async fn execute_batch(
     for (idx, q) in queries.iter().enumerate() {
         let start = std::time::Instant::now();
         let outcome = exec_on_mysql_conn(&mut *conn, q, limit, page, text).await;
-        let mut res =
-            crate::models::BatchStatementResult::from_outcome(start, outcome);
+        let mut res = crate::models::BatchStatementResult::from_outcome(start, outcome);
         if execute_unprotected {
             res.rollback_unprotected = Some(true);
         }
         if let Some(cb) = on_progress {
-            cb(idx, &res);
+            // The connection still carries this window's session state, so it
+            // must not go back to the pool dirty even when the callback aborts
+            // the batch.
+            if let Err(error) = cb(idx, &res) {
+                release_session_scoped_conn(conn, params).await;
+                return Err(error);
+            }
         }
         results.push(res);
     }
+    release_session_scoped_conn(conn, params).await;
     Ok(results)
 }
 
@@ -1665,7 +1741,6 @@ impl MysqlDriver {
                     triggers: true,
                     supports_ssl: true,
                     console_only: false,
-                    native_cli: None,
                     sql_dialect: SqlDialect::Mysql,
                 },
                 is_builtin: true,

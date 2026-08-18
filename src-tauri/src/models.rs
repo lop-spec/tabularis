@@ -216,6 +216,13 @@ pub struct ConnectionParams {
     /// to one physical connection across separate Run All invocations.
     #[serde(skip)]
     pub transaction_context_id: Option<String>,
+    /// Session statements (`SET @var`, `SET SESSION …`) the editor tab ran
+    /// earlier, replayed on whichever pooled connection serves this query so
+    /// they stay in force across separately executed statements, plus the names
+    /// the driver undoes before the connection returns to the pool. Injected
+    /// per call by `execute_query`/`execute_query_batch`; never persisted.
+    #[serde(skip)]
+    pub session_preamble: Option<crate::session_vars::SessionPreamble>,
     /// One-shot acknowledgement that a DDL statement may close the pinned
     /// transaction before the DDL is executed.
     #[serde(skip)]
@@ -270,14 +277,6 @@ pub struct ConnectionParams {
     /// pool hands out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub startup_script: Option<String>,
-    /// Optional absolute path to the native mongosh/redis-cli executable.
-    /// When absent, Tabularis resolves a bundled sidecar, app-data runtime,
-    /// environment override, then PATH.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub native_cli_path: Option<String>,
-    /// Additional native CLI flags parsed into direct argv (never a shell).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub native_cli_args: Option<String>,
     // Connection identity for stable pooling and user-facing rollback paths
     // (not persisted, set at runtime).
     #[serde(skip_serializing_if = "Option::is_none")]

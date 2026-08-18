@@ -11,6 +11,7 @@ interface RollbackRiskModalProps {
   onSkip: () => void;
   onExecuteUnprotected: () => void;
   onAllowImplicitCommit: () => void;
+  /** Seconds the action buttons stay disabled. Defaults to 0 (no countdown). */
   riskDelaySeconds?: number;
 }
 
@@ -21,7 +22,7 @@ export const RollbackRiskModal = ({
   onSkip,
   onExecuteUnprotected,
   onAllowImplicitCommit,
-  riskDelaySeconds = 5,
+  riskDelaySeconds = 0,
 }: RollbackRiskModalProps) => {
   const { t } = useTranslation();
   const [remaining, setRemaining] = useState(riskDelaySeconds);

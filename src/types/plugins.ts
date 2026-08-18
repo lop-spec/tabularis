@@ -46,8 +46,6 @@ export interface DriverCapabilities {
   readonly?: boolean;
   /** Native PTY console connection; skips schema discovery and SQL-only UI. */
   console_only?: boolean;
-  /** Native runtime used by this built-in console connection. */
-  native_cli?: "mongosh" | "redis-cli";
   /** Supports EXPLAIN / query plan visualization. When false, the Visual Explain UI is hidden for connections using this driver. Defaults to false. */
   explain?: boolean;
   /** Supports listing and managing database triggers. Defaults to false. */

@@ -271,7 +271,9 @@ pub async fn get_indexes(
             .await
             .map_err(|e| e.to_string())?;
 
-        let parsed_columns = index_sql.get(&name).map(|sql| parse_sqlite_index_columns(sql));
+        let parsed_columns = index_sql
+            .get(&name)
+            .map(|sql| parse_sqlite_index_columns(sql));
 
         for info in info_rows {
             let seqno: i32 = info.try_get("seqno").unwrap_or(0);
@@ -470,11 +472,7 @@ pub async fn delete_record(
         escape_identifier(table)
     ));
     sqlite_push_pk_where(&mut qb, pk_map)?;
-    let result = qb
-        .build()
-        .execute(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let result = qb.build().execute(&pool).await.map_err(|e| e.to_string())?;
     Ok(result.rows_affected())
 }
 
@@ -742,7 +740,7 @@ pub async fn execute_batch(
         let outcome = exec_on_sqlite_conn(&mut *conn, q, limit, page).await;
         let res = crate::models::BatchStatementResult::from_outcome(start, outcome);
         if let Some(cb) = on_progress {
-            cb(idx, &res);
+            cb(idx, &res)?;
         }
         results.push(res);
     }
@@ -865,7 +863,10 @@ pub async fn get_view_columns(
 }
 
 pub async fn get_triggers(params: &ConnectionParams) -> Result<Vec<TriggerInfo>, String> {
-    log::debug!("SQLite: Fetching triggers for database: {}", params.database);
+    log::debug!(
+        "SQLite: Fetching triggers for database: {}",
+        params.database
+    );
     let pool = get_sqlite_pool(params).await?;
     let rows = sqlx::query(
         "SELECT name, tbl_name, sql FROM sqlite_master WHERE type='trigger' ORDER BY name ASC",
@@ -923,13 +924,11 @@ pub async fn get_trigger_definition(
     trigger_name: &str,
 ) -> Result<String, String> {
     let pool = get_sqlite_pool(params).await?;
-    let row = sqlx::query(
-        "SELECT sql FROM sqlite_master WHERE type='trigger' AND name = ?",
-    )
-    .bind(trigger_name)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| format!("Failed to get trigger definition: {}", e))?;
+    let row = sqlx::query("SELECT sql FROM sqlite_master WHERE type='trigger' AND name = ?")
+        .bind(trigger_name)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| format!("Failed to get trigger definition: {}", e))?;
     let sql: String = row.try_get("sql").unwrap_or_default();
     Ok(sql)
 }
@@ -943,10 +942,7 @@ pub async fn create_trigger(params: &ConnectionParams, trigger_sql: &str) -> Res
     Ok(())
 }
 
-pub async fn drop_trigger(
-    params: &ConnectionParams,
-    trigger_name: &str,
-) -> Result<(), String> {
+pub async fn drop_trigger(params: &ConnectionParams, trigger_name: &str) -> Result<(), String> {
     let pool = get_sqlite_pool(params).await?;
     let sql = format!(
         "DROP TRIGGER IF EXISTS \"{}\"",
@@ -963,7 +959,9 @@ pub async fn drop_trigger(
 // Plugin wrapper
 // ============================================================
 
-use crate::drivers::driver_trait::{DatabaseDriver, DriverCapabilities, PluginManifest, SqlDialect};
+use crate::drivers::driver_trait::{
+    DatabaseDriver, DriverCapabilities, PluginManifest, SqlDialect,
+};
 use async_trait::async_trait;
 use std::collections::HashMap;
 
@@ -1007,7 +1005,6 @@ impl SqliteDriver {
                     triggers: true,
                     supports_ssl: false,
                     console_only: false,
-                    native_cli: None,
                     sql_dialect: SqlDialect::Sqlite,
                 },
                 is_builtin: true,
