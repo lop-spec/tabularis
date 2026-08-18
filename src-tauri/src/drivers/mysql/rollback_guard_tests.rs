@@ -1,7 +1,7 @@
 use super::rollback_guard::{
-    classify_for_rollback, complete_statement_without_database, locked_write_sql,
-    plan_batch_for_rollback, plan_batch_for_rollback_with_policy, plan_for_rollback,
-    review_batch_for_rollback, validate_pinned_transaction_structure,
+    classify_for_rollback, complete_statement_without_database, is_generated_column,
+    locked_write_sql, plan_batch_for_rollback, plan_batch_for_rollback_with_policy,
+    plan_for_rollback, review_batch_for_rollback, validate_pinned_transaction_structure,
     validate_transaction_structure, DmlPlan, ProtectedStatement, ProtectionClass, TemporaryPlan,
     TransactionPlan,
 };
@@ -790,4 +790,21 @@ fn a_column_list_comma_is_not_a_clause_separator() {
         classify_for_rollback("ALTER TABLE users ADD INDEX ix (a, b, c), ALGORITHM=INPLACE").class,
         ProtectionClass::SupportedDdl
     );
+}
+
+#[test]
+fn default_current_timestamp_is_not_a_generated_column() {
+    // MySQL puts EXTRA='DEFAULT_GENERATED' on any column declared
+    // `DEFAULT CURRENT_TIMESTAMP`, and appends 'on update CURRENT_TIMESTAMP'
+    // when that is set too. Testing EXTRA for the substring "GENERATED"
+    // therefore classified ordinary created_at / updated_at columns as
+    // generated, and an UPDATE assigning to one could not be protected at
+    // all — lop hit this on biz_kb_qa_v2_migration.updated_at, whose real
+    // GENERATION_EXPRESSION is empty.
+    for expression in ["", "   "] {
+        assert!(!is_generated_column(expression), "expression={expression:?}");
+    }
+    for expression in ["(`a` + `b`)", "(json_extract(`doc`,'$.id'))"] {
+        assert!(is_generated_column(expression), "expression={expression:?}");
+    }
 }

@@ -1354,7 +1354,8 @@ async fn build_table_restore(
     let column_rows = (&mut *backup)
         .fetch_all(
             sqlx::query(
-                "SELECT COLUMN_NAME, DATA_TYPE, EXTRA FROM information_schema.COLUMNS \
+                "SELECT COLUMN_NAME, DATA_TYPE, GENERATION_EXPRESSION \
+                 FROM information_schema.COLUMNS \
                  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
             )
             .bind(&backup_schema)
@@ -1367,8 +1368,12 @@ async fn build_table_restore(
     for row in &column_rows {
         let name = mysql_text(row, 0)?;
         let data_type = mysql_text(row, 1)?;
-        let extra = mysql_text(row, 2)?.to_ascii_uppercase();
-        if extra.contains("GENERATED") {
+        // Only a real generated column has an expression. EXTRA is not usable
+        // here: `DEFAULT CURRENT_TIMESTAMP` sets it to `DEFAULT_GENERATED`,
+        // which would drop every created_at/updated_at from the restore and
+        // silently lose those values.
+        let generation_expression = mysql_text(row, 2).unwrap_or_default();
+        if !generation_expression.trim().is_empty() {
             generated.push(name);
             continue;
         }

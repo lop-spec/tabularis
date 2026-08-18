@@ -1005,6 +1005,8 @@ async fn execute_pinned_protected_batch(
                 }
             }
 
+            // Set when a DML statement had to run without an exact inverse.
+            let mut degraded: Option<String> = None;
             let mut outcome = match plan {
                 ProtectedStatement::ReadOnly
                 | ProtectedStatement::Session(_)
@@ -1091,6 +1093,7 @@ async fn execute_pinned_protected_batch(
                                 .as_mut()
                                 .expect("write batches always have a recovery journal"),
                             text,
+                            &mut degraded,
                         )
                         .await
                     } else {
@@ -1106,6 +1109,7 @@ async fn execute_pinned_protected_batch(
                                 .as_mut()
                                 .expect("write batches always have a recovery journal"),
                             text,
+                            &mut degraded,
                         )
                         .await
                     }
@@ -1217,6 +1221,9 @@ async fn execute_pinned_protected_batch(
                 stopped = true;
             }
             let mut result = BatchStatementResult::from_outcome(start, outcome);
+            if degraded.take().is_some() {
+                result.rollback_unprotected = Some(true);
+            }
             if matches!(plan, ProtectedStatement::Unsupported(_)) {
                 result.rollback_unprotected = Some(true);
             }
@@ -1389,6 +1396,8 @@ async fn execute_single_run_protected_batch(
             results.push(result);
             continue;
         }
+        // Set when a DML statement had to run without an exact inverse.
+        let mut degraded: Option<String> = None;
         let mut outcome = match plan {
             ProtectedStatement::ReadOnly
                 | ProtectedStatement::Session(_)
@@ -1457,6 +1466,7 @@ async fn execute_single_run_protected_batch(
                                 .as_mut()
                                 .expect("write batches always have a recovery journal"),
                             text,
+                            &mut degraded,
                         )
                         .await
                     } else {
@@ -1472,6 +1482,7 @@ async fn execute_single_run_protected_batch(
                                 .as_mut()
                                 .expect("write batches always have a recovery journal"),
                             text,
+                            &mut degraded,
                         )
                         .await
                     }
@@ -1533,6 +1544,9 @@ async fn execute_single_run_protected_batch(
             stopped = true;
         }
         let mut result = BatchStatementResult::from_outcome(start, outcome);
+        if degraded.take().is_some() {
+            result.rollback_unprotected = Some(true);
+        }
         result.rollback_file = rollback_path.clone();
         if let Some(callback) = on_progress {
             callback(index, &result)?;
@@ -1609,6 +1623,7 @@ async fn execute_protected_dml(
     rollback_journal: &mut RollbackJournal,
     recovery_journal: &mut RecoveryJournal,
     text: super::TextProto,
+    degraded: &mut Option<String>,
 ) -> Result<QueryResult, String> {
     let rollback_checkpoint = rollback_journal.checkpoint();
     let recovery_checkpoint = recovery_journal.checkpoint();
@@ -1624,6 +1639,7 @@ async fn execute_protected_dml(
         rollback_journal,
         recovery_journal,
         text,
+        degraded,
     )
     .await;
 
@@ -1659,6 +1675,19 @@ async fn execute_protected_dml(
     }
 }
 
+/// Marks an error as "this statement is real, but no exact inverse can be
+/// built for it" — as opposed to a syntax error, a lock timeout, or a dead
+/// connection, which must still abort the batch.
+///
+/// Only column-shape checks use it. Resource limits (the capture row cap) stay
+/// fail-closed: degrading there would mean silently running a write we
+/// deliberately refused to size.
+pub(super) const UNPROTECTABLE: &str = "TABULARIS_UNPROTECTABLE:";
+
+pub(super) fn unprotectable_reason(error: &str) -> Option<&str> {
+    error.strip_prefix(UNPROTECTABLE)
+}
+
 async fn execute_protected_dml_body(
     conn: &mut sqlx::MySqlConnection,
     query: &str,
@@ -1667,6 +1696,7 @@ async fn execute_protected_dml_body(
     rollback_journal: &mut RollbackJournal,
     recovery_journal: &mut RecoveryJournal,
     text: super::TextProto,
+    degraded: &mut Option<String>,
 ) -> Result<QueryResult, String> {
     let outcome = match plan {
         DmlPlan::Insert(plan) => {
@@ -1706,7 +1736,42 @@ async fn execute_protected_dml_body(
             .await
         }
     };
-    outcome
+
+    // The statement is legitimate, only its inverse is not derivable. Refusing
+    // it means a valid UPDATE simply cannot run while protection is on, which
+    // is worse than running it with the loss of exactness recorded. The row
+    // images are gone either way; what we keep is the record that the table
+    // was touched, so the backup-based restore can still reach it.
+    let Err(error) = &outcome else {
+        return outcome;
+    };
+    let Some(reason) = unprotectable_reason(error) else {
+        return outcome;
+    };
+    let reason = reason.to_string();
+    log::warn!("Degrading to an unprotected run: {reason}");
+
+    let result = super::exec_on_mysql_conn(conn, query, None, 1, text).await?;
+    let (operation, objects) = crate::recovery_history::parse_change_objects(query);
+    recovery_journal.add_statement(crate::recovery_history::RecoveryStatement {
+        id: String::new(),
+        index: statement_index,
+        executed_at: String::new(),
+        sql: query.trim().to_string(),
+        category: "unprotected".to_string(),
+        operation,
+        objects,
+        affected_columns: Vec::new(),
+        condition: None,
+        columns: Vec::new(),
+        primary_key: Vec::new(),
+        before_rows: Vec::new(),
+        after_rows: Vec::new(),
+        inverse_sql: None,
+        exact: false,
+    })?;
+    *degraded = Some(reason);
+    Ok(result)
 }
 
 async fn execute_insert(
@@ -1815,16 +1880,18 @@ async fn execute_update(
     for assigned in &plan.assigned_columns {
         let column = metadata
             .column(assigned)
-            .ok_or_else(|| format!("UPDATE references unknown column {assigned}"))?;
+            .ok_or_else(|| {
+                format!("{UNPROTECTABLE}UPDATE references unknown column {assigned}")
+            })?;
         if column.generated {
             return Err(format!(
-                "UPDATE of generated column {} cannot be rollback-protected",
+                "{UNPROTECTABLE}UPDATE of generated column {} cannot be rollback-protected",
                 column.name
             ));
         }
         if metadata.is_primary_key(&column.name) {
             return Err(format!(
-                "UPDATE of primary-key column {} is fail-closed because row identity would change",
+                "{UNPROTECTABLE}UPDATE of primary-key column {} cannot be rollback-protected because row identity would change",
                 column.name
             ));
         }
@@ -2196,6 +2263,18 @@ struct ColumnMetadata {
     auto_increment: bool,
 }
 
+/// Whether an `information_schema.COLUMNS` row describes a generated column.
+///
+/// Keyed on GENERATION_EXPRESSION rather than EXTRA. MySQL writes
+/// `DEFAULT_GENERATED` into EXTRA for any column declared
+/// `DEFAULT CURRENT_TIMESTAMP`, so testing EXTRA for the substring "GENERATED"
+/// classified ordinary `created_at` / `updated_at` columns as generated and
+/// refused to rollback-protect an UPDATE that assigned to one. A real
+/// generated column always carries an expression; an ordinary one never does.
+pub(super) fn is_generated_column(generation_expression: &str) -> bool {
+    !generation_expression.trim().is_empty()
+}
+
 #[derive(Debug, Clone)]
 struct TableMetadata {
     schema: String,
@@ -2292,8 +2371,14 @@ async fn load_table_metadata(
         .try_get::<Option<u64>, _>(2)
         .map_err(|error| error.to_string())?;
 
+    // GENERATION_EXPRESSION, not EXTRA, decides whether a column is generated.
+    // MySQL puts `DEFAULT_GENERATED` in EXTRA for any column with
+    // `DEFAULT CURRENT_TIMESTAMP`, so matching on the substring "GENERATED"
+    // classified ordinary `created_at` / `updated_at` columns as generated and
+    // refused to protect an UPDATE that touched them. Only a real generated
+    // column carries an expression here.
     let column_sql = format!(
-        "SELECT COLUMN_NAME, DATA_TYPE, EXTRA \
+        "SELECT COLUMN_NAME, DATA_TYPE, EXTRA, GENERATION_EXPRESSION \
          FROM information_schema.COLUMNS \
          WHERE TABLE_SCHEMA = {} AND TABLE_NAME = {} \
          ORDER BY ORDINAL_POSITION",
@@ -2309,10 +2394,12 @@ async fn load_table_metadata(
         let name = mysql_text(&row, 0)?;
         let data_type = mysql_text(&row, 1)?;
         let extra = mysql_text(&row, 2)?;
+        // NULL for ordinary columns, the expression text for generated ones.
+        let generation_expression = mysql_text(&row, 3).unwrap_or_default();
         columns.push(ColumnMetadata {
             name,
             data_type,
-            generated: extra.to_ascii_uppercase().contains("GENERATED"),
+            generated: is_generated_column(&generation_expression),
             auto_increment: extra.to_ascii_uppercase().contains("AUTO_INCREMENT"),
         });
     }
@@ -2456,10 +2543,12 @@ fn validate_insert_columns(plan: &InsertPlan, metadata: &TableMetadata) -> Resul
         }
         let metadata_column = metadata
             .column(column)
-            .ok_or_else(|| format!("INSERT references unknown column {column}"))?;
+            .ok_or_else(|| {
+                format!("{UNPROTECTABLE}INSERT references unknown column {column}")
+            })?;
         if metadata_column.generated {
             return Err(format!(
-                "INSERT into generated column {} cannot be rollback-protected",
+                "{UNPROTECTABLE}INSERT into generated column {} cannot be rollback-protected",
                 metadata_column.name
             ));
         }
