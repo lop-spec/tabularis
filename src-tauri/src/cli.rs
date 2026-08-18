@@ -17,6 +17,16 @@ pub struct Args {
     /// (Postgres `EXPLAIN (FORMAT JSON)` output).
     #[arg(long, value_name = "FILE")]
     pub explain: Option<String>,
+
+    /// Run the guarded 13309 → 13305 → read-only SQL audit smoke and exit.
+    #[arg(long, hide = true, requires_all = ["functional_test_primary", "functional_test_fallback"])]
+    pub functional_test_audit_smoke: bool,
+
+    #[arg(long, hide = true, value_name = "CONNECTION_ID")]
+    pub functional_test_primary: Option<String>,
+
+    #[arg(long, hide = true, value_name = "CONNECTION_ID")]
+    pub functional_test_fallback: Option<String>,
 }
 
 impl Args {
@@ -24,6 +34,9 @@ impl Args {
         Self {
             debug: false,
             explain: None,
+            functional_test_audit_smoke: false,
+            functional_test_primary: None,
+            functional_test_fallback: None,
         }
     }
 }

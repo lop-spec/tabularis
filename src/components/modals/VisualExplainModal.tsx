@@ -23,6 +23,10 @@ interface VisualExplainModalProps {
   query: string;
   connectionId: string;
   schema?: string;
+  /// Editor tab the query belongs to. Passed through so the plan is produced
+  /// with that tab's session statements (`SET @var`) in force, exactly as
+  /// running the query would.
+  sessionContextId?: string;
   /// Display label to use when the connection isn't loaded in the active
   /// database context. Falls back
   /// to the live connection name if available, then to `connectionId`.
@@ -35,6 +39,7 @@ export const VisualExplainModal = ({
   query,
   connectionId,
   schema,
+  sessionContextId,
   connectionLabel,
 }: VisualExplainModalProps) => {
   const { t } = useTranslation();
@@ -82,6 +87,7 @@ export const VisualExplainModal = ({
         query,
         analyze,
         schema: schema || null,
+        sessionContextId: sessionContextId ?? null,
       });
       const parsedPlan = resolveExplainOutput(result);
       setPlan(parsedPlan);
@@ -91,7 +97,7 @@ export const VisualExplainModal = ({
     } finally {
       setIsLoading(false);
     }
-  }, [query, connectionId, analyze, schema, t]);
+  }, [query, connectionId, analyze, schema, sessionContextId, t]);
 
   useEffect(() => {
     if (isOpen && query?.trim() && connectionId) {

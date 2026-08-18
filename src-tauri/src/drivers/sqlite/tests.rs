@@ -1,10 +1,11 @@
 use super::sqlite_push_pk_where;
 use super::{
-    alter_view, create_view, drop_view, get_indexes, get_view_columns, get_view_definition,
-    get_views, parse_sqlite_index_columns,
+    alter_view, create_view, drop_view, execute_batch, get_indexes, get_view_columns,
+    get_view_definition, get_views, parse_sqlite_index_columns,
 };
 use crate::models::{ConnectionParams, DatabaseSelection};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use std::sync::{Arc, Mutex};
 use tempfile::NamedTempFile;
 
 async fn setup_test_db() -> (ConnectionParams, NamedTempFile) {
@@ -47,6 +48,87 @@ async fn setup_test_db() -> (ConnectionParams, NamedTempFile) {
 
     // We return the file handle too so it doesn't get deleted until the test ends
     (params, file)
+}
+
+#[tokio::test]
+async fn batch_reports_success_failure_and_real_indexes() {
+    let (params, _file) = setup_test_db().await;
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let callback_observed = Arc::clone(&observed);
+    let callback = move |index: usize, statement: &crate::models::BatchStatementResult| {
+        callback_observed.lock().unwrap().push((
+            index,
+            statement.result.is_some(),
+            statement.error.is_some(),
+        ));
+        Ok(())
+    };
+    let queries = [
+        "INSERT INTO users (name) VALUES ('Carol')",
+        "INSERT INTO missing_table (name) VALUES ('blocked')",
+        "SELECT COUNT(*) AS total FROM users",
+    ]
+    .map(str::to_string);
+
+    let results = execute_batch(&params, &queries, None, 1, Some(&callback))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *observed.lock().unwrap(),
+        vec![(0, true, false), (1, false, true), (2, true, false)]
+    );
+    assert_eq!(results.len(), 3);
+    assert_eq!(results[0].result.as_ref().unwrap().affected_rows, 1);
+    assert!(results[1]
+        .error
+        .as_deref()
+        .is_some_and(|error| error.contains("missing_table")));
+    assert_eq!(results[2].result.as_ref().unwrap().rows.len(), 1);
+
+    crate::pool_manager::close_pool(&params).await;
+}
+
+#[tokio::test]
+async fn callback_failure_stops_following_statements_without_retrying_completed_work() {
+    let (params, _file) = setup_test_db().await;
+    let callback_indexes = Arc::new(Mutex::new(Vec::new()));
+    let callback_observed = Arc::clone(&callback_indexes);
+    let callback = move |index: usize, _statement: &crate::models::BatchStatementResult| {
+        callback_observed.lock().unwrap().push(index);
+        if index == 0 {
+            Err("audit append failed".to_string())
+        } else {
+            Ok(())
+        }
+    };
+    let queries = [
+        "INSERT INTO users (name) VALUES ('audit-once')",
+        "INSERT INTO users (name) VALUES ('must-not-run')",
+    ]
+    .map(str::to_string);
+
+    let error = execute_batch(&params, &queries, None, 1, Some(&callback))
+        .await
+        .unwrap_err();
+    assert_eq!(error, "audit append failed");
+    assert_eq!(*callback_indexes.lock().unwrap(), vec![0]);
+
+    let pool = crate::pool_manager::get_sqlite_pool(&params).await.unwrap();
+    let audit_once_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE name = 'audit-once'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let not_run_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE name = 'must-not-run'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(audit_once_count, 1);
+    assert_eq!(not_run_count, 0);
+
+    crate::pool_manager::close_pool(&params).await;
 }
 
 #[test]

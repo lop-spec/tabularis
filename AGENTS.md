@@ -9,10 +9,16 @@ Adhere to the rules defined in the [rules directory](./.rules/):
 - [Modal Styling Rules](./.rules/modals.md) (Modal component structure and styling)
 - [Testing Conventions](./.rules/testing.md) (Test file organization and structure)
 
+### Database connection safety for functional testing
+
+- Tabularis functional tests may connect only to `192.0.2.130:13309` or `192.0.2.130:13305`. Connecting to any other host or port for functional testing is prohibited.
+- Always test `192.0.2.130:13309` first.
+- Use `192.0.2.130:13305` only after `13309` is explicitly confirmed to be nonexistent or unavailable with reproducible evidence; an untested or uncertain state is not sufficient.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **tabularis** (10537 symbols, 25156 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **tabularis-upstream-merge** (10125 symbols, 24716 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -36,10 +42,10 @@ This project is indexed by GitNexus as **tabularis** (10537 symbols, 25156 relat
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/tabularis/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/tabularis/clusters` | All functional areas |
-| `gitnexus://repo/tabularis/processes` | All execution flows |
-| `gitnexus://repo/tabularis/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/tabularis-upstream-merge/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/tabularis-upstream-merge/clusters` | All functional areas |
+| `gitnexus://repo/tabularis-upstream-merge/processes` | All execution flows |
+| `gitnexus://repo/tabularis-upstream-merge/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

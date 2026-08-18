@@ -12,6 +12,22 @@ rust-version = "1.77.2"
 name = "tabularis_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[profile.devfast]
+inherits = "release"
+# The app crate itself is glue; O1 keeps its rebuild fast. The hot paths
+# (sqlx, tokio, serde, sql parsing) live in dependencies, which stay at O3
+# below and are compiled once. Same definition as the tabularis-native-cli-ssh
+# tree, so the dev launcher can run either build the same way.
+opt-level = 1
+lto = false
+codegen-units = 16
+incremental = true
+debug = 1
+strip = false
+
+[profile.devfast.package."*"]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true

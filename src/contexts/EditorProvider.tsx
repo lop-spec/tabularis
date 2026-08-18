@@ -49,7 +49,10 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     tabsRef.current = tabs;
   }, [tabs]);
 
-  const rollbackTransactionContexts = useCallback((closingTabs: Tab[]) => {
+  // Releases everything the backend holds for a tab: its pinned transaction and
+  // the session statements (`SET @var`) replayed for its queries. Both are keyed
+  // by tab id and would otherwise outlive the tab that owns them.
+  const releaseTabServerState = useCallback((closingTabs: Tab[]) => {
     for (const tab of closingTabs) {
       void invoke<boolean>("rollback_transaction_context", {
         connectionId: tab.connectionId,
@@ -57,6 +60,15 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
       }).catch((error) => {
         console.error(
           `Failed to release transaction context ${tab.connectionId}/${tab.id}:`,
+          error,
+        );
+      });
+      void invoke("clear_session_variables", {
+        connectionId: tab.connectionId,
+        sessionContextId: tab.id,
+      }).catch((error) => {
+        console.error(
+          `Failed to clear session variables ${tab.connectionId}/${tab.id}:`,
           error,
         );
       });
@@ -146,11 +158,11 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const handleBeforeUnload = () => {
       flushAllPendingSaves();
-      rollbackTransactionContexts(tabsRef.current);
+      releaseTabServerState(tabsRef.current);
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [rollbackTransactionContexts]);
+  }, [releaseTabServerState]);
 
   // Save tabs to file storage when they change
   useEffect(() => {
@@ -247,7 +259,7 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
       // Flush and evict notebook cache for the closed tab
       const closedTab = tabsRef.current.find((t) => t.id === id);
       if (closedTab) {
-        rollbackTransactionContexts([closedTab]);
+        releaseTabServerState([closedTab]);
       }
       if (closedTab?.notebookId) {
         evictFromCache(closedTab.notebookId);
@@ -274,12 +286,12 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         return newTabs;
       });
     },
-    [activeConnectionId, activeTabId, rollbackTransactionContexts],
+    [activeConnectionId, activeTabId, releaseTabServerState],
   );
 
   const closeAllTabs = useCallback(() => {
     if (!activeConnectionId) return;
-    rollbackTransactionContexts(
+    releaseTabServerState(
       tabsRef.current.filter((tab) => tab.connectionId === activeConnectionId),
     );
     setTabs((prev) => {
@@ -293,12 +305,12 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
       }));
       return newTabs;
     });
-  }, [activeConnectionId, rollbackTransactionContexts]);
+  }, [activeConnectionId, releaseTabServerState]);
 
   const closeOtherTabs = useCallback(
     (id: string) => {
       if (!activeConnectionId) return;
-      rollbackTransactionContexts(
+      releaseTabServerState(
         tabsRef.current.filter(
           (tab) => tab.connectionId === activeConnectionId && tab.id !== id,
         ),
@@ -316,7 +328,7 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         return newTabs;
       });
     },
-    [activeConnectionId, rollbackTransactionContexts],
+    [activeConnectionId, releaseTabServerState],
   );
 
   const closeTabsToLeftInternal = useCallback(
@@ -329,7 +341,7 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         activeTabId,
       ).newTabs;
       const retained = new Set(preview.map((tab) => tab.id));
-      rollbackTransactionContexts(
+      releaseTabServerState(
         tabsRef.current.filter(
           (tab) =>
             tab.connectionId === activeConnectionId && !retained.has(tab.id),
@@ -351,7 +363,7 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         return newTabs;
       });
     },
-    [activeConnectionId, activeTabId, rollbackTransactionContexts],
+    [activeConnectionId, activeTabId, releaseTabServerState],
   );
 
   const closeTabsToRightInternal = useCallback(
@@ -364,7 +376,7 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         activeTabId,
       ).newTabs;
       const retained = new Set(preview.map((tab) => tab.id));
-      rollbackTransactionContexts(
+      releaseTabServerState(
         tabsRef.current.filter(
           (tab) =>
             tab.connectionId === activeConnectionId && !retained.has(tab.id),
@@ -386,7 +398,7 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         return newTabs;
       });
     },
-    [activeConnectionId, activeTabId, rollbackTransactionContexts],
+    [activeConnectionId, activeTabId, releaseTabServerState],
   );
 
   const updateTab = useCallback((id: string, partial: Partial<Tab>) => {

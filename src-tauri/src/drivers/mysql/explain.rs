@@ -13,7 +13,6 @@
 
 use super::helpers::{mysql_row_str, mysql_row_str_opt};
 use crate::models::{ConnectionParams, ExplainQueryOutput, RawExplainOutput};
-use crate::pool_manager::get_mysql_pool;
 use sqlx::{Column, Row};
 
 /// Server capabilities detected via `SELECT VERSION()`.
@@ -76,38 +75,42 @@ fn raw_output(format: &str, payload: String, query: &str) -> ExplainQueryOutput 
     }
 }
 
+/// Explains `query`, with the calling window's session statements in force.
+///
+/// Every variant runs on one connection taken through `acquire_mysql_conn`, so
+/// a plan for a query that reads `@cutoff` is produced with the same variables
+/// executing it would see; the connection is handed back clean.
 pub async fn explain_query(
     params: &ConnectionParams,
     query: &str,
     analyze: bool,
     schema: Option<&str>,
 ) -> Result<ExplainQueryOutput, String> {
-    let effective_params;
-    let pool = if let Some(db) = schema {
-        effective_params = {
-            let mut p = params.clone();
-            p.database = crate::models::DatabaseSelection::Single(db.to_string());
-            p
-        };
-        get_mysql_pool(&effective_params).await?
-    } else {
-        get_mysql_pool(params).await?
-    };
+    let mut conn = super::acquire_mysql_conn(params, schema).await?;
+    let outcome = explain_on_conn(&mut conn, params, query, analyze).await;
+    super::release_session_scoped_conn(conn, params).await;
+    outcome
+}
 
+async fn explain_on_conn(
+    conn: &mut sqlx::MySqlConnection,
+    params: &ConnectionParams,
+    query: &str,
+    analyze: bool,
+) -> Result<ExplainQueryOutput, String> {
     // Behind a bastion that rejects prepared statements, EXPLAIN variants must
     // run over the text protocol (COM_QUERY) — see `super::force_text_protocol`.
     let text = super::force_text_protocol(params);
 
     // Detect server version to skip unsupported EXPLAIN variants
     let caps = {
-        let mut vc = pool.acquire().await.map_err(|e| e.to_string())?;
         let ver_row = if text {
             use sqlx::Executor;
-            (&mut *vc)
+            (&mut *conn)
                 .fetch_one(sqlx::raw_sql("SELECT VERSION()"))
                 .await
         } else {
-            sqlx::query("SELECT VERSION()").fetch_one(&mut *vc).await
+            sqlx::query("SELECT VERSION()").fetch_one(&mut *conn).await
         }
         .ok();
         let ver_str: String = ver_row.and_then(|r| r.try_get(0).ok()).unwrap_or_default();
@@ -117,7 +120,6 @@ pub async fn explain_query(
 
     // EXPLAIN ANALYZE — MySQL 8.0.18+ text tree with estimated + actual data
     if analyze && caps.supports_explain_analyze {
-        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
         let analyze_sql = format!("EXPLAIN ANALYZE {}", query);
         let analyze_res = if text {
             use sqlx::Executor;
@@ -142,7 +144,6 @@ pub async fn explain_query(
     // ANALYZE FORMAT=JSON — MariaDB 10.1+ (executes the query and returns JSON
     // with both estimated and r_* actual fields)
     if analyze && caps.supports_analyze_format {
-        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
         let maria_sql = format!("ANALYZE FORMAT=JSON {}", query);
         let maria_res = if text {
             use sqlx::Executor;
@@ -162,7 +163,6 @@ pub async fn explain_query(
 
     // EXPLAIN FORMAT=JSON — MySQL 5.6+ / MariaDB 10.1+
     if caps.supports_json_format {
-        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
         let json_sql = format!("EXPLAIN FORMAT=JSON {}", query);
         let json_result: Result<String, String> = async {
             let row = if text {
@@ -184,7 +184,6 @@ pub async fn explain_query(
     }
 
     // Tabular fallback — works on all MySQL/MariaDB versions
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let explain_sql = format!("EXPLAIN {}", query);
     let rows = if text {
         use sqlx::Executor;

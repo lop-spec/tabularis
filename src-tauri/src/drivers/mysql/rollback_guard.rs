@@ -239,9 +239,15 @@ pub(super) fn plan_for_rollback(sql: &str) -> Result<ProtectedStatement, Blocked
         "SET" => classify_set(tokens),
         "USE" => Ok(ProtectedStatement::Session(SessionPlan::ScopeChange)),
         "START" | "BEGIN" | "COMMIT" | "ROLLBACK" => classify_transaction_control(tokens),
-        "INSERT" => parse_insert(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Insert(plan))),
-        "UPDATE" => parse_update(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Update(plan))),
-        "DELETE" => parse_delete(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Delete(plan))),
+        "INSERT" => {
+            parse_insert(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Insert(plan)))
+        }
+        "UPDATE" => {
+            parse_update(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Update(plan)))
+        }
+        "DELETE" => {
+            parse_delete(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Delete(plan)))
+        }
         "CREATE"
             if tokens
                 .get(1)
@@ -266,14 +272,12 @@ pub(super) fn plan_for_rollback(sql: &str) -> Result<ProtectedStatement, Blocked
         "REPLACE" | "LOAD" | "MERGE" => Err(BlockedStatement::unsupported(
             "this DML family cannot be mapped to an exact row set before execution",
         )),
-        "CALL" | "DO" | "PREPARE" | "EXECUTE" | "DEALLOCATE" => {
-            Err(BlockedStatement::unsupported(
-                "stored or dynamic SQL is forbidden because its write set is not statically provable",
-            ))
-        }
-        "GRANT" | "REVOKE" | "ANALYZE" | "OPTIMIZE" | "REPAIR" | "INSTALL"
-        | "UNINSTALL" | "IMPORT" | "FLUSH" | "RESET" | "LOCK" | "UNLOCK"
-        | "SAVEPOINT" | "RELEASE" | "XA" | "KILL" | "SHUTDOWN" | "CLONE" => Err(BlockedStatement::unsupported(
+        "CALL" | "DO" | "PREPARE" | "EXECUTE" | "DEALLOCATE" => Err(BlockedStatement::unsupported(
+            "stored or dynamic SQL is forbidden because its write set is not statically provable",
+        )),
+        "GRANT" | "REVOKE" | "ANALYZE" | "OPTIMIZE" | "REPAIR" | "INSTALL" | "UNINSTALL"
+        | "IMPORT" | "FLUSH" | "RESET" | "LOCK" | "UNLOCK" | "SAVEPOINT" | "RELEASE" | "XA"
+        | "KILL" | "SHUTDOWN" | "CLONE" => Err(BlockedStatement::unsupported(
             "administrative, transaction-control, or server-state statements are forbidden in rollback protection mode",
         )),
         _ => Err(BlockedStatement::unsupported(format!(
@@ -748,6 +752,36 @@ pub(super) async fn rollback_connection_transactions(connection_id: &str) -> Res
     }
 }
 
+pub(super) fn complete_statement_without_database(
+    index: usize,
+    plan: &ProtectedStatement,
+    stopped: bool,
+    unsupported_policy: Option<RollbackUnsupportedPolicy>,
+    rollback_file: Option<&str>,
+    on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
+) -> Result<Option<BatchStatementResult>, String> {
+    let mut result = match plan {
+        ProtectedStatement::Unsupported(blocked)
+            if unsupported_policy == Some(RollbackUnsupportedPolicy::Skip) =>
+        {
+            BatchStatementResult::skipped(format!(
+                "Skipped by user because no exact rollback SQL can be generated: {}",
+                blocked.reason
+            ))
+        }
+        _ if stopped => BatchStatementResult::from_outcome(
+            std::time::Instant::now(),
+            Err("Skipped because an earlier protected statement failed".to_string()),
+        ),
+        _ => return Ok(None),
+    };
+    result.rollback_file = rollback_file.map(str::to_string);
+    if let Some(callback) = on_progress {
+        callback(index, &result)?;
+    }
+    Ok(Some(result))
+}
+
 pub(super) async fn execute_protected_batch(
     params: &ConnectionParams,
     queries: &[String],
@@ -896,6 +930,7 @@ async fn execute_pinned_protected_batch(
             recovery_journal,
             explicit_transaction_checkpoint,
             boundary_in_flight,
+            execution_in_flight,
             last_activity,
             ..
         } = &mut *session;
@@ -906,74 +941,77 @@ async fn execute_pinned_protected_batch(
         for (index, (query, plan)) in queries.iter().zip(plans.iter()).enumerate() {
             *last_activity = std::time::Instant::now();
             let start = std::time::Instant::now();
-            if let ProtectedStatement::Unsupported(blocked) = plan {
-                if params.rollback_unsupported_policy == Some(RollbackUnsupportedPolicy::Skip) {
-                    let result = BatchStatementResult::skipped(format!(
-                        "Skipped by user because no exact rollback SQL can be generated: {}",
-                        blocked.reason
-                    ));
-                    if let Some(callback) = on_progress {
-                        callback(index, &result);
-                    }
+            match complete_statement_without_database(
+                index,
+                plan,
+                stopped,
+                params.rollback_unsupported_policy,
+                None,
+                on_progress,
+            ) {
+                Ok(Some(result)) => {
                     results.push(result);
                     continue;
                 }
+                Ok(None) => {}
+                Err(error) => {
+                    *execution_in_flight = false;
+                    *last_activity = std::time::Instant::now();
+                    return Err(error);
+                }
             }
 
-            let mut outcome = if stopped {
-                Err("Skipped because an earlier protected statement failed".to_string())
-            } else {
-                match plan {
-                    ProtectedStatement::ReadOnly
-                    | ProtectedStatement::Session(_)
-                    | ProtectedStatement::Temporary(_) => {
-                        super::exec_on_mysql_conn(conn, query, limit, page, text).await
+            let mut outcome = match plan {
+                ProtectedStatement::ReadOnly
+                | ProtectedStatement::Session(_)
+                | ProtectedStatement::Temporary(_) => {
+                    super::exec_on_mysql_conn(conn, query, limit, page, text).await
+                }
+                ProtectedStatement::Transaction(TransactionPlan::Start) => {
+                    *boundary_in_flight = Some(TransactionPlan::Start);
+                    let outcome = super::exec_on_mysql_conn(conn, query, None, 1, text).await;
+                    *boundary_in_flight = None;
+                    if outcome.is_ok() {
+                        *explicit_transaction_checkpoint = Some((
+                            journal.as_ref().map_or(0, RollbackJournal::checkpoint),
+                            recovery_journal
+                                .as_ref()
+                                .map_or(0, RecoveryJournal::checkpoint),
+                        ));
+                        transaction_outcome = Some("opened".to_string());
                     }
-                    ProtectedStatement::Transaction(TransactionPlan::Start) => {
-                        *boundary_in_flight = Some(TransactionPlan::Start);
-                        let outcome = super::exec_on_mysql_conn(conn, query, None, 1, text).await;
-                        *boundary_in_flight = None;
-                        if outcome.is_ok() {
-                            *explicit_transaction_checkpoint = Some((
-                                journal.as_ref().map_or(0, RollbackJournal::checkpoint),
-                                recovery_journal
-                                    .as_ref()
-                                    .map_or(0, RecoveryJournal::checkpoint),
-                            ));
-                            transaction_outcome = Some("opened".to_string());
+                    outcome
+                }
+                ProtectedStatement::Transaction(TransactionPlan::Commit) => {
+                    *boundary_in_flight = Some(TransactionPlan::Commit);
+                    match super::exec_on_mysql_conn(conn, query, None, 1, text).await {
+                        Ok(result) => {
+                            *boundary_in_flight = None;
+                            *explicit_transaction_checkpoint = None;
+                            transaction_outcome = Some("committed".to_string());
+                            Ok(result)
                         }
-                        outcome
-                    }
-                    ProtectedStatement::Transaction(TransactionPlan::Commit) => {
-                        *boundary_in_flight = Some(TransactionPlan::Commit);
-                        match super::exec_on_mysql_conn(conn, query, None, 1, text).await {
-                            Ok(result) => {
-                                *boundary_in_flight = None;
-                                *explicit_transaction_checkpoint = None;
-                                transaction_outcome = Some("committed".to_string());
-                                Ok(result)
-                            }
-                            Err(error) => {
-                                uncertain_boundary = true;
-                                transaction_outcome = Some("unknown".to_string());
-                                Err(format!(
+                        Err(error) => {
+                            uncertain_boundary = true;
+                            transaction_outcome = Some("unknown".to_string());
+                            Err(format!(
                                     "COMMIT outcome is unknown ({error}); the physical connection will be closed and the durable rollback file retained"
                                 ))
-                            }
                         }
                     }
-                    ProtectedStatement::Transaction(TransactionPlan::Rollback) => {
-                        let (rollback_checkpoint, recovery_checkpoint) =
-                            explicit_transaction_checkpoint.expect(
-                                "pinned preflight requires ROLLBACK to match an active transaction",
-                            );
-                        *boundary_in_flight = Some(TransactionPlan::Rollback);
-                        match super::exec_on_mysql_conn(conn, query, None, 1, text).await {
-                            Ok(result) => {
-                                *boundary_in_flight = None;
-                                *explicit_transaction_checkpoint = None;
-                                transaction_outcome = Some("rolled_back".to_string());
-                                match rewind_journals(
+                }
+                ProtectedStatement::Transaction(TransactionPlan::Rollback) => {
+                    let (rollback_checkpoint, recovery_checkpoint) =
+                        explicit_transaction_checkpoint.expect(
+                            "pinned preflight requires ROLLBACK to match an active transaction",
+                        );
+                    *boundary_in_flight = Some(TransactionPlan::Rollback);
+                    match super::exec_on_mysql_conn(conn, query, None, 1, text).await {
+                        Ok(result) => {
+                            *boundary_in_flight = None;
+                            *explicit_transaction_checkpoint = None;
+                            transaction_outcome = Some("rolled_back".to_string());
+                            match rewind_journals(
                                     journal.as_mut(),
                                     rollback_checkpoint,
                                     recovery_journal.as_mut(),
@@ -984,93 +1022,92 @@ async fn execute_pinned_protected_batch(
                                         "ROLLBACK succeeded, but obsolete rollback/recovery records could not be removed: {error}"
                                     )),
                                 }
+                        }
+                        Err(error) => {
+                            uncertain_boundary = true;
+                            transaction_outcome = Some("unknown".to_string());
+                            Err(format!(
+                                    "ROLLBACK outcome is unknown ({error}); the physical connection will be closed"
+                                ))
+                        }
+                    }
+                }
+                ProtectedStatement::Dml(plan) => {
+                    let statement_index = statement_offset + index;
+                    if explicit_transaction_checkpoint.is_some() {
+                        execute_protected_dml_body(
+                            conn,
+                            query,
+                            plan,
+                            statement_index,
+                            journal
+                                .as_mut()
+                                .expect("write batches always have a rollback journal"),
+                            recovery_journal
+                                .as_mut()
+                                .expect("write batches always have a recovery journal"),
+                            text,
+                        )
+                        .await
+                    } else {
+                        execute_protected_dml(
+                            conn,
+                            query,
+                            plan,
+                            statement_index,
+                            journal
+                                .as_mut()
+                                .expect("write batches always have a rollback journal"),
+                            recovery_journal
+                                .as_mut()
+                                .expect("write batches always have a recovery journal"),
+                            text,
+                        )
+                        .await
+                    }
+                }
+                ProtectedStatement::Ddl(plan) => {
+                    let commit_error = if explicit_transaction_checkpoint.is_some() {
+                        *boundary_in_flight = Some(TransactionPlan::Commit);
+                        match super::exec_on_mysql_conn(conn, "COMMIT", None, 1, text).await {
+                            Ok(_) => {
+                                *boundary_in_flight = None;
+                                *explicit_transaction_checkpoint = None;
+                                transaction_outcome = Some("ddl_implicit_commit".to_string());
+                                None
                             }
                             Err(error) => {
                                 uncertain_boundary = true;
                                 transaction_outcome = Some("unknown".to_string());
-                                Err(format!(
-                                    "ROLLBACK outcome is unknown ({error}); the physical connection will be closed"
-                                ))
-                            }
-                        }
-                    }
-                    ProtectedStatement::Dml(plan) => {
-                        let statement_index = statement_offset + index;
-                        if explicit_transaction_checkpoint.is_some() {
-                            execute_protected_dml_body(
-                                conn,
-                                query,
-                                plan,
-                                statement_index,
-                                journal
-                                    .as_mut()
-                                    .expect("write batches always have a rollback journal"),
-                                recovery_journal
-                                    .as_mut()
-                                    .expect("write batches always have a recovery journal"),
-                                text,
-                            )
-                            .await
-                        } else {
-                            execute_protected_dml(
-                                conn,
-                                query,
-                                plan,
-                                statement_index,
-                                journal
-                                    .as_mut()
-                                    .expect("write batches always have a rollback journal"),
-                                recovery_journal
-                                    .as_mut()
-                                    .expect("write batches always have a recovery journal"),
-                                text,
-                            )
-                            .await
-                        }
-                    }
-                    ProtectedStatement::Ddl(plan) => {
-                        let commit_error = if explicit_transaction_checkpoint.is_some() {
-                            *boundary_in_flight = Some(TransactionPlan::Commit);
-                            match super::exec_on_mysql_conn(conn, "COMMIT", None, 1, text).await {
-                                Ok(_) => {
-                                    *boundary_in_flight = None;
-                                    *explicit_transaction_checkpoint = None;
-                                    transaction_outcome = Some("ddl_implicit_commit".to_string());
-                                    None
-                                }
-                                Err(error) => {
-                                    uncertain_boundary = true;
-                                    transaction_outcome = Some("unknown".to_string());
-                                    Some(format!(
+                                Some(format!(
                                         "COMMIT before DDL has an unknown outcome ({error}); the DDL was not executed"
                                     ))
-                                }
                             }
-                        } else {
-                            None
-                        };
-                        if let Some(error) = commit_error {
-                            Err(error)
-                        } else {
-                            execute_protected_ddl(
-                                conn,
-                                query,
-                                plan,
-                                statement_offset + index,
-                                journal
-                                    .as_mut()
-                                    .expect("write batches always have a rollback journal"),
-                                recovery_journal
-                                    .as_mut()
-                                    .expect("write batches always have a recovery journal"),
-                                text,
-                            )
-                            .await
                         }
+                    } else {
+                        None
+                    };
+                    if let Some(error) = commit_error {
+                        Err(error)
+                    } else {
+                        execute_protected_ddl(
+                            conn,
+                            query,
+                            plan,
+                            statement_offset + index,
+                            journal
+                                .as_mut()
+                                .expect("write batches always have a rollback journal"),
+                            recovery_journal
+                                .as_mut()
+                                .expect("write batches always have a recovery journal"),
+                            text,
+                        )
+                        .await
                     }
-                    ProtectedStatement::Unsupported(_) => {
-                        super::exec_on_mysql_conn(conn, query, limit, page, text).await
-                    }
+                }
+                ProtectedStatement::Unsupported(_) => {
+                    super::exec_on_mysql_conn(conn, query, limit, page, text).await
                 }
             };
 
@@ -1125,7 +1162,11 @@ async fn execute_pinned_protected_batch(
                 result.rollback_unprotected = Some(true);
             }
             if let Some(callback) = on_progress {
-                callback(index, &result);
+                if let Err(error) = callback(index, &result) {
+                    *execution_in_flight = false;
+                    *last_activity = std::time::Instant::now();
+                    return Err(error);
+                }
             }
             results.push(result);
         }
@@ -1266,30 +1307,25 @@ async fn execute_single_run_protected_batch(
     let mut explicit_transaction_checkpoint = None;
     for (index, (query, plan)) in queries.iter().zip(plans.iter()).enumerate() {
         let start = std::time::Instant::now();
-        if let ProtectedStatement::Unsupported(blocked) = plan {
-            let mut result = BatchStatementResult::skipped(format!(
-                "Skipped by user because no exact rollback SQL can be generated: {}",
-                blocked.reason
-            ));
-            result.rollback_file = rollback_path.clone();
-            if let Some(callback) = on_progress {
-                callback(index, &result);
-            }
+        if let Some(result) = complete_statement_without_database(
+            index,
+            plan,
+            stopped,
+            params.rollback_unsupported_policy,
+            rollback_path.as_deref(),
+            on_progress,
+        )? {
             results.push(result);
             continue;
         }
-        let mut outcome = if stopped {
-            Err("Skipped because an earlier protected statement failed".to_string())
-        } else {
-            match plan {
-                ProtectedStatement::ReadOnly
+        let mut outcome = match plan {
+            ProtectedStatement::ReadOnly
                 | ProtectedStatement::Session(_)
                 | ProtectedStatement::Temporary(_) => {
                     super::exec_on_mysql_conn(&mut conn, query, limit, page, text).await
                 }
                 ProtectedStatement::Transaction(TransactionPlan::Start) => {
-                    let outcome =
-                        super::exec_on_mysql_conn(&mut conn, query, None, 1, text).await;
+                    let outcome = super::exec_on_mysql_conn(&mut conn, query, None, 1, text).await;
                     if outcome.is_ok() {
                         explicit_transaction_checkpoint = Some((
                             journal.as_ref().map_or(0, RollbackJournal::checkpoint),
@@ -1314,7 +1350,7 @@ async fn execute_single_run_protected_batch(
                 ProtectedStatement::Transaction(TransactionPlan::Rollback) => {
                     let (rollback_checkpoint, recovery_checkpoint) =
                         explicit_transaction_checkpoint
-                        .expect("preflight requires ROLLBACK to match an open transaction");
+                            .expect("preflight requires ROLLBACK to match an open transaction");
                     match super::exec_on_mysql_conn(&mut conn, query, None, 1, text).await {
                         Ok(result) => {
                             explicit_transaction_checkpoint = None;
@@ -1385,9 +1421,8 @@ async fn execute_single_run_protected_batch(
                     )
                     .await
                 }
-                ProtectedStatement::Unsupported(_) => {
-                    unreachable!("unsupported statements are handled before execution")
-                }
+            ProtectedStatement::Unsupported(_) => {
+                unreachable!("unsupported statements are handled before execution")
             }
         };
         if outcome.is_err()
@@ -1429,7 +1464,7 @@ async fn execute_single_run_protected_batch(
         let mut result = BatchStatementResult::from_outcome(start, outcome);
         result.rollback_file = rollback_path.clone();
         if let Some(callback) = on_progress {
-            callback(index, &result);
+            callback(index, &result)?;
         }
         results.push(result);
     }
@@ -3581,16 +3616,19 @@ fn parse_drop_temporary(tokens: &[Token]) -> Result<TemporaryPlan, BlockedStatem
 fn parse_create(tokens: &[Token]) -> Result<DdlPlan, BlockedStatement> {
     match tokens.get(1).map(Token::upper) {
         Some("TABLE") => {
-            if tokens.get(2).is_some_and(|token| {
-                token.kind == TokenKind::Word && token.upper() == "IF"
-            }) {
+            if tokens
+                .get(2)
+                .is_some_and(|token| token.kind == TokenKind::Word && token.upper() == "IF")
+            {
                 return Err(BlockedStatement::unsupported(
                     "CREATE TABLE IF NOT EXISTS is ambiguous because the inverse must not drop a pre-existing table",
                 ));
             }
             let (table, idx) = parse_object_name(tokens, 2)?;
             if idx >= tokens.len() {
-                return Err(BlockedStatement::unsupported("CREATE TABLE definition is missing"));
+                return Err(BlockedStatement::unsupported(
+                    "CREATE TABLE definition is missing",
+                ));
             }
             if find_top_level_word(tokens, idx, &["AS", "SELECT"]).is_some() {
                 return Err(BlockedStatement::unsupported(
@@ -3600,9 +3638,10 @@ fn parse_create(tokens: &[Token]) -> Result<DdlPlan, BlockedStatement> {
             Ok(DdlPlan::CreateTable(table))
         }
         Some("DATABASE") | Some("SCHEMA") => {
-            if tokens.get(2).is_some_and(|token| {
-                token.kind == TokenKind::Word && token.upper() == "IF"
-            }) {
+            if tokens
+                .get(2)
+                .is_some_and(|token| token.kind == TokenKind::Word && token.upper() == "IF")
+            {
                 return Err(BlockedStatement::unsupported(
                     "CREATE DATABASE IF NOT EXISTS is ambiguous because the inverse must not drop a pre-existing database",
                 ));

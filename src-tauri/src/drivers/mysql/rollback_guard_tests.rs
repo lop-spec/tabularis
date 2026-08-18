@@ -1,8 +1,9 @@
 use super::rollback_guard::{
-    classify_for_rollback, locked_write_sql, plan_batch_for_rollback,
-    plan_batch_for_rollback_with_policy, plan_for_rollback, review_batch_for_rollback,
-    validate_pinned_transaction_structure, validate_transaction_structure, DmlPlan,
-    ProtectedStatement, ProtectionClass, TemporaryPlan, TransactionPlan,
+    classify_for_rollback, complete_statement_without_database, locked_write_sql,
+    plan_batch_for_rollback, plan_batch_for_rollback_with_policy, plan_for_rollback,
+    review_batch_for_rollback, validate_pinned_transaction_structure,
+    validate_transaction_structure, DmlPlan, ProtectedStatement, ProtectionClass, TemporaryPlan,
+    TransactionPlan,
 };
 use super::should_use_rollback_guard;
 use crate::models::RollbackUnsupportedPolicy;
@@ -247,6 +248,76 @@ fn explicit_user_policy_preserves_unsupported_statement_slots() {
 }
 
 #[test]
+fn protected_skips_complete_callbacks_without_database_or_audit() {
+    let queries = ["INSERT INTO users (id) SELECT id FROM staging"].map(str::to_string);
+    let plans =
+        plan_batch_for_rollback_with_policy(&queries, RollbackUnsupportedPolicy::Skip).unwrap();
+    let callback_indexes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let callback_observed = callback_indexes.clone();
+    let callback = move |index: usize, statement: &crate::models::BatchStatementResult| {
+        callback_observed.lock().unwrap().push(index);
+        assert!(!crate::audit_outbox::statement_was_executed(statement));
+        Ok::<(), String>(())
+    };
+
+    let explicit_skip = complete_statement_without_database(
+        4,
+        &plans[0],
+        false,
+        Some(RollbackUnsupportedPolicy::Skip),
+        None,
+        Some(&callback),
+    )
+    .unwrap()
+    .expect("unsupported skip must complete before database execution");
+    assert_eq!(explicit_skip.skipped, Some(true));
+
+    let subsequent_skip = complete_statement_without_database(
+        5,
+        &ProtectedStatement::ReadOnly,
+        true,
+        Some(RollbackUnsupportedPolicy::Skip),
+        None,
+        Some(&callback),
+    )
+    .unwrap()
+    .expect("stopped batch must complete before database execution");
+    assert_eq!(subsequent_skip.skipped, None);
+    assert!(subsequent_skip
+        .error
+        .as_deref()
+        .unwrap()
+        .starts_with("Skipped because "));
+    assert_eq!(*callback_indexes.lock().unwrap(), vec![4, 5]);
+}
+
+#[test]
+fn protected_skip_callback_failure_stops_before_database_execution() {
+    let queries = ["INSERT INTO users (id) SELECT id FROM staging"].map(str::to_string);
+    let plans =
+        plan_batch_for_rollback_with_policy(&queries, RollbackUnsupportedPolicy::Skip).unwrap();
+    let callback_indexes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let callback_observed = callback_indexes.clone();
+    let callback = move |index: usize, statement: &crate::models::BatchStatementResult| {
+        callback_observed.lock().unwrap().push(index);
+        assert!(!crate::audit_outbox::statement_was_executed(statement));
+        Err("audit append failed".to_string())
+    };
+
+    let error = complete_statement_without_database(
+        6,
+        &plans[0],
+        false,
+        Some(RollbackUnsupportedPolicy::Skip),
+        None,
+        Some(&callback),
+    )
+    .unwrap_err();
+    assert_eq!(error, "audit append failed");
+    assert_eq!(*callback_indexes.lock().unwrap(), vec![6]);
+}
+
+#[test]
 fn explicit_risk_execution_stays_on_the_pinned_transaction_connection() {
     let mut params = crate::models::ConnectionParams {
         rollback_protection_enabled: Some(true),
@@ -466,11 +537,11 @@ fn pinned_ddl_requires_acknowledgement_and_closes_the_boundary() {
 #[test]
 fn allows_generated_tabularis_variables_without_rollback_steps() {
     for sql in [
-        "SET @unsafe_environment_ok := ((DATABASE() <=> 'csr') AND (CURRENT_USER() <=> 'root@%'))",
-        "SET @unsafe_environment_ok := ((CAST(DATABASE() AS BINARY) <=> 0x637372) AND (CAST(CURRENT_USER() AS BINARY) <=> 0x726F6F744025) AND (CAST(@@server_uuid AS BINARY) <=> 0x3435653137643961) AND (@@SESSION.foreign_key_checks = 1) AND (@@SESSION.unique_checks = 1))",
-        "SET @unsafe_rollback_failed := FALSE",
-        "SET @unsafe_statement_ok := IF(ROW_COUNT() = 1, @unsafe_rollback_failed, TRUE)",
-        "SET @unsafe_rollback_failed := (@unsafe_rollback_failed OR (@unsafe_step_will_execute AND NOT (ROW_COUNT() <=> 1)))",
+        "SET @tabularis_environment_ok := ((DATABASE() <=> 'csr') AND (CURRENT_USER() <=> 'root@%'))",
+        "SET @tabularis_environment_ok := ((CAST(DATABASE() AS BINARY) <=> 0x637372) AND (CAST(CURRENT_USER() AS BINARY) <=> 0x726F6F744025) AND (CAST(@@server_uuid AS BINARY) <=> 0x3435653137643961) AND (@@SESSION.foreign_key_checks = 1) AND (@@SESSION.unique_checks = 1))",
+        "SET @tabularis_rollback_failed := FALSE",
+        "SET @tabularis_statement_ok := IF(ROW_COUNT() = 1, @tabularis_rollback_failed, TRUE)",
+        "SET @tabularis_rollback_failed := (@tabularis_rollback_failed OR (@tabularis_step_will_execute AND NOT (ROW_COUNT() <=> 1)))",
     ] {
         assert_eq!(
             classify_for_rollback(sql).class,

@@ -528,10 +528,16 @@ mod live_explain_tests {
             username: Some(
                 std::env::var("TABULARIS_TEST_MYSQL_USER").unwrap_or_else(|_| "root".to_string()),
             ),
-            password: Some(
-                std::env::var("TABULARIS_TEST_MYSQL_PASSWORD")
-                    .unwrap_or_else(|_| "Tabularis_Demo_2026!".to_string()),
-            ),
+            // `TABULARIS_TEST_MYSQL_KEYCHAIN_ID` reuses a saved connection's
+            // keychain entry, so running these against a real server does not
+            // require putting its password on a command line.
+            password: match std::env::var("TABULARIS_TEST_MYSQL_KEYCHAIN_ID") {
+                Ok(id) => crate::keychain_utils::get_db_password(&id, "live explain test").ok(),
+                Err(_) => Some(
+                    std::env::var("TABULARIS_TEST_MYSQL_PASSWORD")
+                        .unwrap_or_else(|_| "Tabularis_Demo_2026!".to_string()),
+                ),
+            },
             database: DatabaseSelection::Single(
                 std::env::var("TABULARIS_TEST_MYSQL_DB")
                     .unwrap_or_else(|_| "information_schema".to_string()),
@@ -622,5 +628,162 @@ mod live_explain_tests {
         let result = explain_query(&params, "SELECT * FROM does_not_exist_xyz", false, None).await;
 
         assert!(result.is_err(), "unexplainable statement must error");
+    }
+}
+
+/// Live checks for window-scoped session state (`crate::session_vars`). They
+/// need a real server because the whole point is what survives a connection
+/// going back to the pool, which no in-process fake reproduces.
+///
+/// ```text
+/// TABULARIS_TEST_MYSQL=1 TABULARIS_TEST_MYSQL_HOST=… TABULARIS_TEST_MYSQL_PORT=…
+/// cargo test --lib live_session -- --ignored --nocapture
+/// ```
+#[cfg(test)]
+mod live_session_tests {
+    use crate::drivers::mysql::execute_query;
+    use crate::models::{ConnectionParams, DatabaseSelection};
+    use serde_json::Value;
+
+    const CONTEXT_ID: &str = "live-session-test-window";
+    const PROBE: &str = "SET @tabularis_probe = 'kept'";
+    const READ_PROBE: &str = "SELECT @tabularis_probe AS v";
+
+    fn test_params() -> Option<ConnectionParams> {
+        std::env::var("TABULARIS_TEST_MYSQL").ok()?;
+        let host = std::env::var("TABULARIS_TEST_MYSQL_HOST").ok()?;
+        let port: u16 = std::env::var("TABULARIS_TEST_MYSQL_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok())?;
+
+        Some(ConnectionParams {
+            driver: "mysql".to_string(),
+            host: Some(host),
+            port: Some(port),
+            username: Some(
+                std::env::var("TABULARIS_TEST_MYSQL_USER").unwrap_or_else(|_| "root".to_string()),
+            ),
+            // Prefer the keychain entry of an existing saved connection so the
+            // password never has to appear on a command line.
+            password: match std::env::var("TABULARIS_TEST_MYSQL_KEYCHAIN_ID") {
+                Ok(id) => crate::keychain_utils::get_db_password(&id, "live session test").ok(),
+                Err(_) => std::env::var("TABULARIS_TEST_MYSQL_PASSWORD").ok(),
+            },
+            database: DatabaseSelection::Single(
+                std::env::var("TABULARIS_TEST_MYSQL_DB")
+                    .unwrap_or_else(|_| "information_schema".to_string()),
+            ),
+            connection_id: Some("live-session-test".to_string()),
+            ..Default::default()
+        })
+    }
+
+    fn probe_value(rows: &[Vec<Value>]) -> Value {
+        rows.first()
+            .and_then(|row| row.first())
+            .cloned()
+            .unwrap_or(Value::Null)
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_session_variable_survives_a_separate_statement() {
+        let Some(params) = test_params() else {
+            eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
+            return;
+        };
+        let connection_id = params.connection_id.clone().expect("test sets an id");
+        crate::session_vars::clear_window(&connection_id, CONTEXT_ID);
+
+        // Without the window's preamble the variable is gone, because the SET
+        // ran on a connection that has since been recycled. This is the bug the
+        // feature fixes, asserted so a regression cannot pass silently.
+        execute_query(&params, PROBE, None, 1, None)
+            .await
+            .expect("plain SET");
+        crate::session_vars::record_statement(&connection_id, CONTEXT_ID, PROBE);
+        let bare = execute_query(&params, READ_PROBE, None, 1, None)
+            .await
+            .expect("read without preamble");
+        assert_eq!(
+            probe_value(&bare.rows),
+            Value::Null,
+            "a query with no window context must not inherit session state"
+        );
+
+        // With it, a statement executed on its own still sees the variable.
+        let mut with_state = params.clone();
+        with_state.session_preamble = crate::session_vars::preamble(&connection_id, CONTEXT_ID);
+        assert!(
+            with_state.session_preamble.is_some(),
+            "the SET must have been recorded"
+        );
+        let kept = execute_query(&with_state, READ_PROBE, None, 1, None)
+            .await
+            .expect("read with preamble");
+        assert_eq!(probe_value(&kept.rows), Value::String("kept".to_string()));
+
+        // A later SET of the same variable wins.
+        let overwrite = "SET @tabularis_probe = 'replaced'";
+        let mut with_state = params.clone();
+        with_state.session_preamble = crate::session_vars::preamble(&connection_id, CONTEXT_ID);
+        execute_query(&with_state, overwrite, None, 1, None)
+            .await
+            .expect("overwrite");
+        crate::session_vars::record_statement(&connection_id, CONTEXT_ID, overwrite);
+        let mut with_state = params.clone();
+        with_state.session_preamble = crate::session_vars::preamble(&connection_id, CONTEXT_ID);
+        let replaced = execute_query(&with_state, READ_PROBE, None, 1, None)
+            .await
+            .expect("read after overwrite");
+        assert_eq!(
+            probe_value(&replaced.rows),
+            Value::String("replaced".to_string())
+        );
+
+        crate::session_vars::clear_window(&connection_id, CONTEXT_ID);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_session_state_does_not_leak_to_other_windows() {
+        let Some(params) = test_params() else {
+            eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
+            return;
+        };
+        let mut params = params;
+        params.connection_id = Some("live-session-leak-test".to_string());
+        let connection_id = params.connection_id.clone().expect("test sets an id");
+        crate::session_vars::clear_window(&connection_id, CONTEXT_ID);
+
+        crate::session_vars::record_statement(&connection_id, CONTEXT_ID, PROBE);
+        let mut with_state = params.clone();
+        with_state.session_preamble = crate::session_vars::preamble(&connection_id, CONTEXT_ID);
+
+        // Run the window's query enough times to touch every connection of the
+        // pool (max_connections = 10), interleaved with a query that carries no
+        // session state. The bare query must never see the variable — otherwise
+        // the replay is leaking into connections other windows will be handed.
+        for attempt in 0..12 {
+            let kept = execute_query(&with_state, READ_PROBE, None, 1, None)
+                .await
+                .expect("read with preamble");
+            assert_eq!(
+                probe_value(&kept.rows),
+                Value::String("kept".to_string()),
+                "attempt {attempt}"
+            );
+
+            let bare = execute_query(&params, READ_PROBE, None, 1, None)
+                .await
+                .expect("read without preamble");
+            assert_eq!(
+                probe_value(&bare.rows),
+                Value::Null,
+                "attempt {attempt}: session state leaked into a pooled connection"
+            );
+        }
+
+        crate::session_vars::clear_window(&connection_id, CONTEXT_ID);
     }
 }
