@@ -22,6 +22,8 @@ export interface QueryHistoryContextType {
   deleteEntry: (id: string) => Promise<void>;
   clearHistory: () => Promise<void>;
   refreshHistory: () => Promise<void>;
+  /** Searches the full on-disk log, not just the loaded page. */
+  searchHistory: (query: string, limit?: number) => Promise<QueryHistoryEntry[]>;
 }
 
 export const QueryHistoryContext = createContext<

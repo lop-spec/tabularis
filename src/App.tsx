@@ -5,6 +5,8 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { ConnectionLayoutProvider } from "./contexts/ConnectionLayoutProvider";
 import { RightSidebarProvider } from "./contexts/RightSidebarProvider";
 import { KeybindingsProvider } from "./contexts/KeybindingsProvider";
+import { PluginSlotProvider } from "./contexts/PluginSlotProvider";
+import { PluginModalProvider } from "./contexts/PluginModalProvider";
 import { AlertProvider } from "./contexts/AlertProvider";
 import { Connections } from "./pages/Connections";
 import { Editor } from "./pages/Editor";
@@ -15,13 +17,18 @@ import { VisualExplainPage } from "./pages/VisualExplainPage";
 import { JsonViewerPage } from "./pages/JsonViewerPage";
 import { ResultsWindowPage } from "./pages/ResultsWindowPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
+import { HistoryPage } from "./pages/HistoryPage";
 import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { EditorErrorBoundary } from "./components/ui/EditorErrorBoundary";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
 import { WhatsNewModal } from "./components/modals/WhatsNewModal";
+import { AiApprovalGate } from "./components/modals/AiApprovalGate";
+import { PluginInstallConfirmModal } from "./components/modals/PluginInstallConfirmModal";
 import { SshAskpassGate } from "./components/modals/SshAskpassGate";
 import { useUpdate } from "./hooks/useUpdate";
 import { useChangelog } from "./hooks/useChangelog";
+import { useSettings } from "./hooks/useSettings";
+import { useDeepLinkInstall } from "./hooks/useDeepLinkInstall";
 import { useResultTypeColors } from "./hooks/useResultTypeColors";
 import { APP_VERSION } from "./version";
 import { isVersionAtMost, isVersionNewer } from "./utils/versionCompare";
@@ -37,9 +44,10 @@ export function App() {
     dismissUpdate,
     error: updateError,
   } = useUpdate();
+  const { settings } = useSettings();
   useResultTypeColors();
   const [isDebugMode, setIsDebugMode] = useState(false);
-
+  const deepLinkInstall = useDeepLinkInstall();
   const lastSeenVersion = localStorage.getItem(WHATS_NEW_VERSION_KEY);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(
     () => lastSeenVersion !== null && isVersionNewer(APP_VERSION, lastSeenVersion),
@@ -100,8 +108,10 @@ export function App() {
         <BrowserRouter>
           <ConnectionHealthMonitor />
           <KeybindingsProvider>
-            <ConnectionLayoutProvider>
-              <RightSidebarProvider>
+            <PluginSlotProvider>
+              <PluginModalProvider>
+                <ConnectionLayoutProvider>
+                  <RightSidebarProvider>
                   <Routes>
                     <Route path="/" element={<MainLayout />}>
                       <Route
@@ -117,6 +127,9 @@ export function App() {
                           </EditorErrorBoundary>
                         }
                       />
+                      {/* lop fork: no MCP page — its sidebar slot now holds
+                          the full execution history. */}
+                      <Route path="history" element={<HistoryPage />} />
                       <Route path="recovery" element={<RecoveryPage />} />
                       <Route path="settings" element={<Settings />} />
                     </Route>
@@ -132,8 +145,10 @@ export function App() {
                       element={<ResultsWindowPage />}
                     />
                   </Routes>
-              </RightSidebarProvider>
-            </ConnectionLayoutProvider>
+                  </RightSidebarProvider>
+                </ConnectionLayoutProvider>
+              </PluginModalProvider>
+            </PluginSlotProvider>
           </KeybindingsProvider>
         </BrowserRouter>
       </AlertProvider>
@@ -155,7 +170,25 @@ export function App() {
         isLoading={isChangelogLoading}
       />
 
+      <AiApprovalGate />
       <SshAskpassGate />
+
+      <PluginInstallConfirmModal
+        key={
+          deepLinkInstall.pending
+            ? `${deepLinkInstall.pending.slug}@${deepLinkInstall.pending.version ?? ""}@${deepLinkInstall.pending.registry ?? ""}`
+            : "idle"
+        }
+        request={deepLinkInstall.pending}
+        busy={deepLinkInstall.busy}
+        error={deepLinkInstall.error}
+        onConfirm={() => {
+          void deepLinkInstall.confirm();
+        }}
+        onCancel={deepLinkInstall.cancel}
+        configuredRegistry={settings.tabulariumRegistryUrl ?? null}
+      />
+
     </>
   );
 }

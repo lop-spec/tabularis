@@ -1555,17 +1555,23 @@ export const Editor = () => {
       }
       updateTab(targetTabId, {
         isLoading: false,
-        ...(transactionResult
-          ? {
-              transactionActive,
-              transactionRecoveryFile: transactionActive
-                ? transactionRecoveryFile
-                : undefined,
-              transactionIdleTimeoutSeconds: transactionActive
-                ? transactionIdleTimeoutSeconds
-                : undefined,
-            }
-          : {}),
+        // Only the rollback-guard path reports transaction state; ordinary
+        // runs (a plain SELECT) return `undefined` for every field. Treating
+        // "no report" as "unchanged" used to make `transactionActive` a
+        // sticky flag that survived its own COMMIT: the guarded COMMIT set it
+        // false, but any later unguarded statement left the stale `true` in
+        // place. That flag then forced every following statement — read-only
+        // ones included — down the pinned-transaction path (see the
+        // `targetTab.transactionActive` guard above), pinning a connection
+        // and re-prompting for risk. A run that reports nothing means no
+        // transaction is pinned, so clear it.
+        transactionActive,
+        transactionRecoveryFile: transactionActive
+          ? transactionRecoveryFile
+          : undefined,
+        transactionIdleTimeoutSeconds: transactionActive
+          ? transactionIdleTimeoutSeconds
+          : undefined,
       });
     },
     [

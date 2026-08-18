@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plug2, Settings, PanelLeft, Layers, Star, Clock, BookOpen, RotateCcw } from "lucide-react";
+import { Plug2, Settings, PanelLeft, Layers, Star, Clock, BookOpen, RotateCcw, History } from "lucide-react";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useTheme } from "../../hooks/useTheme";
 
@@ -191,6 +191,7 @@ export const Sidebar = () => {
     if (
       location.pathname === "/" ||
       location.pathname === "/connections" ||
+      location.pathname === "/history" ||
       location.pathname === "/recovery" ||
       location.pathname === "/settings"
     ) {
@@ -232,6 +233,7 @@ export const Sidebar = () => {
   const shouldShowExplorer =
     !!explorerConnId &&
     location.pathname !== "/settings" &&
+    location.pathname !== "/history" &&
     location.pathname !== "/recovery" &&
     location.pathname !== "/connections";
 
@@ -309,6 +311,12 @@ export const Sidebar = () => {
         </nav>
 
         <div className="mt-auto">
+          <NavItem
+            to="/history"
+            icon={History}
+            label={t("history.title")}
+          />
+
           <NavItem
             to="/recovery"
             icon={RotateCcw}

@@ -10,6 +10,9 @@ import type {
   QueryHistoryResponse,
 } from "../types/queryHistory";
 
+/** Entries rendered by default. The rest live in the on-disk log. */
+export const UI_HISTORY_PAGE = 200;
+
 export const QueryHistoryProvider = ({
   children,
 }: {
@@ -30,9 +33,16 @@ export const QueryHistoryProvider = ({
 
     setIsLoading(true);
     try {
-      const result = await invoke<QueryHistoryResponse>("get_query_history", {
-        connectionId: activeConnectionId,
-      });
+      // Only the newest page: the full log stays on disk and is reachable
+      // through search. Loading everything is what made the sidebar stall
+      // once a connection accumulated thousands of statements.
+      const result = await invoke<QueryHistoryResponse>(
+        "get_recent_query_history",
+        {
+          connectionId: activeConnectionId,
+          limit: UI_HISTORY_PAGE,
+        },
+      );
       setEntries(result.entries);
       if (result.recoveredBackupPath) {
         setRecoveryNotice({
@@ -120,6 +130,25 @@ export const QueryHistoryProvider = ({
     setRecoveryNotice(null);
   }, []);
 
+  /// Searches the full on-disk log rather than the loaded page, so statements
+  /// far beyond the newest 200 remain findable.
+  const searchHistory = useCallback(
+    async (query: string, limit = 500): Promise<QueryHistoryEntry[]> => {
+      if (!activeConnectionId) return [];
+      try {
+        const result = await invoke<QueryHistoryResponse>(
+          "search_query_history",
+          { connectionId: activeConnectionId, query, limit },
+        );
+        return result.entries;
+      } catch (e) {
+        console.error("Failed to search query history:", e);
+        return [];
+      }
+    },
+    [activeConnectionId],
+  );
+
   return (
     <QueryHistoryContext.Provider
       value={{
@@ -131,6 +160,7 @@ export const QueryHistoryProvider = ({
         deleteEntry,
         clearHistory,
         refreshHistory,
+        searchHistory,
       }}
     >
       {children}
