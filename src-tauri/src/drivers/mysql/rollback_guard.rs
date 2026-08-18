@@ -4402,3 +4402,36 @@ use crate::recovery_history::{
 use crate::rollback_sql::{RollbackEnvironment, RollbackJournal, RollbackStep, ServerIdentity};
 use sqlx::{Connection, Executor, Row};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+
+/// Whether MySQL commits the open transaction as a side effect of this
+/// statement. Covers the DDL and administrative families from the server's
+/// implicit-commit list; anything unrecognised answers `false`, which only
+/// keeps the existing checkpoint behaviour.
+fn causes_implicit_commit(sql: &str) -> bool {
+    let body = crate::drivers::common::strip_leading_sql_comments(sql);
+    let keyword: String = body
+        .chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .flat_map(|c| c.to_uppercase())
+        .collect();
+    matches!(
+        keyword.as_str(),
+        "CREATE"
+            | "ALTER"
+            | "DROP"
+            | "RENAME"
+            | "TRUNCATE"
+            | "GRANT"
+            | "REVOKE"
+            | "FLUSH"
+            | "LOCK"
+            | "UNLOCK"
+            | "ANALYZE"
+            | "OPTIMIZE"
+            | "REPAIR"
+            | "CACHE"
+            | "INSTALL"
+            | "UNINSTALL"
+            | "LOAD"
+    )
+}

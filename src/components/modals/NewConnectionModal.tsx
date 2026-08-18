@@ -99,9 +99,6 @@ interface ConnectionParams {
   startup_script?: string;
   // MySQL rollback/recovery protection (opt-in per connection).
   rollback_protection_enabled?: boolean;
-  // Native MongoDB/Redis console overrides.
-  native_cli_path?: string;
-  native_cli_args?: string;
 }
 
 interface SavedConnection {
@@ -431,9 +428,8 @@ export const NewConnectionModal = ({
     !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
     !activeDriver?.capabilities?.folder_based;
-  const nativeCliKind = activeDriver?.capabilities?.native_cli;
-  const isNativeCli = activeDriver?.capabilities?.console_only === true;
-  const supportsTunnels = isNetworkDriver && !isNativeCli;
+  const isConsoleOnly = activeDriver?.capabilities?.console_only === true;
+  const supportsTunnels = isNetworkDriver && !isConsoleOnly;
   const k8sDefaultPort = activeDriver?.default_port ?? undefined;
   // Derive K8s ports instead of seeding formData so edit flows with no saved port are covered.
   const getK8sAutoPort = (params: Partial<ConnectionParams>) =>
@@ -1389,26 +1385,19 @@ export const NewConnectionModal = ({
 
   const handleDriverChange = (newDriver: string) => {
     const nextDriver = drivers.find((d) => d.id === newDriver);
-    const nextNativeCli = nextDriver?.capabilities?.native_cli;
     setDriver(newDriver);
     setFormData({
       driver: newDriver,
-      host: nextNativeCli ? "localhost" : "",
+      host: "",
       port: nextDriver?.default_port ?? undefined,
       username: "",
       password: "",
       connection_uri: undefined,
       connection_uri_in_keychain: false,
       database:
-        nextNativeCli === "redis-cli"
-          ? "0"
-          : nextNativeCli === "mongosh"
-            ? "test"
-            : "",
-      ssl_mode: nextNativeCli ? "disabled" : "",
+"",
+      ssl_mode: "",
       rollback_protection_enabled: undefined,
-      native_cli_path: undefined,
-      native_cli_args: undefined,
       ssh_enabled: false,
       ssh_connection_id: undefined,
       ssh_host: undefined,
@@ -2018,7 +2007,7 @@ export const NewConnectionModal = ({
                 <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
                   {t("newConnection.dbName")}
                 </label>
-                {!isNativeCli && (
+                {!isConsoleOnly && (
                   <button
                     type="button"
                     onClick={() => {
@@ -2094,7 +2083,7 @@ export const NewConnectionModal = ({
       )}
 
       {/* Detect JSON in text columns (per-connection opt-in) */}
-      {!isNativeCli && (
+      {!isConsoleOnly && (
         <label className="flex items-start gap-2 cursor-pointer select-none w-fit">
           <input
             type="checkbox"
@@ -2190,85 +2179,7 @@ export const NewConnectionModal = ({
         </div>
       )}
 
-      {isNativeCli && (
-        <div className="space-y-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
-              {t("newConnection.nativeCliPath", {
-                defaultValue: "Native CLI executable",
-              })}
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={formData.native_cli_path ?? ""}
-                onChange={(event) =>
-                  updateField("native_cli_path", event.target.value || undefined)
-                }
-                autoCorrect="off"
-                autoCapitalize="off"
-                autoComplete="off"
-                spellCheck={false}
-                className="flex-1 px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted placeholder:italic focus:border-blue-500 focus:outline-none transition-colors font-mono"
-                placeholder={
-                  nativeCliKind === "mongosh"
-                    ? "Auto: bundled sidecar, TABULARIS_MONGOSH_PATH, PATH"
-                    : "Auto: bundled sidecar, TABULARIS_REDIS_CLI_PATH, PATH"
-                }
-              />
-              <button
-                type="button"
-                onClick={async () => {
-                  const selected = await open({
-                    multiple: false,
-                    directory: false,
-                  });
-                  if (typeof selected === "string") {
-                    updateField("native_cli_path", selected);
-                  }
-                }}
-                className="px-3 py-2 bg-base hover:bg-surface-secondary border border-strong rounded-md text-muted hover:text-primary transition-colors"
-                title={t("newConnection.browseFile")}
-              >
-                <FolderOpen size={15} />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
-              {t("newConnection.nativeCliArgs", {
-                defaultValue: "Additional CLI arguments",
-              })}
-            </label>
-            <input
-              type="text"
-              value={formData.native_cli_args ?? ""}
-              onChange={(event) =>
-                updateField("native_cli_args", event.target.value || undefined)
-              }
-              autoCorrect="off"
-              autoCapitalize="off"
-              autoComplete="off"
-              spellCheck={false}
-              className="w-full px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted placeholder:italic focus:border-blue-500 focus:outline-none transition-colors font-mono"
-              placeholder={
-                nativeCliKind === "mongosh"
-                  ? "--authenticationDatabase admin --authenticationMechanism SCRAM-SHA-256"
-                  : "--tls --insecure"
-              }
-            />
-            <p className="text-xs text-muted">
-              {t("newConnection.nativeCliArgsHint", {
-                defaultValue:
-                  "Parsed as direct argv with quote support; no command shell is involved.",
-              })}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {!isNativeCli && (
+      {!isConsoleOnly && (
         <div className="space-y-2">
           <label className="text-[10px] uppercase font-semibold tracking-wider text-muted block">
             {t("newConnection.startupScript", {

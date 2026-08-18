@@ -18,7 +18,9 @@ use crate::models::{
 };
 use crate::pool_manager::get_postgres_pool;
 use binding::{PgValueOptions, bind_pg_value, build_pk_map_predicate};
-use client::{execute, execute_typed, format_pg_error, get_client, query_all, query_one, query_one_typed};
+use client::{
+    execute, execute_typed, format_pg_error, get_client, query_all, query_one, query_one_typed,
+};
 pub use explain::explain_query;
 use extract::extract_value;
 use helpers::{
@@ -175,10 +177,7 @@ pub async fn get_columns(
 
             TableColumn {
                 name: r.try_get("column_name").unwrap_or_default(),
-                data_type: enum_data_type(
-                    r.try_get("data_type").unwrap_or_default(),
-                    enum_values,
-                ),
+                data_type: enum_data_type(r.try_get("data_type").unwrap_or_default(), enum_values),
                 is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
@@ -750,8 +749,7 @@ pub async fn update_record(
     }
 
     let pk_types = get_pk_column_types(&pool, schema, table, pk_map).await;
-    let (predicate, pk_params) =
-        build_pk_map_predicate(pk_map, &pk_types, bound_params.len() + 1)?;
+    let (predicate, pk_params) = build_pk_map_predicate(pk_map, &pk_types, bound_params.len() + 1)?;
     query.push_str(" WHERE ");
     query.push_str(&predicate);
     bound_params.extend(pk_params);
@@ -771,19 +769,21 @@ pub async fn update_record(
         .cloned()
         .unwrap_or(serde_json::Value::Null);
 
-    execute_typed(&pool, &query, &params_ref).await.map_err(|err| {
-        update_record_error_context(
-            err,
-            schema,
-            table,
-            first_pk_col,
-            &first_pk_val,
-            col_name,
-            &new_val_for_context,
-            column_data_type.as_deref(),
-            &query,
-        )
-    })
+    execute_typed(&pool, &query, &params_ref)
+        .await
+        .map_err(|err| {
+            update_record_error_context(
+                err,
+                schema,
+                table,
+                first_pk_col,
+                &first_pk_val,
+                col_name,
+                &new_val_for_context,
+                column_data_type.as_deref(),
+                &query,
+            )
+        })
 }
 
 pub async fn insert_record(
@@ -930,6 +930,18 @@ async fn acquire_pg_client(
             .await
             .map_err(|e| format_pg_error(&e))?;
     }
+    // After the search_path so a window that set its own search_path wins over
+    // the tab's schema selection, matching what the user typed last.
+    if let Some(preamble) = params.session_preamble.as_ref() {
+        for statement in &preamble.setup {
+            client.execute(statement.as_str(), &[]).await.map_err(|e| {
+                format!(
+                    "Failed to restore session statement `{statement}`: {}",
+                    format_pg_error(&e)
+                )
+            })?;
+        }
+    }
     Ok(client)
 }
 
@@ -1038,6 +1050,38 @@ async fn exec_on_pg_client(
     })
 }
 
+/// Undoes what `acquire_pg_client` replayed, then lets the client go back to
+/// the pool.
+///
+/// Required for correctness: the pool shares this client with every other
+/// window and with metadata queries, and a leftover `SET work_mem` would apply
+/// to all of them. `RESET` restores the value the server started with. If the
+/// reset fails the client is taken out of the pool instead of returned, so a
+/// dirty session is never handed to someone else.
+async fn release_session_scoped_client(
+    client: deadpool_postgres::Client,
+    params: &ConnectionParams,
+) {
+    let Some(preamble) = params.session_preamble.as_ref() else {
+        return;
+    };
+    if preamble.session_settings.is_empty() {
+        return;
+    }
+    let undo = preamble
+        .session_settings
+        .iter()
+        .map(|name| format!("RESET \"{}\";", escape_identifier(name)))
+        .collect::<String>();
+    if let Err(error) = client.batch_execute(&undo).await {
+        log::warn!(
+            "Discarding connection: could not reset session state ({})",
+            format_pg_error(&error)
+        );
+        let _ = deadpool_postgres::Client::take(client);
+    }
+}
+
 pub async fn execute_query(
     params: &ConnectionParams,
     query: &str,
@@ -1046,7 +1090,9 @@ pub async fn execute_query(
     schema: Option<&str>,
 ) -> Result<QueryResult, String> {
     let client = acquire_pg_client(params, schema).await?;
-    exec_on_pg_client(&client, query, limit, page).await
+    let outcome = exec_on_pg_client(&client, query, limit, page).await;
+    release_session_scoped_client(client, params).await;
+    outcome
 }
 
 /// Runs a sequence of statements on a single pooled client so
@@ -1070,10 +1116,16 @@ pub async fn execute_batch(
         let outcome = exec_on_pg_client(&client, q, limit, page).await;
         let res = crate::models::BatchStatementResult::from_outcome(start, outcome);
         if let Some(cb) = on_progress {
-            cb(idx, &res);
+            // Same reason as the MySQL driver: an aborted batch must not leave
+            // this window's session settings on a pooled client.
+            if let Err(error) = cb(idx, &res) {
+                release_session_scoped_client(client, params).await;
+                return Err(error);
+            }
         }
         results.push(res);
     }
+    release_session_scoped_client(client, params).await;
     Ok(results)
 }
 
@@ -1270,10 +1322,7 @@ pub async fn get_view_columns(
 
             TableColumn {
                 name: r.try_get("column_name").unwrap_or_default(),
-                data_type: enum_data_type(
-                    r.try_get("data_type").unwrap_or_default(),
-                    enum_values,
-                ),
+                data_type: enum_data_type(r.try_get("data_type").unwrap_or_default(), enum_values),
                 is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
@@ -1687,7 +1736,9 @@ pub async fn drop_trigger(
 // Plugin wrapper
 // ============================================================
 
-use crate::drivers::driver_trait::{DatabaseDriver, DriverCapabilities, PluginManifest, SqlDialect};
+use crate::drivers::driver_trait::{
+    DatabaseDriver, DriverCapabilities, PluginManifest, SqlDialect,
+};
 use async_trait::async_trait;
 use std::collections::HashMap;
 
@@ -1731,7 +1782,6 @@ impl PostgresDriver {
                     triggers: true,
                     supports_ssl: true,
                     console_only: false,
-                    native_cli: None,
                     sql_dialect: SqlDialect::Postgres,
                 },
                 is_builtin: true,
@@ -2024,7 +2074,13 @@ impl DatabaseDriver for PostgresDriver {
         routine_type: &str,
         schema: Option<&str>,
     ) -> Result<(), String> {
-        drop_routine(params, routine_name, routine_type, self.resolve_schema(schema)).await
+        drop_routine(
+            params,
+            routine_name,
+            routine_type,
+            self.resolve_schema(schema),
+        )
+        .await
     }
 
     async fn get_triggers(
@@ -2042,7 +2098,13 @@ impl DatabaseDriver for PostgresDriver {
         table_name: &str,
         schema: Option<&str>,
     ) -> Result<String, String> {
-        get_trigger_definition(params, trigger_name, table_name, self.resolve_schema(schema)).await
+        get_trigger_definition(
+            params,
+            trigger_name,
+            table_name,
+            self.resolve_schema(schema),
+        )
+        .await
     }
 
     async fn create_trigger(
@@ -2061,7 +2123,13 @@ impl DatabaseDriver for PostgresDriver {
         table_name: &str,
         schema: Option<&str>,
     ) -> Result<(), String> {
-        drop_trigger(params, trigger_name, table_name, self.resolve_schema(schema)).await
+        drop_trigger(
+            params,
+            trigger_name,
+            table_name,
+            self.resolve_schema(schema),
+        )
+        .await
     }
 
     async fn execute_query(
@@ -2175,14 +2243,8 @@ impl DatabaseDriver for PostgresDriver {
         pk_map: &std::collections::HashMap<String, serde_json::Value>,
         schema: Option<&str>,
     ) -> Result<String, String> {
-        fetch_blob_column_as_data_url(
-            params,
-            table,
-            col_name,
-            pk_map,
-            self.resolve_schema(schema),
-        )
-        .await
+        fetch_blob_column_as_data_url(params, table, col_name, pk_map, self.resolve_schema(schema))
+            .await
     }
 
     async fn get_create_table_sql(

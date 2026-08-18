@@ -37,3 +37,4 @@ plugins/**/target
 
 # 时间戳备份不进版本库（2026-08-18）
 *.bak-*
+.verification/

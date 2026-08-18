@@ -3,6 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { PluginManifest } from "../types/plugins";
 
+// MongoDB / Redis 的内置控制台已移除（2026-08-18）。后端源码里的注册也删了，
+// 但正在用的 exe 是删除之前构建的，它仍以 is_builtin:true 注册这些 manifest，
+// 会被下面那个 is_builtin 过滤放行。为此单独重编整棵 Rust 树不划算，
+// 这里按 id 剔除即可；等 exe 因别的原因重建后，这个兜底自然失效但无害。
+const RETIRED_DRIVER_IDS = new Set(["mongodb", "redis", "redis-rust", "redis-go"]);
+
 const FALLBACK_DRIVERS: PluginManifest[] = [
   {
     id: "postgres",
@@ -137,7 +143,9 @@ export function useDrivers(): {
     invoke<PluginManifest[]>("get_registered_drivers")
       .then((registeredDrivers) => {
         setDrivers(
-          registeredDrivers.filter((driver) => driver.is_builtin === true),
+          registeredDrivers.filter(
+            (driver) => driver.is_builtin === true && !RETIRED_DRIVER_IDS.has(driver.id),
+          ),
         );
         setError(null);
       })

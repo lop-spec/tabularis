@@ -112,12 +112,7 @@ import {
   type ResultsClosedPayload,
 } from "../utils/resultsWindowSync";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
-import { NativeCliTerminal } from "../components/ui/NativeCliTerminal";
-import {
-  findNativeCliCommandAtOffset,
-  splitNativeCliCommands,
-  type NativeCliKind,
-} from "../utils/nativeCli";
+import { getDefaultEditorHeight } from "../utils/editorLayout";
 import { NotebookView } from "../components/notebook/NotebookView";
 import { useSqlAutocompleteRegistration } from "../hooks/useSqlAutocompleteRegistration";
 import { createNotebook, renameNotebook } from "../utils/notebookStore";
@@ -261,13 +256,6 @@ export const Editor = () => {
   const driverReadonly = isReadonly(activeCapabilities);
   const driverSupportsExplain = supportsExplain(activeCapabilities);
   const activeDialect = activeCapabilities?.sql_dialect;
-  const nativeCliKind: NativeCliKind | undefined =
-    activeCapabilities?.native_cli === "mongosh" ||
-    activeCapabilities?.native_cli === "redis-cli"
-      ? activeCapabilities.native_cli
-      : undefined;
-  const isNativeCli =
-    activeCapabilities?.console_only === true && nativeCliKind !== undefined;
   const rollbackProtectionEnabled =
     (activeDriver === "mysql" || activeDriver === "mariadb") &&
     connections.find((connection) => connection.id === activeConnectionId)
@@ -398,15 +386,16 @@ export const Editor = () => {
 
   const [showNewRowModal, setShowNewRowModal] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const [editorHeight, setEditorHeight] = useState(300);
-  const editorHeightRef = useRef(300);
+  const [editorHeight, setEditorHeight] = useState<number | string>(
+    getDefaultEditorHeight,
+  );
+  const editorHeightRef = useRef<number | string>(getDefaultEditorHeight());
   // Root of this editor instance: the resize logic must stay scoped to it,
   // in split view every pane mounts its own Editor
   const editorRootRef = useRef<HTMLDivElement>(null);
   const [isResultsCollapsed, setIsResultsCollapsed] = useState(false);
   useEffect(() => {
-    if (isNativeCli) setIsResultsCollapsed(false);
-  }, [activeTabId, isNativeCli]);
+  }, [activeTabId]);
   // Ids of tabs whose results are detached into their own separate windows (one
   // window per tab). Each window keeps showing its tab even when the user
   // switches tabs in the main window.
@@ -528,15 +517,10 @@ export const Editor = () => {
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
-      if (isNativeCli) {
-        void invoke("close_native_cli_session", { sessionId: tabId }).catch(
-          (error) => console.debug("Native CLI session was already closed:", error),
-        );
-      }
       delete editorsRef.current[tabId];
       closeTab(tabId);
     },
-    [closeTab, isNativeCli],
+    [closeTab],
   );
 
   // Update window title when the active tab changes
@@ -821,19 +805,12 @@ export const Editor = () => {
   const stopQuery = useCallback(async () => {
     if (!activeConnectionId) return;
     try {
-      if (isNativeCli && activeTabId) {
-        await invoke("interrupt_native_cli_session", {
-          sessionId: activeTabId,
-        });
-        updateActiveTab({ isLoading: false });
-        return;
-      }
       await invoke("cancel_query", { connectionId: activeConnectionId });
       updateActiveTab({ isLoading: false });
     } catch (e) {
       console.error("Failed to stop:", e);
     }
-  }, [activeConnectionId, activeTabId, isNativeCli, updateActiveTab]);
+  }, [activeConnectionId, updateActiveTab]);
 
   const reconcileDatabaseCatalog = useCallback(
     async (statements: readonly string[], targetTabId: string) => {
@@ -1074,6 +1051,9 @@ export const Editor = () => {
           query: textToRun,
           limit: pageSize,
           page: pageNum,
+          // Keeps this tab's `SET` statements in force: the backend replays
+          // them on whichever pooled connection serves the query.
+          sessionContextId: targetTabId,
           ...(schema ? { schema } : {}),
         });
         await reconcileDatabaseCatalog([textToRun], targetTabId);
@@ -1422,6 +1402,7 @@ export const Editor = () => {
             page: 1,
             batchId,
             transactionContextId: targetTabId,
+            sessionContextId: targetTabId,
             ...(rollbackUnsupportedPolicy
               ? { rollbackUnsupportedPolicy }
               : {}),
@@ -1667,6 +1648,7 @@ export const Editor = () => {
           query: entry.query,
           limit: pageSize,
           page: pageNum,
+          sessionContextId: targetTabId,
           ...(schema ? { schema } : {}),
         });
         const end = performance.now();
@@ -1750,6 +1732,7 @@ export const Editor = () => {
           connectionId: activeConnectionId,
           query: countTarget,
           schema: getExecutionScopeForTab(tab),
+          sessionContextId: tab.id,
         });
         const latest = tabsRef.current.find((t) => t.id === tab.id) ?? tab;
         if (!latest.result?.pagination) return;
@@ -2015,73 +1998,6 @@ export const Editor = () => {
       ? `${runButtonBase} · ${t("editor.runAll")} (${isMac ? "Cmd+Shift+Enter" : "Ctrl+Shift+Enter"})`
       : runButtonBase;
 
-  const submitNativeCliCommand = useCallback(
-    async (command: string, tabId?: string) => {
-      const targetTabId = tabId ?? activeTab?.id;
-      if (
-        !isNativeCli ||
-        !nativeCliKind ||
-        !activeConnectionId ||
-        !targetTabId ||
-        !command.trim()
-      ) {
-        return;
-      }
-
-      const startedAt = performance.now();
-      setIsResultsCollapsed(false);
-      updateTab(targetTabId, {
-        error: "",
-        isLoading: false,
-        result: null,
-        results: undefined,
-        activeResultId: undefined,
-      });
-
-      try {
-        await invoke("start_native_cli_session", {
-          connectionId: activeConnectionId,
-          sessionId: targetTabId,
-          cols: 80,
-          rows: 24,
-        });
-        const normalized = command.replace(/\r?\n/g, "\r");
-        await invoke("write_native_cli_session", {
-          sessionId: targetTabId,
-          data: normalized.endsWith("\r") ? normalized : `${normalized}\r`,
-        });
-        await addHistoryEntry(
-          command,
-          performance.now() - startedAt,
-          "success",
-          null,
-          null,
-          activeDatabaseName,
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        updateTab(targetTabId, { error: message, isLoading: false });
-        await addHistoryEntry(
-          command,
-          null,
-          "error",
-          null,
-          message,
-          activeDatabaseName,
-        );
-      }
-    },
-    [
-      activeConnectionId,
-      activeDatabaseName,
-      activeTab?.id,
-      addHistoryEntry,
-      isNativeCli,
-      nativeCliKind,
-      updateTab,
-    ],
-  );
-
   const handleRunAll = useCallback(() => {
     if (!activeTab) return;
     // Prefer the live editor content — activeTab.query lags behind by the
@@ -2089,61 +2005,12 @@ export const Editor = () => {
     const editor = editorsRef.current[activeTab.id];
     const text = (editor?.getModel()?.getValue() ?? activeTab.query ?? "").trim();
     if (!text) return;
-    if (isNativeCli) {
-      void submitNativeCliCommand(text, activeTab.id);
-      return;
-    }
     const queries = splitQueries(text, activeDialect);
     runMultipleQueries(queries.length > 0 ? queries : [text]);
-  }, [
-    activeTab,
-    activeDialect,
-    isNativeCli,
-    runMultipleQueries,
-    submitNativeCliCommand,
-  ]);
+  }, [activeTab, activeDialect, runMultipleQueries]);
 
   const handleRunButton = useCallback(() => {
     if (!activeTab) return;
-
-    if (isNativeCli && nativeCliKind) {
-      const editor = editorsRef.current[activeTab.id];
-      if (!editor) {
-        if (activeTab.query?.trim()) {
-          void submitNativeCliCommand(activeTab.query, activeTab.id);
-        }
-        return;
-      }
-
-      const selection = editor.getSelection();
-      const selectedText =
-        selection && !selection.isEmpty()
-          ? editor.getModel()?.getValueInRange(selection)
-          : undefined;
-      if (selectedText?.trim()) {
-        void submitNativeCliCommand(selectedText, activeTab.id);
-        return;
-      }
-
-      const text = editor.getValue();
-      if (!text.trim()) return;
-      if (settings.runStatementUnderCursor !== false) {
-        const model = editor.getModel();
-        const position = editor.getPosition();
-        if (model && position) {
-          const command = findNativeCliCommandAtOffset(
-            splitNativeCliCommands(text, nativeCliKind),
-            model.getOffsetAt(position),
-          );
-          if (command) {
-            void submitNativeCliCommand(command.text, activeTab.id);
-            return;
-          }
-        }
-      }
-      void submitNativeCliCommand(text, activeTab.id);
-      return;
-    }
 
     // Table Tab: run query with filter/sort/limit from activeTab
     if (activeTab.type === "table") {
@@ -2219,12 +2086,9 @@ export const Editor = () => {
   }, [
     activeTab,
     activeDialect,
-    isNativeCli,
-    nativeCliKind,
     runQuery,
     runMultipleQueries,
     settings.runStatementUnderCursor,
-    submitNativeCliCommand,
   ]);
 
   const openExplainForQuery = useCallback((query: string) => {
@@ -3331,7 +3195,6 @@ export const Editor = () => {
     // Focus the editor when a console tab is opened (Ctrl+T / new console)
     const mountedTab = tabsRef.current.find((t) => t.id === tabId);
     if (mountedTab?.type === "console") editor.focus();
-    if (isNativeCli) return;
     editor.addAction({
       id: "run-selection",
       label: "Execute Selection",
@@ -3381,7 +3244,7 @@ export const Editor = () => {
   useSqlAutocompleteRegistration(activeConnectionId, {
     monaco: monacoInstance,
     schema: getExecutionScopeForTab(activeTab),
-    enabled: !isNotebookTab && !isNativeCli,
+    enabled: !isNotebookTab,
   });
 
   useEffect(() => {
@@ -3658,31 +3521,16 @@ export const Editor = () => {
             : undefined;
 
           if (selectedText && selection && !selection.isEmpty()) {
-            const queries =
-              isNativeCli && nativeCliKind
-                ? splitNativeCliCommands(selectedText, nativeCliKind).map(
-                    (command) => command.text,
-                  )
-                : splitQueries(selectedText, activeDialect);
+            const queries = splitQueries(selectedText, activeDialect);
             setSelectableQueries(queries);
           } else {
             const text = editor.getValue();
-            const queries =
-              isNativeCli && nativeCliKind
-                ? splitNativeCliCommands(text, nativeCliKind).map(
-                    (command) => command.text,
-                  )
-                : splitQueries(text, activeDialect);
+            const queries = splitQueries(text, activeDialect);
             setSelectableQueries(queries);
           }
         } else if (activeTab.query?.trim()) {
           // Fallback: use saved query when editor ref is not available
-          const queries =
-            isNativeCli && nativeCliKind
-              ? splitNativeCliCommands(activeTab.query, nativeCliKind).map(
-                  (command) => command.text,
-                )
-              : splitQueries(activeTab.query, activeDialect);
+          const queries = splitQueries(activeTab.query, activeDialect);
           setSelectableQueries(queries);
         }
       }
@@ -3692,8 +3540,6 @@ export const Editor = () => {
     isRunDropdownOpen,
     activeTab,
     activeDialect,
-    isNativeCli,
-    nativeCliKind,
   ]);
 
   if (!activeTab) {
@@ -3893,9 +3739,7 @@ export const Editor = () => {
         >
           <Plus size={16} />
         </button>
-        {!isNativeCli && (
-          <>
-            <button
+        <button
               onClick={() => addTab({ type: "query_builder" })}
               className="flex items-center justify-center w-9 h-full text-purple-500 hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
               title={t("editor.newVisualQuery")}
@@ -3921,8 +3765,6 @@ export const Editor = () => {
             >
               <BookOpen size={16} />
             </button>
-          </>
-        )}
       </div>
 
       {/* Toolbar — hidden for notebook tabs. A size container so buttons can
@@ -3984,9 +3826,7 @@ export const Editor = () => {
                       </div>
                     ) : (
                       dropdownQueries.map((q, i) => {
-                        const label = isNativeCli
-                          ? q.split(/\r?\n/, 1)[0]
-                          : statementLabel(q);
+                        const label = statementLabel(q);
                         return (
                         <div
                           key={i}
@@ -3994,11 +3834,7 @@ export const Editor = () => {
                         >
                           <button
                             onClick={() => {
-                              if (isNativeCli) {
-                                void submitNativeCliCommand(q, activeTab.id);
-                              } else {
-                                runQuery(q, 1);
-                              }
+                              runQuery(q, 1);
                               setIsRunDropdownOpen(false);
                             }}
                             className="text-left px-4 py-2 text-xs font-mono text-secondary hover:text-white flex-1 truncate"
@@ -4006,7 +3842,7 @@ export const Editor = () => {
                           >
                             {label}
                           </button>
-                          {!isNativeCli && <button
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setIsRunDropdownOpen(false);
@@ -4016,7 +3852,7 @@ export const Editor = () => {
                             title={t("editor.saveThisQuery")}
                           >
                             <Save size={14} />
-                          </button>}
+                          </button>
                         </div>
                         );
                       })
@@ -4051,7 +3887,7 @@ export const Editor = () => {
         )}
 
         {/* Params Button */}
-        {!isTableTab && !isNativeCli && (
+        {!isTableTab && (
           <button
             onClick={handleEditParams}
             disabled={!hasQueryParams}
@@ -4068,7 +3904,7 @@ export const Editor = () => {
         )}
 
         {/* Format SQL Button */}
-        {!isTableTab && !isNativeCli && (
+        {!isTableTab && (
           <button
             onClick={() => {
               const editor = editorsRef.current[activeTab.id];
@@ -4091,7 +3927,6 @@ export const Editor = () => {
           ref={exportMenuRef}
           className={clsx(
             "relative ml-auto shrink-0",
-            isNativeCli && "hidden",
           )}
         >
           <button
@@ -4246,15 +4081,9 @@ export const Editor = () => {
               <SqlEditorWrapper
                 height="100%"
                 initialValue={tab.query}
-                dialect={isNativeCli ? undefined : activeDialect}
-                language={
-                  nativeCliKind === "mongosh"
-                    ? "javascript"
-                    : nativeCliKind === "redis-cli"
-                      ? "plaintext"
-                      : "sql"
-                }
-                enableSqlTools={!isNativeCli}
+                dialect={activeDialect}
+                language="sql"
+                enableSqlTools
                 onChange={(val) => {
                   if (isActive) updateTab(tab.id, { query: val });
                 }}
@@ -4275,7 +4104,7 @@ export const Editor = () => {
             )}
 
             {/* Editor overlay buttons — bottom-right */}
-            {tab.type !== "query_builder" && !isNativeCli && (
+            {tab.type !== "query_builder" && (
               <div className="absolute bottom-2 right-6 z-10 flex items-center gap-1">
                 {/* Visual Explain — hidden for read-only definition tabs and drivers without EXPLAIN support */}
                 {!tab.readOnly && driverSupportsExplain && (
@@ -4322,7 +4151,7 @@ export const Editor = () => {
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 {/* Detach results into a separate window */}
-                {!isNativeCli && <button
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDetachResults();
@@ -4332,7 +4161,7 @@ export const Editor = () => {
                   title={t("editor.results.detach")}
                 >
                   <ExternalLink size={14} />
-                </button>}
+                </button>
                 {/* Minimize (collapse the results panel) */}
                 <button
                   onClick={(e) => {
@@ -4380,13 +4209,7 @@ export const Editor = () => {
 
           {/* Results Panel */}
           <div className="flex-1 overflow-hidden bg-elevated flex flex-col min-h-0">
-            {isNativeCli && nativeCliKind && activeConnectionId ? (
-              <NativeCliTerminal
-                connectionId={activeConnectionId}
-                sessionId={activeTab.id}
-                kind={nativeCliKind}
-              />
-            ) : detachedTabIds.has(activeTab.id) ? (
+            {detachedTabIds.has(activeTab.id) ? (
               <div className="flex flex-col items-center justify-center h-full text-muted gap-3">
                 <ExternalLink size={28} className="opacity-60" />
                 <p className="text-sm">{t("editor.results.detached")}</p>
@@ -5017,6 +4840,7 @@ export const Editor = () => {
         query={visualExplainQuery ?? activeTab?.query ?? ""}
         connectionId={activeConnectionId ?? ""}
         schema={getExecutionScopeForTab(activeTab)}
+        sessionContextId={activeTab?.id}
       />
       <ExplainSelectionModal
         isOpen={isExplainSelectionOpen}
