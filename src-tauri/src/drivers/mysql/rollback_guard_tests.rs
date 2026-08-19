@@ -808,3 +808,112 @@ fn default_current_timestamp_is_not_a_generated_column() {
         assert!(is_generated_column(expression), "expression={expression:?}");
     }
 }
+
+/// lop 2026-08-19：「for update，for share 这类也要支持上」「很多 set 变量和
+/// select 这种都不要提示」。两个诉求同源——回滚守卫把不需要逆向 SQL 的语句
+/// 判成了 unsupported，前端据此弹出「不可回滚」确认框。
+#[test]
+fn reads_and_session_statements_do_not_need_confirmation() {
+    // 锁定读：在调用方事务里取行锁，不改数据，没有可逆向的东西
+    for sql in [
+        "SELECT id FROM t WHERE id = 1 FOR UPDATE",
+        "SELECT id FROM t WHERE id = 1 FOR SHARE",
+        "SELECT id FROM t WHERE id = 1 LOCK IN SHARE MODE",
+        "SELECT id FROM t WHERE id = 1 FOR UPDATE NOWAIT",
+        "SELECT id FROM t WHERE id = 1 FOR UPDATE SKIP LOCKED",
+    ] {
+        assert_eq!(plan_for_rollback(sql), Ok(ProtectedStatement::ReadOnly), "{sql}");
+    }
+
+    // 读语句不再跑「已证明无副作用」函数白名单：那份名单有 193 项，仍然漏掉
+    // GROUP_CONCAT / ROW_NUMBER / LAG / MD5 / UUID，普通报表查询因此被拒。
+    // 读没有回滚文件，白名单在这里本来就无从谈起。
+    for sql in [
+        "SELECT GROUP_CONCAT(name) FROM t",
+        "SELECT ROW_NUMBER() OVER (ORDER BY id) FROM t",
+        "SELECT LAG(v) OVER (ORDER BY id) FROM t",
+        "SELECT MD5(name) FROM t",
+        "SELECT UUID()",
+        // lop 历史里真实撞到的三个
+        "SELECT REGEXP_LIKE(content, 'x') FROM t",
+        "SELECT REGEXP_REPLACE(content, 'a', 'b') FROM t",
+        "SELECT GROUP_CONCAT(DISTINCT name ORDER BY id SEPARATOR ',') FROM t",
+    ] {
+        assert_eq!(plan_for_rollback(sql), Ok(ProtectedStatement::ReadOnly), "{sql}");
+    }
+
+    // 会话语句：这些形态在 lop 的执行历史里被反复拦下（`SET NAMES utf8mb4`、
+    // `SET SESSION lock_wait_timeout`、`SET SESSION sql_safe_updates` 各若干次），
+    // 而一条被拦会让整批失败，连累后面所有语句。
+    for sql in [
+        "SET @a = 1",
+        "SET NAMES utf8mb4",
+        "SET CHARACTER SET utf8mb4",
+        "SET SESSION lock_wait_timeout = 10",
+        "SET SESSION sql_safe_updates = 1",
+        "SET SESSION sql_mode = 'STRICT_TRANS_TABLES'",
+        "SET @@session.time_zone = '+08:00'",
+        "SET sql_mode = ''",
+        "SET time_zone = '+00:00'",
+        "SET foreign_key_checks = 0",
+        "SET group_concat_max_len = 102400",
+        "SET SESSION group_concat_max_len = 102400, sql_mode = ''",
+    ] {
+        assert!(
+            matches!(plan_for_rollback(sql), Ok(ProtectedStatement::Session(_))),
+            "{sql} -> {:?}",
+            plan_for_rollback(sql)
+        );
+    }
+}
+
+/// 反向断言：放宽不能把真正危险的形态也放过去，否则上面那些「不提示」毫无意义。
+#[test]
+fn dangerous_statements_are_still_refused() {
+    // autocommit=1 会让每条语句立即提交，回滚保护形同虚设——这是唯一真正
+    // 破坏回滚语义的 SET
+    for sql in [
+        "SET autocommit = 1",
+        "SET SESSION autocommit = 1",
+        "SET @@session.autocommit = 0",
+    ] {
+        assert!(plan_for_rollback(sql).is_err(), "{sql} 必须被拒");
+    }
+
+    // 影响其他连接、身份，或事务特性本身
+    for sql in [
+        "SET GLOBAL max_connections = 1000",
+        "SET @@global.sql_mode = ''",
+        "SET PERSIST max_connections = 1000",
+        "SET PERSIST_ONLY max_connections = 1000",
+        "SET PASSWORD FOR 'u'@'%' = 'x'",
+        "SET ROLE admin",
+        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+        "SET SESSION TRANSACTION READ ONLY",
+    ] {
+        assert!(plan_for_rollback(sql).is_err(), "{sql} 必须被拒");
+    }
+
+    // 外部写副作用：去掉函数白名单后这条是读路径上仅存的拦截，必须还在
+    for sql in [
+        "SELECT * FROM t INTO OUTFILE '/tmp/x.csv'",
+        "SELECT * FROM t INTO DUMPFILE '/tmp/x.bin'",
+    ] {
+        assert!(plan_for_rollback(sql).is_err(), "{sql} 必须被拒");
+    }
+
+    // 读语句仍然拒绝**可识别的**存储函数：它们能写表，而那些写不进回滚文件。
+    // 判据是 schema 限定或反引号，不是名单——内置函数不可能长成这两种样子。
+    for sql in [
+        "SELECT app.mutate_users(id) FROM t",
+        "SELECT `mutate_users`(id) FROM t",
+    ] {
+        assert!(plan_for_rollback(sql).is_err(), "{sql} 必须被拒");
+    }
+
+    // 写语句仍然要过完整白名单：它们有回滚文件，藏在函数里的写会让逆向 SQL 失真
+    assert!(
+        plan_for_rollback("UPDATE t SET v = my_custom_udf(1) WHERE id = 1").is_err(),
+        "写语句里的未证明函数必须被拒"
+    );
+}

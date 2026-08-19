@@ -96,7 +96,15 @@ pub(super) enum DdlPlan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SessionPlan {
     UserVariable,
+    /// `USE db` — changes which database unqualified names resolve to, so a
+    /// rollback file written before it would target the wrong schema. Batches
+    /// mixing this with writes are refused.
     ScopeChange,
+    /// `SET SESSION ...` / `SET @@session....` / `SET sql_mode = ...` and the
+    /// rest of what `session_vars` replays. These change how statements behave
+    /// but not which schema they resolve against, so unlike `ScopeChange` they
+    /// are safe to mix with writes.
+    Setting,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -236,7 +244,7 @@ pub(super) fn plan_for_rollback(sql: &str) -> Result<ProtectedStatement, Blocked
                 Ok(ProtectedStatement::ReadOnly)
             }
         }
-        "SET" => classify_set(tokens),
+        "SET" => classify_set(sql, tokens),
         "USE" => Ok(ProtectedStatement::Session(SessionPlan::ScopeChange)),
         "START" | "BEGIN" | "COMMIT" | "ROLLBACK" => classify_transaction_control(tokens),
         "INSERT" => {
@@ -3101,13 +3109,26 @@ fn sql_hex(bytes: &[u8]) -> String {
     value
 }
 
+/// A read needs no inverse statement, so what can make a SELECT unsafe here is
+/// narrow: an external write side effect (INTO OUTFILE/DUMPFILE) or a stored
+/// function that writes tables behind the query.
+///
+/// Reads use [`ensure_no_user_defined_function_calls`] rather than the proven-
+/// function allowlist. Both refuse stored functions; the allowlist additionally
+/// refuses every built-in it has not heard of, and that is where it went wrong
+/// — 193 names and still missing GROUP_CONCAT, ROW_NUMBER, LAG, MD5, UUID.
+/// Write statements keep the allowlist: they carry a rollback file, so an
+/// unrecognised function there is worth failing closed over.
+///
+/// `SELECT ... FOR UPDATE` / `FOR SHARE` / `LOCK IN SHARE MODE` stay read-only:
+/// they take row locks inside the caller's transaction but change no data.
 fn classify_select(tokens: &[Token]) -> Result<ProtectedStatement, BlockedStatement> {
     if contains_word(tokens, "OUTFILE") || contains_word(tokens, "DUMPFILE") {
         return Err(BlockedStatement::unsupported(
             "SELECT INTO OUTFILE/DUMPFILE has an external write side effect",
         ));
     }
-    ensure_only_proven_function_calls(tokens)?;
+    ensure_no_user_defined_function_calls(tokens)?;
     Ok(ProtectedStatement::ReadOnly)
 }
 
@@ -3168,7 +3189,7 @@ fn matches_word_sequence(tokens: &[Token], expected: &[&str]) -> bool {
             .all(|(token, expected)| token.kind == TokenKind::Word && token.upper() == *expected)
 }
 
-fn classify_set(tokens: &[Token]) -> Result<ProtectedStatement, BlockedStatement> {
+fn classify_set(sql: &str, tokens: &[Token]) -> Result<ProtectedStatement, BlockedStatement> {
     if let Some((variable, assignment_index)) = direct_user_variable(tokens) {
         if contains_word(tokens, "OUTFILE") || contains_word(tokens, "DUMPFILE") {
             return Err(BlockedStatement::unsupported(
@@ -3189,6 +3210,27 @@ fn classify_set(tokens: &[Token]) -> Result<ProtectedStatement, BlockedStatement
         ensure_only_proven_function_calls_with_assignment(tokens, allowed_colon_assignment)?;
         return Ok(ProtectedStatement::Session(SessionPlan::UserVariable));
     }
+
+    // Any `SET` that only changes session behaviour is safe here: it touches no
+    // table data, so there is nothing to invert. `session_vars` already owns
+    // that judgement, so reuse it rather than growing a second copy that drifts
+    // — this function used to allow `SET @var` alone, which refused
+    // `SET NAMES utf8mb4`, `SET SESSION sql_mode = ...`, `SET time_zone = ...`
+    // and friends even though the session-variable feature handled them fine.
+    //
+    // What stays refused: GLOBAL/PERSIST (reaches other connections),
+    // PASSWORD/ROLE (identity), TRANSACTION characteristics, and `autocommit`
+    // — that last one is the only SET that genuinely breaks rollback, since
+    // autocommit=1 commits each statement the moment it runs.
+    if crate::session_vars::is_rollback_safe(sql) {
+        if contains_word(tokens, "OUTFILE") || contains_word(tokens, "DUMPFILE") {
+            return Err(BlockedStatement::unsupported(
+                "SET expressions with SELECT INTO OUTFILE/DUMPFILE have an external write side effect",
+            ));
+        }
+        return Ok(ProtectedStatement::Session(SessionPlan::Setting));
+    }
+
     Err(BlockedStatement::unsupported(
         "only SET @user_variable is allowed; session/global settings can invalidate rollback semantics",
     ))
@@ -3209,6 +3251,42 @@ fn direct_user_variable(tokens: &[Token]) -> Option<(&str, usize)> {
 
 fn ensure_only_proven_function_calls(tokens: &[Token]) -> Result<(), BlockedStatement> {
     ensure_only_proven_function_calls_with_assignment(tokens, None)
+}
+
+/// Refuses only the function calls that are *identifiably* user-defined, which
+/// is what reads actually need to worry about: a stored function can write to
+/// tables, and those writes land in no rollback file.
+///
+/// Two markers identify them without consulting any list:
+///   * schema qualification — `app.mutate_users(...)`
+///   * a quoted identifier  — `` `mutate_users`(...) ``
+///
+/// Built-in functions can be neither. That matters because the allowlist used
+/// by [`ensure_only_proven_function_calls`] holds 193 names and still missed
+/// GROUP_CONCAT, ROW_NUMBER, LAG, MD5 and UUID — every miss rejected a read
+/// that was never a risk, and adding names never converges.
+///
+/// A bare `SELECT mutate_users(1)` on a stored function in the *current* schema
+/// still slips through: nothing in the statement distinguishes it from a
+/// built-in. Writes it performs are outside rollback protection. That gap is
+/// the deliberate cost of not maintaining a list; write statements keep the
+/// stricter check, since they are the ones with a rollback file to falsify.
+fn ensure_no_user_defined_function_calls(tokens: &[Token]) -> Result<(), BlockedStatement> {
+    for (idx, token) in tokens.iter().enumerate() {
+        if !matches!(token.kind, TokenKind::Word | TokenKind::QuotedIdentifier)
+            || tokens.get(idx + 1).map(|next| next.text.as_str()) != Some("(")
+        {
+            continue;
+        }
+        let schema_qualified = idx > 0 && tokens[idx - 1].text == ".";
+        if token.kind == TokenKind::QuotedIdentifier || schema_qualified {
+            return Err(BlockedStatement::unsupported(format!(
+                "function call {}(...) is user-defined; stored functions can hide writes that no rollback file records",
+                token.text
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn ensure_only_proven_function_calls_with_assignment(

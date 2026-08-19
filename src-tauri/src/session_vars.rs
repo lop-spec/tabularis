@@ -250,6 +250,49 @@ pub(crate) fn replayable_targets(sql: &str) -> Option<Vec<String>> {
     (!targets.is_empty()).then_some(targets)
 }
 
+/// Prefixes that must not be replayed, yet cannot make a rollback wrong.
+///
+/// `SET NAMES` / `SET CHARACTER SET` change how the connection encodes results.
+/// Replaying them is unsafe because a pooled connection carries the charset to
+/// whichever window gets it next, and there is no way to restore the previous
+/// value — but the charset has no bearing on whether a rollback statement
+/// reproduces the original rows.
+const REPLAY_UNSAFE_BUT_ROLLBACK_SAFE: &[&str] = &["NAMES ", "CHARACTER SET "];
+
+/// Whether this `SET` only changes how the current session behaves, leaving
+/// rollback correctness intact.
+///
+/// This asks a different question from [`replayable_targets`], which is why the
+/// two disagree on `SET NAMES`:
+///
+/// * `replayable_targets` — "can this be re-applied on whatever connection the
+///   pool hands out next?" `SET NAMES` fails that, so it is never remembered.
+/// * `is_rollback_safe` — "can a rollback file still reproduce the original
+///   rows after this ran?" `SET NAMES` passes that; encoding does not change
+///   which rows a rollback statement restores.
+///
+/// So `SET NAMES utf8mb4` should execute but not be replayed. Both answers are
+/// correct; they answer different questions. Refusing it in the rollback guard
+/// was the bug — lop's execution history has it blocked repeatedly, and because
+/// one refused statement fails the whole batch it took the rest of the batch
+/// down with it.
+pub(crate) fn is_rollback_safe(sql: &str) -> bool {
+    if replayable_targets(sql).is_some() {
+        return true;
+    }
+    let statement = trim_statement(sql);
+    if statement.is_empty() || contains_top_level_semicolon(statement) {
+        return false;
+    }
+    let Some(rest) = strip_keyword(statement, "SET") else {
+        return false;
+    };
+    let upper = rest.to_uppercase();
+    REPLAY_UNSAFE_BUT_ROLLBACK_SAFE
+        .iter()
+        .any(|prefix| upper.starts_with(prefix))
+}
+
 /// Returns what follows `keyword` when the statement starts with it as a whole
 /// word, else `None`.
 fn strip_keyword<'a>(statement: &'a str, keyword: &str) -> Option<&'a str> {
