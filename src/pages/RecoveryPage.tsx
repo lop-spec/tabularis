@@ -53,16 +53,6 @@ interface RecoveryCompareResponse {
   backupInstance: string;
 }
 
-interface BackupParams {
-  driver: "mysql";
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  database: string;
-  ssl_mode: string;
-}
-
 const inputClass =
   "w-full rounded-lg border border-default bg-base px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-blue-500/60";
 
@@ -80,10 +70,14 @@ function displayTime(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function displayDatabase(value: string | string[]): string {
+  return Array.isArray(value) ? value.join(", ") : value;
+}
+
 export function RecoveryPage() {
   const { i18n } = useTranslation();
   const zh = i18n.language.toLowerCase().startsWith("zh");
-  const { activeConnectionId } = useDatabase();
+  const { activeConnectionId, connections } = useDatabase();
   const labels = zh
     ? {
         title: "数据恢复",
@@ -104,13 +98,10 @@ export function RecoveryPage() {
         exact: "精确记录",
         inexact: "不可精确恢复",
         backup: "备份实例",
-        backupHint: "连接信息仅用于本次只读对比，不写入恢复记录。",
-        host: "主机",
-        port: "端口",
-        user: "用户名",
-        password: "密码",
-        database: "备份数据库",
-        ssl: "SSL 模式",
+        backupHint: "直接复用已保存连接的数据库、SSH 与凭据配置。",
+        connection: "已保存连接",
+        pickConnection: "请选择 MySQL / MariaDB 连接",
+        noConnections: "暂无可用的 MySQL / MariaDB 连接，请先到“连接”中添加。",
         test: "测试连接",
         tested: "连接成功",
         generate: "只读对比并生成 SQL",
@@ -126,6 +117,7 @@ export function RecoveryPage() {
         unchanged: "无需恢复",
         conflicts: "冲突",
         pickFirst: "请先选择 Run All 或单条 DDL / DML。",
+        pickBackup: "请先选择备份连接。",
         oneConnection: "一次只能恢复同一个目标连接的记录。",
       }
     : {
@@ -148,13 +140,10 @@ export function RecoveryPage() {
         exact: "Exact",
         inexact: "Not exactly recoverable",
         backup: "Backup instance",
-        backupHint: "Credentials are used for this read-only comparison and are not persisted.",
-        host: "Host",
-        port: "Port",
-        user: "Username",
-        password: "Password",
-        database: "Backup database",
-        ssl: "SSL mode",
+        backupHint: "Reuse the database, SSH, and credentials from a saved connection.",
+        connection: "Saved connection",
+        pickConnection: "Select a MySQL / MariaDB connection",
+        noConnections: "No saved MySQL / MariaDB connections. Add one in Connections first.",
         test: "Test connection",
         tested: "Connected",
         generate: "Compare read-only and generate SQL",
@@ -170,6 +159,7 @@ export function RecoveryPage() {
         unchanged: "No change",
         conflicts: "Conflicts",
         pickFirst: "Select a Run All or individual DDL/DML first.",
+        pickBackup: "Select a backup connection first.",
         oneConnection: "A recovery selection can only target one connection.",
       };
 
@@ -187,15 +177,19 @@ export function RecoveryPage() {
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [result, setResult] = useState<RecoveryCompareResponse | null>(null);
-  const [backup, setBackup] = useState<BackupParams>({
-    driver: "mysql",
-    host: "",
-    port: 3306,
-    username: "",
-    password: "",
-    database: "",
-    ssl_mode: "preferred",
-  });
+  const [backupConnectionId, setBackupConnectionId] = useState("");
+
+  const backupConnections = useMemo(
+    () =>
+      connections.filter((connection) =>
+        ["mysql", "mariadb"].includes(connection.params.driver.toLowerCase()),
+      ),
+    [connections],
+  );
+  const selectedBackupConnection = useMemo(
+    () => backupConnections.find((connection) => connection.id === backupConnectionId),
+    [backupConnectionId, backupConnections],
+  );
 
   const loadRuns = useCallback(async () => {
     setLoading(true);
@@ -232,15 +226,6 @@ export function RecoveryPage() {
     [selectedRuns],
   );
   const targetConnectionId = selectedRuns[0]?.connectionId ?? null;
-
-  useEffect(() => {
-    const database = selectedRuns[0]?.database;
-    if (database) {
-      setBackup((current) =>
-        current.database ? current : { ...current, database },
-      );
-    }
-  }, [selectedRuns]);
 
   const toggleStatement = (run: RecoveryRunSummary, statementId: string) => {
     setError(null);
@@ -307,14 +292,15 @@ export function RecoveryPage() {
   };
 
   const testBackup = async () => {
+    if (!backupConnectionId) {
+      setError(labels.pickBackup);
+      return;
+    }
     setTestState("testing");
     setError(null);
     try {
-      await invoke<string>("test_connection", {
-        request: {
-          params: backup,
-          connection_id: null,
-        },
+      await invoke<string>("test_saved_connection", {
+        connectionId: backupConnectionId,
       });
       setTestState("ok");
     } catch (testError) {
@@ -332,6 +318,10 @@ export function RecoveryPage() {
       setError(labels.oneConnection);
       return;
     }
+    if (!backupConnectionId) {
+      setError(labels.pickBackup);
+      return;
+    }
     setGenerating(true);
     setError(null);
     setResult(null);
@@ -342,7 +332,7 @@ export function RecoveryPage() {
           runIds: selectedRuns.map((run) => run.runId),
           statementIds: [...selected],
         },
-        backupParams: backup,
+        backupConnectionId,
       });
       setResult(response);
     } catch (generateError) {
@@ -352,11 +342,8 @@ export function RecoveryPage() {
     }
   };
 
-  const setBackupField = <K extends keyof BackupParams>(
-    field: K,
-    value: BackupParams[K],
-  ) => {
-    setBackup((current) => ({ ...current, [field]: value }));
+  const selectBackupConnection = (connectionId: string) => {
+    setBackupConnectionId(connectionId);
     setTestState("idle");
     setResult(null);
   };
@@ -570,79 +557,43 @@ export function RecoveryPage() {
             </div>
             <p className="mt-1 text-xs text-muted">{labels.backupHint}</p>
 
-            <div className="mt-4 grid grid-cols-[minmax(0,1fr)_96px] gap-3">
-              <label className="space-y-1">
-                <span className="text-[11px] text-muted">{labels.host}</span>
-                <input
-                  className={inputClass}
-                  value={backup.host}
-                  onChange={(event) => setBackupField("host", event.target.value)}
-                  placeholder="127.0.0.1"
-                  autoComplete="off"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[11px] text-muted">{labels.port}</span>
-                <input
-                  className={inputClass}
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={backup.port}
-                  onChange={(event) =>
-                    setBackupField("port", Number(event.target.value) || 3306)
-                  }
-                />
-              </label>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <label className="space-y-1">
-                <span className="text-[11px] text-muted">{labels.user}</span>
-                <input
-                  className={inputClass}
-                  value={backup.username}
-                  onChange={(event) => setBackupField("username", event.target.value)}
-                  autoComplete="username"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[11px] text-muted">{labels.password}</span>
-                <input
-                  className={inputClass}
-                  type="password"
-                  value={backup.password}
-                  onChange={(event) => setBackupField("password", event.target.value)}
-                  autoComplete="current-password"
-                />
-              </label>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <label className="space-y-1">
-                <span className="text-[11px] text-muted">{labels.database}</span>
-                <input
-                  className={inputClass}
-                  value={backup.database}
-                  onChange={(event) => setBackupField("database", event.target.value)}
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[11px] text-muted">{labels.ssl}</span>
-                <select
-                  className={inputClass}
-                  value={backup.ssl_mode}
-                  onChange={(event) => setBackupField("ssl_mode", event.target.value)}
-                >
-                  <option value="disabled">Disabled</option>
-                  <option value="preferred">Preferred</option>
-                  <option value="required">Required</option>
-                  <option value="verify_ca">Verify CA</option>
-                  <option value="verify_identity">Verify identity</option>
-                </select>
-              </label>
-            </div>
+            <label className="mt-4 block space-y-1">
+              <span className="text-[11px] text-muted">{labels.connection}</span>
+              <select
+                className={inputClass}
+                value={backupConnectionId}
+                onChange={(event) => selectBackupConnection(event.target.value)}
+              >
+                <option value="">
+                  {backupConnections.length > 0 ? labels.pickConnection : labels.noConnections}
+                </option>
+                {backupConnections.map((connection) => (
+                  <option key={connection.id} value={connection.id}>
+                    {connection.name} · {connection.params.driver.toUpperCase()}
+                    {connection.params.host
+                      ? ` · ${connection.params.host}${
+                          connection.params.port ? `:${connection.params.port}` : ""
+                        }`
+                      : ""}
+                    {` · ${displayDatabase(connection.params.database)}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selectedBackupConnection && (
+              <div className="mt-3 rounded-lg border border-default/70 bg-base/60 px-3 py-2 text-xs text-muted">
+                <span className="font-medium text-secondary">{selectedBackupConnection.name}</span>
+                <span className="ml-2 uppercase">
+                  {selectedBackupConnection.params.driver}
+                </span>
+                {selectedBackupConnection.params.ssh_enabled && (
+                  <span className="ml-2 text-blue-400">SSH</span>
+                )}
+              </div>
+            )}
             <button
               type="button"
-              disabled={testState === "testing" || !backup.host || !backup.username || !backup.database}
+              disabled={testState === "testing" || !backupConnectionId}
               onClick={() => void testBackup()}
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-default px-3 py-2 text-sm text-secondary transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -670,9 +621,7 @@ export function RecoveryPage() {
               generating ||
               selected.size === 0 ||
               selectedConnectionIds.size !== 1 ||
-              !backup.host ||
-              !backup.username ||
-              !backup.database
+              !backupConnectionId
             }
             onClick={() => void generate()}
             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"

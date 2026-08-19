@@ -463,6 +463,7 @@ pub fn run() {
             commands::get_keybindings,
             commands::save_keybindings,
             commands::test_connection,
+            commands::test_saved_connection,
             commands::list_databases,
             commands::save_connection,
             sqlite_database::create_sqlite_file,

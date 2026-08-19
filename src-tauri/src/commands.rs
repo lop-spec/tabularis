@@ -2545,6 +2545,24 @@ pub async fn run_functional_test_audit_smoke<R: Runtime>(
     Ok(())
 }
 
+/// Test an already saved connection without returning its keychain-backed
+/// password or connection URI to the frontend.
+#[tauri::command]
+pub async fn test_saved_connection<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+) -> Result<String, String> {
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    test_connection(
+        app,
+        TestConnectionRequest {
+            params: saved_conn.params,
+            connection_id: Some(connection_id),
+        },
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4857,16 +4875,20 @@ pub async fn execute_query_batch<R: Runtime>(
     }
 }
 
-/// Compares selected protected Run All records against a separately supplied
-/// backup instance. Both connections are used read-only; the command only
-/// writes an isolated recovery SQL preview under `recovery-sql`.
+/// Compares selected protected Run All records against a saved backup
+/// connection. Both connections are used read-only; the command only writes
+/// an isolated recovery SQL preview under `recovery-sql`.
 #[tauri::command]
 pub async fn generate_recovery_sql<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
     selection: crate::recovery_history::RecoverySelection,
-    backup_params: ConnectionParams,
+    backup_connection_id: String,
 ) -> Result<crate::recovery_history::RecoveryCompareResponse, String> {
+    if connection_id == backup_connection_id {
+        return Err("Backup connection must be different from the recovery target".to_string());
+    }
+
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     if !matches!(saved_conn.params.driver.as_str(), "mysql" | "mariadb") {
         return Err("Recovery comparison currently supports MySQL and MariaDB".to_string());
@@ -4880,12 +4902,19 @@ pub async fn generate_recovery_sql<R: Runtime>(
         &saved_conn.name,
     )?;
 
-    let expanded_backup = expand_ssh_connection_params(&app, &backup_params).await?;
+    let saved_backup = find_connection_by_id(&app, &backup_connection_id)?;
+    if !matches!(saved_backup.params.driver.as_str(), "mysql" | "mariadb") {
+        return Err("Recovery backup must be a MySQL or MariaDB connection".to_string());
+    }
+
+    let expanded_backup = expand_ssh_connection_params(&app, &saved_backup.params).await?;
     let expanded_backup = expand_k8s_connection_params(&app, &expanded_backup).await?;
-    let mut resolved_backup = resolve_connection_params(&expanded_backup)?;
     let transient_id = format!("recovery-backup-{}", ulid::Ulid::new());
-    resolved_backup.connection_id = Some(transient_id.clone());
-    resolved_backup.connection_name = Some("Recovery backup (ephemeral)".to_string());
+    let resolved_backup = resolve_connection_params_with_identity(
+        &expanded_backup,
+        &transient_id,
+        &saved_backup.name,
+    )?;
 
     let result = crate::recovery_history::compare_and_generate(
         &target_params,
