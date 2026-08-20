@@ -141,7 +141,6 @@ import { buildForeignKeyFilterClause } from "../utils/foreignKeys";
 import { formatSqlIdentifier } from "../utils/identifiers";
 import { RelatedRecordsPanel } from "../components/ui/RelatedRecordsPanel";
 import { RollbackFileButton } from "../components/ui/RollbackFileButton";
-import { getDefaultEditorHeight } from "../utils/editorLayout";
 import {
   createRollbackViewerTab,
   findRollbackFile,
