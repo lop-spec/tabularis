@@ -915,22 +915,30 @@ async fn execute_pinned_protected_batch(
         queries,
     )?;
 
+    // `USE db` mixed with writes used to be refused here, on the theory that an
+    // unqualified table name in the rollback file would resolve against whatever
+    // database happened to be current at restore time.
+    //
+    // That is not how the rollback file is built. Both paths qualify the name at
+    // execution time, against the connection's database *as of that statement*:
+    //   * DML  — `load_table_metadata` fills `TableMetadata.schema` (a `String`,
+    //     not an `Option`) via `current_database(conn)`, and the inverse SQL uses
+    //     `metadata.qualified_name()`.
+    //   * DDL  — `resolve_object` does the same before `ObjectName::quoted()`.
+    // So a batch that switches database mid-way produces rollback SQL pointing at
+    // the right schema for each statement, which is exactly what USE + Run All
+    // needs. A failed USE cannot desync this either: the batch sets `stopped` and
+    // every later statement is skipped rather than executed against the old one.
+    //
+    // lop asked for USE + Run All twice; the refusal accounted for 53 blocked
+    // statements in his execution history, each of which failed its whole batch.
+
     let has_writes = plans.iter().any(|plan| {
         matches!(
             plan,
             ProtectedStatement::Dml(_) | ProtectedStatement::Ddl(_)
         )
     });
-    if has_writes
-        && plans
-            .iter()
-            .any(|plan| matches!(plan, ProtectedStatement::Session(SessionPlan::ScopeChange)))
-    {
-        return Err(
-            "Rollback protection blocks USE when the same Run All batch contains writes; select the database in the connection scope instead"
-                .to_string(),
-        );
-    }
 
     let slot = if let Some(slot) = existing_slot {
         slot
@@ -1346,16 +1354,9 @@ async fn execute_single_run_protected_batch(
             ProtectedStatement::Dml(_) | ProtectedStatement::Ddl(_)
         )
     });
-    if has_writes
-        && plans
-            .iter()
-            .any(|plan| matches!(plan, ProtectedStatement::Session(SessionPlan::ScopeChange)))
-    {
-        return Err(
-            "Rollback protection blocks USE when the same Run All batch contains writes; select the database in the connection scope instead"
-                .to_string(),
-        );
-    }
+    // USE + writes is allowed here for the same reason as in the pinned path:
+    // the rollback file is qualified at execution time via `current_database`,
+    // so switching database mid-batch cannot make it target the wrong schema.
 
     let mut conn = super::acquire_mysql_conn(params, schema).await?;
     let text = super::TextProto::protocol_only(super::force_text_protocol(params));

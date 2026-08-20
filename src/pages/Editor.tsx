@@ -118,6 +118,7 @@ import { useSqlAutocompleteRegistration } from "../hooks/useSqlAutocompleteRegis
 import { createNotebook, renameNotebook } from "../utils/notebookStore";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import { useAlert } from "../hooks/useAlert";
 import { useDatabase } from "../hooks/useDatabase";
 import { useDrivers } from "../hooks/useDrivers";
@@ -139,6 +140,12 @@ import type {
 import { buildForeignKeyFilterClause } from "../utils/foreignKeys";
 import { formatSqlIdentifier } from "../utils/identifiers";
 import { RelatedRecordsPanel } from "../components/ui/RelatedRecordsPanel";
+import { RollbackFileButton } from "../components/ui/RollbackFileButton";
+import { getDefaultEditorHeight } from "../utils/editorLayout";
+import {
+  createRollbackViewerTab,
+  findRollbackFile,
+} from "../utils/rollbackFile";
 import {
   getTabScrollState,
   getAdjacentTabIndex,
@@ -394,6 +401,9 @@ export const Editor = () => {
   // in split view every pane mounts its own Editor
   const editorRootRef = useRef<HTMLDivElement>(null);
   const [isResultsCollapsed, setIsResultsCollapsed] = useState(false);
+  const [rollbackFilesByTabId, setRollbackFilesByTabId] = useState<
+    Record<string, string>
+  >({});
   useEffect(() => {
   }, [activeTabId]);
   // Ids of tabs whose results are detached into their own separate windows (one
@@ -1487,9 +1497,14 @@ export const Editor = () => {
         applied.add(idx);
         applyStatement(idx, item);
       });
-      const rollbackFile = batchResults.find(
-        (item) => item.rollback_file,
-      )?.rollback_file;
+      const rollbackFile = findRollbackFile(batchResults);
+      if (rollbackFile) {
+        setRollbackFilesByTabId((previous) =>
+          previous[targetTabId] === rollbackFile
+            ? previous
+            : { ...previous, [targetTabId]: rollbackFile },
+        );
+      }
       const transactionResult = [...batchResults]
         .reverse()
         .find((item) => item.transaction_active !== undefined);
@@ -3388,6 +3403,23 @@ export const Editor = () => {
     document.addEventListener("mouseup", stopResize);
   };
 
+  const handleOpenRollbackFile = useCallback(
+    async (rollbackFile: string) => {
+      try {
+        const content = await readTextFile(rollbackFile);
+        addTab(createRollbackViewerTab(content, activeTab?.schema));
+      } catch (error) {
+        showAlert(
+          t("editor.rollbackFileOpenFailed", {
+            error: String(error),
+          }),
+          { kind: "error" },
+        );
+      }
+    },
+    [activeTab?.schema, addTab, showAlert, t],
+  );
+
   const cancelExport = useCallback(async () => {
     if (!activeConnectionId) return;
     try {
@@ -3927,6 +3959,13 @@ export const Editor = () => {
               {t("editor.formatSql")}
             </span>
           </button>
+        )}
+
+        {!isTableTab && !isNativeCli && (
+          <RollbackFileButton
+            rollbackFile={rollbackFilesByTabId[activeTab.id]}
+            onOpen={handleOpenRollbackFile}
+          />
         )}
 
         <div

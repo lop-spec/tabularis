@@ -2,8 +2,8 @@ use super::rollback_guard::{
     classify_for_rollback, complete_statement_without_database, is_generated_column,
     locked_write_sql, plan_batch_for_rollback, plan_batch_for_rollback_with_policy,
     plan_for_rollback, review_batch_for_rollback, validate_pinned_transaction_structure,
-    validate_transaction_structure, DmlPlan, ProtectedStatement, ProtectionClass, TemporaryPlan,
-    TransactionPlan,
+    validate_transaction_structure, DmlPlan, ProtectedStatement, ProtectionClass, SessionPlan,
+    TemporaryPlan, TransactionPlan,
 };
 use super::should_use_rollback_guard;
 use crate::models::RollbackUnsupportedPolicy;
@@ -916,4 +916,64 @@ fn dangerous_statements_are_still_refused() {
         plan_for_rollback("UPDATE t SET v = my_custom_udf(1) WHERE id = 1").is_err(),
         "写语句里的未证明函数必须被拒"
     );
+}
+
+/// lop 2026-08-20：「我很早之前有让兼容 use database runall，现在还不支持呢」。
+///
+/// `USE db` 与写操作同批曾被整批拒绝，理由是回滚文件里的非限定表名会在恢复时
+/// 解析到别的库。实际不是这样：两条路径都在**语句执行那一刻**用连接当时的
+/// database 补全库名——DML 经 `load_table_metadata` 填 `TableMetadata.schema`
+/// （`String` 而非 `Option`）后用 `qualified_name()`，DDL 经 `resolve_object`
+/// 补全后再 `quoted()`。所以中途切库反而正是 USE + Run All 需要的行为。
+#[test]
+fn use_database_can_share_a_batch_with_writes() {
+    for queries in [
+        // lop 执行历史里被拒的真实形态
+        vec![
+            "USE `csr`",
+            "UPDATE sys_backend_menus SET title = 'x' WHERE id = 1",
+        ],
+        vec![
+            "USE csr",
+            "INSERT INTO t (id) VALUES (1)",
+            "DELETE FROM t WHERE id = 1",
+        ],
+        // 跨库：切一次再切一次，每条语句按它当时的库补全
+        vec![
+            "USE db_a",
+            "UPDATE t SET v = 1 WHERE id = 1",
+            "USE db_b",
+            "UPDATE t SET v = 2 WHERE id = 1",
+        ],
+        // USE 与 DDL 同批
+        vec!["USE csr", "CREATE TABLE audit_log (id BIGINT PRIMARY KEY)"],
+    ] {
+        let owned = queries.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(
+            plan_batch_for_rollback(&owned).is_ok(),
+            "USE 与写同批必须放行: {queries:?}"
+        );
+    }
+}
+
+/// 反向断言：USE 本身仍必须被识别为改变作用域的会话语句，而不是被顺手降级成
+/// 普通设置。它与 `SET SESSION ...` 的区别正在于此——前者改变非限定名解析到
+/// 哪个库，后者不改。判据退化时这条会红。
+#[test]
+fn use_is_still_classified_as_a_scope_change() {
+    for sql in ["USE csr", "USE `csr_sync_hub`"] {
+        assert_eq!(
+            plan_for_rollback(sql),
+            Ok(ProtectedStatement::Session(SessionPlan::ScopeChange)),
+            "{sql}"
+        );
+    }
+    // SET 走 Setting，不是 ScopeChange：两者混用会让 USE 的判据失去意义
+    for sql in ["SET NAMES utf8mb4", "SET SESSION sql_mode = ''"] {
+        assert_eq!(
+            plan_for_rollback(sql),
+            Ok(ProtectedStatement::Session(SessionPlan::Setting)),
+            "{sql}"
+        );
+    }
 }
