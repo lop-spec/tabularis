@@ -106,16 +106,21 @@ export function collectNonCodeSpans(
           break;
         case 'data':
           // A multi-character data token is a MySQL executable comment
-          // (`/*! ... */`, see scanToken): the server runs its payload,
-          // so a `:param` inside it is real. Queue the payload for its
-          // own scan of strings and comments instead of skipping it
-          // wholesale.
+          // (`/*! ... */` or MariaDB's `/*M! ... */`, see scanToken):
+          // the server runs its payload, so a `:param` inside it is real.
+          // Queue the payload for its own scan of strings and comments
+          // instead of skipping it wholesale.
           if (
             token.length > 1 &&
-            text.startsWith('/*!', position) &&
+            (text.startsWith('/*!', position) ||
+              text.startsWith('/*M!', position)) &&
             depth < MAX_EXECUTABLE_COMMENT_DEPTH
           ) {
-            queuePayload(position, token.length, 3);
+            queuePayload(
+              position,
+              token.length,
+              text.startsWith('/*M!', position) ? 4 : 3,
+            );
           }
           state.lineLeading = false;
           break;
