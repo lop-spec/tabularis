@@ -60,7 +60,9 @@ vi.mock("lucide-react", () => ({
   FileText: () => null,
   Loader2: () => null,
   RefreshCw: () => null,
+  Search: () => null,
   ShieldCheck: () => null,
+  X: () => null,
 }));
 
 const recoveryRun = {
@@ -154,5 +156,48 @@ describe("RecoveryPage saved backup connection", () => {
       });
     });
     expect(JSON.stringify(mocks.invoke.mock.calls)).not.toContain("must-not-be-sent");
+  });
+
+  it("surfaces generation failures and re-enables the generate action", async () => {
+    render(<RecoveryPage />);
+
+    await screen.findByText("Run All");
+    mocks.invoke.mockImplementation((command: string) => {
+      if (command === "list_recovery_runs") return Promise.resolve([recoveryRun]);
+      if (command === "generate_recovery_sql") {
+        return Promise.reject(new Error("backup snapshot unavailable"));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    fireEvent.change(screen.getByLabelText("Saved connection"), {
+      target: { value: "mysql-backup" },
+    });
+    fireEvent.click(screen.getByText("Run All"));
+    const generateButton = screen.getByRole("button", {
+      name: "Compare read-only and generate SQL",
+    });
+    fireEvent.click(generateButton);
+
+    expect(await screen.findByText(/backup snapshot unavailable/)).toBeInTheDocument();
+    await waitFor(() => expect(generateButton).toBeEnabled());
+  });
+
+  it("searches SQL across the complete recovery history", async () => {
+    render(<RecoveryPage />);
+
+    fireEvent.change(await screen.findByLabelText("Search recovery SQL"), {
+      target: { value: "UPDATE users" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith("list_recovery_runs", {
+        connectionId: "mysql-target",
+        startedAfter: null,
+        startedBefore: null,
+        query: "UPDATE users",
+      });
+    });
   });
 });

@@ -8,9 +8,11 @@ import {
   FileText,
   Loader2,
   RefreshCw,
+  Search,
   ShieldCheck,
+  X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDatabase } from "../hooks/useDatabase";
 
@@ -87,6 +89,11 @@ export function RecoveryPage() {
         from: "开始时间",
         to: "结束时间",
         refresh: "刷新",
+        search: "搜索",
+        searchLabel: "搜索恢复 SQL",
+        searchPlaceholder: "搜索全部历史 SQL、库表、连接或 Run ID",
+        searchHint: "有关键词时搜索全部恢复历史，不受下方时间范围限制。",
+        clearSearch: "清除搜索",
         selectFiltered: "选择筛选结果",
         clear: "清空选择",
         noRuns: "这个时间范围内没有可恢复记录",
@@ -129,6 +136,11 @@ export function RecoveryPage() {
         from: "From",
         to: "To",
         refresh: "Refresh",
+        search: "Search",
+        searchLabel: "Search recovery SQL",
+        searchPlaceholder: "Search all SQL, objects, connections, or Run IDs",
+        searchHint: "A keyword searches the complete recovery history and ignores the time range below.",
+        clearSearch: "Clear search",
         selectFiltered: "Select filtered",
         clear: "Clear selection",
         noRuns: "No recovery records in this time range",
@@ -168,6 +180,8 @@ export function RecoveryPage() {
     localDateTimeInput(new Date(now.getTime() - 24 * 60 * 60 * 1_000)),
   );
   const [startedBefore, setStartedBefore] = useState(() => localDateTimeInput(now));
+  const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
   const [activeOnly, setActiveOnly] = useState(true);
   const [runs, setRuns] = useState<RecoveryRunSummary[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -197,8 +211,11 @@ export function RecoveryPage() {
     try {
       const response = await invoke<RecoveryRunSummary[]>("list_recovery_runs", {
         connectionId: activeOnly ? activeConnectionId : null,
-        startedAfter: startedAfter ? new Date(startedAfter).toISOString() : null,
-        startedBefore: startedBefore ? new Date(startedBefore).toISOString() : null,
+        startedAfter:
+          appliedQuery || !startedAfter ? null : new Date(startedAfter).toISOString(),
+        startedBefore:
+          appliedQuery || !startedBefore ? null : new Date(startedBefore).toISOString(),
+        query: appliedQuery || null,
       });
       setRuns(response);
       const available = new Set(
@@ -210,11 +227,21 @@ export function RecoveryPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeConnectionId, activeOnly, startedAfter, startedBefore]);
+  }, [activeConnectionId, activeOnly, appliedQuery, startedAfter, startedBefore]);
 
   useEffect(() => {
     void loadRuns();
   }, [loadRuns]);
+
+  const applySearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const next = query.trim();
+    if (next === appliedQuery) {
+      void loadRuns();
+    } else {
+      setAppliedQuery(next);
+    }
+  };
 
   const selectedRuns = useMemo(
     () =>
@@ -368,6 +395,49 @@ export function RecoveryPage() {
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
         <section className="flex min-h-0 flex-col border-r border-default">
           <div className="space-y-3 border-b border-default bg-elevated px-5 py-4">
+            <form className="space-y-1" onSubmit={applySearch}>
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                {labels.searchLabel}
+              </span>
+              <div className="flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                    size={14}
+                  />
+                  <input
+                    aria-label={labels.searchLabel}
+                    className={`${inputClass} pl-9 pr-9`}
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={labels.searchPlaceholder}
+                  />
+                  {query ? (
+                    <button
+                      aria-label={labels.clearSearch}
+                      type="button"
+                      onClick={() => {
+                        setQuery("");
+                        setAppliedQuery("");
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted hover:bg-surface-secondary hover:text-secondary"
+                    >
+                      <X size={13} />
+                    </button>
+                  ) : null}
+                </div>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+                >
+                  <Search size={14} />
+                  {labels.search}
+                </button>
+              </div>
+              {appliedQuery ? (
+                <p className="text-[11px] text-blue-300">{labels.searchHint}</p>
+              ) : null}
+            </form>
             <div className="grid grid-cols-2 gap-3">
               <label className="space-y-1">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
@@ -376,6 +446,7 @@ export function RecoveryPage() {
                 <input
                   className={inputClass}
                   type="datetime-local"
+                  disabled={Boolean(appliedQuery)}
                   value={startedAfter}
                   onChange={(event) => setStartedAfter(event.target.value)}
                 />
@@ -387,6 +458,7 @@ export function RecoveryPage() {
                 <input
                   className={inputClass}
                   type="datetime-local"
+                  disabled={Boolean(appliedQuery)}
                   value={startedBefore}
                   onChange={(event) => setStartedBefore(event.target.value)}
                 />

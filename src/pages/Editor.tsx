@@ -3960,7 +3960,7 @@ export const Editor = () => {
           </button>
         )}
 
-        {!isTableTab && !isNativeCli && (
+        {!isTableTab && (
           <RollbackFileButton
             rollbackFile={rollbackFilesByTabId[activeTab.id]}
             onOpen={handleOpenRollbackFile}

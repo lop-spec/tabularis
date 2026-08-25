@@ -155,12 +155,16 @@ jobs:
           tauriScript: pnpm tauri
           args: ${{ matrix.args }}
 
+      - name: Package portable executable (Windows only)
+        if: matrix.platform == 'windows-latest'
+        env:
+          TABULARIS_PORTABLE_VERSION: ${{ steps.meta.outputs.tag }}
+        run: node scripts/package-windows-portable.mjs
+
       - name: Upload portable executable (Windows only)
         if: matrix.platform == 'windows-latest'
-        shell: pwsh
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $version = "${{ steps.meta.outputs.tag }}".TrimStart('v')
-          $src = "src-tauri\target\release\tabularis.exe"
-          $portable = "tabularis_${version}_x64-portable.exe"
-          Copy-Item $src $portable
-          gh release upload "${{ steps.meta.outputs.tag }}" $portable --clobber
+          gh release upload "${{ steps.meta.outputs.tag }}" dist/portable/* --clobber

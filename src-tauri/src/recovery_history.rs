@@ -309,6 +309,9 @@ pub async fn record_unprotected_changes(
             });
             objects.dedup();
         }
+        if is_unprotected_non_recovery_operation(&operation) {
+            continue;
+        }
         journal.add_statement(RecoveryStatement {
             id: String::new(),
             index: *index,
@@ -327,7 +330,11 @@ pub async fn record_unprotected_changes(
             exact: false,
         })?;
     }
-    journal.finalize()?;
+    if journal.is_empty() {
+        journal.discard()?;
+    } else {
+        journal.finalize()?;
+    }
     Ok(())
 }
 
@@ -494,6 +501,7 @@ pub fn list_recovery_runs(
     connection_id: Option<String>,
     started_after: Option<String>,
     started_before: Option<String>,
+    query: Option<String>,
 ) -> Result<Vec<RecoveryRunSummary>, String> {
     let Some(root) = crate::paths::get_app_data_dir() else {
         return Ok(Vec::new());
@@ -540,7 +548,9 @@ pub fn list_recovery_runs(
         {
             continue;
         }
-        summaries.push(run_summary(&run));
+        if let Some(summary) = run_summary_for_query(&run, query.as_deref()) {
+            summaries.push(summary);
+        }
     }
     summaries.sort_by(|left, right| right.started_at.cmp(&left.started_at));
     Ok(summaries)
@@ -614,7 +624,7 @@ pub async fn compare_and_generate(
     selection: RecoverySelection,
 ) -> Result<RecoveryCompareResponse, String> {
     if selection.run_ids.is_empty() {
-        return Err("Select at least one recovery Run All record".to_string());
+        return Err("Select at least one recovery record".to_string());
     }
     if !matches!(target_params.driver.as_str(), "mysql" | "mariadb")
         || !matches!(backup_params.driver.as_str(), "mysql" | "mariadb")
@@ -1141,7 +1151,9 @@ async fn backup_database_tables(
 ///
 /// These carry no rows, so there is nothing to compare — the definition in
 /// the backup either exists (recreate it) or does not (drop it on the
-/// target). Emitted as manual DDL like every other structure change.
+/// target). Definitions that require an internal statement delimiter are
+/// reported as conflicts because recovery output intentionally avoids
+/// `DELIMITER` directives.
 #[allow(clippy::too_many_arguments)]
 async fn build_routine_restore(
     backup: &mut sqlx::MySqlConnection,
@@ -1195,17 +1207,235 @@ async fn build_routine_restore(
     if create_sql.trim().is_empty() {
         return Ok(steps);
     }
+    let create_sql = strip_show_create_definer(&retarget_schema_qualifiers(
+        &create_sql,
+        &backup_schema,
+        schema,
+    ));
+    let definition = create_sql.trim();
+    let definition_without_trailing_delimiter = definition
+        .strip_suffix(';')
+        .unwrap_or(definition)
+        .trim_end();
+    if contains_executable_semicolon(definition_without_trailing_delimiter) {
+        return Err(format!(
+            "{} {}.{} has a compound definition; SQL policy forbids DELIMITER, so recreate it manually",
+            kind,
+            quote_identifier(schema),
+            quote_identifier(name)
+        ));
+    }
 
     steps.push(RecoverySqlStep {
         order,
-        // The definition names the backup schema when it qualifies anything;
-        // the operator reviews this statement before running it, and DEFINER
-        // clauses may need adjusting on the target.
         sql: create_sql,
         expected_affected_rows: None,
         source: source.to_string(),
     });
     Ok(steps)
+}
+
+/// Rewrites qualified object references in a `SHOW CREATE` definition from
+/// the backup schema to the target schema without touching string literals or
+/// comments. Views and triggers commonly qualify both their own name and the
+/// tables they reference, so replacing only the first occurrence is not
+/// sufficient.
+fn retarget_schema_qualifiers(sql: &str, backup_schema: &str, target_schema: &str) -> String {
+    if backup_schema.eq_ignore_ascii_case(target_schema) {
+        return sql.to_string();
+    }
+    let source = format!("{}.", quote_identifier(backup_schema));
+    let replacement = format!("{}.", quote_identifier(target_schema));
+    let mut output = String::with_capacity(sql.len());
+    let mut index = 0usize;
+    let mut quote: Option<char> = None;
+    let mut line_comment = false;
+    let mut block_comment = false;
+
+    while index < sql.len() {
+        let rest = &sql[index..];
+        if line_comment {
+            let ch = rest.chars().next().expect("index is inside SQL");
+            output.push(ch);
+            index += ch.len_utf8();
+            if ch == '\n' {
+                line_comment = false;
+            }
+            continue;
+        }
+        if block_comment {
+            if rest.starts_with("*/") {
+                output.push_str("*/");
+                index += 2;
+                block_comment = false;
+            } else {
+                let ch = rest.chars().next().expect("index is inside SQL");
+                output.push(ch);
+                index += ch.len_utf8();
+            }
+            continue;
+        }
+        if let Some(active_quote) = quote {
+            let ch = rest.chars().next().expect("index is inside SQL");
+            output.push(ch);
+            index += ch.len_utf8();
+            if ch == '\\' {
+                if let Some(escaped) = sql[index..].chars().next() {
+                    output.push(escaped);
+                    index += escaped.len_utf8();
+                }
+            } else if ch == active_quote {
+                if sql[index..].starts_with(active_quote) {
+                    output.push(active_quote);
+                    index += active_quote.len_utf8();
+                } else {
+                    quote = None;
+                }
+            }
+            continue;
+        }
+
+        if rest.starts_with(&source) {
+            output.push_str(&replacement);
+            index += source.len();
+        } else if rest.starts_with("--") || rest.starts_with('#') {
+            let prefix_len = if rest.starts_with("--") { 2 } else { 1 };
+            output.push_str(&rest[..prefix_len]);
+            index += prefix_len;
+            line_comment = true;
+        } else if rest.starts_with("/*") {
+            output.push_str("/*");
+            index += 2;
+            block_comment = true;
+        } else {
+            let ch = rest.chars().next().expect("index is inside SQL");
+            output.push(ch);
+            index += ch.len_utf8();
+            if matches!(ch, '\'' | '"') {
+                quote = Some(ch);
+            }
+        }
+    }
+    output
+}
+
+/// Whether a SQL fragment contains a real semicolon outside literals,
+/// identifiers, or comments. A compound routine needs such separators and
+/// cannot be emitted as one splitter-safe statement without `DELIMITER`.
+fn contains_executable_semicolon(sql: &str) -> bool {
+    let mut index = 0usize;
+    let mut quote: Option<char> = None;
+    let mut line_comment = false;
+    let mut block_comment = false;
+
+    while index < sql.len() {
+        let rest = &sql[index..];
+        if line_comment {
+            let ch = rest.chars().next().expect("index is inside SQL");
+            index += ch.len_utf8();
+            if ch == '\n' {
+                line_comment = false;
+            }
+            continue;
+        }
+        if block_comment {
+            if rest.starts_with("*/") {
+                index += 2;
+                block_comment = false;
+            } else {
+                index += rest
+                    .chars()
+                    .next()
+                    .expect("index is inside SQL")
+                    .len_utf8();
+            }
+            continue;
+        }
+        if let Some(active_quote) = quote {
+            let ch = rest.chars().next().expect("index is inside SQL");
+            index += ch.len_utf8();
+            if ch == '\\' {
+                if let Some(escaped) = sql[index..].chars().next() {
+                    index += escaped.len_utf8();
+                }
+            } else if ch == active_quote {
+                if sql[index..].starts_with(active_quote) {
+                    index += active_quote.len_utf8();
+                } else {
+                    quote = None;
+                }
+            }
+            continue;
+        }
+
+        if rest.starts_with("--") || rest.starts_with('#') {
+            index += if rest.starts_with("--") { 2 } else { 1 };
+            line_comment = true;
+        } else if rest.starts_with("/*") {
+            index += 2;
+            block_comment = true;
+        } else {
+            let ch = rest.chars().next().expect("index is inside SQL");
+            index += ch.len_utf8();
+            if matches!(ch, '\'' | '"' | '`') {
+                quote = Some(ch);
+            } else if ch == ';' {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// `SHOW CREATE` includes the account that originally owned views, routines,
+/// triggers, and events. Replaying that `DEFINER=user@host` on a recovery
+/// target commonly fails for an operator who cannot impersonate that account.
+/// Removing only this metadata clause keeps `SQL SECURITY DEFINER` semantics
+/// while letting MySQL assign the executing account as the new definer.
+fn strip_show_create_definer(sql: &str) -> String {
+    let lowercase = sql.to_ascii_lowercase();
+    let Some(start) = lowercase.find("definer=") else {
+        return sql.to_string();
+    };
+    if start > 0
+        && lowercase.as_bytes()[start - 1]
+            .is_ascii_alphanumeric()
+    {
+        return sql.to_string();
+    }
+
+    let mut index = start + "definer=".len();
+    let mut in_backtick = false;
+    let mut saw_at = false;
+    while index < sql.len() {
+        let rest = &sql[index..];
+        let ch = rest.chars().next().expect("index is inside SQL");
+        if ch == '`' {
+            if in_backtick && sql[index + ch.len_utf8()..].starts_with('`') {
+                index += ch.len_utf8() * 2;
+                continue;
+            }
+            in_backtick = !in_backtick;
+        } else if !in_backtick && ch == '@' {
+            saw_at = true;
+        } else if !in_backtick && saw_at && ch.is_whitespace() {
+            break;
+        }
+        index += ch.len_utf8();
+    }
+    if !saw_at || in_backtick {
+        return sql.to_string();
+    }
+
+    let before = sql[..start].trim_end();
+    let after = sql[index..].trim_start();
+    if before.is_empty() {
+        after.to_string()
+    } else if after.is_empty() {
+        before.to_string()
+    } else {
+        format!("{before} {after}")
+    }
 }
 
 /// Rows above this are not inlined as INSERT literals when target and backup
@@ -1594,6 +1824,23 @@ async fn append_trigger_restores(
         let create_sql = mysql_text(&created, 2)?;
         if create_sql.trim().is_empty() {
             continue;
+        }
+        let create_sql = strip_show_create_definer(&retarget_schema_qualifiers(
+            &create_sql,
+            backup_schema,
+            schema,
+        ));
+        let definition = create_sql.trim();
+        let definition_without_trailing_delimiter = definition
+            .strip_suffix(';')
+            .unwrap_or(definition)
+            .trim_end();
+        if contains_executable_semicolon(definition_without_trailing_delimiter) {
+            return Err(format!(
+                "trigger {}.{} has a compound definition; SQL policy forbids DELIMITER, so recreate it manually before rebuilding the table",
+                quote_identifier(schema),
+                quote_identifier(&name)
+            ));
         }
         steps.push(RecoverySqlStep {
             order,
@@ -2023,18 +2270,26 @@ fn render_recovery_sql(
     output.push_str(
         "-- Generated by read-only row/schema comparison; never executed automatically.\n",
     );
-    output.push_str("-- Recovery records are isolated from protected Run All rollback files.\n");
     output.push_str("-- No Tabularis session variables or prepared-statement wrappers are used.\n");
-    output.push_str("-- Verify the target instance in this header before execution.\n");
-    output.push_str(
-        "-- DML groups end in ROLLBACK by default; replace it with COMMIT only after reviewing every affected-row result.\n",
-    );
-    output.push_str(
-        "-- MySQL/MariaDB DDL implicitly commits, so DDL is commented and must be reviewed and executed separately.\n",
-    );
+    output
+        .push_str("-- IMPORTANT: DO NOT USE RUN ALL. Select and execute each stage separately.\n");
+    output.push_str("-- Run Stage A immediately before each chosen Stage B group and stop on any identity mismatch.\n");
+    output.push_str("-- DDL implicitly commits; execute one DDL statement at a time. DML ends in ROLLBACK by default.\n");
+    output.push_str(&format!(
+        "-- Target connection alias: {}\n",
+        single_line_comment(&runs[0].connection_name)
+    ));
     output.push_str(&format!(
         "-- Target connection ID: {}\n",
         single_line_comment(connection_id)
+    ));
+    output.push_str(&format!(
+        "-- Expected target database: {}\n",
+        single_line_comment(&target.database)
+    ));
+    output.push_str(&format!(
+        "-- Expected target identity: {}\n",
+        single_line_comment(&target.server_key)
     ));
     output.push_str(&format!(
         "-- Target instance: {}\n",
@@ -2045,7 +2300,7 @@ fn render_recovery_sql(
         single_line_comment(&backup.label)
     ));
     output.push_str(&format!(
-        "-- Selected Run All IDs: {}\n",
+        "-- Selected recovery Run IDs: {}\n",
         runs.iter()
             .map(|run| run.short_id.as_str())
             .collect::<Vec<_>>()
@@ -2059,25 +2314,41 @@ fn render_recovery_sql(
     }
     output.push('\n');
 
-    if !steps.is_empty() {
-        // Both sides were read with the session pinned to UTC
-        // (`begin_read_only_snapshot`), so every TIMESTAMP literal below is
-        // UTC text. Executing this file in another zone would shift them.
-        output.push_str(
-            "-- Row images below were captured in UTC; this keeps TIMESTAMP values identical on write.\n",
-        );
-        output.push_str("SET time_zone = '+00:00';\n\n");
-    }
+    append_identity_stage(
+        &mut output,
+        "Stage A: identity precheck (read-only; run separately)",
+        target,
+    );
 
+    let mut current_group = None;
+    let mut stage_number = 1usize;
     let mut transaction_open = false;
     for (index, step) in steps.iter().enumerate() {
         let transactional = step.expected_affected_rows.is_some();
-        if transactional && !transaction_open {
-            output.push_str("START TRANSACTION;\n\n");
-            transaction_open = true;
-        } else if !transactional && transaction_open {
-            append_transaction_finish(&mut output);
-            transaction_open = false;
+        if current_group != Some(transactional) {
+            if transaction_open {
+                append_transaction_finish(&mut output);
+                transaction_open = false;
+            }
+            if transactional {
+                output.push_str(&format!(
+                    "-- ===== Stage B{stage_number}: DML recovery (write; one transaction; run separately) =====\n"
+                ));
+                output.push_str("-- Row guards are the precheck; each adjacent ROW_COUNT result is the postcheck.\n");
+                output.push_str(
+                    "-- Replace the final ROLLBACK with COMMIT only after every result matches.\n",
+                );
+                output.push_str("SET time_zone = '+00:00';\n");
+                output.push_str("START TRANSACTION;\n\n");
+                transaction_open = true;
+            } else {
+                output.push_str(&format!(
+                    "-- ===== Stage B{stage_number}: DDL recovery (write; implicit commit; run separately) =====\n"
+                ));
+                output.push_str("-- Execute exactly one statement, then run Stage C before continuing. Never select this whole stage.\n\n");
+            }
+            current_group = Some(transactional);
+            stage_number += 1;
         }
         output.push_str(&format!(
             "-- Recovery step {} from {}\n",
@@ -2091,10 +2362,11 @@ fn render_recovery_sql(
                 index + 1
             ));
         } else {
+            output.push_str("-- PRECHECK: Stage A must show both match columns = 1.\n");
+            append_direct_statement(&mut output, &step.sql);
             output.push_str(
-                "-- MANUAL DDL: implicit commit boundary; review and execute this statement separately.\n",
+                "-- POSTCHECK: run Stage C now, then inspect this object's definition/data.\n",
             );
-            append_manual_ddl(&mut output, &step.sql);
         }
         output.push('\n');
     }
@@ -2102,9 +2374,56 @@ fn render_recovery_sql(
         append_transaction_finish(&mut output);
     }
     if steps.is_empty() {
+        output.push_str("-- ===== Stage B: no write required =====\n");
         output.push_str("-- No row or schema differences were found for the selection.\n\n");
     }
+    append_identity_stage(
+        &mut output,
+        "Stage C: postcheck (read-only; run separately after each write)",
+        target,
+    );
+    output.push_str(
+        "-- DML: every adjacent affected_rows value must equal expected_affected_rows.\n",
+    );
+    output.push_str("-- DDL: inspect SHOW CREATE / information_schema for the changed object before the next step.\n");
+    output.push_str("-- Re-run Tabularis read-only comparison; completion means it reports no remaining differences.\n");
     output
+}
+
+fn append_identity_stage(output: &mut String, title: &str, target: &InstanceProbe) {
+    let actual_identity = if target.server_key.starts_with("uuid:") {
+        "CONCAT('uuid:', @@server_uuid)"
+    } else if target.server_key.starts_with("uid:") {
+        "CONCAT('uid:', @@server_uid)"
+    } else {
+        "CONCAT('host:', @@hostname, ':', @@port)"
+    };
+    let expected_identity = sql_text_literal(&target.server_key);
+    let expected_database = sql_text_literal(&target.database);
+    output.push_str(&format!("-- ===== {title} =====\n"));
+    output.push_str("SELECT\n");
+    output.push_str("  @@hostname AS actual_hostname,\n");
+    output.push_str("  @@port AS actual_port,\n");
+    output.push_str(&format!("  {actual_identity} AS actual_server_identity,\n"));
+    output.push_str(&format!(
+        "  {expected_identity} AS expected_server_identity,\n"
+    ));
+    output.push_str(&format!(
+        "  LOWER({actual_identity}) = LOWER({expected_identity}) AS server_identity_matches,\n"
+    ));
+    output.push_str("  DATABASE() AS actual_database,\n");
+    output.push_str(&format!("  {expected_database} AS expected_database,\n"));
+    output.push_str(&format!(
+        "  LOWER(COALESCE(DATABASE(), '')) = LOWER({expected_database}) AS database_matches,\n"
+    ));
+    output.push_str("  CURRENT_USER() AS actual_user,\n");
+    output.push_str("  VERSION() AS actual_version,\n");
+    output.push_str("  @@read_only AS target_read_only;\n");
+    output.push_str("-- STOP unless server_identity_matches = 1 and database_matches = 1.\n\n");
+}
+
+fn sql_text_literal(value: &str) -> String {
+    format!("CONVERT({} USING utf8mb4)", sql_hex(value.as_bytes()))
 }
 
 fn append_transaction_finish(output: &mut String) {
@@ -2124,23 +2443,6 @@ fn append_direct_statement(output: &mut String, sql: &str) {
         output.push(';');
     }
     output.push('\n');
-}
-
-fn append_manual_ddl(output: &mut String, sql: &str) {
-    let sql = sql.trim_end();
-    let lines = sql.lines().collect::<Vec<_>>();
-    if lines.is_empty() {
-        output.push_str("-- TABULARIS_MANUAL_DDL: ;\n");
-        return;
-    }
-    for (index, line) in lines.iter().enumerate() {
-        output.push_str("-- TABULARIS_MANUAL_DDL: ");
-        output.push_str(line);
-        if index + 1 == lines.len() && !sql.ends_with(';') {
-            output.push(';');
-        }
-        output.push('\n');
-    }
 }
 
 fn write_recovery_sql(
@@ -2243,8 +2545,95 @@ fn read_run(path: &Path) -> Result<RecoveryRun, String> {
     Ok(run)
 }
 
-fn run_summary(run: &RecoveryRun) -> RecoveryRunSummary {
-    RecoveryRunSummary {
+fn is_unprotected_non_recovery_operation(operation: &str) -> bool {
+    matches!(
+        operation.to_ascii_lowercase().as_str(),
+        "select" | "set" | "analyze table"
+    )
+}
+
+fn is_legacy_read_only_noise(statement: &RecoveryStatement) -> bool {
+    statement.category.eq_ignore_ascii_case("unprotected")
+        && is_unprotected_non_recovery_operation(&statement.operation)
+}
+
+fn statement_matches_query(statement: &RecoveryStatement, needle: &str) -> bool {
+    statement.id.to_ascii_lowercase().contains(needle)
+        || statement.sql.to_ascii_lowercase().contains(needle)
+        || statement.category.to_ascii_lowercase().contains(needle)
+        || statement.operation.to_ascii_lowercase().contains(needle)
+        || statement.objects.iter().any(|object| {
+            object.kind.to_ascii_lowercase().contains(needle)
+                || object.schema.to_ascii_lowercase().contains(needle)
+                || object.name.to_ascii_lowercase().contains(needle)
+        })
+        || statement
+            .affected_columns
+            .iter()
+            .any(|column| column.to_ascii_lowercase().contains(needle))
+        || statement
+            .condition
+            .as_deref()
+            .is_some_and(|condition| condition.to_ascii_lowercase().contains(needle))
+}
+
+fn statement_summary(statement: &RecoveryStatement) -> RecoveryStatementSummary {
+    let object = statement.objects.first();
+    RecoveryStatementSummary {
+        id: statement.id.clone(),
+        index: statement.index,
+        executed_at: statement.executed_at.clone(),
+        sql: statement.sql.clone(),
+        category: statement.category.clone(),
+        operation: statement.operation.clone(),
+        schema: object.map(|object| object.schema.clone()),
+        table: object.map(|object| object.name.clone()),
+        affected_columns: statement.affected_columns.clone(),
+        condition: statement.condition.clone(),
+        row_count: statement.before_rows.len().max(statement.after_rows.len()),
+        exact: statement.exact,
+    }
+}
+
+fn run_summary_for_query(run: &RecoveryRun, query: Option<&str>) -> Option<RecoveryRunSummary> {
+    let visible = run
+        .statements
+        .iter()
+        .filter(|statement| !is_legacy_read_only_noise(statement))
+        .collect::<Vec<_>>();
+    if visible.is_empty() {
+        return None;
+    }
+
+    let needle = query.map(str::trim).filter(|value| !value.is_empty());
+    let matched = if let Some(needle) = needle {
+        let needle = needle.to_ascii_lowercase();
+        let run_matches = run.run_id.to_ascii_lowercase().contains(&needle)
+            || run.short_id.to_ascii_lowercase().contains(&needle)
+            || run.connection_id.to_ascii_lowercase().contains(&needle)
+            || run.connection_name.to_ascii_lowercase().contains(&needle)
+            || run.database.to_ascii_lowercase().contains(&needle)
+            || run.status.to_ascii_lowercase().contains(&needle);
+        if run_matches {
+            visible
+        } else {
+            visible
+                .into_iter()
+                .filter(|statement| statement_matches_query(statement, &needle))
+                .collect()
+        }
+    } else {
+        visible
+    };
+    if matched.is_empty() {
+        return None;
+    }
+
+    let statements = matched
+        .into_iter()
+        .map(statement_summary)
+        .collect::<Vec<_>>();
+    Some(RecoveryRunSummary {
         run_id: run.run_id.clone(),
         short_id: run.short_id.clone(),
         started_at: run.started_at.clone(),
@@ -2253,29 +2642,9 @@ fn run_summary(run: &RecoveryRun) -> RecoveryRunSummary {
         connection_id: run.connection_id.clone(),
         connection_name: run.connection_name.clone(),
         database: run.database.clone(),
-        statement_count: run.statements.len(),
-        statements: run
-            .statements
-            .iter()
-            .map(|statement| {
-                let object = statement.objects.first();
-                RecoveryStatementSummary {
-                    id: statement.id.clone(),
-                    index: statement.index,
-                    executed_at: statement.executed_at.clone(),
-                    sql: statement.sql.clone(),
-                    category: statement.category.clone(),
-                    operation: statement.operation.clone(),
-                    schema: object.map(|object| object.schema.clone()),
-                    table: object.map(|object| object.name.clone()),
-                    affected_columns: statement.affected_columns.clone(),
-                    condition: statement.condition.clone(),
-                    row_count: statement.before_rows.len().max(statement.after_rows.len()),
-                    exact: statement.exact,
-                }
-            })
-            .collect(),
-    }
+        statement_count: statements.len(),
+        statements,
+    })
 }
 
 fn isolated_connection_segment(connection_name: &str, connection_id: &str) -> String {
@@ -2554,18 +2923,101 @@ mod tests {
             },
         ];
         let sql = render_recovery_sql("connection-a", &[run], &target, &backup, &steps, &[]);
+        assert!(sql.contains("-- Target connection alias: prod"));
+        assert!(sql.contains("-- Expected target database: app"));
         assert!(sql.contains("-- Target instance: target:3306/app"));
         assert!(sql.contains("-- Backup instance: backup:3306/app"));
+        assert!(sql.contains("-- IMPORTANT: DO NOT USE RUN ALL."));
+        assert!(
+            sql.contains("-- ===== Stage A: identity precheck (read-only; run separately) =====")
+        );
+        assert!(sql.contains("CONCAT('uuid:', @@server_uuid) AS actual_server_identity"));
+        assert!(sql.contains("-- ===== Stage B1: DML recovery"));
+        assert!(sql.contains("-- ===== Stage B2: DDL recovery"));
+        assert!(sql.contains("-- ===== Stage C: postcheck"));
         assert!(!sql.to_ascii_lowercase().contains("password"));
         assert!(!sql.contains("@tabularis_"));
         assert!(!sql.contains("PREPARE "));
         assert!(!sql.contains("EXECUTE "));
+        assert!(!sql.contains("DELIMITER "));
+        assert!(!sql.contains("\nUSE "));
         assert!(sql.contains("UPDATE `app`.`users` SET `name` = X'61' WHERE `id` = 1 LIMIT 1;"));
         assert!(sql.contains("SELECT ROW_COUNT() AS recovery_step_1_affected_rows"));
-        assert!(
-            sql.contains("-- TABULARIS_MANUAL_DDL: ALTER TABLE `app`.`users` DROP COLUMN `note`;")
-        );
+        assert!(sql.contains("ALTER TABLE `app`.`users` DROP COLUMN `note`;"));
+        assert!(!sql.contains("-- TABULARIS_MANUAL_DDL:"));
         assert_eq!(sql.matches("\nROLLBACK;\n").count(), 1);
+        assert_eq!(sql.matches(';').count(), 8);
         assert!(!sql.contains("\nCOMMIT;\n"));
+    }
+
+    #[test]
+    fn recovery_search_filters_legacy_non_recovery_noise_and_matches_sql() {
+        let mut change = statement(0);
+        change.id = "RUN-001".to_string();
+        change.sql = "UPDATE app.users SET name = 'old name' WHERE id = 1".to_string();
+        let mut noise = statement(1);
+        noise.id = "RUN-002".to_string();
+        noise.sql = "SELECT * FROM app.users".to_string();
+        noise.category = "unprotected".to_string();
+        noise.operation = "select".to_string();
+        noise.objects.clear();
+        noise.exact = false;
+        let mut analyze = statement(2);
+        analyze.id = "RUN-003".to_string();
+        analyze.sql = "ANALYZE TABLE app.users".to_string();
+        analyze.category = "unprotected".to_string();
+        analyze.operation = "analyze table".to_string();
+        analyze.exact = false;
+        let run = RecoveryRun {
+            version: HISTORY_VERSION,
+            run_id: "run-id".to_string(),
+            short_id: "RUN".to_string(),
+            started_at: "2026-08-20T00:00:00Z".to_string(),
+            finished_at: Some("2026-08-20T00:00:01Z".to_string()),
+            status: "complete".to_string(),
+            connection_id: "connection-a".to_string(),
+            connection_name: "prod".to_string(),
+            database: "app".to_string(),
+            target_identity: "uuid:a".to_string(),
+            statements: vec![change, noise, analyze],
+        };
+
+        let all = run_summary_for_query(&run, None).unwrap();
+        assert_eq!(all.statement_count, 1);
+        assert_eq!(all.statements[0].id, "RUN-001");
+
+        let hit = run_summary_for_query(&run, Some("old name")).unwrap();
+        assert_eq!(hit.statement_count, 1);
+        assert_eq!(hit.statements[0].id, "RUN-001");
+        assert!(run_summary_for_query(&run, Some("definitely missing")).is_none());
+    }
+
+    #[test]
+    fn routine_definitions_are_retargeted_to_the_target_schema() {
+        let sql = "CREATE VIEW `backup_app`.`active_users` AS SELECT '`backup_app`.`literal`' AS note FROM `backup_app`.`users`";
+        let retargeted = retarget_schema_qualifiers(sql, "backup_app", "app");
+        assert_eq!(
+            retargeted,
+            "CREATE VIEW `app`.`active_users` AS SELECT '`backup_app`.`literal`' AS note FROM `app`.`users`"
+        );
+    }
+
+    #[test]
+    fn compound_routine_delimiters_are_detected_without_false_positives() {
+        assert!(contains_executable_semicolon(
+            "CREATE PROCEDURE `app`.`p`() BEGIN SELECT 1; SELECT 2; END"
+        ));
+        assert!(!contains_executable_semicolon(
+            "CREATE VIEW `app`.`v` AS SELECT ';' AS marker /* ; */"
+        ));
+    }
+
+    #[test]
+    fn show_create_definer_is_removed_without_changing_security_or_body_text() {
+        let sql = "CREATE ALGORITHM=UNDEFINED DEFINER=`backup``user`@`%` SQL SECURITY DEFINER VIEW `app`.`v` AS SELECT 'DEFINER=x@y' AS note";
+        assert_eq!(
+            strip_show_create_definer(sql),
+            "CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `app`.`v` AS SELECT 'DEFINER=x@y' AS note"
+        );
     }
 }

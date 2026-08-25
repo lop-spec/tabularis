@@ -1,14 +1,11 @@
-use crate::config::load_config_internal;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime, State};
 use tokio::sync::Mutex;
 use uuid::Uuid;
-
-const DEFAULT_MAX_HISTORY_ENTRIES: u32 = 500;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -140,16 +137,6 @@ pub(crate) fn backup_corrupt_file(path: &Path) -> Result<PathBuf, String> {
 /// POSIX/APFS, so a concurrent or crashed write can never leave the target
 /// file half-written (which is the failure mode that produced the original
 /// "extra data after array" corruption).
-fn write_history<R: Runtime>(
-    app: &AppHandle<R>,
-    connection_id: &str,
-    entries: &[QueryHistoryEntry],
-) -> Result<(), String> {
-    let path = get_history_path(app, connection_id)?;
-    let content = serde_json::to_string_pretty(entries).map_err(|e| e.to_string())?;
-    atomic_write(&path, content.as_bytes())
-}
-
 // --- Append-only log -----------------------------------------------------
 //
 // The original store rewrote the entire JSON array on every executed
@@ -172,6 +159,31 @@ fn log_path<R: Runtime>(app: &AppHandle<R>, connection_id: &str) -> Result<PathB
     Ok(dir.join(format!("{}.jsonl", connection_id)))
 }
 
+fn stored_history_paths<R: Runtime>(
+    app: &AppHandle<R>,
+    connection_id: &str,
+) -> Result<Vec<PathBuf>, String> {
+    let dir = get_history_dir(app)?;
+    let legacy_name = format!("{connection_id}.json");
+    let log_name = format!("{connection_id}.jsonl");
+    let archive_prefix = format!("{connection_id}.json.migrated");
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let Ok(entry) = entry else { continue };
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        if file_name == legacy_name
+            || file_name == log_name
+            || file_name.starts_with(&archive_prefix)
+        {
+            paths.push(entry.path());
+        }
+    }
+    Ok(paths)
+}
+
 /// Moves a legacy `<id>.json` array into the JSONL log, once.
 ///
 /// The old file is renamed rather than deleted so a failed migration cannot
@@ -188,31 +200,76 @@ fn migrate_legacy_json<R: Runtime>(
     let mut existing = read_history(app, connection_id).unwrap_or_default();
     // Legacy order is newest-first; the log is oldest-first.
     existing.reverse();
-    let mut buffer = String::new();
-    for entry in &existing {
-        if let Ok(line) = serde_json::to_string(entry) {
-            buffer.push_str(&line);
-            buffer.push('\n');
-        }
+    let mut logged_entries = read_all_log_entries(&log)?;
+    let migrated_count = merge_log_entries(&mut logged_entries, existing);
+    if migrated_count > 0 {
+        write_all_log_entries(&log, &logged_entries)?;
     }
-    if !buffer.is_empty() {
-        use std::io::Write;
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log)
-            .map_err(|e| e.to_string())?;
-        file.write_all(buffer.as_bytes())
-            .map_err(|e| e.to_string())?;
+    let preferred_archive = legacy.with_extension("json.migrated");
+    let archived = if preferred_archive.exists() {
+        legacy.with_extension(format!("json.migrated-{}", Uuid::new_v4().simple()))
+    } else {
+        preferred_archive
+    };
+    if let Err(error) = fs::rename(&legacy, &archived) {
+        log::warn!(
+            "Query history for '{}' was copied to JSONL but the legacy file could not be archived: {}",
+            connection_id,
+            error
+        );
     }
-    let archived = legacy.with_extension("json.migrated");
-    let _ = fs::rename(&legacy, &archived);
     log::info!(
         "Query history for '{}' migrated to append-only log ({} entries)",
         connection_id,
-        existing.len()
+        migrated_count
     );
     Ok(())
+}
+
+fn merge_log_entries(
+    logged_entries: &mut Vec<QueryHistoryEntry>,
+    mut legacy_entries: Vec<QueryHistoryEntry>,
+) -> usize {
+    let mut logged_ids = logged_entries
+        .iter()
+        .map(|entry| entry.id.clone())
+        .collect::<BTreeSet<_>>();
+    legacy_entries.retain(|entry| logged_ids.insert(entry.id.clone()));
+    let migrated_count = legacy_entries.len();
+    logged_entries.extend(legacy_entries);
+    logged_entries.sort_by(|left, right| left.executed_at.cmp(&right.executed_at));
+    migrated_count
+}
+
+fn read_all_log_entries(path: &Path) -> Result<Vec<QueryHistoryEntry>, String> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut entries = Vec::new();
+    for (index, line) in std::io::BufRead::lines(std::io::BufReader::new(file)).enumerate() {
+        let line = line.map_err(|e| e.to_string())?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        entries.push(serde_json::from_str(&line).map_err(|e| {
+            format!(
+                "Could not parse query history log {} at line {}: {e}",
+                path.display(),
+                index + 1
+            )
+        })?);
+    }
+    Ok(entries)
+}
+
+fn write_all_log_entries(path: &Path, entries: &[QueryHistoryEntry]) -> Result<(), String> {
+    let mut buffer = String::new();
+    for entry in entries {
+        buffer.push_str(&serde_json::to_string(entry).map_err(|e| e.to_string())?);
+        buffer.push('\n');
+    }
+    atomic_write(path, buffer.as_bytes())
 }
 
 fn append_log_entry<R: Runtime>(
@@ -347,10 +404,11 @@ pub async fn get_query_history<R: Runtime>(
 ) -> Result<QueryHistoryResponse, String> {
     let lock = acquire_lock(&state, &connection_id).await;
     let _guard = lock.lock().await;
-    let (entries, backup) = read_history_with_recovery(&app, &connection_id)?;
+    migrate_legacy_json(&app, &connection_id)?;
+    let entries = read_all_log_entries(&log_path(&app, &connection_id)?)?;
     Ok(QueryHistoryResponse {
-        entries,
-        recovered_backup_path: backup.map(|p| p.to_string_lossy().into_owned()),
+        entries: entries.into_iter().rev().collect(),
+        recovered_backup_path: None,
     })
 }
 
@@ -396,6 +454,7 @@ pub async fn search_query_history<R: Runtime>(
     let limit = limit.unwrap_or(UI_HISTORY_PAGE).clamp(1, 5_000);
     let needle = query.trim().to_lowercase();
 
+    migrate_legacy_json(&app, &connection_id)?;
     let path = log_path(&app, &connection_id)?;
     if !path.exists() {
         return Ok(QueryHistoryResponse::default());
@@ -441,21 +500,27 @@ pub async fn search_query_history<R: Runtime>(
     })
 }
 
-/// Connection ids that have a history log on disk, newest-written first.
-fn logged_connection_ids<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<String>, String> {
-    let dir = get_history_dir(app)?;
-    let mut ids = Vec::new();
-    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+/// Connection ids that have either a legacy JSON array or a JSONL log on disk.
+fn logged_connection_ids_in(dir: &Path) -> Result<Vec<String>, String> {
+    let mut ids = BTreeSet::new();
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
         let Ok(entry) = entry else { continue };
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+        if !matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("json") | Some("jsonl")
+        ) {
             continue;
         }
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-            ids.push(stem.to_string());
+            ids.insert(stem.to_string());
         }
     }
-    Ok(ids)
+    Ok(ids.into_iter().collect())
+}
+
+fn logged_connection_ids<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<String>, String> {
+    logged_connection_ids_in(&get_history_dir(app)?)
 }
 
 /// Best-effort display name for a connection that history was logged under.
@@ -522,6 +587,7 @@ pub async fn search_query_history_all<R: Runtime>(
     for connection_id in logged_connection_ids(&app)? {
         let lock = acquire_lock(&state, &connection_id).await;
         let _guard = lock.lock().await;
+        migrate_legacy_json(&app, &connection_id)?;
         let path = log_path(&app, &connection_id)?;
         if !path.exists() {
             continue;
@@ -622,7 +688,9 @@ pub async fn delete_query_history_entry<R: Runtime>(
     let lock = acquire_lock(&state, &connection_id).await;
     let _guard = lock.lock().await;
 
-    let mut entries = read_history(&app, &connection_id)?;
+    migrate_legacy_json(&app, &connection_id)?;
+    let path = log_path(&app, &connection_id)?;
+    let mut entries = read_all_log_entries(&path)?;
     let original_len = entries.len();
     entries.retain(|e| e.id != id);
 
@@ -630,7 +698,7 @@ pub async fn delete_query_history_entry<R: Runtime>(
         return Err("History entry not found".to_string());
     }
 
-    write_history(&app, &connection_id, &entries)
+    write_all_log_entries(&path, &entries)
 }
 
 #[tauri::command]
@@ -642,9 +710,10 @@ pub async fn clear_query_history<R: Runtime>(
     let lock = acquire_lock(&state, &connection_id).await;
     let _guard = lock.lock().await;
 
-    let path = get_history_path(&app, &connection_id)?;
-    if path.exists() {
-        fs::remove_file(path).map_err(|e| e.to_string())?;
+    for path in stored_history_paths(&app, &connection_id)? {
+        if path.exists() {
+            fs::remove_file(path).map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
@@ -678,10 +747,12 @@ pub async fn backfill_missing_database_for_connection<R: Runtime>(
     let lock = acquire_lock(&state, connection_id).await;
     let _guard = lock.lock().await;
 
-    let mut entries = read_history(app, connection_id)?;
+    migrate_legacy_json(app, connection_id)?;
+    let path = log_path(app, connection_id)?;
+    let mut entries = read_all_log_entries(&path)?;
     let updated = backfill_missing_database(&mut entries, database);
     if updated > 0 {
-        write_history(app, connection_id, &entries)?;
+        write_all_log_entries(&path, &entries)?;
     }
     Ok(updated)
 }
@@ -702,12 +773,7 @@ pub async fn remove_history_for_connection<R: Runtime>(
     // Remove every on-disk form: the legacy array, its migrated archive, and
     // the append-only log. Missing any of them would resurrect history for a
     // connection id that gets reused.
-    let legacy = get_history_path(app, connection_id)?;
-    for path in [
-        legacy.clone(),
-        legacy.with_extension("json.migrated"),
-        log_path(app, connection_id)?,
-    ] {
+    for path in stored_history_paths(app, connection_id)? {
         if path.exists() {
             fs::remove_file(&path).map_err(|e| e.to_string())?;
         }
@@ -842,5 +908,31 @@ mod log_tests {
         fs::write(&path, buffer).unwrap();
         assert_eq!(count_log_lines(&path), 5);
     }
-}
 
+    #[test]
+    fn connection_discovery_includes_legacy_json_and_deduplicates_jsonl() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("legacy-only.json"), "[]").unwrap();
+        fs::write(dir.path().join("both.json"), "[]").unwrap();
+        fs::write(dir.path().join("both.jsonl"), "").unwrap();
+        fs::write(dir.path().join("archived.json.migrated"), "[]").unwrap();
+        fs::write(dir.path().join("ignore.txt"), "[]").unwrap();
+
+        let ids = logged_connection_ids_in(dir.path()).unwrap();
+
+        assert_eq!(ids, vec!["both".to_string(), "legacy-only".to_string()]);
+    }
+
+    #[test]
+    fn legacy_merge_is_idempotent_and_keeps_chronological_log_order() {
+        let shared = entry("SELECT shared", "2026-01-02T00:00:00Z");
+        let mut logged = vec![shared.clone()];
+        let mut older = entry("SELECT older", "2026-01-01T00:00:00Z");
+        older.id = "older".to_string();
+
+        assert_eq!(merge_log_entries(&mut logged, vec![shared, older]), 1);
+        assert_eq!(logged.len(), 2);
+        assert_eq!(logged[0].id, "older");
+        assert_eq!(logged[1].sql, "SELECT shared");
+    }
+}
