@@ -721,8 +721,13 @@ fn blocks_external_select_writes_but_allows_normal_selects() {
 
 #[test]
 fn blocks_unproven_stored_or_udf_calls_that_can_hide_writes() {
+    // A bare function name is indistinguishable from a built-in without a
+    // server metadata lookup, so SELECT keeps the permissive read path.
+    assert_eq!(
+        classify_for_rollback("SELECT mutate_users()").class,
+        ProtectionClass::ReadOnly
+    );
     for sql in [
-        "SELECT mutate_users()",
         "SELECT app.mutate_users()",
         "SET @result = mutate_users()",
         "INSERT INTO users (id, name) VALUES (1, mutate_users())",

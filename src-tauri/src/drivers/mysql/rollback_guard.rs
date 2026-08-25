@@ -3129,6 +3129,14 @@ fn classify_select(tokens: &[Token]) -> Result<ProtectedStatement, BlockedStatem
             "SELECT INTO OUTFILE/DUMPFILE has an external write side effect",
         ));
     }
+    if tokens
+        .windows(2)
+        .any(|pair| pair[0].text == ":" && pair[1].text == "=")
+    {
+        return Err(BlockedStatement::unsupported(
+            "user-variable assignment with := is forbidden because session mutations are not represented in the rollback file",
+        ));
+    }
     ensure_no_user_defined_function_calls(tokens)?;
     Ok(ProtectedStatement::ReadOnly)
 }
@@ -4007,7 +4015,7 @@ fn parse_alter(tokens: &[Token]) -> Result<DdlPlan, BlockedStatement> {
         "only a reversible ALTER TABLE subset is supported",
     )?;
     let (table, idx) = parse_object_name(tokens, 2)?;
-    if has_top_level_symbol(tokens, idx, ",") {
+    if has_unsupported_alter_clause_separator(tokens, idx) {
         return Err(BlockedStatement::unsupported(
             "multi-clause ALTER TABLE is fail-closed; split it into individual statements",
         ));
@@ -4024,6 +4032,31 @@ fn parse_alter(tokens: &[Token]) -> Result<DdlPlan, BlockedStatement> {
             "this ALTER TABLE operation is not in the reversible allowlist",
         )),
     }
+}
+
+fn has_unsupported_alter_clause_separator(tokens: &[Token], start: usize) -> bool {
+    let mut depth = 0_i32;
+    for (index, token) in tokens.iter().enumerate().skip(start) {
+        match token.text.as_str() {
+            "(" => depth += 1,
+            ")" => depth -= 1,
+            "," if depth == 0 => {
+                let option_index = index + 1;
+                let allowed = match tokens.get(option_index).map(Token::upper) {
+                    Some("ALGORITHM") | Some("LOCK") => true,
+                    Some("WITH") | Some("WITHOUT") => tokens
+                        .get(option_index + 1)
+                        .is_some_and(|next| next.upper() == "VALIDATION"),
+                    _ => false,
+                };
+                if !allowed {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 fn parse_alter_add(

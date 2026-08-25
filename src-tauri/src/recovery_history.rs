@@ -2946,7 +2946,12 @@ mod tests {
         assert!(sql.contains("ALTER TABLE `app`.`users` DROP COLUMN `note`;"));
         assert!(!sql.contains("-- TABULARIS_MANUAL_DDL:"));
         assert_eq!(sql.matches("\nROLLBACK;\n").count(), 1);
-        assert_eq!(sql.matches(';').count(), 8);
+        let executable_semicolons = sql
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("--"))
+            .map(|line| line.matches(';').count())
+            .sum::<usize>();
+        assert_eq!(executable_semicolons, 8);
         assert!(!sql.contains("\nCOMMIT;\n"));
     }
 
