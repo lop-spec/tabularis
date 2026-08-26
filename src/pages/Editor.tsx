@@ -426,13 +426,10 @@ export const Editor = () => {
     hasSelection: false,
     statementCount: 0,
   });
-  // The label only distinguishes ≤1 from >1 statements, so bail out of count
-  // changes that can't affect it (typing a ';' mid-way through a script) —
-  // each accepted update re-renders this whole page component.
+  // Only selection state changes the Run button target/label.
   const handleRunContextChange = useCallback((context: RunContext) => {
     setRunContext((previous) =>
-      previous.hasSelection === context.hasSelection &&
-      (previous.statementCount > 1) === (context.statementCount > 1)
+      previous.hasSelection === context.hasSelection
         ? previous
         : context,
     );
@@ -1988,35 +1985,23 @@ export const Editor = () => {
     updateTab,
   ]);
 
-  // Keep the Run button honest about its target: with no selection a pasted
-  // multi-statement script only runs the statement under the cursor, and a
-  // button that just reads "Run" gives no hint that the rest was skipped.
-  // handleRunButton below dispatches on the same resolveRunTarget call.
-  // Table and query-builder tabs always run their whole (generated) query;
-  // runContext also still describes the last SQL editor tab on a builder tab.
+  // The primary Run action executes the selection, or every statement when
+  // there is no selection. Table and query-builder tabs run their whole query.
   const runTarget =
     isTableTab || activeTab?.type === "query_builder"
-      ? "whole"
+      ? "all"
       : resolveRunTarget({
           hasSelection: runContext.hasSelection,
           statementCount: runContext.statementCount,
-          runStatementUnderCursor: settings.runStatementUnderCursor !== false,
         });
 
   const runLabel =
     runTarget === "selection"
       ? t("editor.runSelection")
-      : runTarget === "statement"
-        ? t("editor.runStatement")
-        : t("editor.run");
+      : t("editor.runAll");
 
   const runButtonBase = `${runLabel} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`;
-  // Surface the whole-script escape hatch exactly when the button would run
-  // one statement out of several.
-  const runTitle =
-    runTarget === "statement"
-      ? `${runButtonBase} · ${t("editor.runAll")} (${isMac ? "Cmd+Shift+Enter" : "Ctrl+Shift+Enter"})`
-      : runButtonBase;
+  const runTitle = runButtonBase;
 
   const handleRunAll = useCallback(() => {
     if (!activeTab) return;
@@ -2051,11 +2036,9 @@ export const Editor = () => {
       // Fallback: use saved query when editor ref is not available (e.g. after tab restore)
       if (activeTab.query?.trim()) {
         const queries = splitQueries(activeTab.query, activeDialect);
-        if (queries.length <= 1) runQuery(queries[0] || activeTab.query, 1);
-        else {
-          setSelectableQueries(queries);
-          setIsQuerySelectionModalOpen(true);
-        }
+        runMultipleQueries(
+          queries.length > 0 ? queries : [activeTab.query],
+        );
       }
       return;
     }
@@ -2076,7 +2059,6 @@ export const Editor = () => {
       resolveRunTarget({
         hasSelection,
         statementCount: queries.length,
-        runStatementUnderCursor: settings.runStatementUnderCursor !== false,
       })
     ) {
       case "selection": {
@@ -2088,19 +2070,8 @@ export const Editor = () => {
         }
         return;
       }
-      case "whole":
-        runQuery(queries[0] || fullText, 1);
-        return;
-      case "statement": {
-        const statement = getStatementAtCursor(editor, activeDialect);
-        // Only undefined without a model/position; the first statement is
-        // what the cursor resolution would have picked then.
-        runQuery(statement?.text ?? queries[0], 1);
-        return;
-      }
-      case "pick":
-        setSelectableQueries(queries);
-        setIsQuerySelectionModalOpen(true);
+      case "all":
+        runMultipleQueries(queries.length > 0 ? queries : [fullText]);
         return;
     }
   }, [
@@ -2108,7 +2079,6 @@ export const Editor = () => {
     activeDialect,
     runQuery,
     runMultipleQueries,
-    settings.runStatementUnderCursor,
   ]);
 
   const openExplainForQuery = useCallback((query: string) => {
