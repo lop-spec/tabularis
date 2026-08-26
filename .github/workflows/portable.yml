@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: windows-portable-${{ github.ref }}
@@ -68,3 +68,29 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
+
+      - name: Publish rolling main Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: portable-main
+        run: |
+          git tag --force "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$RELEASE_TAG" --force
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "Tabularis Portable (main)" \
+              --notes "Automatically rebuilt from the latest main commit: $GITHUB_SHA" \
+              --prerelease \
+              --latest=false \
+              --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Tabularis Portable (main)" \
+              --notes "Automatically rebuilt from the latest main commit: $GITHUB_SHA" \
+              --prerelease \
+              --latest=false \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+          gh release upload "$RELEASE_TAG" dist/portable/* --clobber --repo "$GITHUB_REPOSITORY"

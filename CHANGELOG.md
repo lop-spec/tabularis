@@ -6,7 +6,7 @@
 
 ### CI
 
-* publish a completed GitHub Release only after all platform assets succeed
+* publish Windows portable EXE Releases without external signing secrets
 
 # [0.17.0](https://github.com/TabularisDB/tabularis/compare/v0.16.0...v0.17.0) (2026-07-27)
 

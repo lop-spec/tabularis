@@ -1,183 +1,89 @@
 name: Release
-env:
-  GH_TOKEN: ${{ SECRETS.GITHUB_TOKEN }}
+
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
-      pr_number:
-        description: "PR number to build (from any fork). Builds from refs/pull/<N>/head and is ALWAYS marked as prerelease so it bypasses AUR/Snap/Winget."
-        required: false
       tag_name:
-        description: "Tag/release name (e.g. v0.10.0-json-beta.1). Required when pr_number is set."
-        required: false
+        description: "Existing tag to build and publish (for example v0.17.1)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.tag_name }}
+  cancel-in-progress: false
 
 jobs:
-  publish-tauri:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: "macos-latest" # for Arm64
-            args: "--target aarch64-apple-darwin"
-          - platform: "macos-15-intel" # for Intel
-            args: "--target x86_64-apple-darwin"
-          - platform: "ubuntu-24.04"
-            args: ""
-            # Build inside an ubuntu:22.04 container (glibc 2.35) rather than
-            # on the bare ubuntu-24.04 runner (glibc 2.39), so the produced
-            # .deb/.AppImage keep running on older LTS distros. Pinned to the
-            # container image, not the runner, so it's unaffected by GitHub's
-            # eventual deprecation of the ubuntu-22.04 *runner* image.
-            container: "ubuntu:22.04"
-          - platform: "windows-latest"
-            args: ""
-
-    runs-on: ${{ matrix.platform }}
-    container: ${{ matrix.container }}
+  publish-portable:
+    name: Build and publish Windows portable EXE
+    runs-on: windows-latest
+    timeout-minutes: 60
     steps:
-      - name: Install container prerequisites (ubuntu container only)
-        if: matrix.container
-        run: |
-          apt-get update
-          apt-get install -y git ca-certificates curl
-      - name: Resolve build ref + tag
+      - name: Resolve tag
         id: meta
         shell: bash
         run: |
-          if [ -n "${{ inputs.pr_number }}" ]; then
-            echo "ref=refs/pull/${{ inputs.pr_number }}/head" >> "$GITHUB_OUTPUT"
-            if [ -z "${{ inputs.tag_name }}" ]; then
-              echo "::error::tag_name is required when pr_number is provided"
-              exit 1
-            fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "tag=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
-            # Fork PR builds are ALWAYS prerelease — release bits must come from main, not a fork.
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "ref=refs/tags/${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
           else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
-            echo "tag=${{ inputs.tag_name || github.ref_name }}" >> "$GITHUB_OUTPUT"
-            # Auto-flag prerelease when tag contains a "-" suffix (semver pre-release).
-            if [[ "${{ inputs.tag_name || github.ref_name }}" == *-* ]]; then
-              echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "prerelease=false" >> "$GITHUB_OUTPUT"
-            fi
           fi
 
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Checkout tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ steps.meta.outputs.ref }}
 
-      - name: Setup pnpm
+      - name: Set up pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .node-version
-          cache: "pnpm"
+          cache: pnpm
 
-      - name: install Rust stable
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
-        with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
-
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-24.04'
-        run: |
-          apt-get update
-          apt-get install -y \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libssl-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libfuse2 \
-            libsoup-3.0-dev \
-            libwebkit2gtk-4.1-dev \
-            patchelf \
-            xdg-utils \
-            gstreamer1.0-plugins-base \
-            gstreamer1.0-plugins-bad \
-            fonts-noto-color-emoji \
-            pkg-config \
-            unzip
-
-      - name: install frontend dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: src-tauri
 
-      # Notarization needs the App Store Connect API key on disk. The .p8 is stored
-      # base64-encoded in APPLE_API_KEY_CONTENT and decoded into a temp file (macOS only).
-      - name: Prepare Apple API key (macOS only)
-        if: startsWith(matrix.platform, 'macos')
-        shell: bash
-        run: |
-          echo "${{ secrets.APPLE_API_KEY_CONTENT }}" | base64 --decode > "$RUNNER_TEMP/apple_api_key.p8"
-          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/apple_api_key.p8" >> "$GITHUB_ENV"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          # macOS code signing (Developer ID Application certificate)
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # macOS notarization (App Store Connect API key)
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
-        with:
-          tagName: ${{ steps.meta.outputs.tag }}
-          releaseName: "v__VERSION__"
-          releaseBody: |
-            See the assets below to download this version and install.
+      - name: Typecheck
+        run: pnpm run typecheck
 
-            ---
-            **Stay in touch:** [Website](https://tabularis.dev) · [Discord](https://discord.com/invite/K2hmhfHRSt) · [X](https://x.com/tabularisdb) · [Bluesky](https://bsky.app/profile/tabularis.bsky.social) · [Mastodon](https://mastodon.social/@tabularis) · [GitHub](https://github.com/TabularisDB/tabularis)
-          releaseDraft: true
-          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
-          tauriScript: pnpm tauri
-          args: ${{ matrix.args }}
+      - name: Build portable executable
+        run: pnpm tauri build --no-bundle --ci
 
-      - name: Package portable executable (Windows only)
-        if: matrix.platform == 'windows-latest'
+      - name: Package and verify portable executable
         env:
           TABULARIS_PORTABLE_VERSION: ${{ steps.meta.outputs.tag }}
         run: node scripts/package-windows-portable.mjs
 
-      - name: Upload portable executable (Windows only)
-        if: matrix.platform == 'windows-latest'
+      - name: Create or update published Release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.meta.outputs.tag }}
         run: |
-          gh release upload "${{ steps.meta.outputs.tag }}" dist/portable/* --clobber
-
-  publish-release:
-    name: Publish completed release
-    needs: publish-tauri
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAG_NAME: ${{ inputs.tag_name || github.ref_name }}
-    steps:
-      - name: Publish release after every platform succeeds
-        run: gh release edit "$TAG_NAME" --draft=false --repo "$GITHUB_REPOSITORY"
+          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" --draft=false --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG_NAME" \
+              --verify-tag \
+              --title "$TAG_NAME" \
+              --notes "Portable Windows x64 build. Download the EXE and run it directly; no installation is required." \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+          gh release upload "$TAG_NAME" dist/portable/* --clobber --repo "$GITHUB_REPOSITORY"
