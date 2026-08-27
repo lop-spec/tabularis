@@ -67,6 +67,15 @@ The app UI is available in English, Italian, Spanish, Chinese (Simplified), Fren
 
 **Discord** — [Join our Discord server](https://discord.com/invite/K2hmhfHRSt) to talk with the maintainers, share feedback, and get help from the community.
 
+### Private fork repository
+
+`lop-spec/tabularis` is the single maintained repository for the private fork:
+application source, rollback and recovery safeguards, Windows portable CI, and
+the verified [release catalog](resources/release-catalog/README.md) all live
+here. The former `tabularis-protected` and `resource-directory` histories
+are retained under migration tags; their standalone GitHub repositories were
+removed after consolidation.
+
 ## Table of Contents
 
 - [Why tabularis?](#why-tabularis)

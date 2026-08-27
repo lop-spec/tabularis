@@ -1,0 +1,79 @@
+name: Release Catalog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "resources/release-catalog/**"
+      - ".github/workflows/release-catalog.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "resources/release-catalog/**"
+      - ".github/workflows/release-catalog.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+
+      - name: Validate catalog
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, readdir } from "node:fs/promises";
+
+          const directory = "resources/release-catalog";
+          const catalog = JSON.parse(
+            await readFile(directory + "/catalog.json", "utf8"),
+          );
+          const fail = (message) => {
+            throw new Error(message);
+          };
+
+          if (catalog.schema_version !== 1) fail("Unsupported schema_version");
+          if (catalog.catalog !== "lop-spec/tabularis:resources/release-catalog") {
+            fail("Catalog must be owned by lop-spec/tabularis");
+          }
+          if (!Array.isArray(catalog.resources) || catalog.resources.length === 0) {
+            fail("Catalog must contain at least one resource");
+          }
+
+          const ids = new Set();
+          for (const resource of catalog.resources) {
+            if (!resource.id || ids.has(resource.id)) fail("Resource ids must be unique");
+            ids.add(resource.id);
+            for (const asset of [resource.portable, resource.checksum]) {
+              if (!asset?.name || !Number.isInteger(asset.size) || asset.size <= 0) {
+                fail(resource.id + " has invalid asset metadata");
+              }
+              if (!/^[a-f0-9]{64}$/.test(asset.sha256)) {
+                fail(resource.id + " has an invalid SHA-256 digest");
+              }
+              const prefix =
+                "https://github.com/" + resource.repository + "/releases/download/" +
+                resource.release.tag + "/";
+              if (!asset.url.startsWith(prefix)) {
+                fail(resource.id + " asset URL does not match its release");
+              }
+            }
+          }
+
+          const files = await readdir(directory, { recursive: true });
+          if (files.some((file) => /\.(exe|msi|zip|7z)$/i.test(file))) {
+            fail("Binary release assets must not be committed");
+          }
+          console.log("Validated " + catalog.resources.length + " release resources.");
+          NODE

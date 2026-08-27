@@ -1,15 +1,20 @@
 {
   "schema_version": 1,
-  "catalog": "lop-spec/resource-directory",
-  "generated_on": "2026-08-26",
+  "catalog": "lop-spec/tabularis:resources/release-catalog",
+  "generated_on": "2026-08-27",
   "policy": {
-    "mode": "release-only",
+    "mode": "in-project",
     "release_required": true,
     "required_assets": [
       "portable Windows executable",
       "SHA256SUMS.txt"
     ],
-    "immutable_catalog_releases": true
+    "immutable_catalog_releases": false,
+    "standalone_repository": false
+  },
+  "migration": {
+    "from": "lop-spec/resource-directory",
+    "merged_on": "2026-08-27"
   },
   "resources": [
     {
@@ -17,24 +22,24 @@
       "name": "Tabularis",
       "repository": "lop-spec/tabularis",
       "repository_url": "https://github.com/lop-spec/tabularis",
-      "main_sha": "d897f4f80485a17a39eab150f3ff0f8f313b568c",
+      "main_sha": "b44db6ddb0c1d2c1d5b7d88554eaa5d8664a6a57",
       "release": {
-        "tag": "v0.17.0",
-        "name": "Tabularis v0.17.0",
-        "url": "https://github.com/lop-spec/tabularis/releases/tag/v0.17.0",
-        "published_at": "2026-08-26T02:52:32Z"
+        "tag": "v0.17.1",
+        "name": "v0.17.1",
+        "url": "https://github.com/lop-spec/tabularis/releases/tag/v0.17.1",
+        "published_at": "2026-08-26T05:39:55Z"
       },
       "portable": {
-        "name": "tabularis_0.17.0_x64-portable.exe",
-        "size": 29243392,
-        "sha256": "adbc01160b2e450130f75ba304b996e8b9007858dfa1e2c18cb6fc94c03743d2",
-        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.17.0/tabularis_0.17.0_x64-portable.exe"
+        "name": "tabularis_0.17.1_x64-portable.exe",
+        "size": 29239296,
+        "sha256": "6b8b6867fe6302d0aa6956d2f258f0f2446033de220b583d00e039f49cf091af",
+        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.17.1/tabularis_0.17.1_x64-portable.exe"
       },
       "checksum": {
         "name": "SHA256SUMS.txt",
         "size": 100,
-        "sha256": "ff9489a3b31de7b7095d73f7f37d0877cde9c07cbc63bf917929ffb1c478f4ac",
-        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.17.0/SHA256SUMS.txt"
+        "sha256": "976b5f6a2ad826a5b757b320246cd37fc9589063cb9552a4a005a3b9a932a1a9",
+        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.17.1/SHA256SUMS.txt"
       }
     },
     {
