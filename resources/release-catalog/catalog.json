@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "catalog": "lop-spec/resource-directory",
+  "generated_on": "2026-08-26",
+  "policy": {
+    "mode": "release-only",
+    "release_required": true,
+    "required_assets": [
+      "portable Windows executable",
+      "SHA256SUMS.txt"
+    ],
+    "immutable_catalog_releases": true
+  },
+  "resources": [
+    {
+      "id": "tabularis",
+      "name": "Tabularis",
+      "repository": "lop-spec/tabularis",
+      "repository_url": "https://github.com/lop-spec/tabularis",
+      "main_sha": "d897f4f80485a17a39eab150f3ff0f8f313b568c",
+      "release": {
+        "tag": "v0.17.0",
+        "name": "Tabularis v0.17.0",
+        "url": "https://github.com/lop-spec/tabularis/releases/tag/v0.17.0",
+        "published_at": "2026-08-26T02:52:32Z"
+      },
+      "portable": {
+        "name": "tabularis_0.17.0_x64-portable.exe",
+        "size": 29243392,
+        "sha256": "adbc01160b2e450130f75ba304b996e8b9007858dfa1e2c18cb6fc94c03743d2",
+        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.17.0/tabularis_0.17.0_x64-portable.exe"
+      },
+      "checksum": {
+        "name": "SHA256SUMS.txt",
+        "size": 100,
+        "sha256": "ff9489a3b31de7b7095d73f7f37d0877cde9c07cbc63bf917929ffb1c478f4ac",
+        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.17.0/SHA256SUMS.txt"
+      }
+    },
+    {
+      "id": "smart-proxy-client",
+      "name": "Smart Proxy",
+      "repository": "lop-spec/smart-proxy-client",
+      "repository_url": "https://github.com/lop-spec/smart-proxy-client",
+      "main_sha": "f17b0a49be14e7b9b12d5e1b34a3a3866b553639",
+      "release": {
+        "tag": "v1.0.0",
+        "name": "Smart Proxy v1.0.0",
+        "url": "https://github.com/lop-spec/smart-proxy-client/releases/tag/v1.0.0",
+        "published_at": "2026-08-25T17:42:48Z"
+      },
+      "portable": {
+        "name": "smart-proxy-client-win_x64.exe",
+        "size": 65258496,
+        "sha256": "b24722ae098ea7c328fad0adbc327ef342b3114fe39c42dd9ae1372268b08878",
+        "url": "https://github.com/lop-spec/smart-proxy-client/releases/download/v1.0.0/smart-proxy-client-win_x64.exe"
+      },
+      "checksum": {
+        "name": "SHA256SUMS.txt",
+        "size": 97,
+        "sha256": "c7876657fae2c759ac3a79eb9d4e14e60813ef418c1478ed3a5c600cf9326d6d",
+        "url": "https://github.com/lop-spec/smart-proxy-client/releases/download/v1.0.0/SHA256SUMS.txt"
+      }
+    }
+  ]
+}
