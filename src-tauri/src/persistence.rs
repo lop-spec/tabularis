@@ -91,16 +91,51 @@ fn protect_file_secrets(file: &mut ConnectionsFile) -> Result<bool, String> {
         })
 }
 
+fn merge_connection_recovery(current: &mut ConnectionsFile, backup: ConnectionsFile) -> bool {
+    let mut changed = false;
+    let mut connection_ids = current
+        .connections
+        .iter()
+        .map(|connection| connection.id.clone())
+        .collect::<std::collections::HashSet<_>>();
+    for connection in backup.connections {
+        if connection_ids.insert(connection.id.clone()) {
+            current.connections.push(connection);
+            changed = true;
+        }
+    }
+    let mut group_ids = current
+        .groups
+        .iter()
+        .map(|group| group.id.clone())
+        .collect::<std::collections::HashSet<_>>();
+    for group in backup.groups {
+        if group_ids.insert(group.id.clone()) {
+            current.groups.push(group);
+            changed = true;
+        }
+    }
+    changed
+}
+
 pub fn load_connections_file(path: &Path) -> Result<ConnectionsFile, String> {
     if !path.exists() {
         return Ok(ConnectionsFile::default());
     }
 
-    if profile_crypto::managed_profile_path(path) {
+    if profile_crypto::managed_profile_path(path) || profile_crypto::file_is_encrypted(path) {
         let read = profile_crypto::read_json::<serde_json::Value>(path, CONNECTIONS_PURPOSE)?
             .ok_or_else(|| "Connections profile disappeared while it was being read".to_string())?;
         let mut file = parse_connections(read.value)?;
-        let changed = protect_file_secrets(&mut file)?;
+        let recovered = if read.was_plaintext {
+            profile_crypto::read_legacy_backup::<serde_json::Value>(path, CONNECTIONS_PURPOSE)?
+                .map(parse_connections)
+                .transpose()?
+                .is_some_and(|backup| merge_connection_recovery(&mut file, backup))
+        } else {
+            false
+        };
+        let changed = protect_file_secrets(&mut file)? || recovered;
         if read.was_plaintext || changed {
             profile_crypto::write_json(path, CONNECTIONS_PURPOSE, &file)?;
         }
@@ -116,7 +151,7 @@ pub fn load_connections(path: &Path) -> Result<Vec<SavedConnection>, String> {
 }
 
 pub fn save_connections_file(path: &Path, file: &ConnectionsFile) -> Result<(), String> {
-    if profile_crypto::managed_profile_path(path) {
+    if profile_crypto::managed_profile_path(path) || profile_crypto::file_is_encrypted(path) {
         let mut protected = file.clone();
         protect_file_secrets(&mut protected)?;
         return profile_crypto::write_json(path, CONNECTIONS_PURPOSE, &protected);
@@ -174,13 +209,31 @@ pub fn load_ssh_connections_file(path: &Path) -> Result<Vec<SshConnection>, Stri
     if !path.exists() {
         return Ok(Vec::new());
     }
-    if profile_crypto::managed_profile_path(path) {
+    if profile_crypto::managed_profile_path(path) || profile_crypto::file_is_encrypted(path) {
         let read = profile_crypto::read_json::<Vec<SshConnection>>(path, SSH_CONNECTIONS_PURPOSE)?
             .ok_or_else(|| "SSH profile disappeared while it was being read".to_string())?;
         let mut connections = read.value;
+        let mut recovered = false;
+        if read.was_plaintext {
+            if let Some(backup) = profile_crypto::read_legacy_backup::<Vec<SshConnection>>(
+                path,
+                SSH_CONNECTIONS_PURPOSE,
+            )? {
+                let mut ids = connections
+                    .iter()
+                    .map(|connection| connection.id.clone())
+                    .collect::<std::collections::HashSet<_>>();
+                for connection in backup {
+                    if ids.insert(connection.id.clone()) {
+                        connections.push(connection);
+                        recovered = true;
+                    }
+                }
+            }
+        }
         let changed = connections
             .iter_mut()
-            .try_fold(false, |changed, connection| {
+            .try_fold(recovered, |changed, connection| {
                 protect_ssh_secrets(connection)
                     .map(|connection_changed| changed || connection_changed)
             })?;
@@ -194,7 +247,7 @@ pub fn load_ssh_connections_file(path: &Path) -> Result<Vec<SshConnection>, Stri
 }
 
 pub fn save_ssh_connections_file(path: &Path, connections: &[SshConnection]) -> Result<(), String> {
-    if profile_crypto::managed_profile_path(path) {
+    if profile_crypto::managed_profile_path(path) || profile_crypto::file_is_encrypted(path) {
         let mut protected = connections.to_vec();
         for connection in &mut protected {
             protect_ssh_secrets(connection)?;
@@ -292,6 +345,22 @@ mod tests {
                 return Err("Migrated passwords did not reach the OS keychain".to_string());
             }
 
+            // Simulate an older executable replacing the encrypted profile with
+            // the empty shape it believes it loaded. The next current launch
+            // must merge the encrypted migration backup instead of losing data.
+            fs::write(
+                &path,
+                serde_json::to_vec_pretty(&ConnectionsFile::default()).unwrap(),
+            )
+            .map_err(|error| error.to_string())?;
+            let recovered = load_connections_file(&path)?;
+            if recovered.connections.len() != 2
+                || recovered.connections[0].id != first_id
+                || recovered.connections[1].id != second_id
+            {
+                return Err("Encrypted rollback did not recover a legacy overwrite".to_string());
+            }
+
             let backup_directory = directory.path().join("migration-backups");
             let backup_files = fs::read_dir(&backup_directory)
                 .map_err(|error| error.to_string())?
@@ -356,6 +425,11 @@ mod tests {
             }
             if keychain_utils::get_ssh_password(&id, "")? != password {
                 return Err("SSH password did not reach the OS keychain".to_string());
+            }
+            fs::write(&path, b"[]").map_err(|error| error.to_string())?;
+            let recovered = load_ssh_connections_file(&path)?;
+            if recovered.len() != 1 || recovered[0].id != id {
+                return Err("Encrypted SSH rollback did not recover a legacy overwrite".to_string());
             }
             let bytes = fs::read(&path).map_err(|error| error.to_string())?;
             for plaintext in [password.as_bytes(), b"ssh.example.invalid".as_slice()] {

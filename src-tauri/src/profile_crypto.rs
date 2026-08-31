@@ -157,6 +157,13 @@ fn envelope_from_bytes(bytes: &[u8]) -> Option<EncryptedEnvelope> {
     (envelope.format == ENVELOPE_FORMAT).then_some(envelope)
 }
 
+pub fn file_is_encrypted(path: &Path) -> bool {
+    fs::read(path)
+        .ok()
+        .and_then(|bytes| envelope_from_bytes(&bytes))
+        .is_some()
+}
+
 fn write_and_sync(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let mut file = OpenOptions::new()
         .write(true)
@@ -208,11 +215,24 @@ fn write_legacy_backup(path: &Path, purpose: &str, plaintext: &[u8]) -> Result<P
         .ok_or_else(|| "Profile path has no parent directory".to_string())?;
     let backup_dir = parent.join("migration-backups");
     fs::create_dir_all(&backup_dir).map_err(|error| error.to_string())?;
-    let digest = hex::encode(Sha256::digest(plaintext));
     let file_name = path
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or("profile");
+    let file_prefix = format!("{file_name}-legacy-");
+    if let Some(existing) = fs::read_dir(&backup_dir)
+        .map_err(|error| error.to_string())?
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with(&file_prefix) && name.ends_with(".enc"))
+        })
+    {
+        return Ok(existing.path());
+    }
+    let digest = hex::encode(Sha256::digest(plaintext));
     let backup = backup_dir.join(format!("{file_name}-legacy-{}.enc", &digest[..16]));
     if !backup.exists() {
         let encrypted = encrypt_bytes_with_key(
@@ -292,6 +312,55 @@ pub fn read_json<T: DeserializeOwned>(
             Ok(Some(recovered))
         }
     }
+}
+
+pub fn read_legacy_backup<T: DeserializeOwned>(
+    path: &Path,
+    purpose: &str,
+) -> Result<Option<T>, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Profile path has no parent directory".to_string())?;
+    let backup_directory = parent.join("migration-backups");
+    if !backup_directory.exists() {
+        return Ok(None);
+    }
+    let file_prefix = format!(
+        "{}-legacy-",
+        path.file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("profile")
+    );
+    let mut backups = fs::read_dir(backup_directory)
+        .map_err(|error| error.to_string())?
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with(&file_prefix) && name.ends_with(".enc"))
+        })
+        .collect::<Vec<_>>();
+    backups.sort_by_key(|entry| {
+        entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+    });
+    for backup in backups {
+        let raw = fs::read(backup.path()).map_err(|error| error.to_string())?;
+        let Some(envelope) = envelope_from_bytes(&raw) else {
+            continue;
+        };
+        let plaintext = decrypt_bytes_with_key(
+            &envelope,
+            &format!("legacy-backup:{purpose}"),
+            &profile_key()?,
+        )?;
+        let value = serde_json::from_slice(&plaintext).map_err(|error| error.to_string())?;
+        return Ok(Some(value));
+    }
+    Ok(None)
 }
 
 pub fn write_json<T: Serialize>(path: &Path, purpose: &str, value: &T) -> Result<(), String> {

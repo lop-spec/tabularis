@@ -1,3 +1,11 @@
+# 0.18.1 (2026-09-01)
+
+### Bug Fixes
+
+* recover encrypted connection and SSH profiles after an older executable overwrites them with a legacy plaintext shape
+* recognize encrypted profiles after they are moved while preserving the user-bound credential-store key
+* retain the original encrypted migration backup instead of replacing it with a later downgrade snapshot
+
 # 0.18.0 (2026-08-31)
 
 ### Security
