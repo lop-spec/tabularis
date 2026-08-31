@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog": "lop-spec/tabularis:resources/release-catalog",
-  "generated_on": "2026-08-27",
+  "generated_on": "2026-08-31",
   "policy": {
     "mode": "in-project",
     "release_required": true,
@@ -22,24 +22,24 @@
       "name": "Tabularis",
       "repository": "lop-spec/tabularis",
       "repository_url": "https://github.com/lop-spec/tabularis",
-      "main_sha": "b44db6ddb0c1d2c1d5b7d88554eaa5d8664a6a57",
+      "main_sha": "7febe83d28f7e8d70374161f645ba44545184a76",
       "release": {
-        "tag": "v0.17.1",
-        "name": "v0.17.1",
-        "url": "https://github.com/lop-spec/tabularis/releases/tag/v0.17.1",
-        "published_at": "2026-08-26T05:39:55Z"
+        "tag": "v0.18.0",
+        "name": "v0.18.0",
+        "url": "https://github.com/lop-spec/tabularis/releases/tag/v0.18.0",
+        "published_at": "2026-08-31T16:58:48Z"
       },
       "portable": {
-        "name": "tabularis_0.17.1_x64-portable.exe",
-        "size": 29239296,
-        "sha256": "6b8b6867fe6302d0aa6956d2f258f0f2446033de220b583d00e039f49cf091af",
-        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.17.1/tabularis_0.17.1_x64-portable.exe"
+        "name": "tabularis_0.18.0_x64-portable.exe",
+        "size": 30546944,
+        "sha256": "f75d94017abc7114dce1ceeafec98964dda36b3f9f5fd64e339e3a1a90985a9f",
+        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.18.0/tabularis_0.18.0_x64-portable.exe"
       },
       "checksum": {
         "name": "SHA256SUMS.txt",
         "size": 100,
-        "sha256": "976b5f6a2ad826a5b757b320246cd37fc9589063cb9552a4a005a3b9a932a1a9",
-        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.17.1/SHA256SUMS.txt"
+        "sha256": "04a6daf5d1ccf7e54efd84c2d59f38e83d464b0377afd96b9f43bdff73dd036f",
+        "url": "https://github.com/lop-spec/tabularis/releases/download/v0.18.0/SHA256SUMS.txt"
       }
     },
     {
