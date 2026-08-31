@@ -12,6 +12,10 @@ pub struct Args {
     #[arg(long)]
     pub debug: bool,
 
+    /// Start without showing or activating the main window
+    #[arg(long)]
+    pub background: bool,
+
     /// Open a Visual Explain window for a previously-saved EXPLAIN file
     /// (Postgres `EXPLAIN (FORMAT JSON)` output).
     #[arg(long, value_name = "FILE")]
@@ -22,6 +26,7 @@ impl Args {
     fn defaults() -> Self {
         Self {
             debug: false,
+            background: false,
             explain: None,
         }
     }
@@ -41,4 +46,16 @@ pub fn parse() -> Args {
         }
         Args::defaults()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn background_flag_is_explicit_and_disabled_by_default() {
+        assert!(!Args::defaults().background);
+        let parsed = Args::try_parse_from(["tabularis", "--background"]).unwrap();
+        assert!(parsed.background);
+    }
 }

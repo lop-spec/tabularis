@@ -72,6 +72,9 @@ file name or download location.
 - Local recovery material remains private and complete. Events sent to a remote
   audit endpoint use stable pseudonyms and SQL with literals removed.
 
+For unattended startup checks, `tabularis.exe --background` initializes the same
+profile and logging path without showing or activating the main window.
+
 The encrypted profile is intentionally bound to the same OS user. Before moving
 to another computer, changing Windows accounts, or downgrading to a version that
 predates encrypted profiles, export the profile from the current version and

@@ -255,8 +255,11 @@ pub fn run() {
 
     tauri::Builder::default()
         // Keep a single application instance and focus the existing window.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             log::info!("Duplicate launch detected — forwarded to existing instance");
+            if argv.iter().any(|argument| argument == "--background") {
+                return;
+            }
             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
                 // This is also the warm-relaunch path for close-to-hide: the
                 // launcher just starts a second instance and we bring the
@@ -296,6 +299,11 @@ pub fn run() {
         .manage(results_window::ResultsWindowStore::default())
         .manage(query_history::QueryHistoryState::default())
         .setup(move |app| {
+            if !args.background {
+                if let Some(window) = app.get_webview_window("main") {
+                    window.show().map_err(std::io::Error::other)?;
+                }
+            }
             let audit_root =
                 audit_outbox::audit_root(&app.handle()).map_err(std::io::Error::other)?;
             let audit_state =
