@@ -118,7 +118,11 @@ if (artifact) {
   if (!existsSync(artifact)) {
     throw new Error(`Artifact does not exist: ${artifact}`);
   }
-  scanText(artifact, readFileSync(artifact).toString("latin1"), true);
+  const bytes = readFileSync(artifact);
+  const printable = Buffer.from(
+    bytes.map((byte) => (byte >= 0x20 && byte <= 0x7e ? byte : 0x0a)),
+  ).toString("ascii");
+  scanText(artifact, printable, true);
 }
 
 if (findings.length > 0) {
