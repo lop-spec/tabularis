@@ -6,6 +6,12 @@ use std::path::Path;
 const CONNECTIONS_PURPOSE: &str = "database-connections";
 const SSH_CONNECTIONS_PURPOSE: &str = "ssh-connections";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalProfileSummary {
+    pub database_connections: usize,
+    pub ssh_connections: usize,
+}
+
 fn parse_connections(value: serde_json::Value) -> Result<ConnectionsFile, String> {
     if value.is_array() {
         let connections: Vec<SavedConnection> =
@@ -199,6 +205,17 @@ pub fn save_ssh_connections_file(path: &Path, connections: &[SshConnection]) -> 
     fs::write(path, data).map_err(|error| error.to_string())
 }
 
+pub fn migrate_local_profiles(config_dir: &Path) -> Result<LocalProfileSummary, String> {
+    let database_path = crate::paths::resolve_connections_path(config_dir);
+    let database_connections = load_connections_file(&database_path)?.connections.len();
+    let ssh_path = config_dir.join("ssh_connections.json");
+    let ssh_connections = load_ssh_connections_file(&ssh_path)?.len();
+    Ok(LocalProfileSummary {
+        database_connections,
+        ssh_connections,
+    })
+}
+
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
@@ -303,6 +320,53 @@ mod tests {
 
         let _ = keychain_utils::delete_db_password(&first_id);
         let _ = keychain_utils::delete_db_password(&second_id);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
+
+    #[test]
+    #[ignore = "uses an isolated OS-keychain entry"]
+    fn legacy_ssh_profile_migrates_to_encrypted_metadata() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("ssh_connections.managed-test.json");
+        let id = uuid::Uuid::new_v4().to_string();
+        let password = uuid::Uuid::new_v4().to_string();
+        let legacy = vec![SshConnection {
+            id: id.clone(),
+            name: "Private SSH".to_string(),
+            host: "ssh.example.invalid".to_string(),
+            port: 22,
+            user: "fixture-user".to_string(),
+            auth_type: Some("password".to_string()),
+            password: Some(password.clone()),
+            key_file: None,
+            key_passphrase: None,
+            allow_passphrase_prompt: Some(false),
+            save_in_keychain: Some(false),
+        }];
+        fs::write(&path, serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
+
+        let result: Result<(), String> = (|| {
+            let migrated = load_ssh_connections_file(&path)?;
+            if migrated.len() != 1
+                || migrated[0].id != id
+                || migrated[0].password.is_some()
+                || migrated[0].save_in_keychain != Some(true)
+            {
+                return Err("SSH profile migration changed its identity or retained a secret".to_string());
+            }
+            if keychain_utils::get_ssh_password(&id, "")? != password {
+                return Err("SSH password did not reach the OS keychain".to_string());
+            }
+            let bytes = fs::read(&path).map_err(|error| error.to_string())?;
+            for plaintext in [password.as_bytes(), b"ssh.example.invalid".as_slice()] {
+                if bytes.windows(plaintext.len()).any(|window| window == plaintext) {
+                    return Err("SSH profile metadata remained plaintext".to_string());
+                }
+            }
+            Ok(())
+        })();
+
+        let _ = keychain_utils::delete_ssh_password(&id);
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
 }

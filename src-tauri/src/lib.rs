@@ -299,6 +299,20 @@ pub fn run() {
         .manage(results_window::ResultsWindowStore::default())
         .manage(query_history::QueryHistoryState::default())
         .setup(move |app| {
+            let config_dir = app
+                .path()
+                .app_config_dir()
+                .map_err(std::io::Error::other)?;
+            match persistence::migrate_local_profiles(&config_dir) {
+                Ok(summary) => log::info!(
+                    "Local profile ready (database connections: {}, SSH connections: {})",
+                    summary.database_connections,
+                    summary.ssh_connections
+                ),
+                Err(error) => log::error!(
+                    "Local profile migration was safely rolled back and requires attention: {error}"
+                ),
+            }
             if !args.background {
                 if let Some(window) = app.get_webview_window("main") {
                     window.show().map_err(std::io::Error::other)?;
