@@ -1,7 +1,7 @@
 {
   "name": "tabularis",
   "private": true,
-  "version": "0.17.1",
+  "version": "0.18.0",
   "type": "module",
   "links": {
     "github": "https://github.com/TabularisDB/tabularis",
@@ -17,6 +17,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
+    "security:artifact": "node scripts/check-public-artifact.mjs",
     "test:coverage": "vitest run --coverage",
     "test:rust": "cd src-tauri && cargo test",
     "test:all": "pnpm test:rust && pnpm test:coverage",

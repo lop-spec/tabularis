@@ -1,0 +1,13 @@
+title = "Tabularis secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated local caches and build outputs"
+paths = [
+  '''(^|[\\/])\.gitnexus[\\/]''',
+  '''(^|[\\/])\.verification[\\/]''',
+  '''(^|[\\/])node_modules[\\/]''',
+  '''(^|[\\/])src-tauri[\\/]target[\\/]''',
+]

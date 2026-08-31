@@ -251,6 +251,8 @@ pub struct ConnectionParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_allow_passphrase_prompt: Option<bool>,
     pub save_in_keychain: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_profile: Option<String>,
     // Kubernetes Tunnel (mutually exclusive with SSH)
     #[serde(default)]
     pub k8s_enabled: Option<bool>,

@@ -9,11 +9,11 @@ Adhere to the rules defined in the [rules directory](./.rules/):
 - [Modal Styling Rules](./.rules/modals.md) (Modal component structure and styling)
 - [Testing Conventions](./.rules/testing.md) (Test file organization and structure)
 
-### Database connection safety for functional testing
+### Database integration test safety
 
-- Tabularis functional tests may connect only to `192.0.2.130:13309` or `192.0.2.130:13305`. Connecting to any other host or port for functional testing is prohibited.
-- Always test `192.0.2.130:13309` first.
-- Use `192.0.2.130:13305` only after `13309` is explicitly confirmed to be nonexistent or unavailable with reproducible evidence; an untested or uncertain state is not sufficient.
+- Never commit environment-specific database hosts, ports, instance identifiers, accounts, or credentials.
+- Live integration targets must be injected by an explicitly approved private runner and must never be compiled into release binaries.
+- Use least-privilege read-only accounts and inert `*.example.invalid` fixtures for all repository tests.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

@@ -1,8 +1,7 @@
 //! Command-line argument parsing for the Tabularis binary.
 //!
 //! Keeping this in its own module means `lib.rs` does not have to know about
-//! clap, and the flag surface (`--debug`, `--explain`, `--help`,
-//! `--version`) lives in one place.
+//! clap, and the public flag surface lives in one place.
 
 use clap::Parser;
 
@@ -17,16 +16,6 @@ pub struct Args {
     /// (Postgres `EXPLAIN (FORMAT JSON)` output).
     #[arg(long, value_name = "FILE")]
     pub explain: Option<String>,
-
-    /// Run the guarded 13309 → 13305 → read-only SQL audit smoke and exit.
-    #[arg(long, hide = true, requires_all = ["functional_test_primary", "functional_test_fallback"])]
-    pub functional_test_audit_smoke: bool,
-
-    #[arg(long, hide = true, value_name = "CONNECTION_ID")]
-    pub functional_test_primary: Option<String>,
-
-    #[arg(long, hide = true, value_name = "CONNECTION_ID")]
-    pub functional_test_fallback: Option<String>,
 }
 
 impl Args {
@@ -34,26 +23,21 @@ impl Args {
         Self {
             debug: false,
             explain: None,
-            functional_test_audit_smoke: false,
-            functional_test_primary: None,
-            functional_test_fallback: None,
         }
     }
 }
 
 /// Parse the process arguments, with platform-friendly fallback behaviour.
 ///
-/// - `--help` / `--version` surface as `Err(DisplayHelp|DisplayVersion)` with the
-///   formatted message attached; let clap print them and exit cleanly.
-/// - Any other parse failure falls back to defaults so that GUI launches (e.g.
-///   macOS passing `-psn_*`) still reach the Tauri builder.
+/// Help and version requests are printed by clap. Other parse failures fall
+/// back to defaults so platform-specific GUI arguments still start the app.
 pub fn parse() -> Args {
-    Args::try_parse().unwrap_or_else(|err| {
+    Args::try_parse().unwrap_or_else(|error| {
         if matches!(
-            err.kind(),
+            error.kind(),
             clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
         ) {
-            err.exit();
+            error.exit();
         }
         Args::defaults()
     })

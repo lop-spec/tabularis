@@ -1,3 +1,19 @@
+# 0.18.0 (2026-08-31)
+
+### Security
+
+* isolate public release binaries from local database profiles and credentials
+* encrypt database and SSH connection metadata with a user-bound OS-protected key
+* migrate inline credentials to the OS credential store without changing connection IDs
+* redact persisted application logs and remote audit payloads
+* block environment-specific infrastructure identifiers in source and release artifacts
+
+### Reliability
+
+* preserve encrypted migration and atomic rollback copies for profile recovery
+* persist bounded rotating application logs across restarts
+* reject non-executable Kubernetes client paths on Windows
+
 # 0.17.1 (2026-08-26)
 
 ### Bug Fixes

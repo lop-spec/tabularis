@@ -46,6 +46,7 @@ pub mod pool_manager;
 #[cfg(test)]
 pub mod pool_manager_tests;
 pub mod preferences;
+pub mod profile_crypto;
 pub mod query_history;
 #[cfg(test)]
 pub mod query_history_tests;
@@ -53,6 +54,7 @@ pub mod recovery_history;
 pub mod recovery_objects;
 #[cfg(test)]
 pub mod recovery_objects_tests;
+pub mod redaction;
 pub mod results_window;
 pub mod rollback_sql;
 pub mod saved_queries;
@@ -77,7 +79,7 @@ pub mod drivers {
     pub mod sqlite;
 }
 
-use logger::{SharedLogBuffer, create_log_buffer, init_logger};
+use logger::{create_log_buffer, create_persistent_log_buffer, init_logger, SharedLogBuffer};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
 
@@ -223,15 +225,16 @@ pub fn run() {
 
     let args = cli::parse();
 
-    // Configure log level based on debug flag
-    // Default to Info level so users can see application logs
+    // Default to Info level so users can see application logs.
     let log_level = log::LevelFilter::Info;
-
-    // Store debug flag in global state
     DEBUG_MODE.store(args.debug, Ordering::Relaxed);
 
-    // Create and initialize log buffer - MUST be before sqlx to capture all logs
-    let log_buffer = create_log_buffer(1000);
+    // Initialize the durable log buffer before sqlx so startup diagnostics are captured.
+    let log_directory = paths::get_app_config_dir().join("logs");
+    let log_buffer = create_persistent_log_buffer(1000, log_directory).unwrap_or_else(|error| {
+        eprintln!("Persistent logging is unavailable; using memory only: {error}");
+        create_log_buffer(1000)
+    });
     LOG_BUFFER
         .set(log_buffer.clone())
         .expect("Failed to initialize log buffer");
@@ -298,9 +301,7 @@ pub fn run() {
             let audit_state =
                 audit_outbox::AuditState::new(audit_root).map_err(std::io::Error::other)?;
             app.manage(std::sync::Arc::new(audit_state));
-            if !args.functional_test_audit_smoke {
-                audit_outbox::spawn_sync_worker(app.handle().clone());
-            }
+            audit_outbox::spawn_sync_worker(app.handle().clone());
 
             // Allow the SSH tunnel code (which runs without a Tauri context)
             // to bridge askpass prompts to the frontend.
@@ -312,39 +313,6 @@ pub fn run() {
                 drivers::registry::register_driver(drivers::postgres::PostgresDriver::new()).await;
                 drivers::registry::register_driver(drivers::sqlite::SqliteDriver::new()).await;
             });
-
-            if args.functional_test_audit_smoke {
-                let handle = app.handle().clone();
-                let primary = args
-                    .functional_test_primary
-                    .clone()
-                    .ok_or_else(|| std::io::Error::other("missing functional-test primary ID"))?;
-                let fallback = args
-                    .functional_test_fallback
-                    .clone()
-                    .ok_or_else(|| std::io::Error::other("missing functional-test fallback ID"))?;
-                tauri::async_runtime::spawn(async move {
-                    let state = handle.state::<commands::QueryCancellationState>();
-                    let outcome = commands::run_functional_test_audit_smoke(
-                        handle.clone(),
-                        state,
-                        &primary,
-                        &fallback,
-                    )
-                    .await;
-                    let exit_code = match outcome {
-                        Ok(()) => {
-                            log::info!("Tabularis functional-test audit smoke completed");
-                            0
-                        }
-                        Err(error) => {
-                            log::error!("Tabularis functional-test audit smoke failed: {error}");
-                            1
-                        }
-                    };
-                    handle.exit(exit_code);
-                });
-            }
 
             // Start connection health-check ping loop.
             {

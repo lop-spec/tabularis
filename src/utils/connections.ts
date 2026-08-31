@@ -28,11 +28,13 @@ export interface ConnectionParams {
   username?: string;
   password?: string;
   /** Raw driver-specific connection URI, forwarded verbatim to the driver.
-   * Never persisted in connections.json: it embeds credentials and is stored
+   * Never persisted in the local profile: it embeds credentials and is stored
    * in the OS keychain instead. */
   connection_uri?: string;
   /** True when the URI can be restored from the OS keychain. */
   connection_uri_in_keychain?: boolean;
+  /** Local audit alias; never derived from or replaced by a real infrastructure ID. */
+  audit_profile?: string;
   ssh_enabled?: boolean;
   ssh_connection_id?: string;
   // Legacy fields (for backward compatibility)

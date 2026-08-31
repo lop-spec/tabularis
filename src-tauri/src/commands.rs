@@ -32,153 +32,6 @@ async fn driver_for(
 const DEFAULT_MYSQL_PORT: u16 = 3306;
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
 
-const FUNCTIONAL_TEST_GUARD_ENV: &str = "TABULARIS_AGENT_FUNCTIONAL_TEST";
-const FUNCTIONAL_TEST_HOST: &str = "192.0.2.130";
-const FUNCTIONAL_TEST_PRIMARY_PORT: u16 = 13309;
-const FUNCTIONAL_TEST_FALLBACK_PORT: u16 = 13305;
-const FUNCTIONAL_TEST_READ_ONLY_SQL: &str = "SELECT 1 AS tabularis_audit_probe";
-const FUNCTIONAL_TEST_PRIMARY_UNAVAILABLE_TTL: std::time::Duration =
-    std::time::Duration::from_secs(15 * 60);
-
-static FUNCTIONAL_TEST_PRIMARY_UNAVAILABLE_AT: std::sync::OnceLock<
-    Mutex<Option<std::time::Instant>>,
-> = std::sync::OnceLock::new();
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FunctionalTestOutcome {
-    Success,
-    PrimaryUnavailable,
-    OtherFailure,
-}
-
-fn functional_test_guard_enabled() -> bool {
-    std::env::var_os(FUNCTIONAL_TEST_GUARD_ENV)
-        .is_some_and(|value| !value.is_empty() && value != "0")
-}
-
-fn functional_test_primary_unavailable_at() -> &'static Mutex<Option<std::time::Instant>> {
-    FUNCTIONAL_TEST_PRIMARY_UNAVAILABLE_AT.get_or_init(|| Mutex::new(None))
-}
-
-fn functional_test_target(params: &ConnectionParams) -> Result<(String, u16), String> {
-    if let Some(value) = params
-        .connection_uri
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        let uri = url::Url::parse(value).map_err(|_| {
-            "Tabularis functional-test guard could not parse the connection URI".to_string()
-        })?;
-        let host = uri.host_str().ok_or_else(|| {
-            "Tabularis functional-test guard requires an explicit URI host".to_string()
-        })?;
-        let port = uri.port_or_known_default().ok_or_else(|| {
-            "Tabularis functional-test guard requires an explicit URI port".to_string()
-        })?;
-        return Ok((host.to_string(), port));
-    }
-
-    let host = params.host.as_deref().ok_or_else(|| {
-        "Tabularis functional-test guard requires an explicit database host".to_string()
-    })?;
-    let port = params.port.ok_or_else(|| {
-        "Tabularis functional-test guard requires an explicit database port".to_string()
-    })?;
-    Ok((host.to_string(), port))
-}
-
-fn validate_functional_test_target_for_mode(
-    params: &ConnectionParams,
-    guard_enabled: bool,
-) -> Result<u16, String> {
-    if !guard_enabled {
-        return Ok(params.port.unwrap_or_default());
-    }
-
-    if params.ssh_enabled.unwrap_or(false) || params.k8s_enabled.unwrap_or(false) {
-        return Err(
-            "Tabularis functional-test guard prohibits SSH and Kubernetes tunnels".to_string(),
-        );
-    }
-
-    let (host, port) = functional_test_target(params)?;
-    if host != FUNCTIONAL_TEST_HOST
-        || ![FUNCTIONAL_TEST_PRIMARY_PORT, FUNCTIONAL_TEST_FALLBACK_PORT].contains(&port)
-    {
-        return Err(format!(
-            "Tabularis functional-test guard blocked database target {host}:{port}"
-        ));
-    }
-
-    let now = std::time::Instant::now();
-    let mut unavailable_at = functional_test_primary_unavailable_at().lock().unwrap();
-    if port == FUNCTIONAL_TEST_PRIMARY_PORT {
-        // Starting any new primary attempt invalidates older fallback evidence.
-        *unavailable_at = None;
-    } else if !unavailable_at.is_some_and(|recorded| {
-        now.duration_since(recorded) <= FUNCTIONAL_TEST_PRIMARY_UNAVAILABLE_TTL
-    }) {
-        *unavailable_at = None;
-        return Err(
-            "Tabularis functional-test guard blocked 192.0.2.130:13305: test 13309 first and confirm a network-unavailable result"
-                .to_string(),
-        );
-    }
-
-    Ok(port)
-}
-
-fn validate_functional_test_target(params: &ConnectionParams) -> Result<u16, String> {
-    validate_functional_test_target_for_mode(params, functional_test_guard_enabled())
-}
-
-fn is_explicit_network_unavailable(error: &str) -> bool {
-    let lower = error.to_ascii_lowercase();
-    let generic_network_error = [
-        "econnrefused",
-        "ehostunreach",
-        "enetunreach",
-        "no route to host",
-        "network is unreachable",
-        "connection refused",
-        "actively refused",
-        "error 2003",
-        "connect timed out",
-        "connection timed out",
-        "connection timeout",
-        "etimedout",
-    ]
-    .iter()
-    .any(|signature| lower.contains(signature));
-    let mysql_socket_error = (lower.contains("can't connect to mysql server")
-        || lower.contains("can't connect to mariadb server"))
-        && (lower.contains("10060") || lower.contains("10061"));
-
-    generic_network_error || mysql_socket_error
-}
-
-fn record_functional_test_outcome_for_mode(
-    port: u16,
-    outcome: FunctionalTestOutcome,
-    guard_enabled: bool,
-) {
-    if !guard_enabled {
-        return;
-    }
-
-    let mut unavailable_at = functional_test_primary_unavailable_at().lock().unwrap();
-    match (port, outcome) {
-        (FUNCTIONAL_TEST_PRIMARY_PORT, FunctionalTestOutcome::PrimaryUnavailable) => {
-            *unavailable_at = Some(std::time::Instant::now());
-        }
-        (FUNCTIONAL_TEST_PRIMARY_PORT, _) => {
-            *unavailable_at = None;
-        }
-        (FUNCTIONAL_TEST_FALLBACK_PORT, _) => {}
-        _ => {}
-    }
-}
-
 /// Per-slot collection of abort handles for in-flight cancellable tasks.
 /// Used by `QueryCancellationState`, `ExportCancellationState`, and
 /// `DumpCancellationState`.
@@ -364,7 +217,6 @@ pub async fn expand_ssh_connection_params<R: Runtime>(
     app: &AppHandle<R>,
     params: &ConnectionParams,
 ) -> Result<ConnectionParams, String> {
-    validate_functional_test_target(params)?;
     let mut expanded_params = params.clone();
 
     // If ssh_connection_id is set and SSH is enabled, load the SSH connection and merge it
@@ -558,8 +410,6 @@ fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, Str
 }
 
 pub fn resolve_connection_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
-    validate_functional_test_target(params)?;
-
     // K8s and SSH are mutually exclusive
     if params.k8s_enabled.unwrap_or(false) && params.ssh_enabled.unwrap_or(false) {
         return Err(
@@ -1149,10 +999,11 @@ pub async fn get_schema_snapshot<R: Runtime>(
 pub async fn save_connection<R: Runtime>(
     app: AppHandle<R>,
     name: String,
-    params: ConnectionParams,
+    mut params: ConnectionParams,
     detect_json_in_text_columns: Option<bool>,
 ) -> Result<SavedConnection, String> {
     log::info!("Saving new connection: {}", name);
+    params.save_in_keychain = Some(true);
     validate_connection_uri_persistence(&params)?;
 
     let path = get_config_path(&app)?;
@@ -1282,9 +1133,10 @@ pub async fn update_connection<R: Runtime>(
     app: AppHandle<R>,
     id: String,
     name: String,
-    params: ConnectionParams,
+    mut params: ConnectionParams,
     detect_json_in_text_columns: Option<bool>,
 ) -> Result<SavedConnection, String> {
+    params.save_in_keychain = Some(true);
     validate_connection_uri_persistence(&params)?;
     let path = get_config_path(&app)?;
     let mut conn_file = persistence::load_connections_file(&path)?;
@@ -1606,12 +1458,7 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
     eprintln!("[Migration] Starting SSH connections migration...");
 
     let ssh_path = get_ssh_config_path(app)?;
-    let mut ssh_connections: Vec<SshConnection> = if ssh_path.exists() {
-        let ssh_content = fs::read_to_string(&ssh_path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&ssh_content).unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let mut ssh_connections = persistence::load_ssh_connections_file(&ssh_path)?;
 
     let mut migrated_connections = Vec::new();
     let mut ssh_connection_map: HashMap<String, String> = HashMap::new(); // (ssh_key -> ssh_id)
@@ -1694,8 +1541,7 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
     }
 
     // Save migrated SSH connections
-    let ssh_json = serde_json::to_string_pretty(&ssh_connections).map_err(|e| e.to_string())?;
-    fs::write(ssh_path, ssh_json).map_err(|e| e.to_string())?;
+    persistence::save_ssh_connections_file(&ssh_path, &ssh_connections)?;
 
     // Save migrated connections using new format (preserving groups)
     conn_file.connections = migrated_connections;
@@ -1717,16 +1563,13 @@ pub async fn get_ssh_connections<R: Runtime>(
         return Ok(Vec::new());
     }
 
-    // File I/O off the Tokio executor thread
-    let content = tokio::task::spawn_blocking({
+    // File I/O and OS-keychain migration stay off the Tokio executor thread.
+    let mut ssh_connections = tokio::task::spawn_blocking({
         let path = path.clone();
-        move || std::fs::read_to_string(path).map_err(|e| e.to_string())
+        move || persistence::load_ssh_connections_file(&path)
     })
     .await
     .map_err(|e| e.to_string())??;
-
-    let mut ssh_connections: Vec<SshConnection> =
-        serde_json::from_str(&content).unwrap_or_default();
 
     // Backward compatibility: determine auth_type if missing
     for ssh in &mut ssh_connections {
@@ -1796,15 +1639,11 @@ pub async fn get_ssh_connections<R: Runtime>(
 pub async fn save_ssh_connection<R: Runtime>(
     app: AppHandle<R>,
     name: String,
-    ssh: SshConnectionInput,
+    mut ssh: SshConnectionInput,
 ) -> Result<SshConnection, String> {
+    ssh.save_in_keychain = Some(true);
     let path = get_ssh_config_path(&app)?;
-    let mut ssh_connections: Vec<SshConnection> = if path.exists() {
-        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let mut ssh_connections = persistence::load_ssh_connections_file(&path)?;
 
     let id = Uuid::new_v4().to_string();
     let ssh_to_save = SshConnection {
@@ -1842,8 +1681,7 @@ pub async fn save_ssh_connection<R: Runtime>(
     };
 
     ssh_connections.push(ssh_to_save.clone());
-    let json = serde_json::to_string_pretty(&ssh_connections).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())?;
+    persistence::save_ssh_connections_file(&path, &ssh_connections)?;
 
     let mut returned_ssh = ssh_to_save;
     returned_ssh.password = ssh.password;
@@ -1856,12 +1694,11 @@ pub async fn update_ssh_connection<R: Runtime>(
     app: AppHandle<R>,
     id: String,
     name: String,
-    ssh: SshConnectionInput,
+    mut ssh: SshConnectionInput,
 ) -> Result<SshConnection, String> {
+    ssh.save_in_keychain = Some(true);
     let path = get_ssh_config_path(&app)?;
-    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let mut ssh_connections: Vec<SshConnection> =
-        serde_json::from_str(&content).unwrap_or_default();
+    let mut ssh_connections = persistence::load_ssh_connections_file(&path)?;
 
     let ssh_idx = ssh_connections
         .iter()
@@ -1910,9 +1747,7 @@ pub async fn update_ssh_connection<R: Runtime>(
     };
 
     ssh_connections[ssh_idx] = ssh_to_save.clone();
-
-    let json = serde_json::to_string_pretty(&ssh_connections).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())?;
+    persistence::save_ssh_connections_file(&path, &ssh_connections)?;
 
     let mut returned_ssh = ssh_to_save;
     returned_ssh.password = ssh.password;
@@ -1930,9 +1765,7 @@ pub async fn delete_ssh_connection<R: Runtime>(
         return Ok(());
     }
 
-    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let mut ssh_connections: Vec<SshConnection> =
-        serde_json::from_str(&content).unwrap_or_default();
+    let mut ssh_connections = persistence::load_ssh_connections_file(&path)?;
 
     ssh_connections.retain(|s| s.id != id);
 
@@ -1943,8 +1776,7 @@ pub async fn delete_ssh_connection<R: Runtime>(
     credential_cache::invalidate_ssh_password(&cache, &id);
     credential_cache::invalidate_ssh_key_passphrase(&cache, &id);
 
-    let json = serde_json::to_string_pretty(&ssh_connections).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())?;
+    persistence::save_ssh_connections_file(&path, &ssh_connections)?;
     Ok(())
 }
 
@@ -1955,20 +1787,21 @@ pub async fn test_ssh_connection<R: Runtime>(
 ) -> Result<String, String> {
     use crate::ssh_tunnel;
 
+    let find_saved_ssh = |conn_id: &str| {
+        let path = get_ssh_config_path(&app).ok()?;
+        if !path.exists() {
+            return None;
+        }
+        persistence::load_ssh_connections_file(&path)
+            .ok()?
+            .into_iter()
+            .find(|connection| connection.id == conn_id)
+    };
     // Resolve password using same logic as database connections
     let resolved_password = resolve_ssh_test_password(
         ssh.password.as_deref(),
         ssh.connection_id.as_deref(),
-        |conn_id| {
-            let path = get_ssh_config_path(&app).ok()?;
-            if !path.exists() {
-                return None;
-            }
-            let content = fs::read_to_string(path).ok()?;
-            let connections: Vec<SshConnection> =
-                serde_json::from_str(&content).unwrap_or_default();
-            connections.into_iter().find(|c| c.id == conn_id)
-        },
+        &find_saved_ssh,
         |conn_id| keychain_utils::get_ssh_password(conn_id, ""),
     );
 
@@ -1976,16 +1809,7 @@ pub async fn test_ssh_connection<R: Runtime>(
     let resolved_passphrase = resolve_ssh_test_credential(
         ssh.key_passphrase.as_deref(),
         ssh.connection_id.as_deref(),
-        |conn_id| {
-            let path = get_ssh_config_path(&app).ok()?;
-            if !path.exists() {
-                return None;
-            }
-            let content = fs::read_to_string(path).ok()?;
-            let connections: Vec<SshConnection> =
-                serde_json::from_str(&content).unwrap_or_default();
-            connections.into_iter().find(|c| c.id == conn_id)
-        },
+        find_saved_ssh,
         |conn_id| keychain_utils::get_ssh_key_passphrase(conn_id, ""),
         |conn| {
             conn.key_passphrase
@@ -2229,7 +2053,6 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
     app: &AppHandle<R>,
     params: &ConnectionParams,
 ) -> Result<ConnectionParams, String> {
-    validate_functional_test_target(params)?;
     if !params.k8s_enabled.unwrap_or(false) {
         return Ok(params.clone());
     }
@@ -2378,10 +2201,6 @@ pub async fn test_connection<R: Runtime>(
         request.params.database
     );
 
-    let guard_enabled = functional_test_guard_enabled();
-    let functional_test_port =
-        validate_functional_test_target_for_mode(&request.params, guard_enabled)?;
-
     let result: Result<String, String> = async {
         let mut expanded_params = expand_ssh_connection_params(&app, &request.params).await?;
         expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
@@ -2422,7 +2241,6 @@ pub async fn test_connection<R: Runtime>(
             }
         }
 
-        validate_functional_test_target_for_mode(&expanded_params, guard_enabled)?;
         let resolved_params = if let Some(conn_id) = &request.connection_id {
             resolve_connection_params_with_id(&expanded_params, conn_id)?
         } else {
@@ -2455,11 +2273,6 @@ pub async fn test_connection<R: Runtime>(
 
     match result {
         Ok(message) => {
-            record_functional_test_outcome_for_mode(
-                functional_test_port,
-                FunctionalTestOutcome::Success,
-                guard_enabled,
-            );
             log::info!(
                 "Connection test successful for database: {}",
                 request.params.database
@@ -2467,14 +2280,6 @@ pub async fn test_connection<R: Runtime>(
             Ok(message)
         }
         Err(error) => {
-            let outcome = if functional_test_port == FUNCTIONAL_TEST_PRIMARY_PORT
-                && is_explicit_network_unavailable(&error)
-            {
-                FunctionalTestOutcome::PrimaryUnavailable
-            } else {
-                FunctionalTestOutcome::OtherFailure
-            };
-            record_functional_test_outcome_for_mode(functional_test_port, outcome, guard_enabled);
             log::warn!(
                 "Connection test failed for database {}: {error}",
                 request.params.database
@@ -2482,67 +2287,6 @@ pub async fn test_connection<R: Runtime>(
             Err(error)
         }
     }
-}
-
-pub async fn run_functional_test_audit_smoke<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, QueryCancellationState>,
-    primary_connection_id: &str,
-    fallback_connection_id: &str,
-) -> Result<(), String> {
-    if !functional_test_guard_enabled() {
-        return Err(
-            "Tabularis functional-test smoke requires TABULARIS_AGENT_FUNCTIONAL_TEST".to_string(),
-        );
-    }
-
-    let primary = find_connection_by_id(&app, primary_connection_id)?;
-    let primary_result = test_connection(
-        app.clone(),
-        TestConnectionRequest {
-            params: primary.params,
-            connection_id: Some(primary_connection_id.to_string()),
-        },
-    )
-    .await;
-    let selected_connection_id = match primary_result {
-        Ok(_) => primary_connection_id,
-        Err(error) if is_explicit_network_unavailable(&error) => {
-            let fallback = find_connection_by_id(&app, fallback_connection_id)?;
-            test_connection(
-                app.clone(),
-                TestConnectionRequest {
-                    params: fallback.params,
-                    connection_id: Some(fallback_connection_id.to_string()),
-                },
-            )
-            .await?;
-            fallback_connection_id
-        }
-        Err(error) => {
-            return Err(format!(
-                "Tabularis functional-test smoke did not obtain reproducible network-unavailable evidence for 192.0.2.130:13309: {error}"
-            ));
-        }
-    };
-
-    execute_query(
-        app.clone(),
-        state,
-        selected_connection_id.to_string(),
-        FUNCTIONAL_TEST_READ_ONLY_SQL.to_string(),
-        Some(1),
-        Some(1),
-        None,
-        // The smoke test is not an editor window, so it carries no session state.
-        None,
-    )
-    .await?;
-    let acknowledged = crate::audit_outbox::flush_pending(&app).await?;
-    if acknowledged == 0 {
-        return Err("The functional-test SQL did not produce a pending audit event".to_string());
-    }
-    Ok(())
 }
 
 /// Test an already saved connection without returning its keychain-backed
@@ -2577,179 +2321,6 @@ mod tests {
             database: DatabaseSelection::Single("testdb".to_string()),
             ..Default::default()
         }
-    }
-
-    fn lock_functional_test_state() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: std::sync::OnceLock<Mutex<()>> = std::sync::OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    fn reset_functional_test_state() {
-        *functional_test_primary_unavailable_at().lock().unwrap() = None;
-    }
-
-    #[test]
-    fn functional_test_guard_is_disabled_for_normal_user_sessions() {
-        let _guard = lock_functional_test_state();
-        reset_functional_test_state();
-        let params = ConnectionParams {
-            host: Some("db.example.invalid".to_string()),
-            port: Some(3306),
-            ..base_params()
-        };
-
-        assert_eq!(
-            validate_functional_test_target_for_mode(&params, false),
-            Ok(3306)
-        );
-    }
-
-    #[test]
-    fn functional_test_guard_blocks_non_allowlisted_targets() {
-        let _guard = lock_functional_test_state();
-        reset_functional_test_state();
-        let params = ConnectionParams {
-            host: Some("db.example.invalid".to_string()),
-            port: Some(FUNCTIONAL_TEST_PRIMARY_PORT),
-            ..base_params()
-        };
-
-        assert!(validate_functional_test_target_for_mode(&params, true)
-            .unwrap_err()
-            .contains("blocked database target"));
-    }
-
-    #[test]
-    fn functional_test_guard_requires_primary_before_fallback() {
-        let _guard = lock_functional_test_state();
-        reset_functional_test_state();
-        let params = ConnectionParams {
-            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
-            port: Some(FUNCTIONAL_TEST_FALLBACK_PORT),
-            ..base_params()
-        };
-
-        assert!(validate_functional_test_target_for_mode(&params, true)
-            .unwrap_err()
-            .contains("test 13309 first"));
-    }
-
-    #[test]
-    fn functional_test_guard_allows_fallback_only_after_primary_unavailable() {
-        let _guard = lock_functional_test_state();
-        reset_functional_test_state();
-        record_functional_test_outcome_for_mode(
-            FUNCTIONAL_TEST_PRIMARY_PORT,
-            FunctionalTestOutcome::PrimaryUnavailable,
-            true,
-        );
-        let params = ConnectionParams {
-            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
-            port: Some(FUNCTIONAL_TEST_FALLBACK_PORT),
-            ..base_params()
-        };
-
-        assert!(validate_functional_test_target_for_mode(&params, true).is_ok());
-        reset_functional_test_state();
-    }
-
-    #[test]
-    fn functional_test_guard_preserves_fallback_evidence_after_successful_fallback_test() {
-        let _guard = lock_functional_test_state();
-        reset_functional_test_state();
-        record_functional_test_outcome_for_mode(
-            FUNCTIONAL_TEST_PRIMARY_PORT,
-            FunctionalTestOutcome::PrimaryUnavailable,
-            true,
-        );
-        record_functional_test_outcome_for_mode(
-            FUNCTIONAL_TEST_FALLBACK_PORT,
-            FunctionalTestOutcome::Success,
-            true,
-        );
-        let params = ConnectionParams {
-            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
-            port: Some(FUNCTIONAL_TEST_FALLBACK_PORT),
-            ..base_params()
-        };
-
-        assert!(validate_functional_test_target_for_mode(&params, true).is_ok());
-        reset_functional_test_state();
-    }
-
-    #[test]
-    fn functional_test_guard_clears_fallback_after_non_network_primary_failure() {
-        let _guard = lock_functional_test_state();
-        reset_functional_test_state();
-        record_functional_test_outcome_for_mode(
-            FUNCTIONAL_TEST_PRIMARY_PORT,
-            FunctionalTestOutcome::PrimaryUnavailable,
-            true,
-        );
-        record_functional_test_outcome_for_mode(
-            FUNCTIONAL_TEST_PRIMARY_PORT,
-            FunctionalTestOutcome::OtherFailure,
-            true,
-        );
-        let params = ConnectionParams {
-            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
-            port: Some(FUNCTIONAL_TEST_FALLBACK_PORT),
-            ..base_params()
-        };
-
-        assert!(validate_functional_test_target_for_mode(&params, true).is_err());
-    }
-
-    #[test]
-    fn functional_test_guard_checks_connection_uri_target() {
-        let _guard = lock_functional_test_state();
-        reset_functional_test_state();
-        let params = ConnectionParams {
-            connection_uri: Some(
-                "mysql://fixture:fixture@db.example.invalid:13309/app".to_string(),
-            ),
-            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
-            port: Some(FUNCTIONAL_TEST_PRIMARY_PORT),
-            ..base_params()
-        };
-
-        assert!(validate_functional_test_target_for_mode(&params, true)
-            .unwrap_err()
-            .contains("db.example.invalid:13309"));
-    }
-
-    #[test]
-    fn functional_test_guard_blocks_tunnels_before_subprocess_start() {
-        let _guard = lock_functional_test_state();
-        reset_functional_test_state();
-        let params = ConnectionParams {
-            host: Some(FUNCTIONAL_TEST_HOST.to_string()),
-            port: Some(FUNCTIONAL_TEST_PRIMARY_PORT),
-            ssh_enabled: Some(true),
-            ..base_params()
-        };
-
-        assert!(validate_functional_test_target_for_mode(&params, true)
-            .unwrap_err()
-            .contains("prohibits SSH and Kubernetes tunnels"));
-    }
-
-    #[test]
-    fn functional_test_unavailable_signatures_exclude_authentication_and_bare_socket_codes() {
-        assert!(is_explicit_network_unavailable(
-            "ERROR 2003 (HY000): Can't connect to MySQL server (10061)"
-        ));
-        assert!(!is_explicit_network_unavailable(
-            "Access denied for user 'fixture' (using password: YES)"
-        ));
-        assert!(!is_explicit_network_unavailable(
-            "unrelated driver failure 10060"
-        ));
-        assert!(!is_explicit_network_unavailable(
-            "unrelated driver failure 10061"
-        ));
     }
 
     #[test]
@@ -6341,12 +5912,7 @@ pub async fn export_connections_payload<R: Runtime>(
     let ssh_path = get_ssh_config_path(&app)?;
 
     let mut conn_file = persistence::load_connections_file(&conn_path)?;
-    let mut ssh_connections = if ssh_path.exists() {
-        let content = fs::read_to_string(&ssh_path).map_err(|e| e.to_string())?;
-        serde_json::from_str::<Vec<SshConnection>>(&content).unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let mut ssh_connections = persistence::load_ssh_connections_file(&ssh_path)?;
     let mut k8s_connections = load_k8s_connections_sync(&app)?;
 
     // When a selection is provided, keep only the selected connections (of any
@@ -6473,12 +6039,7 @@ pub async fn apply_export_payload<R: Runtime>(
     let ssh_path = get_ssh_config_path(&app)?;
 
     let mut current_file = persistence::load_connections_file(&conn_path).unwrap_or_default();
-    let mut current_ssh = if ssh_path.exists() {
-        let content = fs::read_to_string(&ssh_path).map_err(|e| e.to_string())?;
-        serde_json::from_str::<Vec<SshConnection>>(&content).unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let mut current_ssh = persistence::load_ssh_connections_file(&ssh_path)?;
 
     let cache = app
         .state::<std::sync::Arc<crate::credential_cache::CredentialCache>>()
@@ -6490,6 +6051,7 @@ pub async fn apply_export_payload<R: Runtime>(
 
     // Merge connections and handle passwords
     for mut new_conn in payload.connections {
+        new_conn.params.save_in_keychain = Some(true);
         // An imported payload is untrusted input and may carry an inline URI.
         // Hold it to the same rule as a save: keychain or nothing.
         validate_connection_uri_persistence(&new_conn.params)?;
@@ -6543,6 +6105,7 @@ pub async fn apply_export_payload<R: Runtime>(
 
     // Merge SSH connections and handle passwords
     for mut new_ssh in payload.ssh_connections {
+        new_ssh.save_in_keychain = Some(true);
         if new_ssh.save_in_keychain.unwrap_or(false) {
             if let Some(pwd) = &new_ssh.password {
                 keychain_utils::set_ssh_password(&new_ssh.id, pwd)?;
@@ -6566,8 +6129,7 @@ pub async fn apply_export_payload<R: Runtime>(
 
     // Save files
     save_connections_and_invalidate(&app, &conn_path, &current_file)?;
-    let ssh_json = serde_json::to_string_pretty(&current_ssh).map_err(|e| e.to_string())?;
-    fs::write(ssh_path, ssh_json).map_err(|e| e.to_string())?;
+    persistence::save_ssh_connections_file(&ssh_path, &current_ssh)?;
 
     // Merge K8s connections
     let k8s_path = get_k8s_config_path(&app)?;

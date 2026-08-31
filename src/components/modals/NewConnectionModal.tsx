@@ -85,6 +85,7 @@ interface ConnectionParams {
   ssh_key_passphrase?: string;
   ssh_allow_passphrase_prompt?: boolean;
   save_in_keychain?: boolean;
+  audit_profile?: string;
   // K8s
   k8s_enabled?: boolean;
   k8s_connection_id?: string;
@@ -1406,7 +1407,7 @@ export const NewConnectionModal = ({
       ssh_password: undefined,
       ssh_key_file: undefined,
       ssh_key_passphrase: undefined,
-      save_in_keychain: false,
+      save_in_keychain: true,
       k8s_enabled: false,
       k8s_connection_id: undefined,
       k8s_context: undefined,
@@ -1576,14 +1577,6 @@ export const NewConnectionModal = ({
         nameInputRef.current?.focus();
         return;
       }
-      // The URI embeds credentials, so it may only leave this modal if it can
-      // go to the OS keychain. Fail loudly instead of persisting it in plaintext.
-      if (hasConnectionUri && !formData.save_in_keychain) {
-        setStatus("error");
-        setMessage(t("newConnection.connectionUriRequiresKeychain"));
-        setTestResult("error");
-        return;
-      }
       if (isMultiDb) {
         if (selectedDatabasesState.length === 0) {
           setStatus("error");
@@ -1610,6 +1603,7 @@ export const NewConnectionModal = ({
       const paramsBase: Partial<ConnectionParams> = {
         driver,
         ...formData,
+        save_in_keychain: true,
         port: formData.port != null ? Number(formData.port) : undefined,
         k8s_port: effectiveK8sPort,
         database: isMultiDb
@@ -2066,13 +2060,11 @@ export const NewConnectionModal = ({
           )}
 
           {/* Keychain */}
-          <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+          <label className="flex items-center gap-2 select-none w-fit">
             <input
               type="checkbox"
-              checked={!!formData.save_in_keychain}
-              onChange={(e) => {
-                updateField("save_in_keychain", e.target.checked);
-              }}
+              checked
+              disabled
               className="accent-blue-500 w-3.5 h-3.5 rounded"
             />
             <span className="text-xs text-secondary">

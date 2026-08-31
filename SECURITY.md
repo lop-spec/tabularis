@@ -51,6 +51,32 @@ Please assume the realistic threat model where the query text reaching Tabularis
 may come from an untrusted source — that's exactly what the safety layer exists
 to contain.
 
+## Local profile and release isolation
+
+Official release binaries contain no environment-specific connection targets or
+credentials. On Windows, the application keeps its private profile under
+`%APPDATA%\tabularis` and adopts that profile independently of the executable's
+file name or download location.
+
+- Database and SSH connection metadata is stored as an AES-256-GCM envelope.
+  Its random key is held by the current user's OS credential store and is never
+  compiled into the executable.
+- Database, SSH, connection-URI, WebDAV, and audit credentials are stored in the
+  OS credential store. Connection IDs remain stable so upgrades can retrieve
+  existing credentials without prompting again.
+- The first compatible launch migrates a legacy plaintext profile only after an
+  encrypted recovery copy is durable. Atomic rollback copies protect interrupted
+  writes; migration never replaces the only readable copy.
+- Application logs use bounded rolling files. Credential material and connection
+  metadata are redacted before a record reaches memory, disk, or support export.
+- Local recovery material remains private and complete. Events sent to a remote
+  audit endpoint use stable pseudonyms and SQL with literals removed.
+
+The encrypted profile is intentionally bound to the same OS user. Before moving
+to another computer, changing Windows accounts, or downgrading to a version that
+predates encrypted profiles, export the profile from the current version and
+store that export securely.
+
 ## Our commitment
 
 - We'll acknowledge your report within **3 business days**.

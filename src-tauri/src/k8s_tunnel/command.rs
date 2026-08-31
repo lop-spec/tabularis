@@ -186,6 +186,11 @@ fn validate_kubectl_path(value: &str) -> Result<(), String> {
         ));
     }
 
+    #[cfg(windows)]
+    if !has_windows_executable_extension(&path) {
+        return Err(format!("kubectl path is not executable: {}", path.display()));
+    }
+
     which::which(&path)
         .map_err(|_| format!("kubectl path is not executable: {}", path.display()))?;
     Ok(())
@@ -211,6 +216,22 @@ fn validate_kubeconfig_path(value: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(windows)]
+fn has_windows_executable_extension(path: &Path) -> bool {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| format!(".{}", value.to_ascii_lowercase()));
+    let executable_extensions = std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
+        .to_ascii_lowercase();
+    extension.is_some_and(|extension| {
+        executable_extensions
+            .split(';')
+            .any(|candidate| candidate == extension)
+    })
 }
 
 fn is_bare_executable_name(path: &Path) -> bool {

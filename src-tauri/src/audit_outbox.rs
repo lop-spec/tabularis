@@ -2,6 +2,8 @@ use crate::drivers::common::strip_leading_sql_comments;
 use crate::models::SavedConnection;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use sha2::Digest;
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
@@ -13,11 +15,12 @@ use uuid::Uuid;
 
 const AUDIT_URL_ENV: &str = "TABULARIS_AUDIT_URL";
 const AUDIT_TOKEN_ENV: &str = "TABULARIS_AUDIT_TOKEN";
+const AUDIT_TOKEN_KEYCHAIN_ENTRY: &str = "audit-ingest-token-v1";
 const DEFAULT_SYNC_INTERVAL_SECS: u64 = 15;
 const DEFAULT_BATCH_SIZE: usize = 500;
 const DEFAULT_MAX_SEGMENT_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: u64 = 1_000_000;
-const FUNCTIONAL_SMOKE_ACK_TIMEOUT: Duration = Duration::from_secs(45);
+const MANUAL_FLUSH_ACK_TIMEOUT: Duration = Duration::from_secs(45);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -150,6 +153,42 @@ impl AuditEvent {
         );
         event.execution_time_ms = execution_time_ms as u64;
         Some(event)
+    }
+
+    fn redacted_for_transport_with<F>(&self, mut pseudonym: F) -> Result<Self, String>
+    where
+        F: FnMut(&str, &str) -> Result<String, String>,
+    {
+        let mut event = self.clone();
+        event.connection_id = pseudonym("connection", &self.connection_id)?;
+        event.connection_name = pseudonym("connection_name", &self.connection_name)?;
+        event.database_account = pseudonym("account", &self.database_account)?;
+        event.database_name = pseudonym("database", &self.database_name)?;
+        event.sql_text = crate::redaction::redact_sql_literals(&self.sql_text);
+        event.error_message = crate::redaction::redact_sql_literals(&self.error_message);
+        if !self.batch_id.is_empty() {
+            event.batch_id = pseudonym("batch", &self.batch_id)?;
+        }
+        if !self.transaction_context_id.is_empty() {
+            event.transaction_context_id = pseudonym("transaction", &self.transaction_context_id)?;
+        }
+        Ok(event)
+    }
+
+    fn redacted_for_transport(&self) -> Result<Self, String> {
+        #[cfg(not(test))]
+        {
+            self.redacted_for_transport_with(crate::profile_crypto::pseudonymize)
+        }
+        #[cfg(test)]
+        {
+            self.redacted_for_transport_with(|label, value| {
+                Ok(format!(
+                    "{label}_{}",
+                    hex::encode(sha2::Sha256::digest(value.as_bytes()))
+                ))
+            })
+        }
     }
 }
 
@@ -441,10 +480,15 @@ impl AuditState {
             .iter()
             .map(|event| event.event_id.clone())
             .collect();
+        let transport_events = batch
+            .events
+            .iter()
+            .map(AuditEvent::redacted_for_transport)
+            .collect::<Result<Vec<_>, _>>()?;
         let response = client
             .post(url)
             .bearer_auth(token)
-            .json(&serde_json::json!({ "events": &batch.events }))
+            .json(&serde_json::json!({ "events": transport_events }))
             .send()
             .await
             .map_err(|error| error.to_string())?;
@@ -541,13 +585,27 @@ pub fn persist_statement_outcome<R: Runtime>(
     Ok(true)
 }
 
+fn configured_audit_token() -> Result<Option<String>, String> {
+    if let Some(token) = crate::keychain_utils::get_private_value(AUDIT_TOKEN_KEYCHAIN_ENTRY)? {
+        if !token.trim().is_empty() {
+            return Ok(Some(token));
+        }
+    }
+    let token = std::env::var(AUDIT_TOKEN_ENV).unwrap_or_default();
+    if token.trim().is_empty() {
+        return Ok(None);
+    }
+    crate::keychain_utils::set_private_value(AUDIT_TOKEN_KEYCHAIN_ENTRY, &token)?;
+    Ok(Some(token))
+}
+
 pub async fn flush_pending<R: Runtime>(app: &AppHandle<R>) -> Result<usize, String> {
     let url = std::env::var(AUDIT_URL_ENV)
         .map_err(|_| format!("{AUDIT_URL_ENV} is required to flush the audit outbox"))?;
-    let token = std::env::var(AUDIT_TOKEN_ENV)
-        .map_err(|_| format!("{AUDIT_TOKEN_ENV} is required to flush the audit outbox"))?;
-    if url.trim().is_empty() || token.trim().is_empty() {
-        return Err("Audit endpoint and token must not be empty".to_string());
+    let token = configured_audit_token()?
+        .ok_or_else(|| "The audit token is not configured in the OS keychain".to_string())?;
+    if url.trim().is_empty() {
+        return Err("Audit endpoint must not be empty".to_string());
     }
     let state = app.state::<Arc<AuditState>>().inner().clone();
     let client = reqwest::Client::builder()
@@ -555,27 +613,39 @@ pub async fn flush_pending<R: Runtime>(app: &AppHandle<R>) -> Result<usize, Stri
         .build()
         .map_err(|error| error.to_string())?;
     tokio::time::timeout(
-        FUNCTIONAL_SMOKE_ACK_TIMEOUT,
+        MANUAL_FLUSH_ACK_TIMEOUT,
         state.sync_until_empty(&client, &url, &token),
     )
     .await
     .map_err(|_| {
         format!(
             "Audit outbox was not fully acknowledged within {} seconds",
-            FUNCTIONAL_SMOKE_ACK_TIMEOUT.as_secs()
+            MANUAL_FLUSH_ACK_TIMEOUT.as_secs()
         )
     })?
 }
 
 pub fn spawn_sync_worker<R: Runtime>(app: AppHandle<R>) {
     let url = std::env::var(AUDIT_URL_ENV).unwrap_or_default();
-    let token = std::env::var(AUDIT_TOKEN_ENV).unwrap_or_default();
-    if url.trim().is_empty() || token.trim().is_empty() {
-        log::info!(
-            "Tabularis audit sync is disabled because its endpoint or token is not configured"
-        );
+    if url.trim().is_empty() {
+        log::info!("Tabularis audit sync is disabled because its endpoint is not configured");
         return;
     }
+    let token = match configured_audit_token() {
+        Ok(Some(token)) => token,
+        Ok(None) => {
+            log::info!(
+                "Tabularis audit sync is disabled because its endpoint or token is not configured"
+            );
+            return;
+        }
+        Err(error) => {
+            log::warn!(
+                "Tabularis audit sync is disabled because the OS keychain is unavailable: {error}"
+            );
+            return;
+        }
+    };
     let state = app.state::<Arc<AuditState>>().inner().clone();
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -601,19 +671,24 @@ pub fn spawn_sync_worker<R: Runtime>(app: AppHandle<R>) {
 }
 
 fn classify_instance(connection: &SavedConnection) -> Option<&'static str> {
-    const MYSQL_TEST_INSTANCE_ID: &str = "test-db.example.invalid";
-    const MYSQL_PROD_INSTANCE_ID: &str = "prod-db.example.invalid";
+    match connection.params.audit_profile.as_deref() {
+        Some("mysql-test") => return Some("mysql-test"),
+        Some("mysql-prod") => return Some("mysql-prod"),
+        Some(_) => return None,
+        None => {}
+    }
+    audit_profile_from_name(&connection.name)
+}
 
-    let normalized_name = normalize_identity(&connection.name);
-    let normalized_host = normalize_identity(connection.params.host.as_deref().unwrap_or_default());
-    let matches_test = normalized_host.contains(MYSQL_TEST_INSTANCE_ID)
-        || normalized_name.contains(MYSQL_TEST_INSTANCE_ID)
-        || normalized_name.contains("mysqltest")
-        || normalized_name.contains("mysql测试");
-    let matches_prod = normalized_host.contains(MYSQL_PROD_INSTANCE_ID)
-        || normalized_name.contains(MYSQL_PROD_INSTANCE_ID)
-        || normalized_name.contains("mysqlprod")
-        || normalized_name.contains("mysql生产");
+pub(crate) fn audit_profile_from_name(name: &str) -> Option<&'static str> {
+    let normalized_name = normalize_identity(name);
+    let mentions_mysql = normalized_name.contains("mysql");
+    let matches_test =
+        mentions_mysql && (normalized_name.contains("test") || normalized_name.contains("测试"));
+    let matches_prod = mentions_mysql
+        && (normalized_name.contains("prod")
+            || normalized_name.contains("production")
+            || normalized_name.contains("生产"));
     match (matches_test, matches_prod) {
         (true, false) => Some("mysql-test"),
         (false, true) => Some("mysql-prod"),

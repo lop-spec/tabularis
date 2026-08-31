@@ -6235,7 +6235,7 @@ dependencies = [
 
 [[package]]
 name = "tabularis"
-version = "0.17.1"
+version = "0.18.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -6250,6 +6250,8 @@ dependencies = [
  "filetime",
  "futures",
  "gtk",
+ "hex",
+ "hmac",
  "infer 0.16.0",
  "keyring",
  "log",
@@ -6257,6 +6259,7 @@ dependencies = [
  "openssl",
  "plist",
  "portable-pty",
+ "regex",
  "reqwest",
  "roxmltree",
  "russh",

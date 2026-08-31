@@ -8,6 +8,8 @@ on:
       - "src-tauri/**"
       - "packages/**"
       - "scripts/package-windows-portable.mjs"
+      - "scripts/check-public-artifact.mjs"
+      - "security/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".node-version"
@@ -57,6 +59,9 @@ jobs:
 
       - name: Package and verify portable executable
         run: node scripts/package-windows-portable.mjs
+
+      - name: Scan public source and executable
+        run: node scripts/check-public-artifact.mjs --artifact src-tauri/target/release/tabularis.exe
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

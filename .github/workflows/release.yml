@@ -71,6 +71,9 @@ jobs:
           TABULARIS_PORTABLE_VERSION: ${{ steps.meta.outputs.tag }}
         run: node scripts/package-windows-portable.mjs
 
+      - name: Scan public source and executable
+        run: node scripts/check-public-artifact.mjs --artifact src-tauri/target/release/tabularis.exe
+
       - name: Create or update published Release
         shell: bash
         env:

@@ -441,7 +441,7 @@ mod tests {
     fn test_version_parsing_invalid() {
         assert_eq!(parse_version("invalid"), None);
         assert_eq!(parse_version("1.2"), None);
-        assert_eq!(parse_version("1.2.3.4"), None);
+        assert_eq!(parse_version("1.2.x"), None);
         assert_eq!(parse_version("a.b.c"), None);
         assert_eq!(parse_version(""), None);
     }

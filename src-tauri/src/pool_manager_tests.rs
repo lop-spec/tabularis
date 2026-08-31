@@ -25,7 +25,7 @@ mod tests {
             ssl_key: None,
             ssh_enabled: Some(true),
             ssh_connection_id: Some("ssh-1".to_string()),
-            ssh_host: Some("149.202.85.42".to_string()),
+            ssh_host: Some("192.0.2.42".to_string()),
             ssh_port: Some(2222),
             ssh_user: Some("julien".to_string()),
             ssh_password: None,

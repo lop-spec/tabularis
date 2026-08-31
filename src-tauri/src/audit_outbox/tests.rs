@@ -172,42 +172,41 @@ fn event(number: usize) -> AuditEvent {
 }
 
 #[test]
-fn target_classification_uses_stable_instance_identity() {
+fn target_classification_uses_local_connection_aliases_only() {
     let test = AuditTarget::from_connection(
-        &connection_with_host(
-            "临时连接名称",
-            "formal-id",
-            Some("test-db.example.invalid"),
-        ),
+        &connection_with_host("MySQL test", "test-id", Some("test-db.example.invalid")),
         None,
     )
-    .expect("test instance host should be audited");
+    .expect("test alias should be audited");
     let prod = AuditTarget::from_connection(
         &connection_with_host(
-            "另一个名称",
-            "different-dev-id",
+            "MySQL production",
+            "prod-id",
             Some("prod-db.example.invalid"),
         ),
         None,
     )
-    .expect("production instance host should be audited");
-    let legacy_test =
-        AuditTarget::from_connection(&connection("MySQL测试_阿里云", "legacy-id"), None)
-            .expect("legacy test connection should remain auditable");
+    .expect("production alias should be audited");
+    let localized =
+        AuditTarget::from_connection(&connection("MySQL测试_私有环境", "localized-id"), None)
+            .expect("localized test alias should remain auditable");
     let unrelated = AuditTarget::from_connection(&connection("Local MySQL", "local-id"), None);
-    let ambiguous = AuditTarget::from_connection(
+    let host_only = AuditTarget::from_connection(
         &connection_with_host(
-            "MySQL 生产",
-            "ambiguous-id",
-            Some("test-db.example.invalid"),
+            "Unclassified",
+            "host-only-id",
+            Some("database.example.invalid"),
         ),
         None,
     );
+    let ambiguous =
+        AuditTarget::from_connection(&connection("MySQL test production", "ambiguous-id"), None);
 
     assert_eq!(test.instance_id, "mysql-test");
     assert_eq!(prod.instance_id, "mysql-prod");
-    assert_eq!(legacy_test.instance_id, "mysql-test");
+    assert_eq!(localized.instance_id, "mysql-test");
     assert!(unrelated.is_none());
+    assert!(host_only.is_none());
     assert!(ambiguous.is_none());
 }
 
@@ -244,6 +243,31 @@ fn event_keeps_execution_identity_and_generates_unique_ids() {
     assert_eq!(first.database_name, "runtime_db");
     assert_eq!(first.statement_index, 4);
     assert_eq!(first.transaction_context_id, "editor-tab-9");
+}
+
+#[test]
+fn transport_event_is_pseudonymized_and_sql_literals_are_redacted() {
+    let mut original = event(7);
+    original.error_message = "Duplicate entry 'private-value' for key 42".to_string();
+    let transported = original
+        .redacted_for_transport_with(|label, value| Ok(format!("{label}:{}", value.len())))
+        .expect("redact transport event");
+
+    assert_eq!(transported.event_id, original.event_id);
+    assert_eq!(transported.instance_id, "mysql-test");
+    assert_ne!(transported.connection_id, original.connection_id);
+    assert_ne!(transported.connection_name, original.connection_name);
+    assert_ne!(transported.database_account, original.database_account);
+    assert_ne!(transported.database_name, original.database_name);
+    assert!(!transported.sql_text.contains("paid"));
+    assert!(!transported.sql_text.contains("7"));
+    assert!(transported.sql_text.contains('?'));
+    assert!(!transported.error_message.contains("private-value"));
+    assert!(!transported.error_message.contains("42"));
+    assert_eq!(
+        original.sql_text,
+        "UPDATE orders SET status = 'paid' WHERE id = 7"
+    );
 }
 
 #[test]

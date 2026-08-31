@@ -214,8 +214,12 @@ mod tests {
 
     #[test]
     fn strips_userinfo_and_query() {
-        let e = parse("jdbc:mysql://user:pw@host:3306/db?useSSL=true", "mysql").unwrap();
-        assert_eq!(e.host, "host");
+        let e = parse(
+            "jdbc:mysql://user:pw@db.example.invalid:3306/db?useSSL=true",
+            "mysql",
+        )
+        .unwrap();
+        assert_eq!(e.host, "db.example.invalid");
         assert_eq!(e.port, Some(3306));
         assert_eq!(e.database, "db");
     }

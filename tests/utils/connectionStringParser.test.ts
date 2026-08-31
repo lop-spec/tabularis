@@ -72,7 +72,7 @@ const URI_PASSTHROUGH_DRIVERS: ConnectionStringDriver[] = [
 ];
 
 const ATLAS_URI =
-  "mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/?tls=true&retryWrites=true&w=majority&appName=Cluster0";
+  "mongodb+srv://user:pass@cluster0.example.invalid/?tls=true&retryWrites=true&w=majority&appName=Cluster0";
 
 describe("connectionStringParser", () => {
   describe("parseConnectionString", () => {
@@ -125,13 +125,13 @@ describe("connectionStringParser", () => {
 
     it("should parse PostgreSQL connection string", () => {
       const result = parseConnectionString(
-        "postgres://user:pass@db.example.com:5432/mydb",
+        "postgres://user:pass@db.example.invalid:5432/mydb",
         CAPABILITY_DRIVERS,
       );
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.params.driver).toBe("postgres");
-        expect(result.params.host).toBe("db.example.com");
+        expect(result.params.host).toBe("db.example.invalid");
         expect(result.params.port).toBe(5432);
         expect(result.params.username).toBe("user");
         expect(result.params.password).toBe("pass");
@@ -238,7 +238,7 @@ describe("connectionStringParser", () => {
 
     it("should decode URL-encoded characters in credentials", () => {
       const result = parseConnectionString(
-        "mysql://user%40domain:password%23123@host/db",
+        "mysql://user%40domain:password%23123@db.example.invalid/db",
         CAPABILITY_DRIVERS,
       );
       expect(result.success).toBe(true);
@@ -340,7 +340,7 @@ describe("connectionStringParser", () => {
 
     it("should parse database name for capability-driven multi-database drivers", () => {
       const result = parseConnectionString(
-        "postgresql://user:pass@db.example.com:5432/analytics",
+        "postgresql://user:pass@db.example.invalid:5432/analytics",
         CAPABILITY_DRIVERS,
       );
       expect(result.success).toBe(true);
@@ -585,7 +585,7 @@ describe("connectionStringParser", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.params.host).toBe("cluster0.xxxxx.mongodb.net");
+        expect(result.params.host).toBe("cluster0.example.invalid");
         expect(result.params.username).toBe("user");
         // The URI is the only copy of the password: never mirrored into a
         // field that could be persisted in plaintext.
@@ -594,7 +594,7 @@ describe("connectionStringParser", () => {
     });
 
     it("should keep the exact URI when it already carries a database", () => {
-      const uri = "mongodb+srv://user:pass@cluster0.example.net/app?w=majority";
+      const uri = "mongodb+srv://user:pass@cluster0.example.invalid/app?w=majority";
       const result = parseConnectionString(uri, URI_PASSTHROUGH_DRIVERS);
 
       expect(result.success).toBe(true);
