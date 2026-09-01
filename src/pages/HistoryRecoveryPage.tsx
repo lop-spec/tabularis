@@ -105,7 +105,7 @@ export function HistoryRecoveryPage() {
         searchRecovery: "搜索可恢复变更（SQL、库表、连接、Run ID）",
         clearSearch: "清除搜索",
         refresh: "刷新",
-        activeOnly: "仅当前连接",
+        instance: "实例",
         allConnections: "全部连接",
         from: "开始时间",
         to: "结束时间",
@@ -160,7 +160,7 @@ export function HistoryRecoveryPage() {
         searchRecovery: "Search recoverable changes (SQL, objects, connections, Run ID)",
         clearSearch: "Clear search",
         refresh: "Refresh",
-        activeOnly: "Active connection only",
+        instance: "Instance",
         allConnections: "All connections",
         from: "From",
         to: "To",
@@ -222,6 +222,11 @@ export function HistoryRecoveryPage() {
     return () => clearTimeout(id);
   }, [query]);
 
+  // Instance filter, shared by both views. "all" = every connection.
+  const [instanceFilter, setInstanceFilter] = useState<string>(
+    () => activeConnectionId ?? "all",
+  );
+
   // ---------------- All executions ----------------
   const [historyEntries, setHistoryEntries] = useState<QueryHistoryEntry[]>([]);
   const [historyResults, setHistoryResults] = useState<QueryHistoryEntry[] | null>(null);
@@ -265,7 +270,11 @@ export function HistoryRecoveryPage() {
     };
   }, [tab, debouncedQuery, searchAllHistory]);
 
-  const shownHistory = historyResults ?? historyEntries;
+  const shownHistory = useMemo(() => {
+    const entries = historyResults ?? historyEntries;
+    if (instanceFilter === "all") return entries;
+    return entries.filter((entry) => entry.connectionId === instanceFilter);
+  }, [historyResults, historyEntries, instanceFilter]);
 
   // ---------------- Recoverable changes ----------------
   const now = useMemo(() => new Date(), []);
@@ -273,7 +282,6 @@ export function HistoryRecoveryPage() {
     localDateTimeInput(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000)),
   );
   const [startedBefore, setStartedBefore] = useState(() => localDateTimeInput(now));
-  const [activeOnly, setActiveOnly] = useState(true);
   const [runs, setRuns] = useState<RecoveryRunSummary[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [collapsedRuns, setCollapsedRuns] = useState<Set<string>>(new Set());
@@ -294,16 +302,36 @@ export function HistoryRecoveryPage() {
     [connections],
   );
 
+  // Instance options: every saved connection, plus any connection that only
+  // exists in the data (e.g. deleted connections whose history remains).
+  const instanceOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const connection of connections) {
+      options.set(connection.id, connection.name);
+    }
+    for (const run of runs) {
+      if (!options.has(run.connectionId)) {
+        options.set(run.connectionId, run.connectionName);
+      }
+    }
+    for (const entry of historyResults ?? historyEntries) {
+      if (entry.connectionId && !options.has(entry.connectionId)) {
+        options.set(entry.connectionId, entry.connectionName ?? entry.connectionId);
+      }
+    }
+    return [...options.entries()];
+  }, [connections, runs, historyResults, historyEntries]);
+
   const loadRuns = useCallback(async () => {
     setRunsLoading(true);
     setError(null);
     try {
+      // Search, time range, and instance all combine — the backend treats
+      // each as an independent filter.
       const response = await invoke<RecoveryRunSummary[]>("list_recovery_runs", {
-        connectionId: activeOnly ? activeConnectionId : null,
-        startedAfter:
-          debouncedQuery || !startedAfter ? null : new Date(startedAfter).toISOString(),
-        startedBefore:
-          debouncedQuery || !startedBefore ? null : new Date(startedBefore).toISOString(),
+        connectionId: instanceFilter === "all" ? null : instanceFilter,
+        startedAfter: startedAfter ? new Date(startedAfter).toISOString() : null,
+        startedBefore: startedBefore ? new Date(startedBefore).toISOString() : null,
         query: debouncedQuery || null,
       });
       setRuns(response);
@@ -316,7 +344,7 @@ export function HistoryRecoveryPage() {
     } finally {
       setRunsLoading(false);
     }
-  }, [activeConnectionId, activeOnly, debouncedQuery, startedAfter, startedBefore]);
+  }, [instanceFilter, debouncedQuery, startedAfter, startedBefore]);
 
   useEffect(() => {
     if (tab === "recovery") void loadRuns();
@@ -508,41 +536,46 @@ export function HistoryRecoveryPage() {
           )}
         </div>
 
-        {tab === "recovery" && (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setActiveOnly((value) => !value)}
-              className={`rounded-lg border px-2.5 py-1 transition-colors ${
-                activeOnly
-                  ? "border-blue-500/40 bg-blue-500/10 text-blue-300"
-                  : "border-default text-secondary hover:bg-surface-secondary"
-              }`}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <label className="flex items-center gap-1.5 text-muted">
+            {labels.instance}
+            <select
+              aria-label={labels.instance}
+              className={`${inputClass} w-auto py-1 text-xs`}
+              value={instanceFilter}
+              onChange={(event) => setInstanceFilter(event.target.value)}
             >
-              {activeOnly ? labels.activeOnly : labels.allConnections}
-            </button>
-            <label className="flex items-center gap-1.5 text-muted">
-              {labels.from}
-              <input
-                className={`${inputClass} w-auto py-1 text-xs`}
-                type="datetime-local"
-                disabled={Boolean(debouncedQuery)}
-                value={startedAfter}
-                onChange={(event) => setStartedAfter(event.target.value)}
-              />
-            </label>
-            <label className="flex items-center gap-1.5 text-muted">
-              {labels.to}
-              <input
-                className={`${inputClass} w-auto py-1 text-xs`}
-                type="datetime-local"
-                disabled={Boolean(debouncedQuery)}
-                value={startedBefore}
-                onChange={(event) => setStartedBefore(event.target.value)}
-              />
-            </label>
-          </div>
-        )}
+              <option value="all">{labels.allConnections}</option>
+              {instanceOptions.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {tab === "recovery" && (
+            <>
+              <label className="flex items-center gap-1.5 text-muted">
+                {labels.from}
+                <input
+                  className={`${inputClass} w-auto py-1 text-xs`}
+                  type="datetime-local"
+                  value={startedAfter}
+                  onChange={(event) => setStartedAfter(event.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-muted">
+                {labels.to}
+                <input
+                  className={`${inputClass} w-auto py-1 text-xs`}
+                  type="datetime-local"
+                  value={startedBefore}
+                  onChange={(event) => setStartedBefore(event.target.value)}
+                />
+              </label>
+            </>
+          )}
+        </div>
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">

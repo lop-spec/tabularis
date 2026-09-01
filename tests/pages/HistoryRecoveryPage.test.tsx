@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HistoryRecoveryPage } from "../../src/pages/HistoryRecoveryPage";
 
@@ -229,9 +229,11 @@ describe("HistoryRecoveryPage", () => {
     fireEvent.click(screen.getByText(/Backup-instance comparison/));
 
     const select = screen.getByLabelText("Saved connection");
-    expect(screen.getByRole("option", { name: /MySQL backup/ })).toBeInTheDocument();
     expect(
-      screen.queryByRole("option", { name: /PostgreSQL backup/ }),
+      within(select).getByRole("option", { name: /MySQL backup/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(select).queryByRole("option", { name: /PostgreSQL backup/ }),
     ).not.toBeInTheDocument();
     fireEvent.change(select, { target: { value: "mysql-backup" } });
     fireEvent.click(
@@ -246,6 +248,31 @@ describe("HistoryRecoveryPage", () => {
       });
     });
     expect(JSON.stringify(mocks.invoke.mock.calls)).not.toContain("must-not-be-sent");
+  });
+
+  it("combines the instance, time range, and search filters", async () => {
+    mocks.pathname = "/recovery";
+    render(<HistoryRecoveryPage />);
+    await screen.findByText(/UPDATE users SET name/);
+
+    fireEvent.change(screen.getByLabelText("Instance"), {
+      target: { value: "all" },
+    });
+    fireEvent.change(screen.getByLabelText(/Search recoverable changes/), {
+      target: { value: "UPDATE" },
+    });
+
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith(
+        "list_recovery_runs",
+        expect.objectContaining({
+          connectionId: null,
+          startedAfter: expect.any(String),
+          startedBefore: expect.any(String),
+          query: "UPDATE",
+        }),
+      );
+    });
   });
 
   it("searches recoverable changes through the shared search box", async () => {
