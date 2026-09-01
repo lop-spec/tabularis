@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MultiResultPanel } from "../../../src/components/ui/MultiResultPanel";
 import type { QueryResultEntry, QueryResult } from "../../../src/types/editor";
 
@@ -122,6 +122,47 @@ describe("MultiResultPanel", () => {
 
     const tabTexts = screen.getAllByText(/editor\.multiResult\.query/);
     expect(tabTexts).toHaveLength(2);
+  });
+
+  it("stacked list restores scroll chaining and sheds pointer events while scrolling", async () => {
+    // The global `overscroll-behavior: none` utility dead-stops a wheel
+    // gesture at each grid's edge; the stacked list opts its subtree back
+    // into chaining, and while it scrolls the entries must not capture the
+    // pointer (hover recalc + wheel retarget cause the reported jank).
+    const results = [
+      makeEntry({
+        id: "r-0",
+        queryIndex: 0,
+        query: "SELECT 1",
+        isLoading: false,
+        result: makeResult([[1]]),
+      }),
+      makeEntry({
+        id: "r-1",
+        queryIndex: 1,
+        query: "SELECT 2",
+        isLoading: false,
+        result: makeResult([[2]]),
+      }),
+    ];
+    const { container } = render(
+      <MultiResultPanel
+        {...defaultProps}
+        results={results}
+        activeResultId="r-0"
+      />,
+    );
+
+    const list = container.querySelector(".stacked-scroll-chain");
+    expect(list).not.toBeNull();
+    expect(list).not.toHaveClass("stacked-scrolling");
+
+    fireEvent.scroll(list!);
+    expect(list).toHaveClass("stacked-scrolling");
+
+    await waitFor(() =>
+      expect(list).not.toHaveClass("stacked-scrolling"),
+    );
   });
 
   it("switches to the stacked default when a second result arrives", () => {

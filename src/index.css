@@ -178,6 +178,22 @@ code {
     overscroll-behavior-x: none;
   }
 
+  /* Stacked multi-result reading flow (2026-09-01, lop):
+     the global `overscroll-behavior: none` above kills scroll chaining, so a
+     wheel gesture over any result grid dead-stops at that grid's edge instead
+     of continuing down the list. Inside the stacked results list the nested
+     scrollers chain back to the list. */
+  .stacked-scroll-chain .overflow-auto,
+  .stacked-scroll-chain .overflow-y-auto {
+    overscroll-behavior-y: auto;
+  }
+  /* While the stacked list itself is scrolling, children ignore the pointer:
+     grids sliding under the cursor cannot capture the wheel mid-flow, and the
+     per-frame hover style recalc across hundreds of cells stops. */
+  .stacked-scrolling > * {
+    pointer-events: none;
+  }
+
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }

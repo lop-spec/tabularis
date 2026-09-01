@@ -220,6 +220,31 @@ export function MultiResultPanel({
 }: MultiResultPanelProps) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Smooth stacked scrolling: while the list scrolls, a class disables
+  // pointer events on the entries (see index.css). Managed straight on the
+  // DOM — a per-frame setState here would re-render every result grid.
+  const stackedScrollRef = useRef<HTMLDivElement>(null);
+  const stackedScrollTimer = useRef<number | null>(null);
+  const handleStackedScroll = useCallback(() => {
+    const el = stackedScrollRef.current;
+    if (!el) return;
+    el.classList.add("stacked-scrolling");
+    if (stackedScrollTimer.current !== null) {
+      window.clearTimeout(stackedScrollTimer.current);
+    }
+    stackedScrollTimer.current = window.setTimeout(() => {
+      el.classList.remove("stacked-scrolling");
+      stackedScrollTimer.current = null;
+    }, 120);
+  }, []);
+  useEffect(
+    () => () => {
+      if (stackedScrollTimer.current !== null) {
+        window.clearTimeout(stackedScrollTimer.current);
+      }
+    },
+    [],
+  );
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
@@ -457,7 +482,11 @@ export function MultiResultPanel({
           </div>
 
           {/* Stacked results */}
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div
+            ref={stackedScrollRef}
+            onScroll={handleStackedScroll}
+            className="flex-1 min-h-0 overflow-y-auto stacked-scroll-chain"
+          >
             {results.map((entry) => (
               <StackedResultItem
                 key={entry.id}
