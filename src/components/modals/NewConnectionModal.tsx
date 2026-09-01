@@ -2147,11 +2147,11 @@ export const NewConnectionModal = ({
             <input
               type="checkbox"
               id="rollback-protection-toggle"
-              checked={formData.rollback_protection_enabled === true}
+              checked={formData.rollback_protection_enabled !== false}
               onChange={(e) =>
                 updateField(
                   "rollback_protection_enabled",
-                  e.target.checked ? true : undefined,
+                  e.target.checked ? undefined : false,
                 )
               }
               className="accent-blue-500 w-3.5 h-3.5 rounded"
@@ -2165,7 +2165,7 @@ export const NewConnectionModal = ({
           <p className="text-xs text-muted">
             {t("newConnection.rollbackProtectionHint", {
               defaultValue:
-                "Default off. Supported MySQL writes run only after a connection-isolated rollback file is durable; unsafe writes are blocked.",
+                "Default on. Supported MySQL writes run only after a connection-isolated rollback file is durable; statements without an exact inverse run unprotected but are journaled for backup-based recovery.",
             })}
           </p>
         </div>

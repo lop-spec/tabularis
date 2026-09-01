@@ -54,11 +54,69 @@ pub(super) struct DeletePlan {
     pub statement_prefix: String,
 }
 
+/// Where the rows of an extended INSERT come from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum InsertSource {
+    /// Raw VALUES row expressions, taken verbatim from the statement.
+    Values(Vec<Vec<String>>),
+    /// Raw SELECT text. Executed once inside the protected transaction to
+    /// materialize the exact rows, which then insert as literal VALUES —
+    /// `INSERT … SELECT` semantics with a provable row set.
+    Select(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct UpsertTail {
+    /// Raw tail starting at `ON DUPLICATE KEY UPDATE`, appended verbatim when
+    /// a materialized SELECT source is re-executed as VALUES.
+    pub tail_sql: String,
+    pub assigned_columns: Vec<String>,
+}
+
+/// `INSERT [IGNORE] INTO t [(cols)] (VALUES … | SELECT …) [ON DUPLICATE KEY
+/// UPDATE …]` — the shapes the plain exact planner refuses. Normalized at
+/// execution time into known-row inserts/updates so they stay in the
+/// pre-commit exact-rollback channel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct InsertFamilyPlan {
+    pub table: ObjectName,
+    /// `None` = implicit full column list.
+    pub columns: Option<Vec<String>>,
+    pub source: InsertSource,
+    pub ignore: bool,
+    pub upsert: Option<UpsertTail>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct MultiTableTarget {
+    pub table: ObjectName,
+    /// How the statement refers to the table inside `refs_sql` (its alias, or
+    /// its own name when unaliased).
+    pub alias: String,
+    /// Columns this statement assigns on this target (empty for DELETE).
+    pub assigned_columns: Vec<String>,
+}
+
+/// Multi-table / aliased UPDATE and DELETE. The original statement executes
+/// verbatim; the affected primary keys are materialized first with the same
+/// table references and WHERE clause under `FOR UPDATE`, so before/after
+/// images are exact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct MultiTablePlan {
+    pub targets: Vec<MultiTableTarget>,
+    /// Raw table references, verbatim between UPDATE/USING-FROM and SET/WHERE.
+    pub refs_sql: String,
+    pub where_sql: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum DmlPlan {
     Insert(InsertPlan),
     Update(UpdatePlan),
     Delete(DeletePlan),
+    InsertFamily(InsertFamilyPlan),
+    MultiUpdate(MultiTablePlan),
+    MultiDelete(MultiTablePlan),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -247,15 +305,25 @@ pub(super) fn plan_for_rollback(sql: &str) -> Result<ProtectedStatement, Blocked
         "SET" => classify_set(sql, tokens),
         "USE" => Ok(ProtectedStatement::Session(SessionPlan::ScopeChange)),
         "START" | "BEGIN" | "COMMIT" | "ROLLBACK" => classify_transaction_control(tokens),
-        "INSERT" => {
-            parse_insert(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Insert(plan)))
-        }
-        "UPDATE" => {
-            parse_update(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Update(plan)))
-        }
-        "DELETE" => {
-            parse_delete(sql, tokens).map(|plan| ProtectedStatement::Dml(DmlPlan::Delete(plan)))
-        }
+        "INSERT" => match parse_insert(sql, tokens) {
+            Ok(plan) => Ok(ProtectedStatement::Dml(DmlPlan::Insert(plan))),
+            // The strict planner covers plain `INSERT INTO t (cols) VALUES`;
+            // everything else (IGNORE, missing column list, SELECT source,
+            // ON DUPLICATE KEY UPDATE) goes through the normalizing family
+            // planner before it may fail closed.
+            Err(_) => parse_insert_family(sql, tokens)
+                .map(|plan| ProtectedStatement::Dml(DmlPlan::InsertFamily(plan))),
+        },
+        "UPDATE" => match parse_update(sql, tokens) {
+            Ok(plan) => Ok(ProtectedStatement::Dml(DmlPlan::Update(plan))),
+            Err(_) => parse_multi_update(sql, tokens)
+                .map(|plan| ProtectedStatement::Dml(DmlPlan::MultiUpdate(plan))),
+        },
+        "DELETE" => match parse_delete(sql, tokens) {
+            Ok(plan) => Ok(ProtectedStatement::Dml(DmlPlan::Delete(plan))),
+            Err(_) => parse_multi_delete(sql, tokens)
+                .map(|plan| ProtectedStatement::Dml(DmlPlan::MultiDelete(plan))),
+        },
         "CREATE"
             if tokens
                 .get(1)
@@ -618,7 +686,19 @@ fn finish_pinned_journals(
         (None, None) => Ok(None),
         (Some(journal), Some(recovery_journal)) if journal.is_empty() => {
             journal.discard()?;
-            recovery_journal.discard()?;
+            // The rollback journal being empty does not mean nothing changed:
+            // unsupported statements run without rollback steps but are still
+            // journaled for the backup-based restore. Keep that record.
+            if recovery_journal.is_empty() {
+                recovery_journal.discard()?;
+            } else {
+                let history_path = recovery_journal.finalize().map_err(|error| {
+                    format!(
+                        "Unprotected changes completed, but the recovery history could not be finalized: {error}"
+                    )
+                })?;
+                log::info!("Recovery history finalized at {}", history_path.display());
+            }
             Ok(None)
         }
         (Some(journal), Some(recovery_journal)) => {
@@ -816,6 +896,56 @@ pub(super) fn complete_statement_without_database(
     Ok(Some(result))
 }
 
+/// Journals a statement that executed OUTSIDE exact protection into the
+/// batch's recovery journal (`exact: false`), mirroring
+/// `recovery_history::record_unprotected_changes` but reusing the journals
+/// the protected batch already holds. Best-effort: a journaling failure is
+/// logged, never surfaced — it must not fail a statement that already ran.
+async fn journal_unsupported_statement(
+    conn: &mut sqlx::MySqlConnection,
+    recovery_journal: Option<&mut RecoveryJournal>,
+    prepared: &mut HashMap<String, Vec<RecoveryObject>>,
+    statement_index: usize,
+    sql: &str,
+) {
+    let Some(recovery_journal) = recovery_journal else {
+        return;
+    };
+    let (operation, mut objects) = crate::recovery_history::parse_change_objects(sql);
+    if crate::recovery_history::is_unprotected_non_recovery_operation(&operation) {
+        return;
+    }
+    let database = current_database(conn).await.unwrap_or_default();
+    if objects.is_empty() || crate::recovery_objects::dynamic_source(sql).is_some() {
+        objects.extend(
+            crate::recovery_history::resolve_dynamic_objects(conn, &database, sql, prepared)
+                .await,
+        );
+        objects
+            .sort_by(|a, b| (&a.kind, &a.schema, &a.name).cmp(&(&b.kind, &b.schema, &b.name)));
+        objects.dedup();
+    }
+    if let Err(error) = recovery_journal.add_statement(RecoveryStatement {
+        id: String::new(),
+        index: statement_index,
+        executed_at: String::new(),
+        sql: sql.trim().to_string(),
+        category: "unprotected".to_string(),
+        operation,
+        objects,
+        affected_columns: Vec::new(),
+        condition: None,
+        columns: Vec::new(),
+        primary_key: Vec::new(),
+        before_rows: Vec::new(),
+        after_rows: Vec::new(),
+        inverse_sql: None,
+        exact: false,
+    }) {
+        log::warn!("Could not journal an unprotected statement: {error}");
+    }
+}
+
 pub(super) async fn execute_protected_batch(
     params: &ConnectionParams,
     queries: &[String],
@@ -872,13 +1002,12 @@ async fn execute_pinned_protected_batch(
     schema: Option<&str>,
     on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
 ) -> Result<Vec<BatchStatementResult>, String> {
-    let (plans, review) = plan_batch_collecting_risks(queries);
-    match params.rollback_unsupported_policy {
-        None if !review.statements.is_empty() => {
-            return Err(rollback_risk_review_error(&review));
-        }
-        _ => {}
-    }
+    // No-prompt policy (2026-09-01): a missing policy no longer raises
+    // TABULARIS_ROLLBACK_RISK_REVIEW. Unsupported statements execute
+    // unprotected, are flagged in their result, and are journaled below so
+    // the backup-based restore can still reach their objects. An explicit
+    // `Skip` policy is still honored.
+    let (plans, _review) = plan_batch_collecting_risks(queries);
 
     let key = transaction_context_key(params)?;
     let context_lock = transaction_context_lock(&key);
@@ -908,12 +1037,11 @@ async fn execute_pinned_protected_batch(
                 .to_string(),
         );
     }
-    let lifecycle = validate_pinned_transaction_structure(
-        &plans,
-        starts_active,
-        params.allow_implicit_transaction_commit,
-        queries,
-    )?;
+    // No-prompt policy: a DDL implicit commit inside an explicit transaction
+    // is auto-allowed (the boundary is committed, the DDL protected, and the
+    // combined rollback SQL finalized) instead of raising a review error.
+    let lifecycle =
+        validate_pinned_transaction_structure(&plans, starts_active, true, queries)?;
 
     // `USE db` mixed with writes used to be refused here, on the theory that an
     // unqualified table name in the rollback file would resolve against whatever
@@ -933,10 +1061,15 @@ async fn execute_pinned_protected_batch(
     // lop asked for USE + Run All twice; the refusal accounted for 53 blocked
     // statements in his execution history, each of which failed its whole batch.
 
+    // Unsupported statements count as writes: they may change data, and the
+    // no-prompt policy journals them into the recovery history, so the
+    // journals must exist even for a batch that contains nothing protectable.
     let has_writes = plans.iter().any(|plan| {
         matches!(
             plan,
-            ProtectedStatement::Dml(_) | ProtectedStatement::Ddl(_)
+            ProtectedStatement::Dml(_)
+                | ProtectedStatement::Ddl(_)
+                | ProtectedStatement::Unsupported(_)
         )
     });
 
@@ -981,6 +1114,7 @@ async fn execute_pinned_protected_batch(
     let mut stopped = false;
     let mut transaction_outcome: Option<String> = None;
     let mut uncertain_boundary = false;
+    let mut prepared_dynamic_objects: HashMap<String, Vec<RecoveryObject>> = HashMap::new();
     let statement_offset = session.statement_offset;
 
     {
@@ -1186,7 +1320,19 @@ async fn execute_pinned_protected_batch(
                         transaction_outcome =
                             Some("unsupported_implicit_commit".to_string());
                     }
-                    super::exec_on_mysql_conn(conn, query, limit, page, text).await
+                    let outcome =
+                        super::exec_on_mysql_conn(conn, query, limit, page, text).await;
+                    if outcome.is_ok() {
+                        journal_unsupported_statement(
+                            conn,
+                            recovery_journal.as_mut(),
+                            &mut prepared_dynamic_objects,
+                            statement_offset + index,
+                            query,
+                        )
+                        .await;
+                    }
+                    outcome
                 }
             };
 
@@ -1263,18 +1409,15 @@ async fn execute_pinned_protected_batch(
     }
 
     if uncertain_boundary {
-        let recovery_file = session.journal.as_ref().map(|journal| {
-            journal
-                .current_recovery_path()
-                .to_string_lossy()
-                .to_string()
-        });
         let conn = session.conn.take();
-        // The rollback revision survives on disk by construction. The recovery
-        // history must not be dropped mid-"recording": mark it interrupted so
-        // RecoveryPage can still show and compare it — the unknown-COMMIT case
-        // is exactly when the operator needs it.
-        session.journal.take();
+        // Render the abandoned rollback journal to executable SQL right now —
+        // the unknown-COMMIT case is exactly when the operator needs it. The
+        // recovery history must not be dropped mid-"recording": mark it
+        // interrupted so RecoveryPage can still show and compare it.
+        let recovery_file = session
+            .journal
+            .take()
+            .map(|journal| journal.abandon().to_string_lossy().to_string());
         if let Some(recovery_journal) = session.recovery_journal.take() {
             if let Err(error) =
                 recovery_journal.interrupt("transaction boundary outcome unknown")
@@ -1333,25 +1476,27 @@ async fn execute_single_run_protected_batch(
     schema: Option<&str>,
     on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
 ) -> Result<Vec<BatchStatementResult>, String> {
-    let (plans, review) = plan_batch_collecting_risks(queries);
-    match params.rollback_unsupported_policy {
-        None if !review.statements.is_empty() => {
-            return Err(rollback_risk_review_error(&review));
-        }
-        Some(RollbackUnsupportedPolicy::ExecuteUnprotected) => {
-            return Err(
-                "Internal rollback protection error: unprotected execution must use the normal batch path"
-                    .to_string(),
-            );
-        }
-        _ => {}
+    // No-prompt policy (2026-09-01): a missing policy no longer raises
+    // TABULARIS_ROLLBACK_RISK_REVIEW; unsupported statements execute
+    // unprotected, are flagged, and are journaled. `Skip` is still honored.
+    let (plans, _review) = plan_batch_collecting_risks(queries);
+    if params.rollback_unsupported_policy == Some(RollbackUnsupportedPolicy::ExecuteUnprotected) {
+        return Err(
+            "Internal rollback protection error: unprotected execution must use the normal batch path"
+                .to_string(),
+        );
     }
     validate_transaction_structure(&plans)?;
 
+    // Unsupported statements count as writes: they may change data, and the
+    // no-prompt policy journals them into the recovery history, so the
+    // journals must exist even for a batch that contains nothing protectable.
     let has_writes = plans.iter().any(|plan| {
         matches!(
             plan,
-            ProtectedStatement::Dml(_) | ProtectedStatement::Ddl(_)
+            ProtectedStatement::Dml(_)
+                | ProtectedStatement::Ddl(_)
+                | ProtectedStatement::Unsupported(_)
         )
     });
     // USE + writes is allowed here for the same reason as in the pinned path:
@@ -1392,6 +1537,7 @@ async fn execute_single_run_protected_batch(
     let mut results = Vec::with_capacity(queries.len());
     let mut stopped = false;
     let mut explicit_transaction_checkpoint = None;
+    let mut prepared_dynamic_objects: HashMap<String, Vec<RecoveryObject>> = HashMap::new();
     for (index, (query, plan)) in queries.iter().zip(plans.iter()).enumerate() {
         let start = std::time::Instant::now();
         if let Some(result) = complete_statement_without_database(
@@ -1513,7 +1659,21 @@ async fn execute_single_run_protected_batch(
                     .await
                 }
             ProtectedStatement::Unsupported(_) => {
-                unreachable!("unsupported statements are handled before execution")
+                // No-prompt policy: run it, flag the result, and journal the
+                // statement so the backup-based restore can reach its objects.
+                let outcome =
+                    super::exec_on_mysql_conn(&mut conn, query, limit, page, text).await;
+                if outcome.is_ok() {
+                    journal_unsupported_statement(
+                        &mut conn,
+                        recovery_journal.as_mut(),
+                        &mut prepared_dynamic_objects,
+                        index,
+                        query,
+                    )
+                    .await;
+                }
+                outcome
             }
         };
         if outcome.is_err()
@@ -1553,7 +1713,7 @@ async fn execute_single_run_protected_batch(
             stopped = true;
         }
         let mut result = BatchStatementResult::from_outcome(start, outcome);
-        if degraded.take().is_some() {
+        if degraded.take().is_some() || matches!(plan, ProtectedStatement::Unsupported(_)) {
             result.rollback_unprotected = Some(true);
         }
         result.rollback_file = rollback_path.clone();
@@ -1563,26 +1723,12 @@ async fn execute_single_run_protected_batch(
         results.push(result);
     }
 
-    if let Some(journal) = journal {
-        let recovery_path = journal.current_recovery_path().to_path_buf();
-        let final_path = journal.finalize().map_err(|error| {
-            format!(
-                "{error}. The synced recovery SQL remains at {}",
-                recovery_path.display()
-            )
-        })?;
-        let final_path = final_path.to_string_lossy().to_string();
-        for result in &mut results {
-            result.rollback_file = Some(final_path.clone());
-        }
-    }
-    if let Some(recovery_journal) = recovery_journal {
-        let path = recovery_journal.finalize().map_err(|error| {
-            format!(
-                "Protected writes completed, but the independent recovery history could not be finalized: {error}"
-            )
-        })?;
-        log::info!("Recovery history finalized at {}", path.display());
+    // Same finish semantics as the pinned path: an empty rollback journal is
+    // discarded (no noise file), while a recovery history that recorded
+    // unprotected changes is still finalized.
+    let final_rollback = finish_pinned_journals(journal, recovery_journal)?;
+    for result in &mut results {
+        result.rollback_file = final_rollback.clone();
     }
     Ok(results)
 }
@@ -1744,6 +1890,42 @@ async fn execute_protected_dml_body(
             )
             .await
         }
+        DmlPlan::InsertFamily(plan) => {
+            execute_insert_family(
+                conn,
+                query,
+                plan,
+                statement_index,
+                rollback_journal,
+                recovery_journal,
+                text,
+            )
+            .await
+        }
+        DmlPlan::MultiUpdate(plan) => {
+            execute_multi_update(
+                conn,
+                query,
+                plan,
+                statement_index,
+                rollback_journal,
+                recovery_journal,
+                text,
+            )
+            .await
+        }
+        DmlPlan::MultiDelete(plan) => {
+            execute_multi_delete(
+                conn,
+                query,
+                plan,
+                statement_index,
+                rollback_journal,
+                recovery_journal,
+                text,
+            )
+            .await
+        }
     };
 
     // The statement is legitimate, only its inverse is not derivable. Refusing
@@ -1805,10 +1987,9 @@ async fn execute_insert(
             );
         }
     } else if metadata.auto_increment_primary_key().is_none() {
-        return Err(
-            "INSERT requires literal values for every primary-key column, or one omitted AUTO_INCREMENT primary key"
-                .to_string(),
-        );
+        return Err(format!(
+            "{UNPROTECTABLE}INSERT requires literal values for every primary-key column, or one omitted AUTO_INCREMENT primary key"
+        ));
     }
 
     let result = super::exec_on_mysql_conn(conn, query, None, 1, text).await?;
@@ -1884,7 +2065,9 @@ async fn execute_update(
 ) -> Result<QueryResult, String> {
     let metadata = load_locked_dml_metadata(conn, &plan.table, true).await?;
     if metadata.primary_key.is_empty() {
-        return Err("UPDATE rollback requires a declared primary key".to_string());
+        return Err(format!(
+            "{UNPROTECTABLE}UPDATE rollback requires a declared primary key"
+        ));
     }
     for assigned in &plan.assigned_columns {
         let column = metadata
@@ -1994,7 +2177,9 @@ async fn execute_delete(
 ) -> Result<QueryResult, String> {
     let metadata = load_locked_dml_metadata(conn, &plan.table, true).await?;
     if metadata.primary_key.is_empty() {
-        return Err("DELETE rollback requires a declared primary key".to_string());
+        return Err(format!(
+            "{UNPROTECTABLE}DELETE rollback requires a declared primary key"
+        ));
     }
     let before = capture_rows(conn, &metadata, plan.where_sql.as_deref()).await?;
     let key_filter = captured_primary_key_filter(&metadata, &before)?;
@@ -2035,6 +2220,882 @@ async fn execute_delete(
         before,
         Vec::new(),
     ))?;
+    Ok(result)
+}
+
+/// Row-chunk size for synthesized VALUES statements built from a
+/// materialized SELECT source. Bounds single-statement SQL size (and thus
+/// max_allowed_packet exposure) while keeping AUTO_INCREMENT allocation in
+/// the "simple insert" contiguous regime per chunk.
+const FAMILY_CHUNK_ROWS: usize = 500;
+
+fn empty_write_result(affected_rows: u64) -> QueryResult {
+    QueryResult {
+        columns: Vec::new(),
+        rows: Vec::new(),
+        affected_rows,
+        truncated: false,
+        pagination: None,
+        additional_results: None,
+    }
+}
+
+fn validate_family_columns(
+    columns: &[String],
+    metadata: &TableMetadata,
+) -> Result<(), String> {
+    let mut seen = HashSet::new();
+    for column in columns {
+        if !seen.insert(column.to_ascii_lowercase()) {
+            return Err(format!("INSERT column {column} is repeated"));
+        }
+        let metadata_column = metadata
+            .column(column)
+            .ok_or_else(|| format!("{UNPROTECTABLE}INSERT references unknown column {column}"))?;
+        if metadata_column.generated {
+            return Err(format!(
+                "{UNPROTECTABLE}INSERT into generated column {} cannot be rollback-protected",
+                metadata_column.name
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn key_positions(key: &[String], columns: &[String]) -> Option<Vec<usize>> {
+    key.iter()
+        .map(|k| columns.iter().position(|c| c.eq_ignore_ascii_case(k)))
+        .collect()
+}
+
+/// Builds an OR filter that locates every planned row by at least one of the
+/// given key column sets (all of them when `require_all`, for upserts where a
+/// conflict can arise on any unique key). Values are either client-encoded
+/// `X'..'`/`NULL` literals or raw statement literals.
+fn family_key_filter(
+    columns: &[String],
+    rows: &[Vec<String>],
+    encoded: bool,
+    key_sets: &[Vec<String>],
+    require_all: bool,
+) -> Result<String, String> {
+    let mut row_conditions = Vec::with_capacity(rows.len());
+    for row in rows {
+        let mut located = Vec::new();
+        for key in key_sets {
+            let Some(positions) = key_positions(key, columns) else {
+                if require_all {
+                    return Err(format!(
+                        "{UNPROTECTABLE}every unique-key column must appear in the INSERT column list for exact upsert rollback"
+                    ));
+                }
+                continue;
+            };
+            let mut conditions = Vec::with_capacity(key.len());
+            let mut locatable = true;
+            for (column, position) in key.iter().zip(&positions) {
+                let literal = row
+                    .get(*position)
+                    .ok_or_else(|| "INSERT key position is out of bounds".to_string())?;
+                if encoded {
+                    conditions.push(format!(
+                        "CAST({} AS BINARY) <=> {}",
+                        quote_identifier(column),
+                        literal
+                    ));
+                } else if is_safe_key_literal(literal) {
+                    conditions.push(format!(
+                        "{} <=> {}",
+                        quote_identifier(column),
+                        literal.trim()
+                    ));
+                } else {
+                    locatable = false;
+                    break;
+                }
+            }
+            if locatable {
+                located.push(format!("({})", conditions.join(" AND ")));
+            } else if require_all {
+                return Err(format!(
+                    "{UNPROTECTABLE}INSERT key expression is not a deterministic literal"
+                ));
+            }
+        }
+        if located.is_empty() {
+            return Err(format!(
+                "{UNPROTECTABLE}INSERT rows cannot be located by any key for exact rollback"
+            ));
+        }
+        row_conditions.push(if located.len() == 1 {
+            located.pop().expect("checked non-empty")
+        } else {
+            format!("({})", located.join(" OR "))
+        });
+    }
+    Ok(row_conditions.join(" OR "))
+}
+
+/// Runs the raw SELECT source once and returns its rows as durable
+/// `X'..'`/`NULL` literals. The single evaluation IS the statement's
+/// semantics: the rows read here are exactly the rows inserted.
+///
+/// Values are hex-encoded server-side (the same projection `capture_rows`
+/// uses) because the text protocol's typed decoding cannot hand back
+/// arbitrary columns as bytes.
+async fn materialize_select_rows(
+    conn: &mut sqlx::MySqlConnection,
+    select_sql: &str,
+    expected_width: usize,
+) -> Result<Vec<Vec<String>>, String> {
+    let description = conn
+        .describe(select_sql)
+        .await
+        .map_err(|error| format!("Could not inspect the INSERT source SELECT: {error}"))?;
+    let names: Vec<String> = description
+        .columns()
+        .iter()
+        .map(|column| column.name().to_string())
+        .collect();
+    if names.len() != expected_width {
+        return Err(format!(
+            "{UNPROTECTABLE}INSERT column list expects {expected_width} columns but its SELECT produces {}",
+            names.len()
+        ));
+    }
+    let mut seen = HashSet::new();
+    for name in &names {
+        if !seen.insert(name.to_ascii_lowercase()) {
+            return Err(format!(
+                "{UNPROTECTABLE}INSERT source SELECT has duplicate output column {name}; its rows cannot be materialized"
+            ));
+        }
+    }
+
+    let cap = rollback_capture_row_limit();
+    let projection = names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| {
+            let quoted = quote_identifier(name);
+            format!(
+                "CASE WHEN {quoted} IS NULL THEN 'NULL' \
+                 ELSE CONCAT('X''', HEX(CAST({quoted} AS BINARY)), '''') END AS `v{index}`"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT {projection} FROM ({select_sql}) AS `__tabularis_src` LIMIT {}",
+        cap + 1
+    );
+    let fetched = conn
+        .fetch_all(sqlx::raw_sql(&sql))
+        .await
+        .map_err(|error| format!("Could not materialize INSERT source rows: {error}"))?;
+    if fetched.len() > cap {
+        return Err(format!(
+            "Rollback protection refused to materialize more than {cap} INSERT source rows \
+             (set TABULARIS_ROLLBACK_CAPTURE_LIMIT to raise the cap or split the statement)"
+        ));
+    }
+    let mut rows = Vec::with_capacity(fetched.len());
+    for row in fetched {
+        let values = (0..expected_width)
+            .map(|index| mysql_text(&row, index))
+            .collect::<Result<Vec<_>, _>>()?;
+        rows.push(values);
+    }
+    Ok(rows)
+}
+
+/// Unique index column sets (excluding PRIMARY). `None` when the table has a
+/// functional/expression unique index whose conflicts we cannot pre-locate.
+async fn load_unique_index_column_sets(
+    conn: &mut sqlx::MySqlConnection,
+    metadata: &TableMetadata,
+) -> Result<Option<Vec<Vec<String>>>, String> {
+    let sql = format!(
+        "SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.STATISTICS \
+         WHERE TABLE_SCHEMA = {} AND TABLE_NAME = {} AND NON_UNIQUE = 0 \
+           AND INDEX_NAME <> 'PRIMARY' \
+         ORDER BY INDEX_NAME, SEQ_IN_INDEX",
+        sql_hex(metadata.schema.as_bytes()),
+        sql_hex(metadata.name.as_bytes())
+    );
+    let rows = conn
+        .fetch_all(sqlx::raw_sql(&sql))
+        .await
+        .map_err(|error| format!("Could not inspect unique indexes: {error}"))?;
+    let mut sets: Vec<(String, Vec<String>)> = Vec::new();
+    for row in rows {
+        let index_name = mysql_text(&row, 0)?;
+        let column = match row.try_get::<Option<String>, _>(1) {
+            Ok(Some(column)) => column,
+            Ok(None) => return Ok(None),
+            Err(_) => match row.try_get::<Option<Vec<u8>>, _>(1) {
+                Ok(Some(bytes)) => String::from_utf8(bytes)
+                    .map_err(|error| format!("unique index column is not UTF-8: {error}"))?,
+                _ => return Ok(None),
+            },
+        };
+        match sets.last_mut() {
+            Some((name, columns)) if *name == index_name => columns.push(column),
+            _ => sets.push((index_name, vec![column])),
+        }
+    }
+    Ok(Some(sets.into_iter().map(|(_, columns)| columns).collect()))
+}
+
+fn synthesize_family_insert_sql(
+    metadata: &TableMetadata,
+    columns: &[String],
+    chunk: &[Vec<String>],
+    ignore: bool,
+    upsert_tail: Option<&str>,
+) -> Result<String, String> {
+    let column_list = columns
+        .iter()
+        .map(|column| quote_identifier(column))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut rows_sql = Vec::with_capacity(chunk.len());
+    for row in chunk {
+        let mut literals = Vec::with_capacity(row.len());
+        for (value, column) in row.iter().zip(columns) {
+            let metadata_column = metadata
+                .column(column)
+                .ok_or_else(|| format!("unknown INSERT column {column}"))?;
+            literals.push(restoration_literal(metadata_column, value));
+        }
+        rows_sql.push(format!("({})", literals.join(", ")));
+    }
+    Ok(format!(
+        "INSERT {}INTO {} ({column_list}) VALUES\n{}{}",
+        if ignore { "IGNORE " } else { "" },
+        metadata.qualified_name(),
+        rows_sql.join(",\n"),
+        upsert_tail
+            .map(|tail| format!("\n{tail}"))
+            .unwrap_or_default()
+    ))
+}
+
+/// Executes the extended INSERT family with exact pre-commit rollback:
+/// IGNORE and ON DUPLICATE KEY UPDATE via key-located before/after diffs, and
+/// SELECT sources via one-shot materialization into literal VALUES chunks.
+async fn execute_insert_family(
+    conn: &mut sqlx::MySqlConnection,
+    query: &str,
+    plan: &InsertFamilyPlan,
+    statement_index: usize,
+    rollback_journal: &mut RollbackJournal,
+    recovery_journal: &mut RecoveryJournal,
+    text: super::TextProto,
+) -> Result<QueryResult, String> {
+    let metadata =
+        load_locked_dml_metadata(conn, &plan.table, plan.upsert.is_some()).await?;
+    let columns: Vec<String> = match &plan.columns {
+        Some(columns) => columns.clone(),
+        None => {
+            if metadata.columns.iter().any(|column| column.generated) {
+                return Err(format!(
+                    "{UNPROTECTABLE}INSERT without an explicit column list cannot be rollback-protected on a table with generated columns"
+                ));
+            }
+            metadata
+                .columns
+                .iter()
+                .map(|column| column.name.clone())
+                .collect()
+        }
+    };
+    validate_family_columns(&columns, &metadata)?;
+    if metadata.primary_key.is_empty() {
+        return Err(format!(
+            "{UNPROTECTABLE}this INSERT form requires a declared primary key for exact rollback"
+        ));
+    }
+    if let Some(upsert) = &plan.upsert {
+        for assigned in &upsert.assigned_columns {
+            let column = metadata.column(assigned).ok_or_else(|| {
+                format!("{UNPROTECTABLE}ON DUPLICATE KEY UPDATE references unknown column {assigned}")
+            })?;
+            if column.generated {
+                return Err(format!(
+                    "{UNPROTECTABLE}ON DUPLICATE KEY UPDATE of generated column {} cannot be rollback-protected",
+                    column.name
+                ));
+            }
+            if metadata.is_primary_key(&column.name) {
+                return Err(format!(
+                    "{UNPROTECTABLE}ON DUPLICATE KEY UPDATE of primary-key column {} would change row identity",
+                    column.name
+                ));
+            }
+        }
+    }
+
+    let (rows, encoded) = match &plan.source {
+        InsertSource::Values(rows) => {
+            for row in rows {
+                if row.len() != columns.len() {
+                    return Err(format!(
+                        "INSERT row value count {} does not match its column list {}",
+                        row.len(),
+                        columns.len()
+                    ));
+                }
+            }
+            (rows.clone(), false)
+        }
+        InsertSource::Select(select_sql) => (
+            materialize_select_rows(conn, select_sql, columns.len()).await?,
+            true,
+        ),
+    };
+    if rows.is_empty() {
+        // The SELECT matched nothing: the statement inserts zero rows.
+        recovery_journal.add_statement(recovery_dml_statement(
+            query,
+            statement_index,
+            "insert",
+            &metadata,
+            Vec::new(),
+            None,
+            Vec::new(),
+            Vec::new(),
+        ))?;
+        return Ok(empty_write_result(0));
+    }
+
+    // Key sets that identify planned rows. Upserts must be locatable through
+    // every unique key (a conflict can arise on any of them); plain and
+    // IGNORE inserts only need the primary key.
+    let mut key_sets = vec![metadata.primary_key.clone()];
+    if plan.upsert.is_some() {
+        match load_unique_index_column_sets(conn, &metadata).await? {
+            Some(sets) => key_sets.extend(sets),
+            None => {
+                return Err(format!(
+                    "{UNPROTECTABLE}the target table has a functional unique index; upsert conflicts cannot be pre-located"
+                ));
+            }
+        }
+    }
+    let pk_locatable = key_positions(&metadata.primary_key, &columns).is_some();
+    let needs_key_identity = encoded || plan.ignore || plan.upsert.is_some();
+    if needs_key_identity && !pk_locatable && metadata.auto_increment_primary_key().is_none() {
+        return Err(format!(
+            "{UNPROTECTABLE}this INSERT form requires its primary-key columns in the column list, or an omitted AUTO_INCREMENT primary key"
+        ));
+    }
+    if (plan.ignore || plan.upsert.is_some()) && !pk_locatable {
+        return Err(format!(
+            "{UNPROTECTABLE}IGNORE/ON DUPLICATE KEY UPDATE rollback requires the primary-key columns in the column list"
+        ));
+    }
+
+    let auto_increment_reset =
+        if let (Some(_), Some(next_value)) = (
+            metadata.auto_increment_primary_key(),
+            metadata.auto_increment_next,
+        ) {
+            Some(RollbackStep {
+                statement_index,
+                sql: format!(
+                    "ALTER TABLE {} AUTO_INCREMENT = {}",
+                    metadata.qualified_name(),
+                    next_value
+                ),
+                expected_affected_rows: None,
+            })
+        } else {
+            None
+        };
+
+    let upsert_tail = plan.upsert.as_ref().map(|tail| tail.tail_sql.as_str());
+    let chunks: Vec<&[Vec<String>]> = if encoded {
+        rows.chunks(FAMILY_CHUNK_ROWS).collect()
+    } else {
+        vec![rows.as_slice()]
+    };
+
+    let mut total_affected = 0_u64;
+    let mut inserted_total: Vec<CapturedRow> = Vec::new();
+    let mut changed_before: Vec<CapturedRow> = Vec::new();
+    let mut changed_after: Vec<CapturedRow> = Vec::new();
+    let mut matched_total = 0_u64;
+    let mut updated_total = 0_u64;
+    let mut rollback_steps: Vec<RollbackStep> = Vec::new();
+    let mut actual_changed_columns = BTreeSet::new();
+
+    for chunk in chunks {
+        let filter = if pk_locatable {
+            Some(family_key_filter(
+                &columns,
+                chunk,
+                encoded,
+                &key_sets,
+                plan.upsert.is_some(),
+            )?)
+        } else {
+            None
+        };
+
+        let before_by_key = if plan.ignore || plan.upsert.is_some() {
+            let filter = filter.as_deref().expect("checked pk_locatable above");
+            let before = capture_rows(conn, &metadata, Some(filter)).await?;
+            matched_total += before.len() as u64;
+            rows_by_primary_key(&metadata, before)?
+        } else {
+            BTreeMap::new()
+        };
+
+        let chunk_sql;
+        let executed_sql = if encoded {
+            chunk_sql = synthesize_family_insert_sql(
+                &metadata,
+                &columns,
+                chunk,
+                plan.ignore,
+                upsert_tail,
+            )?;
+            chunk_sql.as_str()
+        } else {
+            query
+        };
+        let result = super::exec_on_mysql_conn(conn, executed_sql, None, 1, text).await?;
+        total_affected += result.affected_rows;
+
+        let after_condition = match &filter {
+            Some(filter) => filter.clone(),
+            None => auto_increment_insert_condition(conn, &metadata, chunk.len()).await?,
+        };
+        let after = capture_rows(conn, &metadata, Some(&after_condition)).await?;
+        let after_by_key = rows_by_primary_key(&metadata, after)?;
+
+        if plan.ignore || plan.upsert.is_some() {
+            for (key, after_row) in after_by_key {
+                match before_by_key.get(&key) {
+                    None => {
+                        rollback_steps.push(RollbackStep {
+                            statement_index,
+                            sql: build_insert_rollback_delete(&metadata, &after_row)?,
+                            expected_affected_rows: Some(1),
+                        });
+                        inserted_total.push(after_row);
+                    }
+                    Some(before_row) if before_row.values != after_row.values => {
+                        for (index, column) in metadata.writable_columns().enumerate() {
+                            if before_row.values.get(index) != after_row.values.get(index) {
+                                actual_changed_columns.insert(column.name.clone());
+                            }
+                        }
+                        rollback_steps.push(RollbackStep {
+                            statement_index,
+                            sql: build_update_rollback(&metadata, before_row, &after_row)?,
+                            expected_affected_rows: Some(1),
+                        });
+                        updated_total += 1;
+                        changed_before.push(before_row.clone());
+                        changed_after.push(after_row);
+                    }
+                    Some(_) => {}
+                }
+            }
+        } else {
+            if after_by_key.len() != chunk.len() {
+                return Err(format!(
+                    "INSERT after-image contains {} rows but {} were expected; transaction was rolled back",
+                    after_by_key.len(),
+                    chunk.len()
+                ));
+            }
+            if result.affected_rows != chunk.len() as u64 {
+                return Err(format!(
+                    "INSERT changed {} rows but the protected plan expected {}; transaction was rolled back",
+                    result.affected_rows,
+                    chunk.len()
+                ));
+            }
+            for (_, after_row) in after_by_key {
+                rollback_steps.push(RollbackStep {
+                    statement_index,
+                    sql: build_insert_rollback_delete(&metadata, &after_row)?,
+                    expected_affected_rows: Some(1),
+                });
+                inserted_total.push(after_row);
+            }
+        }
+    }
+
+    // Affected-rows tripwire for the conflict-handling forms. MySQL counts an
+    // upserted row as 2 and an IGNOREd duplicate as 0; with CLIENT_FOUND_ROWS
+    // every matched row counts 1. The row diffs above are the ground truth —
+    // this only catches a diverging execution.
+    if plan.upsert.is_some() {
+        let inserted = inserted_total.len() as u64;
+        let standard = inserted + 2 * updated_total;
+        let found_rows = inserted + matched_total;
+        if total_affected != standard && total_affected != found_rows {
+            return Err(format!(
+                "upsert reported {total_affected} affected rows but the row diff found {inserted} inserts and {updated_total} updates; transaction was rolled back"
+            ));
+        }
+    } else if plan.ignore && total_affected != inserted_total.len() as u64 {
+        return Err(format!(
+            "INSERT IGNORE reported {total_affected} affected rows but {} rows were inserted; transaction was rolled back",
+            inserted_total.len()
+        ));
+    }
+
+    if !rollback_steps.is_empty() {
+        if !inserted_total.is_empty() {
+            if let Some(reset) = auto_increment_reset {
+                rollback_steps.insert(0, reset);
+            }
+        }
+        rollback_journal.add_steps(rollback_steps)?;
+    }
+
+    let operation = if plan.upsert.is_some() { "upsert" } else { "insert" };
+    let mut before_rows = changed_before;
+    let mut after_rows = changed_after;
+    after_rows.extend(inserted_total);
+    if operation == "insert" {
+        before_rows.clear();
+    }
+    let affected_columns = if actual_changed_columns.is_empty() {
+        metadata
+            .writable_columns()
+            .map(|column| column.name.clone())
+            .collect()
+    } else {
+        actual_changed_columns.into_iter().collect()
+    };
+    recovery_journal.add_statement(recovery_dml_statement(
+        query,
+        statement_index,
+        operation,
+        &metadata,
+        affected_columns,
+        None,
+        before_rows,
+        after_rows,
+    ))?;
+    Ok(empty_write_result(total_affected))
+}
+
+/// Materializes the primary keys a multi-table statement touches on one
+/// target, using the statement's own table references and WHERE clause under
+/// `FOR UPDATE` so the set cannot change before the write executes.
+async fn materialize_target_keys(
+    conn: &mut sqlx::MySqlConnection,
+    alias: &str,
+    metadata: &TableMetadata,
+    refs_sql: &str,
+    where_sql: Option<&str>,
+) -> Result<Vec<Vec<String>>, String> {
+    let projection = metadata
+        .primary_key
+        .iter()
+        .enumerate()
+        .map(|(index, key)| {
+            format!(
+                "CASE WHEN {alias}.{key} IS NULL THEN 'NULL' \
+                 ELSE CONCAT('X''', HEX(CAST({alias}.{key} AS BINARY)), '''') END AS `k{index}`",
+                alias = quote_identifier(alias),
+                key = quote_identifier(key)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let where_clause = where_sql
+        .map(|clause| format!(" WHERE {clause}"))
+        .unwrap_or_default();
+    let limit = rollback_capture_row_limit();
+    let sql = format!(
+        "SELECT {projection} FROM {refs_sql}{where_clause} LIMIT {} FOR UPDATE",
+        limit + 1
+    );
+    let rows = conn
+        .fetch_all(sqlx::raw_sql(&sql))
+        .await
+        .map_err(|error| format!("Could not materialize affected keys: {error}"))?;
+    if rows.len() > limit {
+        return Err(format!(
+            "Rollback protection refused to capture more than {limit} affected rows \
+             (set TABULARIS_ROLLBACK_CAPTURE_LIMIT to raise the cap or split the statement)"
+        ));
+    }
+    let width = metadata.primary_key.len();
+    let mut keys = BTreeSet::new();
+    for row in rows {
+        let mut key = Vec::with_capacity(width);
+        for index in 0..width {
+            key.push(mysql_text(&row, index)?);
+        }
+        keys.insert(key);
+    }
+    Ok(keys.into_iter().collect())
+}
+
+fn encoded_pk_filter(metadata: &TableMetadata, keys: &[Vec<String>]) -> String {
+    if keys.is_empty() {
+        return "FALSE".to_string();
+    }
+    keys.iter()
+        .map(|key| {
+            format!(
+                "({})",
+                metadata
+                    .primary_key
+                    .iter()
+                    .zip(key)
+                    .map(|(column, value)| {
+                        format!(
+                            "CAST({} AS BINARY) <=> {}",
+                            quote_identifier(column),
+                            value
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" AND ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" OR ")
+}
+
+async fn load_multi_table_metadata(
+    conn: &mut sqlx::MySqlConnection,
+    plan: &MultiTablePlan,
+    require_assignable: bool,
+) -> Result<Vec<TableMetadata>, String> {
+    let mut metas = Vec::with_capacity(plan.targets.len());
+    for target in &plan.targets {
+        let metadata = load_locked_dml_metadata(conn, &target.table, true).await?;
+        if metadata.primary_key.is_empty() {
+            return Err(format!(
+                "{UNPROTECTABLE}rollback for {} requires a declared primary key",
+                metadata.qualified_name()
+            ));
+        }
+        if require_assignable {
+            for assigned in &target.assigned_columns {
+                let column = metadata.column(assigned).ok_or_else(|| {
+                    format!("{UNPROTECTABLE}UPDATE references unknown column {assigned}")
+                })?;
+                if column.generated {
+                    return Err(format!(
+                        "{UNPROTECTABLE}UPDATE of generated column {} cannot be rollback-protected",
+                        column.name
+                    ));
+                }
+                if metadata.is_primary_key(&column.name) {
+                    return Err(format!(
+                        "{UNPROTECTABLE}UPDATE of primary-key column {} would change row identity",
+                        column.name
+                    ));
+                }
+            }
+        }
+        metas.push(metadata);
+    }
+    Ok(metas)
+}
+
+/// Multi-table / aliased UPDATE: materialize target PKs, capture before
+/// images, run the original statement verbatim, diff, and journal per-row
+/// inverse updates.
+async fn execute_multi_update(
+    conn: &mut sqlx::MySqlConnection,
+    query: &str,
+    plan: &MultiTablePlan,
+    statement_index: usize,
+    rollback_journal: &mut RollbackJournal,
+    recovery_journal: &mut RecoveryJournal,
+    text: super::TextProto,
+) -> Result<QueryResult, String> {
+    let metas = load_multi_table_metadata(conn, plan, true).await?;
+
+    let mut before_per_target = Vec::with_capacity(plan.targets.len());
+    for (target, metadata) in plan.targets.iter().zip(&metas) {
+        let keys = materialize_target_keys(
+            conn,
+            &target.alias,
+            metadata,
+            &plan.refs_sql,
+            plan.where_sql.as_deref(),
+        )
+        .await?;
+        let filter = encoded_pk_filter(metadata, &keys);
+        let before = if keys.is_empty() {
+            Vec::new()
+        } else {
+            capture_rows(conn, metadata, Some(&filter)).await?
+        };
+        before_per_target.push(before);
+    }
+
+    let result = super::exec_on_mysql_conn(conn, query, None, 1, text).await?;
+
+    let mut total_changed = 0_u64;
+    let mut total_matched = 0_u64;
+    for ((target, metadata), before) in plan
+        .targets
+        .iter()
+        .zip(&metas)
+        .zip(before_per_target)
+    {
+        total_matched += before.len() as u64;
+        let after = capture_rows_by_primary_keys(conn, metadata, &before).await?;
+        let before_by_key = rows_by_primary_key(metadata, before)?;
+        let after_by_key = rows_by_primary_key(metadata, after)?;
+        if before_by_key.len() != after_by_key.len()
+            || before_by_key.keys().ne(after_by_key.keys())
+        {
+            return Err(format!(
+                "UPDATE changed row identity in {}; transaction was rolled back",
+                metadata.qualified_name()
+            ));
+        }
+        let mut rollback_steps = Vec::new();
+        let mut changed_before = Vec::new();
+        let mut changed_after = Vec::new();
+        let mut actual_changed_columns = BTreeSet::new();
+        let writable: Vec<String> = metadata
+            .writable_columns()
+            .map(|column| column.name.clone())
+            .collect();
+        for (key, before_row) in before_by_key {
+            let after_row = after_by_key
+                .get(&key)
+                .expect("key sets were verified as equal");
+            if before_row.values == after_row.values {
+                continue;
+            }
+            for (index, column) in writable.iter().enumerate() {
+                if before_row.values.get(index) != after_row.values.get(index) {
+                    actual_changed_columns.insert(column.clone());
+                }
+            }
+            total_changed += 1;
+            rollback_steps.push(RollbackStep {
+                statement_index,
+                sql: build_update_rollback(metadata, &before_row, after_row)?,
+                expected_affected_rows: Some(1),
+            });
+            changed_before.push(before_row);
+            changed_after.push(after_row.clone());
+        }
+        if !rollback_steps.is_empty() {
+            rollback_journal.add_steps(rollback_steps)?;
+        }
+        if !changed_before.is_empty() {
+            recovery_journal.add_statement(recovery_dml_statement(
+                query,
+                statement_index,
+                "update",
+                metadata,
+                actual_changed_columns.into_iter().collect(),
+                plan.where_sql.clone(),
+                changed_before,
+                changed_after,
+            ))?;
+        }
+        let _ = target;
+    }
+
+    if result.affected_rows != total_changed && result.affected_rows != total_matched {
+        return Err(format!(
+            "UPDATE reported {} affected rows but the row diff found {total_changed}; transaction was rolled back",
+            result.affected_rows
+        ));
+    }
+    Ok(result)
+}
+
+/// Multi-table / aliased DELETE: materialize target PKs, capture full before
+/// images, run the original statement verbatim, verify the captured rows are
+/// gone, and journal per-row restoring inserts.
+async fn execute_multi_delete(
+    conn: &mut sqlx::MySqlConnection,
+    query: &str,
+    plan: &MultiTablePlan,
+    statement_index: usize,
+    rollback_journal: &mut RollbackJournal,
+    recovery_journal: &mut RecoveryJournal,
+    text: super::TextProto,
+) -> Result<QueryResult, String> {
+    let metas = load_multi_table_metadata(conn, plan, false).await?;
+
+    let mut captured = Vec::with_capacity(plan.targets.len());
+    for (target, metadata) in plan.targets.iter().zip(&metas) {
+        let keys = materialize_target_keys(
+            conn,
+            &target.alias,
+            metadata,
+            &plan.refs_sql,
+            plan.where_sql.as_deref(),
+        )
+        .await?;
+        let filter = encoded_pk_filter(metadata, &keys);
+        let before = if keys.is_empty() {
+            Vec::new()
+        } else {
+            capture_rows(conn, metadata, Some(&filter)).await?
+        };
+        captured.push((filter, before));
+    }
+
+    let result = super::exec_on_mysql_conn(conn, query, None, 1, text).await?;
+
+    let mut total_deleted = 0_u64;
+    for (metadata, (filter, before)) in metas.iter().zip(captured) {
+        if before.is_empty() {
+            continue;
+        }
+        let remaining = capture_rows(conn, metadata, Some(&filter)).await?;
+        if !remaining.is_empty() {
+            return Err(format!(
+                "DELETE left {} of its matched rows in {}; transaction was rolled back",
+                remaining.len(),
+                metadata.qualified_name()
+            ));
+        }
+        total_deleted += before.len() as u64;
+        let rollback_steps = before
+            .iter()
+            .map(|row| RollbackStep {
+                statement_index,
+                sql: build_delete_rollback_insert(metadata, row),
+                expected_affected_rows: Some(1),
+            })
+            .collect();
+        rollback_journal.add_steps(rollback_steps)?;
+        recovery_journal.add_statement(recovery_dml_statement(
+            query,
+            statement_index,
+            "delete",
+            metadata,
+            metadata
+                .writable_columns()
+                .map(|column| column.name.clone())
+                .collect(),
+            plan.where_sql.clone(),
+            before,
+            Vec::new(),
+        ))?;
+    }
+
+    if result.affected_rows != total_deleted {
+        return Err(format!(
+            "DELETE reported {} affected rows but {total_deleted} before-images were locked; transaction was rolled back",
+            result.affected_rows
+        ));
+    }
     Ok(result)
 }
 
@@ -2446,7 +3507,15 @@ async fn load_locked_dml_metadata(
     object: &ObjectName,
     check_cascades: bool,
 ) -> Result<TableMetadata, String> {
-    let initial = load_table_metadata(conn, object).await?;
+    let initial = load_table_metadata(conn, object).await.map_err(|error| {
+        // A view target is a legitimate statement whose inverse we cannot
+        // build — degrade instead of refusing the write outright.
+        if error.contains("not rollback-protected") {
+            format!("{UNPROTECTABLE}{error}")
+        } else {
+            error
+        }
+    })?;
     let lock_sql = format!(
         "SELECT 1 FROM {} WHERE FALSE FOR UPDATE",
         initial.qualified_name()
@@ -2455,7 +3524,13 @@ async fn load_locked_dml_metadata(
         .await
         .map_err(|error| format!("Could not lock target table metadata: {error}"))?;
     let locked = load_table_metadata(conn, object).await?;
-    ensure_dml_safe_table(conn, &locked, check_cascades).await?;
+    // Table-shape refusals (engine, triggers, cascades, exotic column types)
+    // mark the statement as unprotectable rather than failing it: under
+    // default-on protection a runnable statement must stay runnable, with the
+    // loss of exactness recorded in the recovery journal.
+    ensure_dml_safe_table(conn, &locked, check_cascades)
+        .await
+        .map_err(|error| format!("{UNPROTECTABLE}{error}"))?;
     Ok(locked)
 }
 
@@ -3718,6 +4793,520 @@ fn parse_delete(sql: &str, tokens: &[Token]) -> Result<DeletePlan, BlockedStatem
     })
 }
 
+/// Finds the top-level `ON DUPLICATE KEY UPDATE` sequence, distinguishing it
+/// from any `JOIN … ON` inside a SELECT source.
+fn find_on_duplicate_key_update(tokens: &[Token], start: usize) -> Option<usize> {
+    let mut depth = 0_i32;
+    for idx in start..tokens.len() {
+        match tokens[idx].text.as_str() {
+            "(" => depth += 1,
+            ")" => depth -= 1,
+            _ if depth == 0
+                && tokens[idx].kind == TokenKind::Word
+                && tokens[idx].upper() == "ON"
+                && tokens.len() >= idx + 4
+                && tokens[idx + 1].upper() == "DUPLICATE"
+                && tokens[idx + 2].upper() == "KEY"
+                && tokens[idx + 3].upper() == "UPDATE" =>
+            {
+                return Some(idx);
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Parses `VALUES (…), (…) [AS alias [(cols)]]` into raw row expressions.
+fn parse_values_rows(
+    sql: &str,
+    tokens: &[Token],
+) -> Result<Vec<Vec<String>>, BlockedStatement> {
+    // tokens[0] is VALUES/VALUE.
+    let mut idx = 1;
+    let mut rows = Vec::new();
+    while idx < tokens.len() {
+        if tokens[idx].text != "(" {
+            break;
+        }
+        let row_end = matching_paren(tokens, idx)?;
+        ensure_only_proven_function_calls(&tokens[idx + 1..row_end])?;
+        rows.push(split_expressions(sql, &tokens[idx + 1..row_end])?);
+        idx = row_end + 1;
+        if tokens.get(idx).map(|t| t.text.as_str()) == Some(",") {
+            idx += 1;
+            continue;
+        }
+        break;
+    }
+    if rows.is_empty() {
+        return Err(BlockedStatement::unsupported(
+            "INSERT ... VALUES must contain at least one row",
+        ));
+    }
+    // Optional MySQL 8.0.19 row alias: AS name [(col, …)].
+    if tokens.get(idx).is_some_and(|t| t.upper() == "AS") {
+        idx += 1;
+        let (_, next) = parse_single_identifier(tokens, idx)?;
+        idx = next;
+        if tokens.get(idx).map(|t| t.text.as_str()) == Some("(") {
+            idx = matching_paren(tokens, idx)? + 1;
+        }
+    }
+    if idx != tokens.len() {
+        return Err(BlockedStatement::unsupported(
+            "unexpected trailing tokens after INSERT ... VALUES",
+        ));
+    }
+    Ok(rows)
+}
+
+/// Parses the extended INSERT family:
+/// `INSERT [IGNORE] INTO t [(cols)] (VALUES … | SELECT …) [ON DUPLICATE KEY
+/// UPDATE …]`. Everything else fails closed.
+fn parse_insert_family(
+    sql: &str,
+    tokens: &[Token],
+) -> Result<InsertFamilyPlan, BlockedStatement> {
+    let mut idx = 1;
+    let mut ignore = false;
+    if tokens.get(idx).is_some_and(|t| t.upper() == "IGNORE") {
+        ignore = true;
+        idx += 1;
+    }
+    expect_word(
+        tokens,
+        idx,
+        "INTO",
+        "INSERT modifiers other than IGNORE are not supported",
+    )?;
+    let (table, mut idx) = parse_object_name(tokens, idx + 1)?;
+
+    // A "(" here is either an explicit column list or a parenthesized SELECT.
+    let mut columns = None;
+    if tokens.get(idx).map(|t| t.text.as_str()) == Some("(") {
+        let inner = tokens.get(idx + 1).map(Token::upper);
+        if !matches!(inner, Some("SELECT") | Some("WITH")) {
+            let columns_end = matching_paren(tokens, idx)?;
+            columns = Some(parse_identifier_list(&tokens[idx + 1..columns_end])?);
+            idx = columns_end + 1;
+        }
+    }
+
+    let source_end = find_on_duplicate_key_update(tokens, idx).unwrap_or(tokens.len());
+    let source_tokens = &tokens[idx..source_end];
+    let source = match source_tokens.first().map(Token::upper) {
+        Some("VALUES") | Some("VALUE") => {
+            InsertSource::Values(parse_values_rows(sql, source_tokens)?)
+        }
+        Some("SELECT") | Some("WITH") | Some("(") => {
+            InsertSource::Select(raw_token_range(sql, source_tokens)?)
+        }
+        _ => {
+            return Err(BlockedStatement::unsupported(
+                "INSERT source must be VALUES or SELECT",
+            ));
+        }
+    };
+
+    let upsert = if source_end < tokens.len() {
+        let assignment_tokens = &tokens[source_end + 4..];
+        let assigned_columns = parse_assignments(assignment_tokens)?;
+        ensure_only_proven_function_calls(assignment_tokens)?;
+        if matches!(source, InsertSource::Select(_))
+            && assignment_tokens.iter().any(|t| t.text == ".")
+        {
+            // A qualified reference into the SELECT would not resolve once
+            // the source is re-executed as literal VALUES.
+            return Err(BlockedStatement::unsupported(
+                "ON DUPLICATE KEY UPDATE with qualified references to the SELECT source is not supported",
+            ));
+        }
+        Some(UpsertTail {
+            tail_sql: sql[tokens[source_end].start..statement_end(sql, tokens)]
+                .trim()
+                .to_string(),
+            assigned_columns,
+        })
+    } else {
+        None
+    };
+
+    Ok(InsertFamilyPlan {
+        table,
+        columns,
+        source,
+        ignore,
+        upsert,
+    })
+}
+
+const JOIN_KEYWORDS: &[&str] = &[
+    "JOIN",
+    "INNER",
+    "LEFT",
+    "RIGHT",
+    "FULL",
+    "OUTER",
+    "CROSS",
+    "NATURAL",
+    "STRAIGHT_JOIN",
+];
+
+/// Extracts `(table, alias)` pairs from raw table references (`a JOIN b ON …`,
+/// `t1, t2`, `db.t AS x`). Derived tables, index hints, and anything else that
+/// would make the alias map unreliable fail closed.
+fn parse_table_references(
+    tokens: &[Token],
+) -> Result<Vec<(ObjectName, String)>, BlockedStatement> {
+    let mut references = Vec::new();
+    let mut idx = 0;
+    loop {
+        if tokens.get(idx).map(|t| t.text.as_str()) == Some("(") {
+            return Err(BlockedStatement::unsupported(
+                "derived tables and subqueries in table references are not supported",
+            ));
+        }
+        let (object, next) = parse_object_name(tokens, idx)?;
+        idx = next;
+        let mut alias = object.name.clone();
+        if tokens.get(idx).is_some_and(|t| t.upper() == "AS") {
+            let (name, next) = parse_single_identifier(tokens, idx + 1)?;
+            alias = name;
+            idx = next;
+        } else if tokens.get(idx).is_some_and(|t| {
+            is_identifier(t)
+                && !JOIN_KEYWORDS.contains(&t.upper())
+                && !matches!(t.upper(), "ON" | "USING" | "USE" | "FORCE" | "IGNORE")
+        }) {
+            alias = tokens[idx].text.clone();
+            idx += 1;
+        }
+        if tokens
+            .get(idx)
+            .is_some_and(|t| matches!(t.upper(), "USE" | "FORCE" | "IGNORE"))
+        {
+            return Err(BlockedStatement::unsupported(
+                "index hints in table references are not supported",
+            ));
+        }
+        references.push((object, alias));
+
+        // Skip the join condition (or nothing) until the next table
+        // reference: a top-level "," or a JOIN-family keyword run.
+        let mut depth = 0_i32;
+        let mut next_table = None;
+        while idx < tokens.len() {
+            match tokens[idx].text.as_str() {
+                "(" => depth += 1,
+                ")" => depth -= 1,
+                "," if depth == 0 => {
+                    next_table = Some(idx + 1);
+                    break;
+                }
+                _ if depth == 0
+                    && tokens[idx].kind == TokenKind::Word
+                    && JOIN_KEYWORDS.contains(&tokens[idx].upper()) =>
+                {
+                    let mut join_end = idx;
+                    while tokens
+                        .get(join_end)
+                        .is_some_and(|t| JOIN_KEYWORDS.contains(&t.upper()))
+                    {
+                        join_end += 1;
+                    }
+                    next_table = Some(join_end);
+                    break;
+                }
+                _ => {}
+            }
+            idx += 1;
+        }
+        match next_table {
+            Some(next) => idx = next,
+            None => break,
+        }
+    }
+    if references.is_empty() {
+        return Err(BlockedStatement::unsupported(
+            "could not identify any table reference",
+        ));
+    }
+    Ok(references)
+}
+
+/// Like [`parse_assignments`] but keeps the left-hand qualifier so
+/// multi-table targets can be resolved.
+fn parse_qualified_assignments(
+    tokens: &[Token],
+) -> Result<Vec<(Option<String>, String)>, BlockedStatement> {
+    if tokens.is_empty() {
+        return Err(BlockedStatement::unsupported("UPDATE SET clause is empty"));
+    }
+    let mut result = Vec::new();
+    let mut segment_start = 0;
+    let mut depth = 0_i32;
+    for idx in 0..=tokens.len() {
+        let at_end = idx == tokens.len();
+        if !at_end {
+            match tokens[idx].text.as_str() {
+                "(" => depth += 1,
+                ")" => depth -= 1,
+                _ => {}
+            }
+        }
+        if at_end || (depth == 0 && tokens[idx].text == ",") {
+            let segment = &tokens[segment_start..idx];
+            let equals = segment
+                .iter()
+                .position(|token| token.text == "=")
+                .ok_or_else(|| {
+                    BlockedStatement::unsupported("UPDATE assignment must contain =")
+                })?;
+            let lhs = &segment[..equals];
+            if segment[equals + 1..].is_empty() {
+                return Err(BlockedStatement::unsupported(
+                    "UPDATE assignment value is empty",
+                ));
+            }
+            let (qualifier, column) = match lhs {
+                [column] if is_identifier(column) => (None, column.text.clone()),
+                [qualifier, dot, column]
+                    if is_identifier(qualifier) && dot.text == "." && is_identifier(column) =>
+                {
+                    (Some(qualifier.text.clone()), column.text.clone())
+                }
+                _ => {
+                    return Err(BlockedStatement::unsupported(
+                        "UPDATE assignment target must be a simple column",
+                    ));
+                }
+            };
+            result.push((qualifier, column));
+            segment_start = idx + 1;
+        }
+    }
+    Ok(result)
+}
+
+fn resolve_reference<'a>(
+    references: &'a [(ObjectName, String)],
+    qualifier: &str,
+) -> Option<&'a (ObjectName, String)> {
+    references
+        .iter()
+        .find(|(_, alias)| alias.eq_ignore_ascii_case(qualifier))
+        .or_else(|| {
+            references
+                .iter()
+                .find(|(object, _)| object.name.eq_ignore_ascii_case(qualifier))
+        })
+}
+
+/// Multi-table / aliased UPDATE: `UPDATE <refs> SET <assignments> [WHERE …]`.
+fn parse_multi_update(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, BlockedStatement> {
+    if tokens
+        .get(1)
+        .is_some_and(|t| matches!(t.upper(), "LOW_PRIORITY" | "IGNORE"))
+    {
+        return Err(BlockedStatement::unsupported(
+            "UPDATE modifiers are not supported",
+        ));
+    }
+    let set_idx = find_top_level_word(tokens, 1, &["SET"]).ok_or_else(|| {
+        BlockedStatement::unsupported("UPDATE must contain a SET clause")
+    })?;
+    if set_idx <= 1 {
+        return Err(BlockedStatement::unsupported(
+            "UPDATE is missing its table references",
+        ));
+    }
+    let references = parse_table_references(&tokens[1..set_idx])?;
+    if find_top_level_word(tokens, set_idx + 1, &["ORDER", "LIMIT", "RETURNING"]).is_some() {
+        return Err(BlockedStatement::unsupported(
+            "UPDATE ORDER BY/LIMIT/RETURNING is not supported by the exact row-diff planner",
+        ));
+    }
+    let where_idx = find_top_level_word(tokens, set_idx + 1, &["WHERE"]);
+    let assignments_end = where_idx.unwrap_or(tokens.len());
+    let assignments = parse_qualified_assignments(&tokens[set_idx + 1..assignments_end])?;
+    ensure_only_proven_function_calls(&tokens[set_idx + 1..])?;
+
+    let mut targets: Vec<MultiTableTarget> = Vec::new();
+    for (qualifier, column) in assignments {
+        let (object, alias) = match &qualifier {
+            Some(q) => resolve_reference(&references, q).ok_or_else(|| {
+                BlockedStatement::unsupported(
+                    "UPDATE assignment qualifier does not match a table reference",
+                )
+            })?,
+            None if references.len() == 1 => &references[0],
+            None => {
+                return Err(BlockedStatement::unsupported(
+                    "unqualified assignments are ambiguous in a multi-table UPDATE",
+                ));
+            }
+        };
+        match targets
+            .iter_mut()
+            .find(|target| target.alias.eq_ignore_ascii_case(alias))
+        {
+            Some(target) => target.assigned_columns.push(column),
+            None => targets.push(MultiTableTarget {
+                table: object.clone(),
+                alias: alias.clone(),
+                assigned_columns: vec![column],
+            }),
+        }
+    }
+
+    let refs_sql = raw_token_range(sql, &tokens[1..set_idx])?;
+    let where_sql = where_idx
+        .map(|idx| sql[tokens[idx].end..statement_end(sql, tokens)].trim().to_string());
+    if where_sql.as_deref() == Some("") {
+        return Err(BlockedStatement::unsupported(
+            "UPDATE WHERE clause is empty",
+        ));
+    }
+    Ok(MultiTablePlan {
+        targets,
+        refs_sql,
+        where_sql,
+    })
+}
+
+/// Strips an optional `.*` suffix from a DELETE target alias list entry.
+fn parse_delete_target(
+    tokens: &[Token],
+    idx: usize,
+) -> Result<(String, usize), BlockedStatement> {
+    let (name, mut next) = parse_single_identifier(tokens, idx)?;
+    if tokens.get(next).map(|t| t.text.as_str()) == Some(".")
+        && tokens.get(next + 1).map(|t| t.text.as_str()) == Some("*")
+    {
+        next += 2;
+    }
+    Ok((name, next))
+}
+
+/// Multi-table / aliased DELETE:
+/// `DELETE a [, b] FROM <refs> [WHERE]`,
+/// `DELETE FROM a [, b] USING <refs> [WHERE]`, or
+/// `DELETE FROM t [AS] alias [WHERE]` (single table with alias).
+fn parse_multi_delete(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, BlockedStatement> {
+    if find_top_level_word(tokens, 1, &["ORDER", "LIMIT", "RETURNING"]).is_some() {
+        return Err(BlockedStatement::unsupported(
+            "DELETE ORDER BY/LIMIT/RETURNING is not supported",
+        ));
+    }
+    let (target_aliases, refs_start, refs_end) = if tokens
+        .get(1)
+        .is_some_and(|t| t.upper() == "FROM")
+    {
+        let using_idx = find_top_level_word(tokens, 2, &["USING"]);
+        match using_idx {
+            Some(using_idx) => {
+                // DELETE FROM <targets> USING <refs>.
+                let mut aliases = Vec::new();
+                let mut idx = 2;
+                loop {
+                    let (name, next) = parse_delete_target(tokens, idx)?;
+                    aliases.push(name);
+                    idx = next;
+                    if tokens.get(idx).map(|t| t.text.as_str()) == Some(",") {
+                        idx += 1;
+                        continue;
+                    }
+                    break;
+                }
+                if idx != using_idx {
+                    return Err(BlockedStatement::unsupported(
+                        "unexpected tokens in DELETE target list",
+                    ));
+                }
+                let where_idx = find_top_level_word(tokens, using_idx + 1, &["WHERE"]);
+                (aliases, using_idx + 1, where_idx.unwrap_or(tokens.len()))
+            }
+            None => {
+                // DELETE FROM t [AS] alias [WHERE]: single aliased table.
+                let where_idx = find_top_level_word(tokens, 2, &["WHERE"]);
+                let refs_end = where_idx.unwrap_or(tokens.len());
+                let references = parse_table_references(&tokens[2..refs_end])?;
+                if references.len() != 1 {
+                    return Err(BlockedStatement::unsupported(
+                        "multi-table DELETE must name its targets before FROM or via USING",
+                    ));
+                }
+                (vec![references[0].1.clone()], 2, refs_end)
+            }
+        }
+    } else {
+        // DELETE <targets> FROM <refs>.
+        let mut aliases = Vec::new();
+        let mut idx = 1;
+        loop {
+            let (name, next) = parse_delete_target(tokens, idx)?;
+            aliases.push(name);
+            idx = next;
+            if tokens.get(idx).map(|t| t.text.as_str()) == Some(",") {
+                idx += 1;
+                continue;
+            }
+            break;
+        }
+        expect_word(
+            tokens,
+            idx,
+            "FROM",
+            "DELETE targets must be followed by FROM",
+        )?;
+        let where_idx = find_top_level_word(tokens, idx + 1, &["WHERE"]);
+        (aliases, idx + 1, where_idx.unwrap_or(tokens.len()))
+    };
+
+    if refs_start >= refs_end {
+        return Err(BlockedStatement::unsupported(
+            "DELETE is missing its table references",
+        ));
+    }
+    let references = parse_table_references(&tokens[refs_start..refs_end])?;
+    let mut targets = Vec::new();
+    for alias in &target_aliases {
+        let (object, resolved_alias) = resolve_reference(&references, alias).ok_or_else(|| {
+            BlockedStatement::unsupported(
+                "DELETE target does not match a table reference",
+            )
+        })?;
+        if targets
+            .iter()
+            .any(|target: &MultiTableTarget| target.alias.eq_ignore_ascii_case(resolved_alias))
+        {
+            continue;
+        }
+        targets.push(MultiTableTarget {
+            table: object.clone(),
+            alias: resolved_alias.clone(),
+            assigned_columns: Vec::new(),
+        });
+    }
+    let where_idx = find_top_level_word(tokens, refs_end, &["WHERE"]);
+    let where_sql = where_idx
+        .map(|idx| sql[tokens[idx].end..statement_end(sql, tokens)].trim().to_string());
+    if where_sql.as_deref() == Some("") {
+        return Err(BlockedStatement::unsupported(
+            "DELETE WHERE clause is empty",
+        ));
+    }
+    if let Some(where_idx) = where_idx {
+        ensure_only_proven_function_calls(&tokens[where_idx..])?;
+    }
+    Ok(MultiTablePlan {
+        targets,
+        refs_sql: raw_token_range(sql, &tokens[refs_start..refs_end])?,
+        where_sql,
+    })
+}
+
 fn plan_temporary_table_write(
     sql: &str,
     temporary_tables: &[ObjectName],
@@ -4601,7 +6190,7 @@ use crate::recovery_history::{
     RecoveryColumn, RecoveryJournal, RecoveryObject, RecoveryRow, RecoveryStatement,
 };
 use crate::rollback_sql::{RollbackEnvironment, RollbackJournal, RollbackStep, ServerIdentity};
-use sqlx::{Connection, Executor, Row};
+use sqlx::{Column, Connection, Executor, Row};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// Whether MySQL commits the open transaction as a side effect of this

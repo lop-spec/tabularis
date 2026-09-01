@@ -262,10 +262,12 @@ export const Editor = () => {
   const driverReadonly = isReadonly(activeCapabilities);
   const driverSupportsExplain = supportsExplain(activeCapabilities);
   const activeDialect = activeCapabilities?.sql_dialect;
+  // Default-on (2026-09-01): an unset flag means protection is active; only an
+  // explicit `false` opts a MySQL/MariaDB connection out.
   const rollbackProtectionEnabled =
     (activeDriver === "mysql" || activeDriver === "mariadb") &&
     connections.find((connection) => connection.id === activeConnectionId)
-      ?.params.rollback_protection_enabled === true;
+      ?.params.rollback_protection_enabled !== false;
 
   const [tabContextMenu, setTabContextMenu] = useState<{
     x: number;

@@ -408,7 +408,7 @@ describe("NewConnectionModal rollback protection", () => {
     k8sMocks.loadK8sConnections.mockResolvedValue([]);
   });
 
-  it("defaults off and persists only after the connection toggle is enabled", async () => {
+  it("defaults on and persists an explicit false only after opting out", async () => {
     renderModal();
     selectDriver();
     fireEvent.change(screen.getByPlaceholderText("newConnection.namePlaceholder"), {
@@ -422,9 +422,10 @@ describe("NewConnectionModal rollback protection", () => {
     const toggle = document.getElementById(
       "rollback-protection-toggle",
     ) as HTMLInputElement;
-    expect(toggle).not.toBeChecked();
-    fireEvent.click(toggle);
+    // Default-on: an unset flag renders checked and stays unset when saved.
     expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(toggle).not.toBeChecked();
 
     fireEvent.click(screen.getByText("newConnection.save"));
     await waitFor(() => {
@@ -432,7 +433,7 @@ describe("NewConnectionModal rollback protection", () => {
         "save_connection",
         expect.objectContaining({
           params: expect.objectContaining({
-            rollback_protection_enabled: true,
+            rollback_protection_enabled: false,
           }),
         }),
       );

@@ -336,6 +336,21 @@ pub fn run() {
                 drivers::registry::register_driver(drivers::sqlite::SqliteDriver::new()).await;
             });
 
+            // Close out journals a crash left behind — runs synchronously in
+            // setup, before any command can start a new batch, so it never
+            // races a live journal. Orphaned rollback step journals become
+            // executable crash-recovery SQL; orphaned recovery runs are
+            // marked interrupted so RecoveryPage can compare them.
+            if let Some(data_dir) = paths::get_app_data_dir() {
+                let rendered = rollback_sql::render_orphaned_step_journals(&data_dir);
+                let closed = recovery_history::finalize_orphaned_recovery_runs(&data_dir);
+                if rendered + closed > 0 {
+                    log::warn!(
+                        "Startup journal recovery: rendered {rendered} rollback journal(s), closed {closed} recovery run(s)"
+                    );
+                }
+            }
+
             // Start connection health-check ping loop.
             {
                 let config = crate::config::load_config_internal(&app.handle());

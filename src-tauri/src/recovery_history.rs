@@ -102,9 +102,22 @@ pub struct RecoveryRunSummary {
     pub statements: Vec<RecoveryStatementSummary>,
 }
 
+/// One append-only line of a `.recovery.jsonl` run (after the header line,
+/// which is the serialized [`RecoveryRun`] itself).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "record", rename_all = "snake_case")]
+enum RunRecord {
+    Statement { statement: RecoveryStatement },
+    Rewind { checkpoint: usize },
+    Finish { status: String, finished_at: String },
+}
+
 pub struct RecoveryJournal {
     path: PathBuf,
     run: RecoveryRun,
+    file: std::fs::File,
+    synced_len: u64,
+    poisoned: bool,
 }
 
 impl RecoveryJournal {
@@ -144,7 +157,12 @@ impl RecoveryJournal {
         let run_id = ulid::Ulid::new().to_string();
         let short_id = short_run_id(&run_id);
         let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
-        let path = directory.join(format!("{timestamp}-{run_id}.recovery.json"));
+        // Append-only JSONL: the header line is the run itself (statements
+        // empty), each statement is one fsynced line, and `finalize` appends
+        // a finish record. A run of `n` statements therefore writes O(n)
+        // bytes instead of re-serializing every recorded row image per
+        // statement. Legacy `.recovery.json` files remain readable.
+        let path = directory.join(format!("{timestamp}-{run_id}.recovery.jsonl"));
         let run = RecoveryRun {
             version: HISTORY_VERSION,
             run_id,
@@ -158,9 +176,58 @@ impl RecoveryJournal {
             target_identity,
             statements: Vec::new(),
         };
-        let journal = Self { path, run };
-        journal.persist()?;
+        let file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&path)
+            .map_err(|error| format!("Could not create recovery history: {error}"))?;
+        let mut journal = Self {
+            path,
+            run,
+            file,
+            synced_len: 0,
+            poisoned: false,
+        };
+        let header = serde_json::to_vec(&journal.run)
+            .map_err(|error| format!("Could not serialize recovery history header: {error}"))?;
+        journal.append_line(header)?;
         Ok(journal)
+    }
+
+    /// Appends one JSON line with flush+fsync. On failure the file is
+    /// truncated back to the last synced length so a torn line can never
+    /// corrupt later appends.
+    fn append_line(&mut self, mut line: Vec<u8>) -> Result<(), String> {
+        if self.poisoned {
+            return Err(
+                "Recovery history is unusable after an earlier write failure".to_string(),
+            );
+        }
+        line.push(b'\n');
+        let outcome = crate::rollback_sql::run_blocking(|| {
+            self.file
+                .write_all(&line)
+                .and_then(|()| self.file.flush())
+                .and_then(|()| self.file.sync_all())
+        });
+        match outcome {
+            Ok(()) => {
+                self.synced_len += line.len() as u64;
+                Ok(())
+            }
+            Err(error) => {
+                if self.file.set_len(self.synced_len).is_err() {
+                    self.poisoned = true;
+                }
+                Err(format!("Could not append to recovery history: {error}"))
+            }
+        }
+    }
+
+    fn append_record(&mut self, record: &RunRecord) -> Result<(), String> {
+        let line = serde_json::to_vec(record)
+            .map_err(|error| format!("Could not serialize recovery record: {error}"))?;
+        self.append_line(line)
     }
 
     pub fn checkpoint(&self) -> usize {
@@ -178,11 +245,10 @@ impl RecoveryJournal {
             statement.index.saturating_add(1)
         );
         statement.executed_at = chrono::Utc::now().to_rfc3339();
+        self.append_record(&RunRecord::Statement {
+            statement: statement.clone(),
+        })?;
         self.run.statements.push(statement);
-        if let Err(error) = self.persist() {
-            self.run.statements.pop();
-            return Err(error);
-        }
         Ok(())
     }
 
@@ -193,14 +259,19 @@ impl RecoveryJournal {
                 self.run.statements.len()
             ));
         }
+        if checkpoint == self.run.statements.len() {
+            return Ok(());
+        }
+        self.append_record(&RunRecord::Rewind { checkpoint })?;
         self.run.statements.truncate(checkpoint);
-        self.persist()
+        Ok(())
     }
 
     pub fn finalize(mut self) -> Result<PathBuf, String> {
-        self.run.status = "complete".to_string();
-        self.run.finished_at = Some(chrono::Utc::now().to_rfc3339());
-        self.persist()?;
+        self.append_record(&RunRecord::Finish {
+            status: "complete".to_string(),
+            finished_at: chrono::Utc::now().to_rfc3339(),
+        })?;
         Ok(self.path)
     }
 
@@ -209,59 +280,131 @@ impl RecoveryJournal {
     /// visible and comparable — that is exactly the situation where the
     /// operator needs the recovery history most.
     pub fn interrupt(mut self, reason: &str) -> Result<PathBuf, String> {
-        self.run.status = "interrupted".to_string();
-        self.run.finished_at = Some(chrono::Utc::now().to_rfc3339());
         log::warn!(
             "Recovery run {} marked interrupted: {reason}",
             self.run.short_id
         );
-        self.persist()?;
+        self.append_record(&RunRecord::Finish {
+            status: "interrupted".to_string(),
+            finished_at: chrono::Utc::now().to_rfc3339(),
+        })?;
         Ok(self.path)
     }
 
     pub fn discard(self) -> Result<(), String> {
-        match fs::remove_file(&self.path) {
+        let path = self.path.clone();
+        drop(self.file);
+        match fs::remove_file(&path) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(error) => Err(format!(
                 "Could not discard recovery history {}: {error}",
-                self.path.display()
+                path.display()
             )),
         }
     }
+}
 
-    fn persist(&self) -> Result<(), String> {
-        // fsync-backed writes run on the caller's thread while the pinned
-        // session lock is held — hand them to a blocking-safe context so a
-        // large batch cannot starve the async workers.
-        crate::rollback_sql::run_blocking(|| {
-            let payload = serde_json::to_vec_pretty(&self.run)
-                .map_err(|error| format!("Could not serialize recovery history: {error}"))?;
-            let temporary = self
-                .path
-                .with_extension(format!("json.tmp-{}", ulid::Ulid::new()));
-            let mut file = OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(&temporary)
-                .map_err(|error| {
-                    format!("Could not create recovery history revision: {error}")
-                })?;
-            file.write_all(&payload)
-                .map_err(|error| format!("Could not write recovery history revision: {error}"))?;
-            file.flush()
-                .map_err(|error| format!("Could not flush recovery history revision: {error}"))?;
-            file.sync_all()
-                .map_err(|error| format!("Could not sync recovery history revision: {error}"))?;
-            drop(file);
-
-            if let Err(error) = fs::rename(&temporary, &self.path) {
-                let _ = fs::remove_file(&temporary);
-                return Err(format!("Could not publish recovery history: {error}"));
+/// Parses an append-only `.recovery.jsonl` run. Tolerates one trailing
+/// partial line (a crash-torn append); earlier corruption is an error.
+fn parse_jsonl_run(content: &str) -> Result<RecoveryRun, String> {
+    let mut lines = content.lines().enumerate().peekable();
+    let (_, header) = lines
+        .next()
+        .ok_or_else(|| "recovery history is empty".to_string())?;
+    let mut run: RecoveryRun = serde_json::from_str(header)
+        .map_err(|error| format!("unreadable recovery history header: {error}"))?;
+    while let Some((_, line)) = lines.next() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<RunRecord>(line) {
+            Ok(RunRecord::Statement { statement }) => run.statements.push(statement),
+            Ok(RunRecord::Rewind { checkpoint }) => run.statements.truncate(checkpoint),
+            Ok(RunRecord::Finish {
+                status,
+                finished_at,
+            }) => {
+                run.status = status;
+                run.finished_at = Some(finished_at);
             }
-            Ok(())
-        })
+            Err(error) => {
+                if lines.peek().is_none() {
+                    // The crash interrupted this very append; whatever it
+                    // carried never finished committing to the journal.
+                    break;
+                }
+                return Err(format!("corrupted recovery history line: {error}"));
+            }
+        }
     }
+    Ok(run)
+}
+
+/// Closes crash-orphaned `.recovery.jsonl` runs (no finish record) by
+/// appending an `interrupted` finish. Runs once at startup, before any new
+/// batch can start recording, so it never races a live journal.
+pub fn finalize_orphaned_recovery_runs(data_root: &Path) -> usize {
+    let mut closed = 0usize;
+    let Ok(files) = recovery_files(data_root) else {
+        return 0;
+    };
+    for path in files {
+        if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(run) = parse_jsonl_run(&content) else {
+            continue;
+        };
+        if run.status != "recording" {
+            continue;
+        }
+        let record = RunRecord::Finish {
+            status: "interrupted".to_string(),
+            finished_at: chrono::Utc::now().to_rfc3339(),
+        };
+        let Ok(mut line) = serde_json::to_vec(&record) else {
+            continue;
+        };
+        line.push(b'\n');
+        // A crash-torn partial tail line is dropped before appending: the
+        // append it belonged to never finished, and leaving it mid-file would
+        // read as corruption once the finish record follows it.
+        let keep_len = if content.ends_with('\n') {
+            content.len() as u64
+        } else {
+            content.rfind('\n').map(|idx| idx as u64 + 1).unwrap_or(0)
+        };
+        let outcome = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .and_then(|mut file| {
+                file.set_len(keep_len)?;
+                std::io::Seek::seek(&mut file, std::io::SeekFrom::End(0))?;
+                file.write_all(&line)?;
+                file.sync_all()
+            });
+        match outcome {
+            Ok(()) => {
+                log::warn!(
+                    "Closed crash-orphaned recovery run as interrupted: {}",
+                    path.display()
+                );
+                closed += 1;
+            }
+            Err(error) => {
+                log::warn!(
+                    "Could not close orphaned recovery run {}: {error}",
+                    path.display()
+                );
+            }
+        }
+    }
+    closed
 }
 
 /// Object extraction for a change statement, so that even SQL we cannot
@@ -2500,7 +2643,9 @@ fn recovery_files(root: &Path) -> Result<Vec<PathBuf>, String> {
                 if path
                     .file_name()
                     .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.ends_with(".recovery.json"))
+                    .is_some_and(|name| {
+                        name.ends_with(".recovery.json") || name.ends_with(".recovery.jsonl")
+                    })
                 {
                     files.push(path);
                 }
@@ -2529,12 +2674,23 @@ fn read_run(path: &Path) -> Result<RecoveryRun, String> {
             path.display()
         )
     })?;
-    let run: RecoveryRun = serde_json::from_slice(&content).map_err(|error| {
-        format!(
-            "Could not parse recovery history {}: {error}",
-            path.display()
-        )
-    })?;
+    let is_jsonl = path.extension().and_then(|ext| ext.to_str()) == Some("jsonl");
+    let run: RecoveryRun = if is_jsonl {
+        let text = String::from_utf8_lossy(&content);
+        parse_jsonl_run(&text).map_err(|error| {
+            format!(
+                "Could not parse recovery history {}: {error}",
+                path.display()
+            )
+        })?
+    } else {
+        serde_json::from_slice(&content).map_err(|error| {
+            format!(
+                "Could not parse recovery history {}: {error}",
+                path.display()
+            )
+        })?
+    };
     if run.version != HISTORY_VERSION {
         return Err(format!(
             "Unsupported recovery history version {} in {}",
@@ -2545,7 +2701,7 @@ fn read_run(path: &Path) -> Result<RecoveryRun, String> {
     Ok(run)
 }
 
-fn is_unprotected_non_recovery_operation(operation: &str) -> bool {
+pub(crate) fn is_unprotected_non_recovery_operation(operation: &str) -> bool {
     matches!(
         operation.to_ascii_lowercase().as_str(),
         "select" | "set" | "analyze table"
@@ -2820,6 +2976,65 @@ mod tests {
         journal.discard().unwrap();
 
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn legacy_pretty_json_runs_remain_readable() {
+        // G8 (2026-09-01): histories written before the JSONL migration must
+        // still load for RecoveryPage listing and comparison.
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("recovery-history").join("conn").join("d");
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("20260101T000000.000Z-run.recovery.json");
+        let legacy = RecoveryRun {
+            version: HISTORY_VERSION,
+            run_id: "0123456789ABCDEFGHIJ123456".to_string(),
+            short_id: "GHIJ123456".to_string(),
+            started_at: "2026-01-01T00:00:00Z".to_string(),
+            finished_at: Some("2026-01-01T00:00:01Z".to_string()),
+            status: "complete".to_string(),
+            connection_id: "connection-a".to_string(),
+            connection_name: "prod".to_string(),
+            database: "app".to_string(),
+            target_identity: "server-a".to_string(),
+            statements: vec![statement(0)],
+        };
+        fs::write(&path, serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
+
+        let run = read_run(&path).unwrap();
+        assert_eq!(run.status, "complete");
+        assert_eq!(run.statements.len(), 1);
+    }
+
+    #[test]
+    fn orphaned_jsonl_run_is_closed_as_interrupted_and_tolerates_a_torn_tail() {
+        let root = tempfile::tempdir().unwrap();
+        let mut journal = RecoveryJournal::create_in(
+            root.path(),
+            "connection-a".to_string(),
+            "prod".to_string(),
+            "app".to_string(),
+            "server-a".to_string(),
+        )
+        .unwrap();
+        journal.add_statement(statement(0)).unwrap();
+        let path = journal.path.clone();
+        // Simulate a crash: drop without finalize, leaving a torn append.
+        drop(journal);
+        {
+            use std::io::Write;
+            let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+            file.write_all(b"{\"record\":\"stat").unwrap();
+        }
+
+        assert_eq!(finalize_orphaned_recovery_runs(root.path()), 1);
+
+        let run = read_run(&path).unwrap();
+        assert_eq!(run.status, "interrupted");
+        assert!(run.finished_at.is_some());
+        assert_eq!(run.statements.len(), 1);
+        // Idempotent: a second pass finds nothing left to close.
+        assert_eq!(finalize_orphaned_recovery_runs(root.path()), 0);
     }
 
     #[test]

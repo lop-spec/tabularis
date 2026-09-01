@@ -627,7 +627,7 @@
     "pipesAsConcat": "连接时设置 PIPES_AS_CONCAT sql_mode",
     "pipesAsConcatHint": "保持启用 — Tabularis 会在拒绝它的服务器（Vitess/PlanetScale）上自动跳过。",
     "rollbackProtection": "为“全部运行”生成回滚 SQL",
-    "rollbackProtectionHint": "默认关闭。开启后，MySQL 写操作仅在连接隔离的回滚文件持久化后执行；无法精确回滚的写法会被阻止。",
+    "rollbackProtectionHint": "默认开启。MySQL 写操作仅在连接隔离的回滚文件持久化后执行；无法精确回滚的语句会直接执行并记入恢复台账（可用备份实例恢复）。",
     "chooseContext": "选择上下文...",
     "chooseK8s": "选择连接...",
     "chooseNamespace": "选择命名空间...",

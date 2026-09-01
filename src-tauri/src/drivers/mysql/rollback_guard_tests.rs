@@ -24,6 +24,28 @@ fn classifies_supported_dml_families() {
 }
 
 #[test]
+fn explicit_locking_reads_stay_read_only_and_unprompted() {
+    // Contract (2026-09-01): user-issued locking reads must pass the guard as
+    // plain reads so they execute on the pinned transaction connection with
+    // their InnoDB lock semantics intact — never blocked, never prompted.
+    for sql in [
+        "SELECT * FROM users WHERE id = 1 FOR UPDATE",
+        "SELECT id, name FROM users WHERE id IN (1, 2) FOR UPDATE NOWAIT",
+        "SELECT id FROM users WHERE id = 1 FOR UPDATE SKIP LOCKED",
+        "SELECT id FROM users u JOIN orders o ON o.user_id = u.id FOR UPDATE OF u",
+        "SELECT id FROM users WHERE id = 1 FOR SHARE",
+        "SELECT id FROM users WHERE id = 1 LOCK IN SHARE MODE",
+        "WITH candidates AS (SELECT id FROM users) SELECT * FROM candidates FOR UPDATE",
+    ] {
+        assert_eq!(
+            classify_for_rollback(sql).class,
+            ProtectionClass::ReadOnly,
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn classifies_supported_ddl_families() {
     for sql in [
         "CREATE TABLE audit_log (id BIGINT PRIMARY KEY)",
@@ -151,11 +173,6 @@ fn temp_exception_does_not_hide_real_or_unprovable_writes() {
 fn fail_closes_every_unsupported_write_family() {
     for sql in [
         "REPLACE INTO users (id) VALUES (1)",
-        "INSERT INTO users (id) SELECT id FROM staging",
-        "INSERT IGNORE INTO users (id) VALUES (1)",
-        "INSERT INTO users (id) VALUES (1) ON DUPLICATE KEY UPDATE id = VALUES(id)",
-        "UPDATE users u JOIN teams t ON t.id = u.team_id SET u.active = 0",
-        "DELETE u FROM users u JOIN teams t ON t.id = u.team_id",
         "LOAD DATA LOCAL INFILE 'users.csv' INTO TABLE users",
         "LOAD XML LOCAL INFILE 'users.xml' INTO TABLE users",
         "CALL mutate_users()",
@@ -203,6 +220,8 @@ fn fail_closes_every_unsupported_write_family() {
 
 #[test]
 fn reviews_every_unsupported_statement_before_execution() {
+    // INSERT ... SELECT moved into the normalizing family planner
+    // (2026-09-01) and no longer appears in the risk review.
     let queries = [
         "UPDATE users SET active = 1 WHERE id = 1",
         "INSERT INTO users (id) SELECT id FROM staging",
@@ -211,23 +230,68 @@ fn reviews_every_unsupported_statement_before_execution() {
     .map(str::to_string);
 
     let review = review_batch_for_rollback(&queries).expect("risk review");
-    assert_eq!(review.statements.len(), 2);
-    assert_eq!(review.statements[0].index, 2);
-    assert_eq!(
-        review.statements[0].sql,
-        "INSERT INTO users (id) SELECT id FROM staging"
-    );
-    assert!(review.statements[0].reason.contains("INSERT SELECT"));
+    assert_eq!(review.statements.len(), 1);
+    assert_eq!(review.statements[0].index, 3);
+    assert!(review.statements[0].reason.contains("statically provable"));
     assert!(!review.statements[0].destructive);
-    assert_eq!(review.statements[1].index, 3);
-    assert!(review.statements[1].reason.contains("statically provable"));
+}
+
+#[test]
+fn classifies_normalized_dml_families_as_supported() {
+    // The rewrite normalizer (2026-09-01) keeps these shapes in the exact
+    // pre-commit rollback channel instead of prompting.
+    for sql in [
+        "INSERT INTO users (id) SELECT id FROM staging",
+        "INSERT INTO users (id, name) SELECT s.id, s.name FROM staging s JOIN teams t ON t.id = s.team_id WHERE s.active = 1",
+        "INSERT IGNORE INTO users (id) VALUES (1)",
+        "INSERT IGNORE INTO users_bak SELECT * FROM users",
+        "INSERT INTO users (id) VALUES (1) ON DUPLICATE KEY UPDATE id = VALUES(id)",
+        "INSERT INTO users (id, name) SELECT s.id, s.name FROM staging s ON DUPLICATE KEY UPDATE name = VALUES(name)",
+        "INSERT INTO users VALUES (1, 'Ada')",
+        "UPDATE users u JOIN teams t ON t.id = u.team_id SET u.active = 0",
+        "UPDATE users AS u SET u.active = 0 WHERE u.id = 1",
+        "UPDATE a.t1 x JOIN b.t2 y ON y.id = x.id SET x.v = y.v, y.seen = 1",
+        "DELETE u FROM users u JOIN teams t ON t.id = u.team_id",
+        "DELETE t FROM app.users t WHERE NOT EXISTS (SELECT 1 FROM teams s WHERE s.id = t.team_id)",
+        "DELETE FROM u, t USING users u JOIN teams t ON t.id = u.team_id WHERE u.active = 0",
+        "DELETE FROM users alias_name WHERE alias_name.id = 1",
+    ] {
+        assert_eq!(
+            classify_for_rollback(sql).class,
+            ProtectionClass::SupportedDml,
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn normalized_family_edges_still_fail_closed() {
+    for sql in [
+        // Derived tables would make the alias map unreliable.
+        "UPDATE (SELECT id FROM users) d JOIN users u ON u.id = d.id SET u.active = 0",
+        // Index hints change which rows a materializing SELECT would lock.
+        "UPDATE users USE INDEX (PRIMARY) SET active = 0 WHERE id = 1 ORDER BY id LIMIT 1",
+        // UPDATE IGNORE swallows errors the planner cannot model.
+        "UPDATE IGNORE users u JOIN teams t ON t.id = u.team_id SET u.active = 0",
+        // Qualified references into the SELECT source cannot survive
+        // re-execution as literal VALUES.
+        "INSERT INTO users (id, name) SELECT s.id, s.name FROM staging s ON DUPLICATE KEY UPDATE name = s.name",
+        // Unqualified assignment is ambiguous across two tables.
+        "UPDATE users u JOIN teams t ON t.id = u.team_id SET active = 0",
+    ] {
+        assert_eq!(
+            classify_for_rollback(sql).class,
+            ProtectionClass::BlockedUnsupported,
+            "{sql}"
+        );
+    }
 }
 
 #[test]
 fn explicit_user_policy_preserves_unsupported_statement_slots() {
     let queries = [
         "INSERT INTO users (id, name) VALUES (1, 'Ada')",
-        "INSERT INTO users (id) SELECT id FROM staging",
+        "REPLACE INTO users (id) VALUES (1)",
     ]
     .map(str::to_string);
 
@@ -249,7 +313,7 @@ fn explicit_user_policy_preserves_unsupported_statement_slots() {
 
 #[test]
 fn protected_skips_complete_callbacks_without_database_or_audit() {
-    let queries = ["INSERT INTO users (id) SELECT id FROM staging"].map(str::to_string);
+    let queries = ["REPLACE INTO users (id) VALUES (1)"].map(str::to_string);
     let plans =
         plan_batch_for_rollback_with_policy(&queries, RollbackUnsupportedPolicy::Skip).unwrap();
     let callback_indexes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -293,7 +357,7 @@ fn protected_skips_complete_callbacks_without_database_or_audit() {
 
 #[test]
 fn protected_skip_callback_failure_stops_before_database_execution() {
-    let queries = ["INSERT INTO users (id) SELECT id FROM staging"].map(str::to_string);
+    let queries = ["REPLACE INTO users (id) VALUES (1)"].map(str::to_string);
     let plans =
         plan_batch_for_rollback_with_policy(&queries, RollbackUnsupportedPolicy::Skip).unwrap();
     let callback_indexes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -315,6 +379,22 @@ fn protected_skip_callback_failure_stops_before_database_execution() {
     .unwrap_err();
     assert_eq!(error, "audit append failed");
     assert_eq!(*callback_indexes.lock().unwrap(), vec![6]);
+}
+
+#[test]
+fn rollback_protection_defaults_on_when_the_flag_is_unset() {
+    let params = crate::models::ConnectionParams::default();
+    assert!(
+        params.rollback_protection_enabled.is_none(),
+        "precondition: the default params leave the flag unset"
+    );
+    assert!(should_use_rollback_guard(&params));
+
+    let disabled = crate::models::ConnectionParams {
+        rollback_protection_enabled: Some(false),
+        ..Default::default()
+    };
+    assert!(!should_use_rollback_guard(&disabled));
 }
 
 #[test]
@@ -962,6 +1042,263 @@ fn use_database_can_share_a_batch_with_writes() {
 }
 
 /// 反向断言：USE 本身仍必须被识别为改变作用域的会话语句，而不是被顺手降级成
+/// Live end-to-end tests for the rewrite normalizer and the no-prompt policy
+/// against a real MySQL. Gated exactly like the other live suites:
+///
+/// ```text
+/// TABULARIS_TEST_MYSQL=1 TABULARIS_TEST_MYSQL_HOST=… TABULARIS_TEST_MYSQL_PORT=… \
+/// TABULARIS_DATA_DIR=<temp> cargo test live_rollback -- --ignored
+/// ```
+#[cfg(test)]
+mod live_rollback_family_tests {
+    use crate::drivers::mysql::execute_batch;
+    use crate::models::{BatchStatementResult, ConnectionParams, DatabaseSelection};
+    use serde_json::Value;
+
+    const DB: &str = "tabularis_live_guard";
+
+    fn base_params(protected: Option<bool>, database: &str) -> Option<ConnectionParams> {
+        std::env::var("TABULARIS_TEST_MYSQL").ok()?;
+        let host = std::env::var("TABULARIS_TEST_MYSQL_HOST").ok()?;
+        let port: u16 = std::env::var("TABULARIS_TEST_MYSQL_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok())?;
+        Some(ConnectionParams {
+            driver: "mysql".to_string(),
+            host: Some(host),
+            port: Some(port),
+            username: Some(
+                std::env::var("TABULARIS_TEST_MYSQL_USER").unwrap_or_else(|_| "root".to_string()),
+            ),
+            password: match std::env::var("TABULARIS_TEST_MYSQL_KEYCHAIN_ID") {
+                Ok(id) => crate::keychain_utils::get_db_password(&id, "live rollback test").ok(),
+                Err(_) => std::env::var("TABULARIS_TEST_MYSQL_PASSWORD").ok(),
+            },
+            database: DatabaseSelection::Single(database.to_string()),
+            rollback_protection_enabled: protected,
+            connection_id: Some("live-rollback-family-test".to_string()),
+            connection_name: Some("live-rollback-family-test".to_string()),
+            ssl_mode: Some("disabled".to_string()),
+            ..Default::default()
+        })
+    }
+
+    fn all_ok(results: &[BatchStatementResult]) -> Result<(), String> {
+        for (index, result) in results.iter().enumerate() {
+            if let Some(error) = &result.error {
+                return Err(format!("statement {} failed: {error}", index + 1));
+            }
+        }
+        Ok(())
+    }
+
+    async fn run_unprotected(params: &ConnectionParams, queries: &[&str]) {
+        let queries: Vec<String> = queries.iter().map(|q| q.to_string()).collect();
+        let results = execute_batch(params, &queries, None, 1, None, None)
+            .await
+            .expect("unprotected batch");
+        all_ok(&results).expect("unprotected statements");
+    }
+
+    async fn snapshot(params: &ConnectionParams, table: &str) -> Vec<Vec<Value>> {
+        let result = crate::drivers::mysql::execute_query(
+            params,
+            &format!("SELECT * FROM {table} ORDER BY id"),
+            None,
+            1,
+            None,
+        )
+        .await
+        .expect("snapshot query");
+        result.rows
+    }
+
+    /// Extracts executable statements from a rollback file and flips the
+    /// trailing review ROLLBACK into COMMIT so the rollback truly applies.
+    fn rollback_statements(sql: &str) -> Vec<String> {
+        let body: String = sql
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("--"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        body.split(';')
+            .map(str::trim)
+            .filter(|statement| !statement.is_empty())
+            .map(|statement| {
+                if statement.eq_ignore_ascii_case("ROLLBACK") {
+                    "COMMIT".to_string()
+                } else {
+                    statement.to_string()
+                }
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_rollback_family_end_to_end_restores_the_exact_before_state() {
+        let Some(admin) = base_params(Some(false), "information_schema") else {
+            eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
+            return;
+        };
+        run_unprotected(&admin, &[&format!("DROP DATABASE IF EXISTS {DB}"), &format!("CREATE DATABASE {DB}")]).await;
+        let unprotected = base_params(Some(false), DB).expect("params");
+        run_unprotected(
+            &unprotected,
+            &[
+                "CREATE TABLE src (id INT PRIMARY KEY, name VARCHAR(50), val INT)",
+                "CREATE TABLE dst (id INT PRIMARY KEY, name VARCHAR(50), val INT, UNIQUE KEY uq_name (name))",
+                "INSERT INTO src (id, name, val) VALUES (1,'a',10),(2,'b',20),(3,'c',30),(4,'d',40),(5,'e',50)",
+                "INSERT INTO dst (id, name, val) VALUES (1,'a',10),(2,'b',20),(5,'e',50)",
+            ],
+        )
+        .await;
+        let before_src = snapshot(&unprotected, "src").await;
+        let before_dst = snapshot(&unprotected, "dst").await;
+
+        // Default-on: the flag is unset, protection must engage (G5 live).
+        let protected = base_params(None, DB).expect("params");
+        let queries: Vec<String> = [
+            // insert-select
+            "INSERT INTO dst (id, name, val) SELECT id, name, val FROM src WHERE id = 4",
+            // upsert: updates id=1, inserts id=6
+            "INSERT INTO dst (id, name, val) VALUES (1,'a',111),(6,'f',60) ON DUPLICATE KEY UPDATE val = VALUES(val)",
+            // ignore: id=2 collides, id=7 inserts
+            "INSERT IGNORE INTO dst (id, name, val) VALUES (2,'dup',0),(7,'g',70)",
+            // multi-table update
+            "UPDATE dst d JOIN src s ON s.id = d.id SET d.val = s.val + 1000 WHERE s.id <= 2",
+            // multi-table delete
+            "DELETE d FROM dst d JOIN src s ON s.id = d.id WHERE s.id = 5",
+        ]
+        .iter()
+        .map(|q| q.to_string())
+        .collect();
+        let results = execute_batch(&protected, &queries, None, 1, None, None)
+            .await
+            .expect("protected batch");
+        all_ok(&results).expect("protected statements");
+        for (index, result) in results.iter().enumerate() {
+            assert_ne!(
+                result.rollback_unprotected,
+                Some(true),
+                "statement {} must be exactly protected",
+                index + 1
+            );
+        }
+        let rollback_file = results[0]
+            .rollback_file
+            .clone()
+            .expect("protected batch must produce a rollback file");
+
+        // The writes really happened.
+        let mutated_dst = snapshot(&unprotected, "dst").await;
+        assert_ne!(mutated_dst, before_dst);
+        assert_eq!(mutated_dst.len(), 5, "expected ids 1,2,4,6,7: {mutated_dst:?}");
+
+        // Applying the rollback file restores the exact before state.
+        let rollback_sql = std::fs::read_to_string(&rollback_file).expect("rollback file");
+        let statements = rollback_statements(&rollback_sql);
+        assert!(!statements.is_empty());
+        let applied = execute_batch(
+            &unprotected,
+            &statements,
+            None,
+            1,
+            None,
+            None,
+        )
+        .await
+        .expect("rollback apply");
+        all_ok(&applied).expect("rollback statements");
+
+        assert_eq!(snapshot(&unprotected, "dst").await, before_dst);
+        assert_eq!(snapshot(&unprotected, "src").await, before_src);
+
+        run_unprotected(&admin, &[&format!("DROP DATABASE {DB}")]).await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_unsupported_statement_executes_without_prompt_and_is_flagged() {
+        let Some(admin) = base_params(Some(false), "information_schema") else {
+            eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
+            return;
+        };
+        let db = format!("{DB}_noprompt");
+        run_unprotected(&admin, &[&format!("DROP DATABASE IF EXISTS {db}"), &format!("CREATE DATABASE {db}")]).await;
+        let unprotected = base_params(Some(false), &db).expect("params");
+        run_unprotected(
+            &unprotected,
+            &[
+                "CREATE TABLE t (id INT PRIMARY KEY, v INT)",
+                "INSERT INTO t (id, v) VALUES (1, 1)",
+            ],
+        )
+        .await;
+
+        // G4 live: REPLACE has no exact inverse. With no policy supplied it
+        // must execute (no TABULARIS_ROLLBACK_RISK_REVIEW error), be flagged,
+        // and land in the recovery journal as unprotected.
+        let protected = base_params(None, &db).expect("params");
+        let queries = vec!["REPLACE INTO t (id, v) VALUES (1, 2)".to_string()];
+        let results = execute_batch(&protected, &queries, None, 1, None, None)
+            .await
+            .expect("no-prompt batch must not error");
+        all_ok(&results).expect("replace must execute");
+        assert_eq!(results[0].rollback_unprotected, Some(true));
+
+        let rows = snapshot(&unprotected, "t").await;
+        assert_eq!(rows[0][1], Value::from(2), "REPLACE really executed");
+
+        run_unprotected(&admin, &[&format!("DROP DATABASE {db}")]).await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_explicit_select_for_update_flows_through_protection() {
+        let Some(admin) = base_params(Some(false), "information_schema") else {
+            eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
+            return;
+        };
+        let db = format!("{DB}_forupdate");
+        run_unprotected(&admin, &[&format!("DROP DATABASE IF EXISTS {db}"), &format!("CREATE DATABASE {db}")]).await;
+        let unprotected = base_params(Some(false), &db).expect("params");
+        run_unprotected(
+            &unprotected,
+            &[
+                "CREATE TABLE t (id INT PRIMARY KEY, v INT)",
+                "INSERT INTO t (id, v) VALUES (1, 1), (2, 2)",
+            ],
+        )
+        .await;
+
+        // R3 live: a user transaction built around an explicit locking read
+        // must pass the guard end-to-end — no prompt, exact rollback journal,
+        // and the write committed.
+        let protected = base_params(None, &db).expect("params");
+        let queries: Vec<String> = [
+            "START TRANSACTION",
+            "SELECT v FROM t WHERE id = 1 FOR UPDATE",
+            "UPDATE t SET v = v + 10 WHERE id = 1",
+            "COMMIT",
+        ]
+        .iter()
+        .map(|q| q.to_string())
+        .collect();
+        let results = execute_batch(&protected, &queries, None, 1, None, None)
+            .await
+            .expect("locking-read transaction");
+        all_ok(&results).expect("locking-read statements");
+        for result in &results {
+            assert_ne!(result.rollback_unprotected, Some(true));
+        }
+        let rows = snapshot(&unprotected, "t").await;
+        assert_eq!(rows[0][1], Value::from(11));
+
+        run_unprotected(&admin, &[&format!("DROP DATABASE {db}")]).await;
+    }
+}
+
 /// 普通设置。它与 `SET SESSION ...` 的区别正在于此——前者改变非限定名解析到
 /// 哪个库，后者不改。判据退化时这条会红。
 #[test]

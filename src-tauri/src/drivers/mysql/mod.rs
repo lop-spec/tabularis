@@ -1541,7 +1541,9 @@ pub async fn execute_query(
 /// When the script uses transactions, MySQL itself will refuse subsequent
 /// statements inside the aborted transaction, surfacing the error.
 fn should_use_rollback_guard(params: &ConnectionParams) -> bool {
-    let enabled = params.rollback_protection_enabled.unwrap_or(false);
+    // Default-on (2026-09-01): an unset flag means protection is active; only
+    // an explicit `false` opts a connection out.
+    let enabled = params.rollback_protection_enabled.unwrap_or(true);
     let execute_unprotected = matches!(
         params.rollback_unsupported_policy,
         Some(crate::models::RollbackUnsupportedPolicy::ExecuteUnprotected)
@@ -1579,7 +1581,7 @@ pub async fn execute_batch(
     schema: Option<&str>,
     on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
 ) -> Result<Vec<crate::models::BatchStatementResult>, String> {
-    let rollback_protection_enabled = params.rollback_protection_enabled.unwrap_or(false);
+    let rollback_protection_enabled = params.rollback_protection_enabled.unwrap_or(true);
     let execute_unprotected = rollback_protection_enabled
         && matches!(
             params.rollback_unsupported_policy,
