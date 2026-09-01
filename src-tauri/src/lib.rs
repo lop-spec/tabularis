@@ -581,6 +581,7 @@ pub fn run() {
             query_history::delete_query_history_entry,
             query_history::clear_query_history,
             recovery_history::list_recovery_runs,
+            recovery_history::generate_offline_recovery_sql,
             commands::generate_recovery_sql,
             // Config
             config::get_schema_preference,

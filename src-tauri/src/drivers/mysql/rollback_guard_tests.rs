@@ -1214,7 +1214,71 @@ mod live_rollback_family_tests {
         assert_eq!(snapshot(&unprotected, "dst").await, before_dst);
         assert_eq!(snapshot(&unprotected, "src").await, before_src);
 
+        // Round 2: undo the same batch via the OFFLINE generator — rollback
+        // SQL built purely from the recovery journal's row images, with no
+        // backup instance and no target probe.
+        let results = execute_batch(&protected, &queries, None, 1, None, None)
+            .await
+            .expect("second protected batch");
+        all_ok(&results).expect("second protected statements");
+        assert_ne!(snapshot(&unprotected, "dst").await, before_dst);
+
+        let data_root = std::path::PathBuf::from(
+            std::env::var("TABULARIS_DATA_DIR").expect("live tests pin a data dir"),
+        );
+        let run_id = latest_recovery_run_id(&data_root, "live-rollback-family-test");
+        let response = crate::recovery_history::generate_offline_recovery_sql_in(
+            &data_root,
+            "live-rollback-family-test",
+            &crate::recovery_history::RecoverySelection {
+                run_ids: vec![run_id],
+                statement_ids: Vec::new(),
+            },
+        )
+        .expect("offline rollback generation");
+        assert!(response.exact, "conflicts: {:?}", response.conflicts);
+        assert!(response.generated_steps > 0);
+
+        let statements = rollback_statements(&response.sql);
+        let applied = execute_batch(&unprotected, &statements, None, 1, None, None)
+            .await
+            .expect("offline rollback apply");
+        all_ok(&applied).expect("offline rollback statements");
+        assert_eq!(snapshot(&unprotected, "dst").await, before_dst);
+        assert_eq!(snapshot(&unprotected, "src").await, before_src);
+
         run_unprotected(&admin, &[&format!("DROP DATABASE {DB}")]).await;
+    }
+
+    /// Newest recovery run id recorded for `connection_id` under `root`.
+    fn latest_recovery_run_id(root: &std::path::Path, connection_id: &str) -> String {
+        let mut newest: Option<(String, String)> = None;
+        let history = root.join("recovery-history");
+        for connection in std::fs::read_dir(&history).into_iter().flatten().flatten() {
+            for date in std::fs::read_dir(connection.path()).into_iter().flatten().flatten() {
+                for entry in std::fs::read_dir(date.path()).into_iter().flatten().flatten() {
+                    let path = entry.path();
+                    let Ok(content) = std::fs::read_to_string(&path) else {
+                        continue;
+                    };
+                    let Some(header) = content.lines().next() else {
+                        continue;
+                    };
+                    let Ok(run) = serde_json::from_str::<serde_json::Value>(header) else {
+                        continue;
+                    };
+                    if run["connectionId"].as_str() != Some(connection_id) {
+                        continue;
+                    }
+                    let started = run["startedAt"].as_str().unwrap_or_default().to_string();
+                    let run_id = run["runId"].as_str().unwrap_or_default().to_string();
+                    if newest.as_ref().is_none_or(|(at, _)| *at < started) {
+                        newest = Some((started, run_id));
+                    }
+                }
+            }
+        }
+        newest.expect("a recovery run must have been recorded").1
     }
 
     #[tokio::test]

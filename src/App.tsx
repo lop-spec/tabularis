@@ -14,8 +14,7 @@ import { TaskManagerPage } from "./pages/TaskManagerPage";
 import { VisualExplainPage } from "./pages/VisualExplainPage";
 import { JsonViewerPage } from "./pages/JsonViewerPage";
 import { ResultsWindowPage } from "./pages/ResultsWindowPage";
-import { RecoveryPage } from "./pages/RecoveryPage";
-import { HistoryPage } from "./pages/HistoryPage";
+import { HistoryRecoveryPage } from "./pages/HistoryRecoveryPage";
 import { ConnectionHealthMonitor } from "./components/ConnectionHealthMonitor";
 import { EditorErrorBoundary } from "./components/ui/EditorErrorBoundary";
 import { UpdateNotificationModal } from "./components/modals/UpdateNotificationModal";
@@ -119,8 +118,8 @@ export function App() {
                     />
                     {/* lop fork: no MCP page — its sidebar slot now holds
                         the full execution history. */}
-                    <Route path="history" element={<HistoryPage />} />
-                    <Route path="recovery" element={<RecoveryPage />} />
+                    <Route path="history" element={<HistoryRecoveryPage />} />
+                    <Route path="recovery" element={<HistoryRecoveryPage />} />
                     <Route path="settings" element={<Settings />} />
                   </Route>
                   <Route

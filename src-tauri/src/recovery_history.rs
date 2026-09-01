@@ -905,6 +905,470 @@ pub async fn compare_and_generate(
     })
 }
 
+/// Normalizes a recorded target identity into the `uuid:`/`uid:`/`host:`
+/// key format so the offline precheck stage can assert it.
+fn normalized_identity_key(recorded: &str) -> String {
+    if let Some(uuid) = recorded.strip_prefix("MySQL server UUID ") {
+        return format!("uuid:{uuid}");
+    }
+    if let Some(uid) = recorded.strip_prefix("MariaDB server UID ") {
+        return format!("uid:{uid}");
+    }
+    if recorded.starts_with("uuid:")
+        || recorded.starts_with("uid:")
+        || recorded.starts_with("host:")
+    {
+        return recorded.to_string();
+    }
+    format!("host:{recorded}")
+}
+
+fn offline_pk_positions(statement: &RecoveryStatement) -> Result<Vec<usize>, String> {
+    if statement.primary_key.is_empty() {
+        return Err("statement has no recorded primary key".to_string());
+    }
+    statement
+        .primary_key
+        .iter()
+        .map(|key| {
+            statement
+                .columns
+                .iter()
+                .position(|column| column.name.eq_ignore_ascii_case(key))
+                .ok_or_else(|| format!("primary-key column {key} is not in the recorded row image"))
+        })
+        .collect()
+}
+
+fn offline_row_check(statement: &RecoveryStatement, row: &RecoveryRow) -> Result<(), String> {
+    if row.values.len() != statement.columns.len() {
+        return Err(format!(
+            "row image width {} does not match its {} recorded columns",
+            row.values.len(),
+            statement.columns.len()
+        ));
+    }
+    Ok(())
+}
+
+fn offline_pk_condition(
+    statement: &RecoveryStatement,
+    positions: &[usize],
+    row: &RecoveryRow,
+) -> String {
+    format!(
+        "({})",
+        positions
+            .iter()
+            .map(|position| {
+                format!(
+                    "CAST({} AS BINARY) <=> {}",
+                    quote_identifier(&statement.columns[*position].name),
+                    row.values[*position]
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" AND ")
+    )
+}
+
+fn offline_full_row_guard(statement: &RecoveryStatement, row: &RecoveryRow) -> String {
+    statement
+        .columns
+        .iter()
+        .zip(&row.values)
+        .map(|(column, value)| {
+            format!(
+                "CAST({} AS BINARY) <=> {}",
+                quote_identifier(&column.name),
+                value
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" AND ")
+}
+
+fn offline_table_name(statement: &RecoveryStatement) -> Result<String, String> {
+    let object = statement
+        .objects
+        .iter()
+        .find(|object| object.kind == "table")
+        .ok_or_else(|| "statement has no recorded table object".to_string())?;
+    Ok(format!(
+        "{}.{}",
+        quote_identifier(&object.schema),
+        quote_identifier(&object.name)
+    ))
+}
+
+fn offline_restore_update(
+    statement: &RecoveryStatement,
+    positions: &[usize],
+    before: &RecoveryRow,
+    after: &RecoveryRow,
+) -> Result<String, String> {
+    let assignments = statement
+        .columns
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !positions.contains(index))
+        .map(|(index, column)| {
+            format!(
+                "{} = {}",
+                quote_identifier(&column.name),
+                restoration_literal(column, &before.values[index])
+            )
+        })
+        .collect::<Vec<_>>();
+    if assignments.is_empty() {
+        return Err("recorded row image has no writable non-key columns".to_string());
+    }
+    Ok(format!(
+        "UPDATE {} SET {} WHERE {} AND ({}) LIMIT 1",
+        offline_table_name(statement)?,
+        assignments.join(", "),
+        offline_pk_condition(statement, positions, after),
+        offline_full_row_guard(statement, after)
+    ))
+}
+
+fn offline_restore_delete(
+    statement: &RecoveryStatement,
+    positions: &[usize],
+    after: &RecoveryRow,
+) -> Result<String, String> {
+    Ok(format!(
+        "DELETE FROM {} WHERE {} AND ({}) LIMIT 1",
+        offline_table_name(statement)?,
+        offline_pk_condition(statement, positions, after),
+        offline_full_row_guard(statement, after)
+    ))
+}
+
+fn offline_restore_insert(
+    statement: &RecoveryStatement,
+    before: &RecoveryRow,
+) -> Result<String, String> {
+    Ok(format!(
+        "INSERT INTO {} ({}) VALUES ({})",
+        offline_table_name(statement)?,
+        statement
+            .columns
+            .iter()
+            .map(|column| quote_identifier(&column.name))
+            .collect::<Vec<_>>()
+            .join(", "),
+        statement
+            .columns
+            .iter()
+            .zip(&before.values)
+            .map(|(column, value)| restoration_literal(column, value))
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
+}
+
+/// Builds the inverse steps for one exact statement, newest-row-first, purely
+/// from its recorded before/after images.
+fn offline_statement_steps(
+    statement: &RecoveryStatement,
+    order: &mut usize,
+) -> Result<(Vec<RecoverySqlStep>, usize), String> {
+    let mut steps = Vec::new();
+    let mut unchanged = 0usize;
+    let mut push = |sql: String, expected: Option<u64>, order: &mut usize| {
+        *order += 1;
+        steps.push(RecoverySqlStep {
+            order: *order,
+            sql,
+            expected_affected_rows: expected,
+            source: statement.id.clone(),
+        });
+    };
+
+    if statement.category.eq_ignore_ascii_case("ddl") {
+        let inverse = statement
+            .inverse_sql
+            .as_deref()
+            .ok_or_else(|| "DDL statement has no recorded inverse".to_string())?;
+        push(inverse.to_string(), None, order);
+        return Ok((steps, unchanged));
+    }
+
+    for row in statement.before_rows.iter().chain(&statement.after_rows) {
+        offline_row_check(statement, row)?;
+    }
+    if statement.before_rows.is_empty() && statement.after_rows.is_empty() {
+        // e.g. an INSERT ... SELECT that matched nothing: nothing to undo.
+        return Ok((steps, unchanged));
+    }
+    let positions = offline_pk_positions(statement)?;
+    let key_of = |row: &RecoveryRow| -> Vec<String> {
+        positions
+            .iter()
+            .map(|position| row.values[*position].clone())
+            .collect()
+    };
+
+    match statement.operation.as_str() {
+        "insert" => {
+            for row in statement.after_rows.iter().rev() {
+                push(offline_restore_delete(statement, &positions, row)?, Some(1), order);
+            }
+        }
+        "delete" => {
+            for row in statement.before_rows.iter().rev() {
+                push(offline_restore_insert(statement, row)?, Some(1), order);
+            }
+        }
+        "update" | "upsert" => {
+            let mut before_by_key: BTreeMap<Vec<String>, &RecoveryRow> = BTreeMap::new();
+            for row in &statement.before_rows {
+                if before_by_key.insert(key_of(row), row).is_some() {
+                    return Err("recorded before-images contain a duplicate key".to_string());
+                }
+            }
+            let mut matched = 0usize;
+            for row in statement.after_rows.iter().rev() {
+                match before_by_key.get(&key_of(row)) {
+                    Some(before) => {
+                        matched += 1;
+                        if before.values == row.values {
+                            unchanged += 1;
+                        } else {
+                            push(
+                                offline_restore_update(statement, &positions, before, row)?,
+                                Some(1),
+                                order,
+                            );
+                        }
+                    }
+                    None if statement.operation == "upsert" => {
+                        push(offline_restore_delete(statement, &positions, row)?, Some(1), order);
+                    }
+                    None => {
+                        return Err(
+                            "an after-image has no matching before-image".to_string()
+                        );
+                    }
+                }
+            }
+            if matched != statement.before_rows.len() {
+                return Err("a before-image has no matching after-image".to_string());
+            }
+        }
+        other => {
+            return Err(format!("operation {other} has no offline inverse"));
+        }
+    }
+    Ok((steps, unchanged))
+}
+
+fn render_offline_recovery_sql(
+    connection_id: &str,
+    runs: &[RecoveryRun],
+    steps: &[RecoverySqlStep],
+    conflicts: &[String],
+) -> String {
+    let mut output = String::new();
+    output.push_str("-- Tabularis offline rollback SQL\n");
+    output.push_str(
+        "-- Generated purely from the recovery journal's recorded before/after row images;\n",
+    );
+    output.push_str("-- no database instance was queried during generation.\n");
+    output.push_str("-- Row guards assert the current row still matches the recorded after-image;\n");
+    output.push_str("-- a later change to the same row makes its guarded statement affect 0 rows.\n");
+    output.push_str("-- DML ends in ROLLBACK by default; replace it with COMMIT only after every\n");
+    output.push_str("-- ROW_COUNT result equals its expected_affected_rows.\n");
+    output.push_str(&format!(
+        "-- Target connection alias: {}\n",
+        single_line_comment(&runs[0].connection_name)
+    ));
+    output.push_str(&format!(
+        "-- Target connection ID: {}\n",
+        single_line_comment(connection_id)
+    ));
+    output.push_str(&format!(
+        "-- Selected recovery Run IDs: {}\n",
+        runs.iter()
+            .map(|run| run.short_id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
+    for conflict in conflicts {
+        output.push_str(&format!(
+            "-- SKIPPED (no offline inverse): {}\n",
+            single_line_comment(conflict)
+        ));
+    }
+    output.push('\n');
+
+    let probe = InstanceProbe {
+        label: runs[0].connection_name.clone(),
+        server_key: normalized_identity_key(&runs[0].target_identity),
+        database: runs[0].database.clone(),
+    };
+    append_identity_stage(
+        &mut output,
+        "Stage A: identity precheck (read-only; run separately)",
+        &probe,
+    );
+
+    let mut transaction_open = false;
+    for step in steps {
+        let transactional = step.expected_affected_rows.is_some();
+        if transactional && !transaction_open {
+            output.push_str("-- ===== Stage B: DML rollback (one transaction; run separately) =====\n");
+            output.push_str("SET time_zone = '+00:00';\n");
+            output.push_str("START TRANSACTION;\n\n");
+            transaction_open = true;
+        } else if !transactional && transaction_open {
+            append_transaction_finish(&mut output);
+            transaction_open = false;
+        }
+        output.push_str(&format!(
+            "-- Rollback step {} (statement {})\n",
+            step.order, step.source
+        ));
+        if let Some(expected) = step.expected_affected_rows {
+            append_direct_statement(&mut output, &step.sql);
+            output.push_str(&format!(
+                "SELECT ROW_COUNT() AS rollback_step_{}_affected_rows, {expected} AS expected_affected_rows;\n",
+                step.order
+            ));
+        } else {
+            output.push_str(
+                "-- MANUAL DDL: implicit commit boundary; review and execute separately.\n",
+            );
+            for line in step.sql.lines() {
+                output.push_str("-- TABULARIS_MANUAL_DDL: ");
+                output.push_str(line);
+                output.push('\n');
+            }
+        }
+        output.push('\n');
+    }
+    if transaction_open {
+        append_transaction_finish(&mut output);
+    }
+    if steps.is_empty() {
+        output.push_str("-- No reversible steps were generated.\n");
+    }
+    output
+}
+
+/// Generates rollback SQL for selected exact statements straight from their
+/// recorded row images — no target probe, no backup instance. Statements
+/// without an exact image are reported as conflicts and need the
+/// backup-instance restore instead.
+pub fn generate_offline_recovery_sql_in(
+    root: &Path,
+    connection_id: &str,
+    selection: &RecoverySelection,
+) -> Result<RecoveryCompareResponse, String> {
+    if selection.run_ids.is_empty() {
+        return Err("Select at least one recovery record".to_string());
+    }
+    let selected_run_ids: HashSet<_> = selection.run_ids.iter().cloned().collect();
+    let selected_statement_ids: HashSet<_> = selection.statement_ids.iter().cloned().collect();
+    let mut runs = Vec::new();
+    for path in recovery_files(root)? {
+        let run = read_run(&path)?;
+        if !selected_run_ids.contains(&run.run_id) {
+            continue;
+        }
+        if run.connection_id != connection_id {
+            return Err(format!(
+                "Recovery run {} belongs to another connection",
+                run.short_id
+            ));
+        }
+        if run.status != "complete" && run.status != "interrupted" {
+            return Err(format!(
+                "Recovery run {} is still recording and cannot be used",
+                run.short_id
+            ));
+        }
+        runs.push(run);
+    }
+    if runs.len() != selected_run_ids.len() {
+        return Err("One or more selected recovery runs no longer exist".to_string());
+    }
+    runs.sort_by(|left, right| left.started_at.cmp(&right.started_at));
+
+    let mut steps = Vec::new();
+    let mut conflicts = Vec::new();
+    let mut unchanged_rows = 0usize;
+    let mut selected_count = 0usize;
+    let mut order = 0usize;
+    // Newest first: later changes must be undone before earlier ones.
+    for run in runs.iter().rev() {
+        for statement in run.statements.iter().rev() {
+            if !selected_statement_ids.is_empty()
+                && !selected_statement_ids.contains(&statement.id)
+            {
+                continue;
+            }
+            selected_count += 1;
+            if !statement.exact {
+                conflicts.push(format!(
+                    "{}: executed without exact protection — use the backup-instance restore (SQL: {})",
+                    statement.id,
+                    statement.sql.chars().take(120).collect::<String>()
+                ));
+                continue;
+            }
+            match offline_statement_steps(statement, &mut order) {
+                Ok((statement_steps, unchanged)) => {
+                    unchanged_rows += unchanged;
+                    steps.extend(statement_steps);
+                }
+                Err(reason) => {
+                    conflicts.push(format!("{}: {reason}", statement.id));
+                }
+            }
+        }
+    }
+    if selected_count == 0 {
+        return Err("The selection contains no statements".to_string());
+    }
+    if !selected_statement_ids.is_empty() && selected_count != selected_statement_ids.len() {
+        return Err(
+            "One or more selected statement IDs do not belong to the selected runs".to_string(),
+        );
+    }
+    if steps.is_empty() && conflicts.is_empty() && unchanged_rows == 0 {
+        return Err("The selection contains no reversible row images".to_string());
+    }
+
+    let sql = render_offline_recovery_sql(connection_id, &runs, &steps, &conflicts);
+    let output_path = write_recovery_sql(root, connection_id, &runs[0].connection_name, &sql)?;
+    Ok(RecoveryCompareResponse {
+        output_path: output_path.to_string_lossy().to_string(),
+        sql,
+        generated_steps: steps.len(),
+        unchanged_rows,
+        exact: conflicts.is_empty(),
+        conflicts,
+        target_instance: format!(
+            "{} · {}",
+            runs[0].connection_name, runs[0].target_identity
+        ),
+        backup_instance: "recorded row images (offline)".to_string(),
+    })
+}
+
+/// Tauri command: offline rollback generation from recorded row images.
+#[tauri::command]
+pub fn generate_offline_recovery_sql(
+    connection_id: String,
+    selection: RecoverySelection,
+) -> Result<RecoveryCompareResponse, String> {
+    let root = crate::paths::get_app_data_dir()
+        .ok_or_else(|| "Could not resolve the Tabularis data directory".to_string())?;
+    generate_offline_recovery_sql_in(&root, &connection_id, &selection)
+}
+
 async fn compare_selected_statements(
     target: &mut sqlx::MySqlConnection,
     backup: &mut sqlx::MySqlConnection,
@@ -2976,6 +3440,98 @@ mod tests {
         journal.discard().unwrap();
 
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn offline_rollback_generates_guarded_inverse_sql_without_any_connection() {
+        let root = tempfile::tempdir().unwrap();
+        let mut journal = RecoveryJournal::create_in(
+            root.path(),
+            "connection-a".to_string(),
+            "prod".to_string(),
+            "app".to_string(),
+            "MySQL server UUID feed-beef".to_string(),
+        )
+        .unwrap();
+        // Statement 0: exact update (id=1: name 'a' -> 'b').
+        journal.add_statement(statement(0)).unwrap();
+        // Statement 1: exact insert of id=2.
+        let mut insert = statement(1);
+        insert.operation = "insert".to_string();
+        insert.before_rows = Vec::new();
+        insert.after_rows = vec![RecoveryRow {
+            values: vec!["X'32'".to_string(), "X'63'".to_string()],
+        }];
+        journal.add_statement(insert).unwrap();
+        // Statement 2: exact delete of id=3.
+        let mut delete = statement(2);
+        delete.operation = "delete".to_string();
+        delete.before_rows = vec![RecoveryRow {
+            values: vec!["X'33'".to_string(), "X'64'".to_string()],
+        }];
+        delete.after_rows = Vec::new();
+        journal.add_statement(delete).unwrap();
+        // Statement 3: unprotected — must surface as a conflict, not SQL.
+        let mut unprotected = statement(3);
+        unprotected.exact = false;
+        unprotected.category = "unprotected".to_string();
+        unprotected.operation = "replace".to_string();
+        unprotected.before_rows = Vec::new();
+        unprotected.after_rows = Vec::new();
+        journal.add_statement(unprotected).unwrap();
+        let run = read_run(&journal.finalize().unwrap()).unwrap();
+
+        let response = generate_offline_recovery_sql_in(
+            root.path(),
+            "connection-a",
+            &RecoverySelection {
+                run_ids: vec![run.run_id.clone()],
+                statement_ids: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(response.generated_steps, 3);
+        assert!(!response.exact, "the unprotected statement is a conflict");
+        assert_eq!(response.conflicts.len(), 1);
+        assert_eq!(response.backup_instance, "recorded row images (offline)");
+        let sql = &response.sql;
+        // Identity precheck derives from the recorded label, offline; the
+        // expected identity is hex-encoded by sql_text_literal.
+        assert!(
+            sql.contains(&sql_text_literal("uuid:feed-beef")),
+            "{sql}"
+        );
+        assert!(sql.contains("@@server_uuid"), "{sql}");
+        // Inverses are guarded and reverse-ordered: delete-inverse (INSERT)
+        // first, then insert-inverse (DELETE), then update-inverse (UPDATE).
+        let insert_back = sql.find("INSERT INTO `app`.`users`").expect("insert-back");
+        let delete_back = sql.find("DELETE FROM `app`.`users`").expect("delete-back");
+        let update_back = sql.find("UPDATE `app`.`users` SET").expect("update-back");
+        assert!(insert_back < delete_back && delete_back < update_back, "{sql}");
+        assert!(sql.contains("CAST(`id` AS BINARY) <=> X'31'"), "{sql}");
+        assert!(sql.contains("`name` = CAST(X'61' AS BINARY)"), "{sql}");
+        assert!(sql.contains("\nROLLBACK;\n"), "{sql}");
+        assert!(std::path::Path::new(&response.output_path).exists());
+
+        // Selecting only the exact statements yields a clean, exact result.
+        let exact_only: Vec<String> = run
+            .statements
+            .iter()
+            .filter(|statement| statement.exact)
+            .map(|statement| statement.id.clone())
+            .collect();
+        let clean = generate_offline_recovery_sql_in(
+            root.path(),
+            "connection-a",
+            &RecoverySelection {
+                run_ids: vec![run.run_id],
+                statement_ids: exact_only,
+            },
+        )
+        .unwrap();
+        assert!(clean.exact);
+        assert_eq!(clean.generated_steps, 3);
     }
 
     #[test]

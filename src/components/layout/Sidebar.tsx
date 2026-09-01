@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plug2, Settings, PanelLeft, Layers, Star, Clock, BookOpen, RotateCcw, History } from "lucide-react";
+import { Plug2, Settings, PanelLeft, Layers, Star, Clock, BookOpen, History } from "lucide-react";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useTheme } from "../../hooks/useTheme";
 
@@ -314,13 +314,9 @@ export const Sidebar = () => {
           <NavItem
             to="/history"
             icon={History}
-            label={t("history.title")}
-          />
-
-          <NavItem
-            to="/recovery"
-            icon={RotateCcw}
-            label={t("recovery.title")}
+            label={t("historyRecovery.title", {
+              defaultValue: "History & Recovery",
+            })}
           />
 
           <NavItem

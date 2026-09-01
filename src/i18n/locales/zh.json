@@ -1696,6 +1696,9 @@
     "title": "连接测试日志",
     "showLog": "显示日志"
   },
+  "historyRecovery": {
+    "title": "历史与恢复"
+  },
   "history": {
     "title": "执行历史",
     "noConnection": "未选择连接",

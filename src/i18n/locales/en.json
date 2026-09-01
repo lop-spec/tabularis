@@ -1841,6 +1841,9 @@
     "title": "Connection test log",
     "showLog": "Show log"
   },
+  "historyRecovery": {
+    "title": "History & Recovery"
+  },
   "history": {
     "title": "Execution history",
     "noConnection": "No connection selected",
