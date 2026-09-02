@@ -151,16 +151,18 @@ async fn get_ssh_connection_by_id<R: Runtime>(
         return Err(format!("SSH connection with ID {} not found", ssh_id));
     }
 
-    // File I/O off the Tokio executor thread
-    let content = tokio::task::spawn_blocking({
+    // File I/O off the Tokio executor thread. Go through the persistence
+    // layer so encrypted profile envelopes are decrypted the same way as
+    // `get_ssh_connections`; parsing the raw bytes as a plain JSON array
+    // silently yields an empty list once the profile is encrypted.
+    let connections = tokio::task::spawn_blocking({
         let path = path.clone();
-        move || std::fs::read_to_string(path).map_err(|e| e.to_string())
+        move || persistence::load_ssh_connections_file(&path)
     })
     .await
     .map_err(|e| e.to_string())??;
 
-    let mut ssh = serde_json::from_str::<Vec<SshConnection>>(&content)
-        .unwrap_or_default()
+    let mut ssh = connections
         .into_iter()
         .find(|s| s.id == ssh_id)
         .ok_or_else(|| format!("SSH connection with ID {} not found", ssh_id))?;
