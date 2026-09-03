@@ -4,10 +4,10 @@ use base64::Engine;
 use hmac::{Hmac, Mac};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
 
@@ -87,6 +87,7 @@ fn additional_data(purpose: &str) -> Vec<u8> {
     format!("{ENVELOPE_FORMAT}:{purpose}").into_bytes()
 }
 
+#[cfg(test)]
 fn encrypt_bytes_with_key(
     plaintext: &[u8],
     purpose: &str,
@@ -209,42 +210,6 @@ fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn write_legacy_backup(path: &Path, purpose: &str, plaintext: &[u8]) -> Result<PathBuf, String> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Profile path has no parent directory".to_string())?;
-    let backup_dir = parent.join("migration-backups");
-    fs::create_dir_all(&backup_dir).map_err(|error| error.to_string())?;
-    let file_name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("profile");
-    let file_prefix = format!("{file_name}-legacy-");
-    if let Some(existing) = fs::read_dir(&backup_dir)
-        .map_err(|error| error.to_string())?
-        .filter_map(Result::ok)
-        .find(|entry| {
-            entry
-                .file_name()
-                .to_str()
-                .is_some_and(|name| name.starts_with(&file_prefix) && name.ends_with(".enc"))
-        })
-    {
-        return Ok(existing.path());
-    }
-    let digest = hex::encode(Sha256::digest(plaintext));
-    let backup = backup_dir.join(format!("{file_name}-legacy-{}.enc", &digest[..16]));
-    if !backup.exists() {
-        let encrypted = encrypt_bytes_with_key(
-            plaintext,
-            &format!("legacy-backup:{purpose}"),
-            &profile_key()?,
-        )?;
-        atomic_replace(&backup, &encrypted)?;
-    }
-    Ok(backup)
-}
-
 fn decode_json<T: DeserializeOwned>(
     raw: Vec<u8>,
     purpose: &str,
@@ -293,21 +258,23 @@ pub fn read_json<T: DeserializeOwned>(
             } else {
                 [0; PROFILE_KEY_BYTES]
             };
-            let recovered = decode_json(previous_raw.clone(), purpose, &previous_key).or_else(|_| {
-                let envelope = envelope_from_bytes(&previous_raw)
-                    .ok_or_else(|| primary_error.clone())?;
-                let plaintext = decrypt_bytes_with_key(
-                    &envelope,
-                    &format!("legacy-backup:{purpose}"),
-                    &previous_key,
-                )?;
-                let value = serde_json::from_slice(&plaintext).map_err(|_| primary_error.clone())?;
-                Ok::<ProfileRead<T>, String>(ProfileRead {
-                    value,
-                    was_plaintext: false,
-                    plaintext_bytes: plaintext,
-                })
-            })?;
+            let recovered =
+                decode_json(previous_raw.clone(), purpose, &previous_key).or_else(|_| {
+                    let envelope =
+                        envelope_from_bytes(&previous_raw).ok_or_else(|| primary_error.clone())?;
+                    let plaintext = decrypt_bytes_with_key(
+                        &envelope,
+                        &format!("legacy-backup:{purpose}"),
+                        &previous_key,
+                    )?;
+                    let value =
+                        serde_json::from_slice(&plaintext).map_err(|_| primary_error.clone())?;
+                    Ok::<ProfileRead<T>, String>(ProfileRead {
+                        value,
+                        was_plaintext: false,
+                        plaintext_bytes: plaintext,
+                    })
+                })?;
             eprintln!("Recovered a local profile from its atomic rollback copy");
             Ok(Some(recovered))
         }
@@ -363,40 +330,14 @@ pub fn read_legacy_backup<T: DeserializeOwned>(
     Ok(None)
 }
 
-pub fn write_json<T: Serialize>(path: &Path, purpose: &str, value: &T) -> Result<(), String> {
+/// Local profiles are stored as plain JSON. Encryption at rest was removed
+/// (this fork's repository is already scrubbed); `read_json` still decrypts
+/// envelopes written by earlier builds so existing profiles migrate back to
+/// plaintext on first load. `purpose` is kept for signature compatibility.
+pub fn write_json<T: Serialize>(path: &Path, _purpose: &str, value: &T) -> Result<(), String> {
     let plaintext = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
     let _guard = FILE_GATE.lock().map_err(|error| error.to_string())?;
-    if !managed_profile_path(path) {
-        return atomic_replace(path, &plaintext);
-    }
-
-    let existing_plaintext = path
-        .exists()
-        .then(|| fs::read(path).map_err(|error| error.to_string()))
-        .transpose()?
-        .filter(|bytes| envelope_from_bytes(bytes).is_none());
-    if let Some(bytes) = existing_plaintext.as_deref() {
-        write_legacy_backup(path, purpose, bytes)?;
-    }
-
-    let encrypted = encrypt_bytes_with_key(&plaintext, purpose, &profile_key()?)?;
-    atomic_replace(path, &encrypted)?;
-
-    let file_name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("profile");
-    let previous = path.with_file_name(format!(".{file_name}.previous"));
-    if previous.exists() && envelope_from_bytes(&fs::read(&previous).unwrap_or_default()).is_none()
-    {
-        let encrypted_previous = encrypt_bytes_with_key(
-            existing_plaintext.as_deref().unwrap_or_default(),
-            &format!("legacy-backup:{purpose}"),
-            &profile_key()?,
-        )?;
-        fs::write(previous, encrypted_previous).map_err(|error| error.to_string())?;
-    }
-    Ok(())
+    atomic_replace(path, &plaintext)
 }
 
 pub fn pseudonymize(label: &str, value: &str) -> Result<String, String> {
@@ -453,43 +394,5 @@ mod tests {
             .unwrap();
         assert!(loaded.was_plaintext);
         assert_eq!(loaded.value["value"], 7);
-    }
-
-    #[test]
-    #[ignore = "writes an isolated probe through the OS credential store"]
-    fn managed_profile_round_trip_uses_the_os_protected_key() {
-        let path = crate::paths::get_app_config_dir()
-            .join(format!(".profile-probe-{}.json", Uuid::new_v4()));
-        let profile = serde_json::json!({
-            "host": "db.example.invalid",
-            "connectionId": Uuid::new_v4().to_string()
-        });
-        let outcome = (|| {
-            write_json(&path, "profile-probe", &profile)?;
-            let raw = fs::read_to_string(&path).map_err(|error| error.to_string())?;
-            if raw.contains("db.example.invalid") {
-                return Err("Managed profile remained plaintext".to_string());
-            }
-            let loaded = read_json::<serde_json::Value>(&path, "profile-probe")?
-                .ok_or_else(|| "Managed profile probe disappeared".to_string())?;
-            if loaded.was_plaintext || loaded.value != profile {
-                return Err("Managed profile did not decrypt to its original value".to_string());
-            }
-
-            let updated = serde_json::json!({"host": "next.example.invalid"});
-            write_json(&path, "profile-probe", &updated)?;
-            fs::write(&path, b"corrupted-profile").map_err(|error| error.to_string())?;
-            let recovered = read_json::<serde_json::Value>(&path, "profile-probe")?
-                .ok_or_else(|| "Profile rollback copy disappeared".to_string())?;
-            if recovered.value != profile {
-                return Err("Atomic rollback did not recover the prior profile".to_string());
-            }
-            Ok(())
-        })();
-        let _ = fs::remove_file(&path);
-        if let Some(file_name) = path.file_name().and_then(|value| value.to_str()) {
-            let _ = fs::remove_file(path.with_file_name(format!(".{file_name}.previous")));
-        }
-        assert!(outcome.is_ok(), "{}", outcome.unwrap_err());
     }
 }

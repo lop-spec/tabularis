@@ -127,7 +127,11 @@ pub fn load_connections_file(path: &Path) -> Result<ConnectionsFile, String> {
         let read = profile_crypto::read_json::<serde_json::Value>(path, CONNECTIONS_PURPOSE)?
             .ok_or_else(|| "Connections profile disappeared while it was being read".to_string())?;
         let mut file = parse_connections(read.value)?;
-        let recovered = if read.was_plaintext {
+        // Encrypted profiles from earlier builds are converted back to plain
+        // JSON on first load. Entries that only survive in the legacy backup
+        // are merged in during that one-time conversion.
+        let was_encrypted = !read.was_plaintext;
+        let recovered = if was_encrypted {
             profile_crypto::read_legacy_backup::<serde_json::Value>(path, CONNECTIONS_PURPOSE)?
                 .map(parse_connections)
                 .transpose()?
@@ -136,7 +140,7 @@ pub fn load_connections_file(path: &Path) -> Result<ConnectionsFile, String> {
             false
         };
         let changed = protect_file_secrets(&mut file)? || recovered;
-        if read.was_plaintext || changed {
+        if was_encrypted || changed {
             profile_crypto::write_json(path, CONNECTIONS_PURPOSE, &file)?;
         }
         return Ok(file);
@@ -214,7 +218,10 @@ pub fn load_ssh_connections_file(path: &Path) -> Result<Vec<SshConnection>, Stri
             .ok_or_else(|| "SSH profile disappeared while it was being read".to_string())?;
         let mut connections = read.value;
         let mut recovered = false;
-        if read.was_plaintext {
+        // One-time conversion of encrypted profiles back to plain JSON, merging
+        // entries that only survive in the legacy backup.
+        let was_encrypted = !read.was_plaintext;
+        if was_encrypted {
             if let Some(backup) = profile_crypto::read_legacy_backup::<Vec<SshConnection>>(
                 path,
                 SSH_CONNECTIONS_PURPOSE,
@@ -237,7 +244,7 @@ pub fn load_ssh_connections_file(path: &Path) -> Result<Vec<SshConnection>, Stri
                 protect_ssh_secrets(connection)
                     .map(|connection_changed| changed || connection_changed)
             })?;
-        if read.was_plaintext || changed {
+        if was_encrypted || changed {
             profile_crypto::write_json(path, SSH_CONNECTIONS_PURPOSE, &connections)?;
         }
         return Ok(connections);
@@ -371,7 +378,11 @@ mod tests {
             }
             let mut profile_files = vec![path.clone()];
             profile_files.extend(backup_files.into_iter().map(|entry| entry.path()));
-            profile_files.push(directory.path().join(".connections.managed-test.json.previous"));
+            profile_files.push(
+                directory
+                    .path()
+                    .join(".connections.managed-test.json.previous"),
+            );
             for profile_file in profile_files.into_iter().filter(|file| file.exists()) {
                 let bytes = fs::read(profile_file).map_err(|error| error.to_string())?;
                 for plaintext in [
@@ -379,7 +390,10 @@ mod tests {
                     second_password.as_bytes(),
                     b"test-db.example.invalid".as_slice(),
                 ] {
-                    if bytes.windows(plaintext.len()).any(|window| window == plaintext) {
+                    if bytes
+                        .windows(plaintext.len())
+                        .any(|window| window == plaintext)
+                    {
                         return Err("A migrated profile file still contains plaintext".to_string());
                     }
                 }
@@ -421,7 +435,9 @@ mod tests {
                 || migrated[0].password.is_some()
                 || migrated[0].save_in_keychain != Some(true)
             {
-                return Err("SSH profile migration changed its identity or retained a secret".to_string());
+                return Err(
+                    "SSH profile migration changed its identity or retained a secret".to_string(),
+                );
             }
             if keychain_utils::get_ssh_password(&id, "")? != password {
                 return Err("SSH password did not reach the OS keychain".to_string());
@@ -433,7 +449,10 @@ mod tests {
             }
             let bytes = fs::read(&path).map_err(|error| error.to_string())?;
             for plaintext in [password.as_bytes(), b"ssh.example.invalid".as_slice()] {
-                if bytes.windows(plaintext.len()).any(|window| window == plaintext) {
+                if bytes
+                    .windows(plaintext.len())
+                    .any(|window| window == plaintext)
+                {
                     return Err("SSH profile metadata remained plaintext".to_string());
                 }
             }
