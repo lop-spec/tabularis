@@ -318,16 +318,6 @@ export interface ReconstructQueryOptions {
 }
 
 /**
- * Fold macOS "Smart Quotes" (curly ‘ ’ “ ”) back to straight ASCII quotes.
- * SQL engines only accept straight ' as a string delimiter, so a filter typed
- * as `status = 'x'` that the OS rewrote to `status = ‘x’` fails to parse
- * ("unterminated quoted string").
- */
-function normalizeSmartQuotes(s: string): string {
-  return s.replace(/[‘’‚‛]/g, "'").replace(/[“”„‟]/g, '"');
-}
-
-/**
  * Reconstruct a SELECT query for a table tab with filters, sort, and limit.
  * Optional overrides replace the tab's own clause values when provided.
  * When wrapLimitSubquery is true, the LIMIT is applied via a subquery wrapper
@@ -355,8 +345,13 @@ export function reconstructTableQuery(
       ? options.limitOverride
       : tab.limitClause;
 
-  const filter = filterClause ? `WHERE ${normalizeSmartQuotes(filterClause)}` : "";
-  const sort = sortClause ? `ORDER BY ${normalizeSmartQuotes(sortClause)}` : "";
+  // Clauses go through verbatim. This used to fold curly quotes to ASCII to
+  // rescue filters typed on macOS with Smart Quotes on, but that also rewrote
+  // quotation marks that are part of the value being searched for — filtering
+  // on CJK text containing “ ” then silently matched nothing. A filter that
+  // fails to parse is visible; one that quietly queries something else is not.
+  const filter = filterClause ? `WHERE ${filterClause}` : "";
+  const sort = sortClause ? `ORDER BY ${sortClause}` : "";
   const quotedTable = quoteTableRef(tab.activeTable, driver, tab.schema);
 
   let baseQuery = `SELECT * FROM ${quotedTable} ${filter} ${sort}`.trim();

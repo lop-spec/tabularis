@@ -123,17 +123,75 @@ fn require_query_audit_append(
     })
 }
 
-/// Trims trailing semicolons and normalises Unicode smart quotes that some
-/// editors insert when the user pastes a query. Called on every query the
-/// UI hands off to a driver.
+/// Trims surrounding whitespace and trailing semicolons. Everything else is
+/// sent to the driver verbatim.
+///
+/// This function used to fold Unicode smart quotes (U+2018/U+2019/U+201C/U+201D)
+/// to their ASCII counterparts. That silently corrupted data: those code points
+/// are ordinary content in CJK text, so an UPDATE writing Chinese full-width
+/// quotation marks stored ASCII `"` instead, with no error on either side and
+/// nothing in the server logs to show it happened. A statement that fails to
+/// parse is visible and recoverable; a statement that succeeds with rewritten
+/// characters is neither. Never rewrite characters inside a statement here —
+/// if smart quotes were meant as delimiters, let the engine reject them and
+/// surface the hint from `smart_quote_hint`.
 fn sanitize_user_query(query: &str) -> String {
-    query
-        .trim()
-        .trim_end_matches(';')
-        .replace('\u{2018}', "'")
-        .replace('\u{2019}', "'")
-        .replace('\u{201C}', "\"")
-        .replace('\u{201D}', "\"")
+    query.trim().trim_end_matches(';').to_string()
+}
+
+/// Unicode quotation marks that some editors and input methods substitute for
+/// ASCII `'` / `"`. Used only for diagnostics, never for rewriting.
+const SMART_QUOTE_CHARS: [char; 8] = [
+    '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}', // single: ‘ ’ ‚ ‛
+    '\u{201C}', '\u{201D}', '\u{201E}', '\u{201F}', // double: “ ” „ ‟
+];
+
+/// If a statement failed and contains Unicode quotation marks, append a hint.
+/// Covers the case the old smart-quote rewriting was meant to solve, without
+/// touching the statement itself.
+fn smart_quote_hint(error: String, query: &str) -> String {
+    if query.chars().any(|c| SMART_QUOTE_CHARS.contains(&c)) {
+        format!(
+            "{error}\n\nHint: this statement contains Unicode quotation marks \
+             (\u{2018} \u{2019} \u{201C} \u{201D}). Tabularis sends SQL verbatim. \
+             If they were intended as string delimiters, replace them with ASCII ' or \"."
+        )
+    } else {
+        error
+    }
+}
+
+#[cfg(test)]
+mod sanitize_user_query_tests {
+    use super::{sanitize_user_query, smart_quote_hint};
+
+    #[test]
+    fn keeps_unicode_quotation_marks_verbatim() {
+        // Regression guard. This function used to fold U+2018/U+2019/U+201C/U+201D
+        // to ASCII, which rewrote CJK content on its way into the database with no
+        // error on either side. SQL must reach the driver byte-for-byte.
+        let double = "UPDATE t SET c = '\u{201C}填写话术示例\u{201D}' WHERE id = 1";
+        assert_eq!(sanitize_user_query(double), double);
+
+        let single = "SELECT '\u{2018}x\u{2019}'";
+        assert_eq!(sanitize_user_query(single), single);
+    }
+
+    #[test]
+    fn trims_whitespace_and_trailing_semicolons() {
+        assert_eq!(sanitize_user_query("  SELECT 1;;  "), "SELECT 1");
+        assert_eq!(sanitize_user_query("SELECT 1"), "SELECT 1");
+    }
+
+    #[test]
+    fn hints_at_quotation_marks_only_when_they_are_present() {
+        let hinted = smart_quote_hint("syntax error".to_string(), "SELECT \u{2018}x\u{2019}");
+        assert!(hinted.starts_with("syntax error"));
+        assert!(hinted.contains("Unicode quotation marks"));
+
+        let plain = smart_quote_hint("syntax error".to_string(), "SELECT 'x'");
+        assert_eq!(plain, "syntax error");
+    }
 }
 
 // --- Persistence Helpers ---
@@ -4196,7 +4254,7 @@ pub async fn execute_query<R: Runtime>(
                     crate::audit_outbox::append_required(&app, &event),
                 )?;
             }
-            Err(e)
+            Err(smart_quote_hint(e, &audit_sql))
         }
         Err(e) if e == "Query cancelled" => {
             log::warn!("Query was cancelled");
@@ -4411,7 +4469,7 @@ pub async fn execute_query_batch<R: Runtime>(
         }
         Ok(Err(e)) => {
             log::error!("Batch execution failed: {}", e);
-            Err(e)
+            Err(smart_quote_hint(e, &audit_queries.join("\n")))
         }
         Err(join_error) if join_error.is_cancelled() => {
             log::warn!("Batch was cancelled");
@@ -4537,6 +4595,8 @@ pub async fn explain_query_plan<R: Runtime>(
     params.session_preamble = session_preamble_for(&connection_id, session_context_id.as_deref());
 
     let drv = driver_for(&saved_conn.params.driver).await?;
+    // Kept for diagnostics: the spawn below takes ownership of `sanitized_query`.
+    let hint_sql = sanitized_query.clone();
     let task = tokio::spawn(async move {
         drv.explain_query(&params, &sanitized_query, analyze, schema.as_deref())
             .await
@@ -4556,7 +4616,7 @@ pub async fn explain_query_plan<R: Runtime>(
         }
         Ok(Err(e)) => {
             log::error!("Explain query failed: {}", e);
-            Err(e)
+            Err(smart_quote_hint(e, &hint_sql))
         }
         Err(_) => {
             log::warn!("Explain query was cancelled");

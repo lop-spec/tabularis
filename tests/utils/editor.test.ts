@@ -846,10 +846,14 @@ describe("editor", () => {
       expect(result).not.toMatch(/\s{2,}/);
     });
 
-    it("should fold macOS smart quotes in the filter to straight ASCII", () => {
-      const tab = createMockTab({ filterClause: "status = ‘active’" });
+    it("should pass Unicode quotation marks through verbatim", () => {
+      // Curly quotes are ordinary content in CJK text, so the filter must not
+      // rewrite them: doing so silently queries for something the user did not
+      // type. Delimiter mishaps (macOS Smart Quotes) surface as a parse error
+      // from the engine instead.
+      const tab = createMockTab({ filterClause: "note LIKE '%“x”%'" });
       const result = reconstructTableQuery(tab);
-      expect(result).toBe("SELECT * FROM \"users\" WHERE status = 'active'");
+      expect(result).toBe("SELECT * FROM \"users\" WHERE note LIKE '%“x”%'");
     });
   });
 
