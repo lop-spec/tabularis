@@ -1,3 +1,21 @@
+# [0.19.0](https://github.com/lop-spec/tabularis/compare/v0.18.1...v0.19.0) (2026-09-04)
+
+
+### Bug Fixes
+
+* **history-recovery:** instance picker + combinable time/search filters ([553b707](https://github.com/lop-spec/tabularis/commit/553b707606d7b8aa93124b0a26c213997dc40241))
+* **query:** send SQL verbatim instead of folding smart quotes to ASCII ([ce0665c](https://github.com/lop-spec/tabularis/commit/ce0665c494023cc4b2a54ecf035e24ffc6efd1a0))
+* **results:** smooth wheel scrolling through stacked multi-results ([88a95d5](https://github.com/lop-spec/tabularis/commit/88a95d5ecb35352c0376cdce2d83c56e3fad5c93))
+* **ssh:** resolve tunnel profiles through the encrypted store ([9a4faa1](https://github.com/lop-spec/tabularis/commit/9a4faa1d626e03a27ea163d32d4a4731e8f1afff))
+
+
+### Features
+
+* **editor:** run DROP and TRUNCATE without a confirmation dialog ([e9e7d73](https://github.com/lop-spec/tabularis/commit/e9e7d7399e06e1021d2ac872aa2d92cd8d3e25d6))
+* **recovery:** offline rollback from row images + unified History & Recovery page ([2f3605e](https://github.com/lop-spec/tabularis/commit/2f3605efb5b6a3b12127cf1d98b0e5e21f7671a7))
+* **release:** publish an NSIS installer alongside the portable EXE ([9d77e1c](https://github.com/lop-spec/tabularis/commit/9d77e1c8456138d0caa279dda325758dfd26c39b))
+* **rollback:** default-on protection, no-prompt auto-degrade, rewrite normalizer, O(n) journals ([3d18e92](https://github.com/lop-spec/tabularis/commit/3d18e92dc01152ccf5d12354752b5618cffb5c6b))
+
 # 0.18.1 (2026-09-01)
 
 ### Bug Fixes
