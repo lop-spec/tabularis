@@ -66,11 +66,16 @@ jobs:
       # One build produces both artifacts: the release EXE that the portable
       # packager consumes, and the NSIS installer. Building twice would just
       # relink the same binary.
+      #
+      # tauri.nsis.conf.json turns off createUpdaterArtifacts. Signing those
+      # requires a private key matching plugins.updater.pubkey, which this
+      # repository does not hold - see 080d6244, which stripped the signed
+      # build path from this workflow for exactly that reason. Producing a
+      # bundle re-enabled it and broke the build; the installer itself needs
+      # no signing key. The updater endpoint points at the upstream repo and
+      # was never live here anyway.
       - name: Build portable executable and NSIS installer
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        run: pnpm tauri build --bundles nsis --ci
+        run: pnpm tauri build --bundles nsis --ci --config src-tauri/tauri.nsis.conf.json
 
       - name: Package and verify portable executable
         env:
