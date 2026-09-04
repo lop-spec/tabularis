@@ -34,12 +34,24 @@ export const DANGEROUS_QUERY_I18N: Record<
 };
 
 /**
- * Gates execution of dangerous statements (DELETE/UPDATE with no WHERE, DROP,
- * TRUNCATE) behind a user confirmation. `guardQuery` resolves immediately (no
- * dialog) for safe statements; for dangerous ones it opens the dialog and
- * resolves once the user answers. A second dangerous statement submitted while
- * a dialog is already open is declined immediately instead of replacing the
- * pending one, so the first caller's promise always settles.
+ * Kinds that still require confirmation.
+ *
+ * DROP and TRUNCATE were removed from this list on 2026-09-04. Both are DDL:
+ * MySQL/MariaDB commit the active transaction before running them, so rollback
+ * protection never covered them and the dialog was a speed bump rather than a
+ * safety net. They now run with no client-side gate — a deliberate trade for a
+ * tool whose user runs them routinely. `classifyDangerousQuery` still reports
+ * both kinds; only the confirmation is gone.
+ */
+const KINDS_REQUIRING_CONFIRMATION: readonly DangerousQueryKind[] = ["no-where"];
+
+/**
+ * Gates execution of DELETE/UPDATE statements with no WHERE clause behind a
+ * user confirmation. `guardQuery` resolves immediately (no dialog) for every
+ * other statement; for gated ones it opens the dialog and resolves once the
+ * user answers. A second gated statement submitted while a dialog is already
+ * open is declined immediately instead of replacing the pending one, so the
+ * first caller's promise always settles.
  */
 export function useDangerousQueryGuard() {
   const [pending, setPending] = useState<DangerousQueryInfo | null>(null);
@@ -72,7 +84,7 @@ export function useDangerousQueryGuard() {
       let count = 0;
       for (const sql of statements) {
         const kind = classifyDangerousQuery(sql);
-        if (!kind) continue;
+        if (!kind || !KINDS_REQUIRING_CONFIRMATION.includes(kind)) continue;
         count++;
         if (!first) first = { kind, sql, count: 0 };
       }

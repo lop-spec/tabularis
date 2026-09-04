@@ -39,26 +39,23 @@ describe('useDangerousQueryGuard', () => {
     expect(result.current.pending).toBe(null);
   });
 
-  it('flags DROP and TRUNCATE statements with the matching kind', async () => {
+  it('runs DROP and TRUNCATE without a confirmation dialog', async () => {
+    // Both are DDL and commit implicitly, so rollback protection never covered
+    // them; the dialog was a speed bump, not a safety net. Removed 2026-09-04.
     const { result } = renderHook(() => useDangerousQueryGuard());
 
-    act(() => {
-      result.current.guardQuery('DROP TABLE users');
+    let resolved: boolean | undefined;
+    await act(async () => {
+      resolved = await result.current.guardQuery('DROP TABLE users');
     });
-    expect(result.current.pending?.kind).toBe('drop');
+    expect(resolved).toBe(true);
+    expect(result.current.isPending).toBe(false);
 
-    act(() => {
-      result.current.resolve(false);
+    await act(async () => {
+      resolved = await result.current.guardQuery('TRUNCATE TABLE logs');
     });
-
-    act(() => {
-      result.current.guardQuery('TRUNCATE TABLE logs');
-    });
-    expect(result.current.pending?.kind).toBe('truncate');
-
-    act(() => {
-      result.current.resolve(false);
-    });
+    expect(resolved).toBe(true);
+    expect(result.current.isPending).toBe(false);
   });
 
   it('resolves to false and closes the dialog when the user declines', async () => {
@@ -90,11 +87,12 @@ describe('useDangerousQueryGuard', () => {
     });
 
     expect(result.current.isPending).toBe(true);
-    // The first flagged statement drives the preview; count reflects all of them.
+    // The first flagged statement drives the preview; count reflects all of
+    // them. The DROP in this batch is no longer gated, so it is not counted.
     expect(result.current.pending).toEqual({
       kind: 'no-where',
       sql: 'DELETE FROM sessions',
-      count: 2,
+      count: 1,
     });
 
     act(() => {

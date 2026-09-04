@@ -1955,25 +1955,21 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       label: t("sidebar.deleteTable"),
                       icon: Trash2,
                       danger: true,
+                      // Runs straight away: the DROP confirmation was removed on
+                      // 2026-09-04 along with the editor's DROP/TRUNCATE dialog.
+                      // Failures still surface through showAlert.
                       action: async () => {
                         const quotedTable = quoteTableRef(contextMenu.id, activeDriver, ctxSchema);
-                        if (
-                          await ask(
-                            t("sidebar.deleteTableConfirm", { table: contextMenu.id }),
-                            { title: t("sidebar.deleteTable"), kind: "warning" },
-                          )
-                        ) {
-                          try {
-                            await invoke("execute_query", {
-                              connectionId: activeConnectionId,
-                              query: `DROP TABLE ${quotedTable}`,
-                              ...(ctxSchema ? { schema: ctxSchema } : {}),
-                            });
-                            if (refreshTables) refreshTables();
-                          } catch (e) {
-                            console.error(e);
-                            showAlert(t("sidebar.failDeleteTable") + String(e), { kind: "error" });
-                          }
+                        try {
+                          await invoke("execute_query", {
+                            connectionId: activeConnectionId,
+                            query: `DROP TABLE ${quotedTable}`,
+                            ...(ctxSchema ? { schema: ctxSchema } : {}),
+                          });
+                          if (refreshTables) refreshTables();
+                        } catch (e) {
+                          console.error(e);
+                          showAlert(t("sidebar.failDeleteTable") + String(e), { kind: "error" });
                         }
                       },
                     } : null,
