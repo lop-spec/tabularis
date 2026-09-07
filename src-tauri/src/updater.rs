@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 // Strutture dati
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -55,7 +55,7 @@ struct GitHubAsset {
 }
 
 // Constants
-const GITHUB_REPO: &str = "TabularisDB/tabularis";
+const GITHUB_REPO: &str = "lop-spec/tabularis";
 const CACHE_DURATION_SECS: u64 = 43200; // 12 hours
 /// Returns the installation source: "snap", "aur", or None for direct installs.
 /// Only meaningful on Linux; always returns None on other platforms.
@@ -104,10 +104,9 @@ pub fn get_installation_source() -> Option<String> {
 
 // Helper functions
 fn get_cache_path(app: &AppHandle) -> Option<PathBuf> {
-    app.path()
-        .app_config_dir()
-        .ok()
-        .map(|p| p.join("update_check_cache.json"))
+    crate::config::get_config_dir(app)
+        // Never reuse a cached update recommendation from the official build.
+        .map(|p| p.join("update_check_cache.lop-spec.json"))
 }
 
 fn parse_version(version: &str) -> Option<(u32, u32, u32)> {
@@ -423,6 +422,16 @@ pub async fn download_and_install_update(app: AppHandle) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn configured_update_endpoints_stay_in_the_fork() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let endpoints = config["plugins"]["updater"]["endpoints"].as_array().unwrap();
+        assert!(!endpoints.is_empty());
+        let prefix = format!("https://github.com/{GITHUB_REPO}/");
+        assert!(endpoints.iter().all(|endpoint| endpoint.as_str().unwrap().starts_with(&prefix)));
+    }
+
     // Version parsing tests
     #[test]
     fn test_version_parsing_standard() {
@@ -547,7 +556,7 @@ mod tests {
     // GitHub repo constant test
     #[test]
     fn test_github_repo_constant() {
-        assert_eq!(GITHUB_REPO, "TabularisDB/tabularis");
+        assert_eq!(GITHUB_REPO, "lop-spec/tabularis");
     }
 
     // Cache duration test

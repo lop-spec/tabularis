@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
-use tauri::Manager;
 use std::sync::RwLock;
 
 use std::collections::HashMap;
@@ -97,8 +96,9 @@ pub struct AppConfig {
 
 static CONFIG_CACHE: Lazy<RwLock<AppConfig>> = Lazy::new(|| RwLock::new(AppConfig::default()));
 
-pub fn get_config_dir<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
-    app.path().app_config_dir().ok()
+pub fn get_config_dir<R: tauri::Runtime>(_app: &AppHandle<R>) -> Option<PathBuf> {
+    // Settings and connections must use the same explicit profile override.
+    Some(crate::paths::get_app_config_dir())
 }
 
 fn cache_config(config: &AppConfig) {
