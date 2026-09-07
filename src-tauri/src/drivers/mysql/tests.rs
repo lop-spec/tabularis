@@ -74,6 +74,18 @@ fn mysql_string_literal_no_backslash_escapes_mode() {
 }
 
 #[test]
+fn binary_primary_keys_use_bytes_in_both_protocols() {
+    let wire = crate::drivers::common::encode_blob(&[0x00, 0x7f, 0xff]);
+    let value = serde_json::json!(wire);
+    let mut text = sqlx::QueryBuilder::<sqlx::MySql>::new("");
+    super::push_pk_value(&mut text, &value, super::TextProto::protocol_only(true)).unwrap();
+    assert_eq!(text.sql(), "x'007fff'");
+    let mut bound = sqlx::QueryBuilder::<sqlx::MySql>::new("");
+    super::push_pk_value(&mut bound, &value, super::TextProto::protocol_only(false)).unwrap();
+    assert_eq!(bound.sql(), "?");
+}
+
+#[test]
 fn mysql_bytes_literal_hex_encodes() {
     assert_eq!(mysql_bytes_literal(&[]), "x''");
     assert_eq!(mysql_bytes_literal(&[0x00, 0x0f, 0xff]), "x'000fff'");
@@ -373,6 +385,7 @@ mod multi_result_collector {
 mod routine_management {
     use super::super::routines::{
         drop_routine_sql, routine_call_sql, routine_create_template, routine_edit_script,
+        show_create_routine_sql,
     };
     use crate::models::RoutineCallArg;
 
@@ -477,6 +490,26 @@ mod routine_management {
         assert_eq!(
             drop_routine_sql("weird`name", "FUNCTION"),
             "DROP FUNCTION `weird``name`"
+        );
+    }
+
+    #[test]
+    fn show_create_qualifies_routine_with_schema() {
+        assert_eq!(
+            show_create_routine_sql("ppi", "laporanTertusukJarum", "PROCEDURE"),
+            "SHOW CREATE PROCEDURE `ppi`.`laporanTertusukJarum`"
+        );
+        assert_eq!(
+            show_create_routine_sql("aplikasi", "fn_add", "FUNCTION"),
+            "SHOW CREATE FUNCTION `aplikasi`.`fn_add`"
+        );
+    }
+
+    #[test]
+    fn show_create_escapes_schema_and_name() {
+        assert_eq!(
+            show_create_routine_sql("weird`db", "weird`name", "procedure"),
+            "SHOW CREATE PROCEDURE `weird``db`.`weird``name`"
         );
     }
 }

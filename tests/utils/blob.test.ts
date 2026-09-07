@@ -142,22 +142,23 @@ describe("blob utilities", () => {
       expect(formatBlobValue(123, "INTEGER")).toBe("123");
     });
 
-    it("should work with different BLOB type names", () => {
-      const b64 = btoa("test");
-      const wire = `BLOB:4:application/octet-stream:${b64}`;
+    it("displays complete printable UTF-8 blobs for every BLOB type", () => {
+      const text = "cafè / 数据库\nrow\t2";
+      const bytes = new TextEncoder().encode(text);
+      const wire = `BLOB:${bytes.length}:application/octet-stream:${btoa(String.fromCharCode(...bytes))}`;
+      for (const type of ["BLOB", "TINYBLOB", "MEDIUMBLOB", "LONGBLOB"]) {
+        expect(formatBlobValue(wire, type)).toBe(text);
+      }
+    });
 
-      expect(formatBlobValue(wire, "BLOB")).toContain(
-        "application/octet-stream",
-      );
-      expect(formatBlobValue(wire, "TINYBLOB")).toContain(
-        "application/octet-stream",
-      );
-      expect(formatBlobValue(wire, "MEDIUMBLOB")).toContain(
-        "application/octet-stream",
-      );
-      expect(formatBlobValue(wire, "LONGBLOB")).toContain(
-        "application/octet-stream",
-      );
+    it.each(["\xff\xfe", "A\x00B", "A\x7fB"])("keeps binary metadata for %j", (binary) => {
+      const wire = `BLOB:${binary.length}:application/octet-stream:${btoa(binary)}`;
+      expect(formatBlobValue(wire, "BLOB")).toContain("application/octet-stream");
+    });
+
+    it("does not decode incomplete or oversized payloads", () => {
+      expect(formatBlobValue(`BLOB:20000:application/octet-stream:${btoa("text")}`, "BLOB"))
+        .toContain("application/octet-stream");
     });
   });
 

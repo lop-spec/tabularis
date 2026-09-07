@@ -18,6 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { useDatabase } from "../hooks/useDatabase";
@@ -234,6 +235,7 @@ export function HistoryRecoveryPage() {
   const [historyDetail, setHistoryDetail] = useState<QueryHistoryEntry | null>(null);
 
   useEffect(() => {
+    if (tab !== "history") return;
     let cancelled = false;
     void (async () => {
       setHistoryLoading(true);
@@ -247,7 +249,7 @@ export function HistoryRecoveryPage() {
     return () => {
       cancelled = true;
     };
-  }, [loadAllHistory]);
+  }, [loadAllHistory, tab]);
 
   useEffect(() => {
     if (tab !== "history") return;
@@ -288,7 +290,7 @@ export function HistoryRecoveryPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyFeedback(1500);
   const [result, setResult] = useState<RecoveryCompareResponse | null>(null);
   const [backupOpen, setBackupOpen] = useState(false);
   const [backupConnectionId, setBackupConnectionId] = useState("");
@@ -448,9 +450,7 @@ export function HistoryRecoveryPage() {
 
   const copyResult = () => {
     if (!result) return;
-    void navigator.clipboard.writeText(result.sql);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1_500);
+    void copy(result.sql);
   };
 
   const statusDot = (ok: boolean) => (
@@ -798,9 +798,7 @@ export function HistoryRecoveryPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      void navigator.clipboard.writeText(historyDetail.sql);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1_500);
+                      void copy(historyDetail.sql);
                     }}
                     className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-secondary hover:bg-surface-secondary"
                   >

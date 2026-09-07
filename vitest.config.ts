@@ -12,6 +12,8 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    // Bound jsdom workers on high-core desktop machines to avoid memory contention.
+    maxWorkers: 2,
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
     include: [

@@ -915,6 +915,7 @@
     "executingQuery": "Executando consulta...",
     "exporting": "Exportando...",
     "rowsProcessed": "Linhas Processadas",
+    "exportLoadedRowsWarning": "Apenas {{loaded}} linhas carregadas de {{total}} linhas totais foram exportadas. Navegue pelas páginas do resultado ou execute uma consulta mais restrita antes de exportar se precisar de mais linhas.",
     "queryParameters": "Parâmetros da Consulta",
     "formatSql": "Formatar SQL",
     "convertToConsole": "Converter para Console",

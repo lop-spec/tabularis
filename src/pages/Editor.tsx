@@ -2,6 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import {
+  formatResultForExport,
+  getLoadedRowsExportLimit,
+} from "../utils/resultExport";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import {
   changesDatabaseCatalog,
@@ -118,7 +122,7 @@ import { useSqlAutocompleteRegistration } from "../hooks/useSqlAutocompleteRegis
 import { createNotebook, renameNotebook } from "../utils/notebookStore";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAlert } from "../hooks/useAlert";
 import { useDatabase } from "../hooks/useDatabase";
 import { useDrivers } from "../hooks/useDrivers";
@@ -288,6 +292,7 @@ export const Editor = () => {
     rowsProcessed: number;
     fileName: string;
     errorMessage?: string;
+    warningMessage?: string;
   }>({
     isOpen: false,
     status: "exporting",
@@ -1113,7 +1118,10 @@ export const Editor = () => {
           currentTab?.type === "table" ? currentTab.activeTable : undefined;
 
         if (!tableName && textToRun) {
-          const extracted = extractTableName(textToRun);
+          const extracted = extractTableName(
+            textToRun,
+            schema ?? activeDatabaseName,
+          );
           // Reject views and materialized views — they are not row-editable
           // (materialized views only accept REFRESH, not INSERT/UPDATE/DELETE).
           if (
@@ -1346,7 +1354,8 @@ export const Editor = () => {
           return;
         }
         const res = item?.result ?? null;
-        const tableName = extractTableName(entry.query) ?? null;
+        const tableName =
+          extractTableName(entry.query, schema ?? batchDatabase ?? activeDatabaseName) ?? null;
         const useDecision = applySuccessfulUseDatabase(
           entry.query,
           targetTabId,
@@ -3329,6 +3338,7 @@ export const Editor = () => {
   const startResize = () => {
     isDragging.current = true;
     document.body.style.cursor = "row-resize";
+    const activeEditor = activeTab ? editorsRef.current[activeTab.id] : undefined;
 
     // Overlay prevents CodeMirror from capturing mouse events during drag
     const overlay = document.createElement("div");
@@ -3358,6 +3368,7 @@ export const Editor = () => {
           panels.forEach((el) => {
             el.style.height = `${newHeight}px`;
           });
+          activeEditor?.layout();
         });
       }
     };
@@ -3367,6 +3378,7 @@ export const Editor = () => {
       overlay.remove();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       setEditorHeight(editorHeightRef.current);
+      requestAnimationFrame(() => activeEditor?.layout());
       document.removeEventListener("mousemove", handleResize);
       document.removeEventListener("mouseup", stopResize);
     };
@@ -3391,7 +3403,14 @@ export const Editor = () => {
     [activeTab?.schema, addTab, showAlert, t],
   );
 
+  const exportCancelledRef = useRef(false);
+  const localExportRef = useRef(false);
   const cancelExport = useCallback(async () => {
+    exportCancelledRef.current = true;
+    if (localExportRef.current) {
+      setExportState((prev) => ({ ...prev, isOpen: false }));
+      return;
+    }
     if (!activeConnectionId) return;
     try {
       await invoke("cancel_export", { connectionId: activeConnectionId });
@@ -3410,6 +3429,69 @@ export const Editor = () => {
 
   const handleExportCommon = async (format: "csv" | "json" | "markdown") => {
     if (!activeTab || !activeConnectionId) return;
+    exportCancelledRef.current = false;
+    localExportRef.current = false;
+
+    const extension = format === "markdown" ? "md" : format;
+    const resultEntries = getExportableResultEntries(activeTab.results);
+    const multiResult = resultEntries.length === 1
+      ? resultEntries[0].result
+      : resultEntries.length === 0 && activeTab.type !== "table"
+        ? activeTab.result
+        : undefined;
+    if (multiResult?.columns.length) {
+      localExportRef.current = true;
+      try {
+        const loadedRowsLimit = getLoadedRowsExportLimit(multiResult);
+        const warningMessage = loadedRowsLimit
+          ? t("editor.exportLoadedRowsWarning", {
+              loaded: loadedRowsLimit.loadedRows.toLocaleString(),
+              total: loadedRowsLimit.totalRows.toLocaleString(),
+            })
+          : undefined;
+        if (loadedRowsLimit) console.warn("[export] Exporting loaded rows only", loadedRowsLimit);
+
+        const filePath = await save({
+          filters: [
+            {
+              name: format === "markdown" ? "Markdown" : format.toUpperCase(),
+              extensions: [extension],
+            },
+          ],
+          defaultPath: `result_${Date.now()}.${extension}`,
+        });
+
+        if (!filePath) return;
+
+        setExportState({
+          isOpen: true,
+          status: "exporting",
+          rowsProcessed: multiResult.rows.length,
+          fileName: filePath.split(/[/\\]/).pop() || filePath,
+          errorMessage: undefined,
+          warningMessage,
+        });
+        setExportMenuOpen(false);
+
+        await writeTextFile(
+          filePath,
+          formatResultForExport(multiResult, format, csvDelimiter),
+        );
+        if (exportCancelledRef.current) return;
+
+        setExportState((prev) => ({
+          ...prev,
+          status: "completed",
+        }));
+      } catch (e) {
+        setExportState((prev) => ({
+          ...prev,
+          status: "error",
+          errorMessage: String(e),
+        }));
+      }
+      return;
+    }
 
     const effectiveSchema =
       activeCapabilities?.schemas === true ? activeTab.schema : undefined;
@@ -3418,13 +3500,16 @@ export const Editor = () => {
       activeTab.type === "table" && activeTab.activeTable
         ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
         : activeTab.query;
-    const resultEntries = getExportableResultEntries(activeTab.results);
-    const singleQuery = resultEntries[0]?.query || fallbackQuery;
+    const singleQuery = fallbackQuery;
 
-    if (resultEntries.length === 0 && (!singleQuery || !singleQuery.trim())) return;
+    // Console results must never be regenerated: RETURNING or CALL may write.
+    if (resultEntries.length === 0 && activeTab.type !== "table") {
+      console.warn("[export] No loaded console result; refusing to re-execute SQL");
+      return;
+    }
+    if (resultEntries.length === 0 && !singleQuery?.trim()) return;
 
     try {
-      const extension = format === "markdown" ? "md" : format;
       // On multi-database connections (e.g. MySQL) scope the export to the
       // selected database so the query runs against the database the user is
       // viewing rather than the connection's primary database. The tab may not
@@ -3437,6 +3522,7 @@ export const Editor = () => {
           : {};
 
       if (resultEntries.length > 1) {
+        localExportRef.current = true;
         const directory = await open({ directory: true, multiple: false });
         if (typeof directory !== "string") return;
 
@@ -3453,22 +3539,27 @@ export const Editor = () => {
         });
 
         for (let index = 0; index < resultEntries.length; index += 1) {
+          if (exportCancelledRef.current) return;
           const entry = resultEntries[index];
           const fileName = buildBatchExportFileName(entry, index, extension);
           const filePath = await join(directory, fileName);
+          const result = entry.result!;
+          const limit = getLoadedRowsExportLimit(result);
+          const warningMessage = limit
+            ? t("editor.exportLoadedRowsWarning", {
+                loaded: limit.loadedRows.toLocaleString(),
+                total: limit.totalRows.toLocaleString(),
+              })
+            : undefined;
+          if (limit) console.warn("[export] Exporting loaded rows only", { index, ...limit });
           setExportState((prev) => ({
             ...prev,
-            rowsProcessed: 0,
+            rowsProcessed: result.rows.length,
             fileName: `${index + 1}/${resultEntries.length} ${fileName}`,
+            // Keep a truncation warning visible even if a later result is complete.
+            warningMessage: warningMessage ?? prev.warningMessage,
           }));
-          await invoke("export_query_to_file", {
-            connectionId: activeConnectionId,
-            query: entry.query,
-            filePath,
-            format,
-            csvDelimiter: format === "csv" ? csvDelimiter : undefined,
-            ...databaseParam,
-          });
+          await writeTextFile(filePath, formatResultForExport(result, format, csvDelimiter));
         }
       } else {
         const filePath = await save({
@@ -3499,6 +3590,7 @@ export const Editor = () => {
         });
       }
 
+      if (exportCancelledRef.current) return;
       // Success: update modal state instead of showing toast
       setExportState((prev) => ({
         ...prev,
@@ -4934,6 +5026,7 @@ export const Editor = () => {
         rowsProcessed={exportState.rowsProcessed}
         fileName={exportState.fileName}
         errorMessage={exportState.errorMessage}
+        warningMessage={exportState.warningMessage}
         onCancel={cancelExport}
         onClose={closeExportModal}
       />

@@ -243,10 +243,15 @@ export function statementLabel(query: string): string {
 /**
  * Extracts the table name from a SELECT query.
  * Handles quotes: `table`, "table", 'table', and unquoted table names.
+ * Schema-qualified names are accepted only when the qualifier matches
+ * `expectedSchema`, preventing edits from targeting the active schema by mistake.
  * Returns null if no table is found or if it's not a SELECT query.
  * Returns null for aggregate queries (COUNT, SUM, etc.) since they don't return table rows.
  */
-export function extractTableName(sql: string): string | null {
+export function extractTableName(
+  sql: string,
+  expectedSchema?: string | null,
+): string | null {
   // Remove comments and normalize whitespace
   const cleaned = sql
     .replace(/--[^\n]*/g, '') // Remove line comments
@@ -285,13 +290,18 @@ export function extractTableName(sql: string): string | null {
     return null;
   }
 
-  // Match FROM clause with optional quotes
-  // Matches: FROM table, FROM `table`, FROM "table", FROM 'table'
-  const fromMatch = cleaned.match(/\bFROM\s+([`"']?)(\w+)\1/i);
+  // Match an optionally schema-qualified identifier. Each identifier can be
+  // quoted independently, for example `Ops`.`Addresses` or Ops.Addresses.
+  const fromMatch = cleaned.match(
+    /\bFROM\s+(?:(?:`([^`]+)`|"([^"]+)"|'([^']+)'|([\w$]+))\s*\.\s*)?(?:`([^`]+)`|"([^"]+)"|'([^']+)'|([\w$]+))/i,
+  );
+  if (!fromMatch) return null;
 
-  if (fromMatch && fromMatch[2]) {
-    return fromMatch[2];
-  }
+  const schema = fromMatch[1] ?? fromMatch[2] ?? fromMatch[3] ?? fromMatch[4];
+  const table = fromMatch[5] ?? fromMatch[6] ?? fromMatch[7] ?? fromMatch[8];
+  if (!table) return null;
 
-  return null;
+  if (schema && schema !== expectedSchema) return null;
+
+  return table;
 }

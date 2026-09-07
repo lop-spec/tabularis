@@ -325,6 +325,25 @@ export function blobPayloadToBytes(payload: string, isBase64: boolean): Uint8Arr
   return new TextEncoder().encode(payload);
 }
 
+// Adapted from upstream b90292c6 without the unrelated hex-editing feature.
+function formatBlobTextPreview(value: unknown, metadata: BlobMetadata): string | null {
+  if (metadata.mimeType !== "application/octet-stream" || !metadata.isBase64 ||
+      metadata.isTruncated || metadata.size > 10 * 1024) return null;
+  try {
+    const bytes = blobPayloadToBytes(extractBase64Payload(value), true);
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    // Tabs and newlines are text; other control bytes indicate binary data.
+    if (Array.from(text).some((char) => {
+      const cp = char.codePointAt(0)!;
+      return cp <= 8 || cp === 11 || cp === 12 || (cp >= 14 && cp <= 31) || (cp >= 127 && cp <= 159);
+    })) return null;
+    return text;
+  } catch {
+    // Binary content is expected; this is classification, not a failed fetch.
+    return null;
+  }
+}
+
 /**
  * Formats a BLOB value for display in the DataGrid.
  * Shows MIME type and size instead of raw data.
@@ -340,5 +359,5 @@ export function formatBlobValue(value: unknown, dataType: string): string {
     return "NULL";
   }
 
-  return `${metadata.mimeType} (${metadata.formattedSize})`;
+  return formatBlobTextPreview(value, metadata) ?? `${metadata.mimeType} (${metadata.formattedSize})`;
 }

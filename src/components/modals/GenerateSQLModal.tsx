@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import clsx from "clsx";
 import {X, Loader2, Copy, Check, FileCode, List, Table2, PenLine, Trash2, Play} from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
@@ -45,7 +46,7 @@ export const GenerateSQLModal = ({
   const [sql, setSql] = useState<string>("");
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyFeedback();
   const targetSchema = schema ?? activeSchema;
 
   useEffect(() => {
@@ -159,11 +160,7 @@ export const GenerateSQLModal = ({
     onClose();
   };
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(displayedSql);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const handleCopy = () => copy(displayedSql);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>

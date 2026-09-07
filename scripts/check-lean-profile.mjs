@@ -14,6 +14,9 @@ const forbiddenPaths = [
   "plugins",
   "packages/plugin-api",
   "packages/create-plugin",
+  "src-tauri/src/native_cli.rs",
+  "src-tauri/src/drivers/mongodb",
+  "src-tauri/src/drivers/redis",
   "src-tauri/src/ai.rs",
   "src-tauri/src/ai_activity.rs",
   "src-tauri/src/ai_approval.rs",
@@ -39,7 +42,9 @@ const requiredPaths = [
   "src/components/settings/ShortcutsTab.tsx",
   "src/contexts/KeybindingsContext.ts",
   "src/contexts/KeybindingsProvider.tsx",
-  "src-tauri/src/native_cli.rs",
+  "src-tauri/src/drivers/mysql/mod.rs",
+  "src-tauri/src/drivers/postgres/mod.rs",
+  "src-tauri/src/drivers/sqlite/mod.rs",
 ];
 
 const forbiddenTokens = [
@@ -170,8 +175,8 @@ for (const token of [
   "commands::start_native_cli_session",
   "commands::close_native_cli_session",
 ]) {
-  if (!rustEntry.includes(token)) {
-    failures.push(`retained native CLI registration is missing: ${token}`);
+  if (rustEntry.includes(token)) {
+    failures.push(`excluded native CLI registration exists: ${token}`);
   }
 }
 
@@ -182,5 +187,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Lean profile check passed (${files.length} active files scanned; shortcuts and native CLI retained).`,
+  `Lean profile check passed (${files.length} active files scanned; shortcuts and SQL drivers retained; native consoles excluded).`,
 );

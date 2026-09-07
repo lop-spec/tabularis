@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConnectionManager } from "./useConnectionManager";
 import { useKeybindings } from "./useKeybindings";
+import { isTextCompositionKeyEvent } from "../utils/keyboardEvents";
 
 /**
  * Registers global keyboard shortcuts for navigation.
@@ -14,6 +15,7 @@ export function useGlobalShortcuts() {
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
+			if (isTextCompositionKeyEvent(e)) return;
 			// Don't fire when typing in inputs / textareas / contenteditable (except for the quick navigator)
 			const target = e.target as HTMLElement;
 			const isQuickNavigator = matchesShortcut(e, "quick_navigator");

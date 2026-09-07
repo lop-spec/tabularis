@@ -142,6 +142,12 @@ const offlineResponse = {
 };
 
 describe("HistoryRecoveryPage", () => {
+  it("does not load SQL history on the recovery-only route", async () => {
+    mocks.pathname = "/recovery";
+    render(<HistoryRecoveryPage />);
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("list_recovery_runs", expect.any(Object)));
+    expect(mocks.loadAllHistory).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.pathname = "/history";

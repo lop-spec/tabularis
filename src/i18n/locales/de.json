@@ -878,6 +878,7 @@
     "executingQuery": "Abfrage wird ausgeführt...",
     "exporting": "Wird exportiert...",
     "rowsProcessed": "Verarbeitete Zeilen",
+    "exportLoadedRowsWarning": "Es wurden nur {{loaded}} geladene Zeilen von insgesamt {{total}} Zeilen exportiert. Blättere durch das Ergebnis oder führe eine eingeschränktere Abfrage aus, wenn du mehr Zeilen exportieren musst.",
     "queryParameters": "Abfrageparameter",
     "formatSql": "SQL formatieren",
     "convertToConsole": "In Konsole umwandeln",

@@ -158,6 +158,18 @@ describe('sql utils', () => {
       expect(extractTableName("SELECT * FROM `my_table` WHERE id = 1")).toBe('my_table');
     });
 
+    it('should extract a table qualified by the active schema', () => {
+      expect(extractTableName('SELECT * FROM Ops.Addresses', 'Ops')).toBe('Addresses');
+      expect(extractTableName('SELECT * FROM `Ops`.`Addresses`', 'Ops')).toBe('Addresses');
+      expect(extractTableName('SELECT * FROM "Ops"."Addresses"', 'Ops')).toBe('Addresses');
+      expect(extractTableName("SELECT * FROM 'Ops'.'Addresses'", 'Ops')).toBe('Addresses');
+    });
+
+    it('should reject a qualified table outside the active schema', () => {
+      expect(extractTableName('SELECT * FROM Ops.Addresses')).toBeNull();
+      expect(extractTableName('SELECT * FROM Other.Addresses', 'Ops')).toBeNull();
+    });
+
     it('should return null for non-SELECT queries', () => {
       expect(extractTableName('UPDATE users SET name="test"')).toBeNull();
       expect(extractTableName('DELETE FROM users')).toBeNull();

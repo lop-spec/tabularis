@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, ChevronUp, Copy } from "lucide-react";
 import type { TFunction } from "i18next";
-import { copyTextToClipboard } from "../../utils/clipboard";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 
 interface ErrorDisplayProps {
   error: string;
@@ -10,22 +10,14 @@ interface ErrorDisplayProps {
 
 export function ErrorDisplay({ error, t }: ErrorDisplayProps) {
   const [showDetails, setShowDetails] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyFeedback(1500);
 
   const separatorIndex = error.indexOf("\n\n");
   const hasDetails = separatorIndex !== -1 && separatorIndex < error.length - 2;
   const brief = hasDetails ? error.slice(0, separatorIndex) : error;
   const details = hasDetails ? error.slice(separatorIndex + 2) : "";
 
-  const copyError = async () => {
-    try {
-      await copyTextToClipboard(`Error: ${error}`);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // copyTextToClipboard already logs the browser clipboard error.
-    }
-  };
+  const copyError = () => copy(`Error: ${error}`);
 
   return (
     <div className="relative p-4 pr-12 text-red-400 font-mono text-sm bg-red-900/10 h-full overflow-auto select-text">

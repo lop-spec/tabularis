@@ -14,6 +14,7 @@ import {
   type Statement,
 } from "../../utils/sqlSplitter";
 import { formatSql } from "../../utils/sqlFormat";
+import { isTextCompositionKeyEvent } from "../../utils/keyboardEvents";
 import type { SqlDialect } from "../../utils/sql";
 import type { RunContext } from "../../utils/runTarget";
 
@@ -347,6 +348,7 @@ const SqlEditorInternal = ({
 
       // Force the suggestion widget via the user-configurable shortcut
       editor.onKeyDown((e) => {
+        if (isTextCompositionKeyEvent(e.browserEvent)) return;
         if (matchesShortcutRef.current(e.browserEvent, "trigger_suggestions")) {
           e.preventDefault();
           e.stopPropagation();

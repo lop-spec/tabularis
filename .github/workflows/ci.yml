@@ -60,6 +60,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Check lean fork boundaries
+        run: pnpm check:lean-profile
+
       - name: Typecheck
         run: pnpm run typecheck
 
