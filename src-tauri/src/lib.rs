@@ -51,6 +51,7 @@ pub mod query_history;
 #[cfg(test)]
 pub mod query_history_tests;
 pub mod recovery_history;
+mod mysql_row_identity;
 pub mod recovery_objects;
 #[cfg(test)]
 pub mod recovery_objects_tests;

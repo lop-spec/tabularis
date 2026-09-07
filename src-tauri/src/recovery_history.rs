@@ -961,10 +961,10 @@ fn offline_pk_condition(
         positions
             .iter()
             .map(|position| {
-                format!(
-                    "CAST({} AS BINARY) <=> {}",
-                    quote_identifier(&statement.columns[*position].name),
-                    row.values[*position]
+                crate::mysql_row_identity::encoded_key_condition(
+                    &quote_identifier(&statement.columns[*position].name),
+                    &statement.columns[*position].data_type,
+                    &row.values[*position],
                 )
             })
             .collect::<Vec<_>>()
@@ -2510,7 +2510,7 @@ fn row_key(
 }
 
 /// Keys per SELECT when comparing. Each key expands to an OR'd conjunction of
-/// `CAST(col AS BINARY) <=> X'..'` terms, so the batch size bounds SQL length.
+/// typed key lookups with byte-exact guards, so the batch size bounds SQL length.
 const COMPARE_FETCH_BATCH: usize = 200;
 
 fn recovery_row_projection(work: &RowWork) -> String {
@@ -2533,7 +2533,20 @@ fn key_condition(work: &RowWork, key: &[String]) -> String {
         .iter()
         .zip(key)
         .map(|(column, value)| {
-            format!("CAST({} AS BINARY) <=> {}", quote_identifier(column), value)
+            let data_type = work
+                .columns
+                .iter()
+                .find(|metadata| metadata.name.eq_ignore_ascii_case(column))
+                .map(|metadata| metadata.data_type.as_str())
+                .unwrap_or_else(|| {
+                    log::warn!("Recovery key {column} has no type metadata; retaining byte-exact lookup");
+                    ""
+                });
+            crate::mysql_row_identity::encoded_key_condition(
+                &quote_identifier(column),
+                data_type,
+                value,
+            )
         })
         .collect::<Vec<_>>()
         .join(" AND ")
@@ -2661,15 +2674,7 @@ fn build_delete_sql(work: &RowWork, current: &RecoveryRow) -> Result<String, Str
 
 fn primary_key_condition(work: &RowWork, row: &RecoveryRow) -> Result<String, String> {
     let key = row_key(&work.columns, &work.primary_key, row)?;
-    Ok(work
-        .primary_key
-        .iter()
-        .zip(key)
-        .map(|(column, value)| {
-            format!("CAST({} AS BINARY) <=> {}", quote_identifier(column), value)
-        })
-        .collect::<Vec<_>>()
-        .join(" AND "))
+    Ok(key_condition(work, &key))
 }
 
 fn full_row_guard(work: &RowWork, row: &RecoveryRow) -> Result<String, String> {
@@ -3344,6 +3349,7 @@ fn mysql_text(row: &sqlx::mysql::MySqlRow, index: usize) -> Result<String, Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    include!("recovery_identity_tests.rs");
 
     fn statement(index: usize) -> RecoveryStatement {
         RecoveryStatement {

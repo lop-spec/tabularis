@@ -9,6 +9,10 @@ pub(super) enum ProtectionClass {
     BlockedUnsupported,
 }
 
+#[cfg(test)]
+#[path = "rollback_identity_tests.rs"]
+mod identity_tests;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(not(test), allow(dead_code))]
 pub(super) struct ClassifiedStatement {
@@ -2273,6 +2277,7 @@ fn key_positions(key: &[String], columns: &[String]) -> Option<Vec<usize>> {
 /// conflict can arise on any unique key). Values are either client-encoded
 /// `X'..'`/`NULL` literals or raw statement literals.
 fn family_key_filter(
+    metadata: &TableMetadata,
     columns: &[String],
     rows: &[Vec<String>],
     encoded: bool,
@@ -2298,10 +2303,15 @@ fn family_key_filter(
                     .get(*position)
                     .ok_or_else(|| "INSERT key position is out of bounds".to_string())?;
                 if encoded {
-                    conditions.push(format!(
-                        "CAST({} AS BINARY) <=> {}",
-                        quote_identifier(column),
-                        literal
+                    conditions.push(crate::mysql_row_identity::encoded_key_condition(
+                        &quote_identifier(column),
+                        &metadata
+                            .column(column)
+                            .ok_or_else(|| {
+                                format!("Key column {column} is missing from table metadata")
+                            })?
+                            .data_type,
+                        literal,
                     ));
                 } else if is_safe_key_literal(literal) {
                     conditions.push(format!(
@@ -2633,6 +2643,7 @@ async fn execute_insert_family(
     for chunk in chunks {
         let filter = if pk_locatable {
             Some(family_key_filter(
+                &metadata,
                 &columns,
                 chunk,
                 encoded,
@@ -2854,10 +2865,13 @@ fn encoded_pk_filter(metadata: &TableMetadata, keys: &[Vec<String>]) -> String {
                     .iter()
                     .zip(key)
                     .map(|(column, value)| {
-                        format!(
-                            "CAST({} AS BINARY) <=> {}",
-                            quote_identifier(column),
-                            value
+                        crate::mysql_row_identity::encoded_key_condition(
+                            &quote_identifier(column),
+                            &metadata
+                                .column(column)
+                                .expect("validated primary-key metadata")
+                                .data_type,
+                            value,
                         )
                     })
                     .collect::<Vec<_>>()
@@ -3880,7 +3894,14 @@ fn primary_key_condition(metadata: &TableMetadata, row: &CapturedRow) -> Result<
             .iter()
             .zip(values)
             .map(|(column, value)| {
-                format!("CAST({} AS BINARY) <=> {}", quote_identifier(column), value)
+                crate::mysql_row_identity::encoded_key_condition(
+                    &quote_identifier(column),
+                    &metadata
+                        .column(column)
+                        .expect("validated primary-key metadata")
+                        .data_type,
+                    &value,
+                )
             })
             .collect::<Vec<_>>()
             .join(" AND ")

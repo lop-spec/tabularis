@@ -1546,12 +1546,9 @@ export const Editor = () => {
         );
       } else if (transactionOutcome === "unknown") {
         showAlert(t("editor.transactionOutcomeUnknown"), { kind: "warning" });
-      } else if (
-        transactionOutcome === "rolled_back" ||
-        transactionOutcome === "auto_rolled_back"
-      ) {
-        showAlert(t("editor.transactionRolledBack"), { kind: "info" });
       }
+      // Successful rollback and saved rollback files are reflected in the
+      // toolbar/results, not blocking dialogs. Keep unknown outcomes visible.
       // Deliberately no notice for statements executed by explicit risk
       // choice: the user already accepted them in the risk dialog, so
       // restating it afterwards is pure noise. The result rows still carry
@@ -1563,14 +1560,6 @@ export const Editor = () => {
             path:
               rollbackFile ??
               t("editor.rollbackRiskNoProtectedRollbackFile"),
-          }),
-          { kind: "info" },
-        );
-      } else if (rollbackFile) {
-        showAlert(
-          t("editor.rollbackFileReady", {
-            path: rollbackFile,
-            defaultValue: `Rollback SQL saved: ${rollbackFile}`,
           }),
           { kind: "info" },
         );
