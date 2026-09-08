@@ -2385,14 +2385,24 @@ async fn ensure_conflict_locking_isolation(conn: &mut sqlx::MySqlConnection) -> 
     Ok(())
 }
 
+fn mysql_nonnegative_integer(row: &sqlx::mysql::MySqlRow, index: usize) -> Result<u64, String> {
+    // SHOW diagnostics return numeric columns, not strings. Handle either
+    // signedness in server/proxy metadata without accepting negative values.
+    if let Ok(value) = row.try_get::<u64, _>(index) {
+        return Ok(value);
+    }
+    let value = row.try_get::<i64, _>(index).map_err(|error| format!("Could not decode MySQL diagnostic integer {index}: {error}"))?;
+    u64::try_from(value).map_err(|error| format!("Negative MySQL diagnostic integer {index}: {error}"))
+}
+
 async fn verify_duplicate_only_warnings(conn: &mut sqlx::MySqlConnection) -> Result<(), String> {
     // SHOW diagnostics do not clear the preceding statement's warning list.
     let count_row = conn.fetch_one(sqlx::raw_sql("SHOW COUNT(*) WARNINGS")).await
         .map_err(|error| format!("Could not read INSERT warning count: {error}"))?;
-    let count = mysql_text(&count_row, 0)?.parse::<u64>().map_err(|error| error.to_string())?;
+    let count = mysql_nonnegative_integer(&count_row, 0)?;
     let rows = conn.fetch_all(sqlx::raw_sql("SHOW WARNINGS")).await
         .map_err(|error| format!("Could not inspect INSERT warnings: {error}"))?;
-    let codes = rows.iter().map(|row| mysql_text(row, 1)?.parse::<u64>().map_err(|error| error.to_string()))
+    let codes = rows.iter().map(|row| mysql_nonnegative_integer(row, 1))
         .collect::<Result<Vec<_>, String>>()?;
     safety::complete_duplicate_warnings(count, &codes)
 }
@@ -3431,8 +3441,8 @@ async fn load_table_metadata(
         .collect::<Result<Vec<_>, _>>()?;
     if primary_key.is_empty() {
         let unique_sql = format!(
-            "SELECT s.INDEX_NAME, s.COLUMN_NAME, \
-             (s.SUB_PART IS NULL AND c.IS_NULLABLE = 'NO' AND COALESCE(c.GENERATION_EXPRESSION, '') = '') \
+            "SELECT s.INDEX_NAME, COALESCE(s.COLUMN_NAME, ''), \
+             CAST(COALESCE((s.SUB_PART IS NULL AND c.IS_NULLABLE = 'NO' AND COALESCE(c.GENERATION_EXPRESSION, '') = ''), 0) AS CHAR) \
              FROM information_schema.STATISTICS s LEFT JOIN information_schema.COLUMNS c \
              ON c.TABLE_SCHEMA=s.TABLE_SCHEMA AND c.TABLE_NAME=s.TABLE_NAME AND c.COLUMN_NAME=s.COLUMN_NAME \
              WHERE s.TABLE_SCHEMA={} AND s.TABLE_NAME={} AND s.NON_UNIQUE=0 \
