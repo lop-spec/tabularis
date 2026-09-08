@@ -11,6 +11,8 @@ mod stmt_classify;
 
 #[cfg(test)]
 mod rollback_guard_tests;
+#[cfg(test)]
+mod rollback_entry_tests;
 
 #[cfg(test)]
 mod stmt_classify_tests;
@@ -701,6 +703,7 @@ async fn mysql_execute_with_pk(
     prefix: &str,
     pk_map: &HashMap<String, serde_json::Value>,
 ) -> Result<u64, String> {
+    require_grid_write_permission(params)?;
     let pool = get_mysql_pool(params).await?;
     let text = resolve_text_proto(&pool, params).await?;
     let pairs = build_mysql_pk_where(pk_map)?;
@@ -762,6 +765,7 @@ pub async fn update_record(
     new_val: serde_json::Value,
     max_blob_size: u64,
 ) -> Result<u64, String> {
+    require_grid_write_permission(params)?;
     let pool = get_mysql_pool(params).await?;
     // Behind a prepared-statement-less bastion every value is inlined as an
     // escaped literal instead of bound (see `force_text_protocol`).
@@ -875,6 +879,7 @@ pub async fn insert_record(
     data: std::collections::HashMap<String, serde_json::Value>,
     max_blob_size: u64,
 ) -> Result<u64, String> {
+    require_grid_write_permission(params)?;
     let pool = get_mysql_pool(params).await?;
     // Behind a prepared-statement-less bastion every value is inlined as an
     // escaped literal instead of bound (see `force_text_protocol`).
@@ -1529,6 +1534,18 @@ pub async fn execute_query(
     page: u32,
     schema: Option<&str>,
 ) -> Result<QueryResult, String> {
+    // Backend enforcement also covers callers that do not use the editor's
+    // protected-batch routing. Never trust a frontend classification for DML.
+    if should_use_rollback_guard(params)
+        && rollback_guard::classify_for_rollback(query).class != rollback_guard::ProtectionClass::ReadOnly
+    {
+        let mut results = execute_batch(params, &[query.to_string()], limit, page, schema, None).await?;
+        let statement = results.pop().ok_or_else(|| "Protected execution returned no statement result".to_string())?;
+        return statement.result.ok_or_else(|| statement.error.unwrap_or_else(|| "Protected statement was skipped".to_string()));
+    }
+    if !should_use_rollback_guard(params) {
+        log::warn!("Rollback protection explicitly disabled for direct query execution");
+    }
     let mut conn = acquire_mysql_conn(params, schema).await?;
     // `exec_on_mysql_conn` runs the user's SQL verbatim (no literal inlining),
     // so it only needs to know whether to use the text protocol.
@@ -1550,12 +1567,17 @@ pub async fn execute_query(
 fn should_use_rollback_guard(params: &ConnectionParams) -> bool {
     // Default-on (2026-09-01): an unset flag means protection is active; only
     // an explicit `false` opts a connection out.
-    let enabled = params.rollback_protection_enabled.unwrap_or(true);
-    let execute_unprotected = matches!(
-        params.rollback_unsupported_policy,
-        Some(crate::models::RollbackUnsupportedPolicy::ExecuteUnprotected)
-    );
-    enabled && (!execute_unprotected || params.transaction_context_id.is_some())
+    params.rollback_protection_enabled.unwrap_or(true)
+}
+
+fn require_grid_write_permission(params: &ConnectionParams) -> Result<(), String> {
+    if should_use_rollback_guard(params) {
+        let reason = "Strict rollback protection refused grid mutation: this API has no exact row-image journal; use explicitly keyed SQL in the protected editor instead";
+        log::warn!("{reason}");
+        return Err(reason.to_string());
+    }
+    log::warn!("Rollback protection explicitly disabled for grid mutation");
+    Ok(())
 }
 
 /// Per-statement time budget for the protected (rollback-guard) path.
@@ -1620,6 +1642,7 @@ pub async fn execute_batch(
             )),
         };
     }
+    log::warn!("Rollback protection explicitly disabled for batch execution; no exact recovery guarantee");
     let mut conn = acquire_mysql_conn(params, schema).await?;
     // See `execute_query`: statements run verbatim, so only the protocol flag
     // is needed here, not the literal-escaping mode.

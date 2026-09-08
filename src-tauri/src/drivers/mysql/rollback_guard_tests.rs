@@ -220,8 +220,7 @@ fn fail_closes_every_unsupported_write_family() {
 
 #[test]
 fn reviews_every_unsupported_statement_before_execution() {
-    // INSERT ... SELECT moved into the normalizing family planner
-    // (2026-09-01) and no longer appears in the risk review.
+    // Unsafe INSERT SELECT conversion is refused alongside dynamic writes.
     let queries = [
         "UPDATE users SET active = 1 WHERE id = 1",
         "INSERT INTO users (id) SELECT id FROM staging",
@@ -230,30 +229,24 @@ fn reviews_every_unsupported_statement_before_execution() {
     .map(str::to_string);
 
     let review = review_batch_for_rollback(&queries).expect("risk review");
-    assert_eq!(review.statements.len(), 1);
-    assert_eq!(review.statements[0].index, 3);
-    assert!(review.statements[0].reason.contains("statically provable"));
+    assert_eq!(review.statements.len(), 2);
+    assert_eq!(review.statements[0].index, 2);
+    assert_eq!(review.statements[1].index, 3);
+    assert!(review.statements[1].reason.contains("statically provable"));
     assert!(!review.statements[0].destructive);
 }
 
 #[test]
 fn classifies_normalized_dml_families_as_supported() {
-    // The rewrite normalizer (2026-09-01) keeps these shapes in the exact
-    // pre-commit rollback channel instead of prompting.
+    // Only proven literal inserts and single-target keyed joins stay admitted.
     for sql in [
-        "INSERT INTO users (id) SELECT id FROM staging",
-        "INSERT INTO users (id, name) SELECT s.id, s.name FROM staging s JOIN teams t ON t.id = s.team_id WHERE s.active = 1",
         "INSERT IGNORE INTO users (id) VALUES (1)",
-        "INSERT IGNORE INTO users_bak SELECT * FROM users",
         "INSERT INTO users (id) VALUES (1) ON DUPLICATE KEY UPDATE id = VALUES(id)",
-        "INSERT INTO users (id, name) SELECT s.id, s.name FROM staging s ON DUPLICATE KEY UPDATE name = VALUES(name)",
         "INSERT INTO users VALUES (1, 'Ada')",
         "UPDATE users u JOIN teams t ON t.id = u.team_id SET u.active = 0",
         "UPDATE users AS u SET u.active = 0 WHERE u.id = 1",
-        "UPDATE a.t1 x JOIN b.t2 y ON y.id = x.id SET x.v = y.v, y.seen = 1",
+        "UPDATE a.t1 x JOIN b.t2 y ON y.id = x.id SET x.v = y.v",
         "DELETE u FROM users u JOIN teams t ON t.id = u.team_id",
-        "DELETE t FROM app.users t WHERE NOT EXISTS (SELECT 1 FROM teams s WHERE s.id = t.team_id)",
-        "DELETE FROM u, t USING users u JOIN teams t ON t.id = u.team_id WHERE u.active = 0",
         "DELETE FROM users alias_name WHERE alias_name.id = 1",
     ] {
         assert_eq!(
@@ -404,7 +397,7 @@ fn explicit_risk_execution_stays_on_the_pinned_transaction_connection() {
         rollback_unsupported_policy: Some(RollbackUnsupportedPolicy::ExecuteUnprotected),
         ..Default::default()
     };
-    assert!(!should_use_rollback_guard(&params));
+    assert!(should_use_rollback_guard(&params), "legacy unprotected policy cannot bypass enabled protection");
 
     params.transaction_context_id = Some("editor-tab-1".to_string());
     assert!(should_use_rollback_guard(&params));
@@ -801,11 +794,11 @@ fn blocks_external_select_writes_but_allows_normal_selects() {
 
 #[test]
 fn blocks_unproven_stored_or_udf_calls_that_can_hide_writes() {
-    // A bare function name is indistinguishable from a built-in without a
-    // server metadata lookup, so SELECT keeps the permissive read path.
+    // Unknown bare functions can write other tables too; strict mode refuses
+    // them just like schema-qualified stored functions.
     assert_eq!(
         classify_for_rollback("SELECT mutate_users()").class,
-        ProtectionClass::ReadOnly
+        ProtectionClass::BlockedUnsupported
     );
     for sql in [
         "SELECT app.mutate_users()",
@@ -1159,10 +1152,11 @@ mod live_rollback_family_tests {
         // Default-on: the flag is unset, protection must engage (G5 live).
         let protected = base_params(None, DB).expect("params");
         let queries: Vec<String> = [
-            // insert-select
-            "INSERT INTO dst (id, name, val) SELECT id, name, val FROM src WHERE id = 4",
-            // upsert: updates id=1, inserts id=6
-            "INSERT INTO dst (id, name, val) VALUES (1,'a',111),(6,'f',60) ON DUPLICATE KEY UPDATE val = VALUES(val)",
+            // Explicitly reviewed typed values replace automatic SELECT conversion.
+            "INSERT INTO dst (id, name, val) VALUES (4,'d',40)",
+            // Each upsert has one input row and one provable conflict identity.
+            "INSERT INTO dst (id, name, val) VALUES (1,'a',111) ON DUPLICATE KEY UPDATE val = VALUES(val)",
+            "INSERT INTO dst (id, name, val) VALUES (6,'f',60) ON DUPLICATE KEY UPDATE val = VALUES(val)",
             // ignore: id=2 collides, id=7 inserts
             "INSERT IGNORE INTO dst (id, name, val) VALUES (2,'dup',0),(7,'g',70)",
             // multi-table update
@@ -1283,7 +1277,7 @@ mod live_rollback_family_tests {
 
     #[tokio::test]
     #[ignore]
-    async fn live_unsupported_statement_executes_without_prompt_and_is_flagged() {
+    async fn live_unsupported_statement_is_refused_without_execution() {
         let Some(admin) = base_params(Some(false), "information_schema") else {
             eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
             return;
@@ -1300,19 +1294,16 @@ mod live_rollback_family_tests {
         )
         .await;
 
-        // G4 live: REPLACE has no exact inverse. With no policy supplied it
-        // must execute (no TABULARIS_ROLLBACK_RISK_REVIEW error), be flagged,
-        // and land in the recovery journal as unprotected.
+        // REPLACE has no exact inverse: default protection refuses it before
+        // execution rather than creating an exact:false recovery record.
         let protected = base_params(None, &db).expect("params");
         let queries = vec!["REPLACE INTO t (id, v) VALUES (1, 2)".to_string()];
-        let results = execute_batch(&protected, &queries, None, 1, None, None)
-            .await
-            .expect("no-prompt batch must not error");
-        all_ok(&results).expect("replace must execute");
-        assert_eq!(results[0].rollback_unprotected, Some(true));
+        let error = execute_batch(&protected, &queries, None, 1, None, None)
+            .await.expect_err("strict batch must refuse REPLACE");
+        assert!(error.contains("Strict rollback protection refused"));
 
         let rows = snapshot(&unprotected, "t").await;
-        assert_eq!(rows[0][1], Value::from(2), "REPLACE really executed");
+        assert_eq!(rows[0][1], Value::from(1), "REPLACE must not execute");
 
         run_unprotected(&admin, &[&format!("DROP DATABASE {db}")]).await;
     }

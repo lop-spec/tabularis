@@ -13,6 +13,12 @@ pub(super) enum ProtectionClass {
 #[path = "rollback_identity_tests.rs"]
 mod identity_tests;
 
+#[path = "rollback_safety.rs"]
+mod safety;
+#[cfg(test)]
+#[path = "rollback_safety_tests.rs"]
+mod safety_tests;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(not(test), allow(dead_code))]
 pub(super) struct ClassifiedStatement {
@@ -63,9 +69,9 @@ pub(super) struct DeletePlan {
 pub(super) enum InsertSource {
     /// Raw VALUES row expressions, taken verbatim from the statement.
     Values(Vec<Vec<String>>),
-    /// Raw SELECT text. Executed once inside the protected transaction to
-    /// materialize the exact rows, which then insert as literal VALUES —
-    /// `INSERT … SELECT` semantics with a provable row set.
+    /// Retained only for defensive tests of legacy/internal plans. Both parser
+    /// and executor reject this unsafe conversion before contacting the DB.
+    #[allow(dead_code)]
     Select(String),
 }
 
@@ -292,7 +298,10 @@ pub(super) fn plan_for_rollback(sql: &str) -> Result<ProtectedStatement, Blocked
     match first {
         "SELECT" => classify_select(tokens),
         "WITH" => classify_with(tokens),
-        "SHOW" | "DESCRIBE" | "DESC" => Ok(ProtectedStatement::ReadOnly),
+        "SHOW" | "DESCRIBE" | "DESC" => {
+            ensure_only_proven_function_calls(tokens)?;
+            Ok(ProtectedStatement::ReadOnly)
+        }
         "EXPLAIN" => {
             if contains_word(tokens, "DELETE")
                 || contains_word(tokens, "UPDATE")
@@ -303,6 +312,7 @@ pub(super) fn plan_for_rollback(sql: &str) -> Result<ProtectedStatement, Blocked
                     "EXPLAIN for a write statement is not allowed in rollback protection mode",
                 ))
             } else {
+                ensure_only_proven_function_calls(tokens)?;
                 Ok(ProtectedStatement::ReadOnly)
             }
         }
@@ -900,56 +910,6 @@ pub(super) fn complete_statement_without_database(
     Ok(Some(result))
 }
 
-/// Journals a statement that executed OUTSIDE exact protection into the
-/// batch's recovery journal (`exact: false`), mirroring
-/// `recovery_history::record_unprotected_changes` but reusing the journals
-/// the protected batch already holds. Best-effort: a journaling failure is
-/// logged, never surfaced — it must not fail a statement that already ran.
-async fn journal_unsupported_statement(
-    conn: &mut sqlx::MySqlConnection,
-    recovery_journal: Option<&mut RecoveryJournal>,
-    prepared: &mut HashMap<String, Vec<RecoveryObject>>,
-    statement_index: usize,
-    sql: &str,
-) {
-    let Some(recovery_journal) = recovery_journal else {
-        return;
-    };
-    let (operation, mut objects) = crate::recovery_history::parse_change_objects(sql);
-    if crate::recovery_history::is_unprotected_non_recovery_operation(&operation) {
-        return;
-    }
-    let database = current_database(conn).await.unwrap_or_default();
-    if objects.is_empty() || crate::recovery_objects::dynamic_source(sql).is_some() {
-        objects.extend(
-            crate::recovery_history::resolve_dynamic_objects(conn, &database, sql, prepared)
-                .await,
-        );
-        objects
-            .sort_by(|a, b| (&a.kind, &a.schema, &a.name).cmp(&(&b.kind, &b.schema, &b.name)));
-        objects.dedup();
-    }
-    if let Err(error) = recovery_journal.add_statement(RecoveryStatement {
-        id: String::new(),
-        index: statement_index,
-        executed_at: String::new(),
-        sql: sql.trim().to_string(),
-        category: "unprotected".to_string(),
-        operation,
-        objects,
-        affected_columns: Vec::new(),
-        condition: None,
-        columns: Vec::new(),
-        primary_key: Vec::new(),
-        before_rows: Vec::new(),
-        after_rows: Vec::new(),
-        inverse_sql: None,
-        exact: false,
-    }) {
-        log::warn!("Could not journal an unprotected statement: {error}");
-    }
-}
-
 pub(super) async fn execute_protected_batch(
     params: &ConnectionParams,
     queries: &[String],
@@ -1006,12 +966,10 @@ async fn execute_pinned_protected_batch(
     schema: Option<&str>,
     on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
 ) -> Result<Vec<BatchStatementResult>, String> {
-    // No-prompt policy (2026-09-01): a missing policy no longer raises
-    // TABULARIS_ROLLBACK_RISK_REVIEW. Unsupported statements execute
-    // unprotected, are flagged in their result, and are journaled below so
-    // the backup-based restore can still reach their objects. An explicit
-    // `Skip` policy is still honored.
+    // Preflight never executes an unsupported write. Explicit skip remains
+    // available, but execute_unprotected cannot override enabled protection.
     let (plans, _review) = plan_batch_collecting_risks(queries);
+    safety::preflight(&plans, params.rollback_unsupported_policy)?;
 
     let key = transaction_context_key(params)?;
     let context_lock = transaction_context_lock(&key);
@@ -1041,11 +999,13 @@ async fn execute_pinned_protected_batch(
                 .to_string(),
         );
     }
-    // No-prompt policy: a DDL implicit commit inside an explicit transaction
-    // is auto-allowed (the boundary is committed, the DDL protected, and the
-    // combined rollback SQL finalized) instead of raising a review error.
-    let lifecycle =
-        validate_pinned_transaction_structure(&plans, starts_active, true, queries)?;
+    // Strict mode must not implicitly commit preceding DML to execute DDL.
+    let lifecycle = validate_pinned_transaction_structure(&plans, starts_active, false, queries)
+        .map_err(|error| {
+            if error.starts_with(ROLLBACK_RISK_REVIEW_PREFIX) {
+                safety::refusal("DDL would implicitly commit the active transaction; explicitly COMMIT or ROLLBACK it before submitting DDL")
+            } else { error }
+        })?;
 
     // `USE db` mixed with writes used to be refused here, on the theory that an
     // unqualified table name in the rollback file would resolve against whatever
@@ -1118,7 +1078,6 @@ async fn execute_pinned_protected_batch(
     let mut stopped = false;
     let mut transaction_outcome: Option<String> = None;
     let mut uncertain_boundary = false;
-    let mut prepared_dynamic_objects: HashMap<String, Vec<RecoveryObject>> = HashMap::new();
     let statement_offset = session.statement_offset;
 
     {
@@ -1308,36 +1267,7 @@ async fn execute_pinned_protected_batch(
                         .await
                     }
                 }
-                ProtectedStatement::Unsupported(_) => {
-                    // MySQL commits implicitly around DDL. The Ddl branch
-                    // above clears the checkpoint for that reason; an
-                    // Unsupported statement that is also DDL — DROP TABLE,
-                    // TRUNCATE, the destructive ones a user accepts the
-                    // risk on — commits identically but left the
-                    // checkpoint standing, so a later ROLLBACK rewound the
-                    // journal past changes that were already permanent and
-                    // erased the only record of them.
-                    if explicit_transaction_checkpoint.is_some()
-                        && causes_implicit_commit(query)
-                    {
-                        *explicit_transaction_checkpoint = None;
-                        transaction_outcome =
-                            Some("unsupported_implicit_commit".to_string());
-                    }
-                    let outcome =
-                        super::exec_on_mysql_conn(conn, query, limit, page, text).await;
-                    if outcome.is_ok() {
-                        journal_unsupported_statement(
-                            conn,
-                            recovery_journal.as_mut(),
-                            &mut prepared_dynamic_objects,
-                            statement_offset + index,
-                            query,
-                        )
-                        .await;
-                    }
-                    outcome
-                }
+                ProtectedStatement::Unsupported(blocked) => Err(safety::refusal(&blocked.reason)),
             };
 
             if outcome.is_err()
@@ -1386,13 +1316,11 @@ async fn execute_pinned_protected_batch(
             if outcome.is_err() {
                 stopped = true;
             }
-            let mut result = BatchStatementResult::from_outcome(start, outcome);
+            let result = BatchStatementResult::from_outcome(start, outcome);
             if degraded.take().is_some() {
-                result.rollback_unprotected = Some(true);
+                return Err("Internal strict-protection invariant violated: an unprotected result was produced".to_string());
             }
-            if matches!(plan, ProtectedStatement::Unsupported(_)) {
-                result.rollback_unprotected = Some(true);
-            }
+            // Unsupported statements cannot have executed in strict mode.
             if let Some(callback) = on_progress {
                 if let Err(error) = callback(index, &result) {
                     *execution_in_flight = false;
@@ -1480,16 +1408,8 @@ async fn execute_single_run_protected_batch(
     schema: Option<&str>,
     on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
 ) -> Result<Vec<BatchStatementResult>, String> {
-    // No-prompt policy (2026-09-01): a missing policy no longer raises
-    // TABULARIS_ROLLBACK_RISK_REVIEW; unsupported statements execute
-    // unprotected, are flagged, and are journaled. `Skip` is still honored.
     let (plans, _review) = plan_batch_collecting_risks(queries);
-    if params.rollback_unsupported_policy == Some(RollbackUnsupportedPolicy::ExecuteUnprotected) {
-        return Err(
-            "Internal rollback protection error: unprotected execution must use the normal batch path"
-                .to_string(),
-        );
-    }
+    safety::preflight(&plans, params.rollback_unsupported_policy)?;
     validate_transaction_structure(&plans)?;
 
     // Unsupported statements count as writes: they may change data, and the
@@ -1541,7 +1461,6 @@ async fn execute_single_run_protected_batch(
     let mut results = Vec::with_capacity(queries.len());
     let mut stopped = false;
     let mut explicit_transaction_checkpoint = None;
-    let mut prepared_dynamic_objects: HashMap<String, Vec<RecoveryObject>> = HashMap::new();
     for (index, (query, plan)) in queries.iter().zip(plans.iter()).enumerate() {
         let start = std::time::Instant::now();
         if let Some(result) = complete_statement_without_database(
@@ -1662,23 +1581,7 @@ async fn execute_single_run_protected_batch(
                     )
                     .await
                 }
-            ProtectedStatement::Unsupported(_) => {
-                // No-prompt policy: run it, flag the result, and journal the
-                // statement so the backup-based restore can reach its objects.
-                let outcome =
-                    super::exec_on_mysql_conn(&mut conn, query, limit, page, text).await;
-                if outcome.is_ok() {
-                    journal_unsupported_statement(
-                        &mut conn,
-                        recovery_journal.as_mut(),
-                        &mut prepared_dynamic_objects,
-                        index,
-                        query,
-                    )
-                    .await;
-                }
-                outcome
-            }
+            ProtectedStatement::Unsupported(blocked) => Err(safety::refusal(&blocked.reason)),
         };
         if outcome.is_err()
             && explicit_transaction_checkpoint.is_some()
@@ -1717,8 +1620,8 @@ async fn execute_single_run_protected_batch(
             stopped = true;
         }
         let mut result = BatchStatementResult::from_outcome(start, outcome);
-        if degraded.take().is_some() || matches!(plan, ProtectedStatement::Unsupported(_)) {
-            result.rollback_unprotected = Some(true);
+        if degraded.take().is_some() {
+            return Err("Internal strict-protection invariant violated: an unprotected result was produced".to_string());
         }
         result.rollback_file = rollback_path.clone();
         if let Some(callback) = on_progress {
@@ -1932,41 +1835,18 @@ async fn execute_protected_dml_body(
         }
     };
 
-    // The statement is legitimate, only its inverse is not derivable. Refusing
-    // it means a valid UPDATE simply cannot run while protection is on, which
-    // is worse than running it with the loss of exactness recorded. The row
-    // images are gone either way; what we keep is the record that the table
-    // was touched, so the backup-based restore can still reach it.
-    let Err(error) = &outcome else {
-        return outcome;
-    };
-    let Some(reason) = unprotectable_reason(error) else {
-        return outcome;
-    };
-    let reason = reason.to_string();
-    log::warn!("Degrading to an unprotected run: {reason}");
-
-    let result = super::exec_on_mysql_conn(conn, query, None, 1, text).await?;
-    let (operation, objects) = crate::recovery_history::parse_change_objects(query);
-    recovery_journal.add_statement(crate::recovery_history::RecoveryStatement {
-        id: String::new(),
-        index: statement_index,
-        executed_at: String::new(),
-        sql: query.trim().to_string(),
-        category: "unprotected".to_string(),
-        operation,
-        objects,
-        affected_columns: Vec::new(),
-        condition: None,
-        columns: Vec::new(),
-        primary_key: Vec::new(),
-        before_rows: Vec::new(),
-        after_rows: Vec::new(),
-        inverse_sql: None,
-        exact: false,
-    })?;
-    *degraded = Some(reason);
-    Ok(result)
+    // The caller rolls back and rewinds both journals on every error,
+    // including a refusal discovered after an earlier write in this transaction.
+    // Never execute the user's statement a second time as a fallback.
+    let _ = degraded;
+    outcome.map_err(|error| {
+        if let Some(reason) = unprotectable_reason(&error) {
+            safety::refusal(reason)
+        } else {
+            log::warn!("Protected DML failed; transaction must be rolled back: {error}");
+            error
+        }
+    })
 }
 
 async fn execute_insert(
@@ -2426,7 +2306,7 @@ async fn load_unique_index_column_sets(
     metadata: &TableMetadata,
 ) -> Result<Option<Vec<Vec<String>>>, String> {
     let sql = format!(
-        "SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.STATISTICS \
+        "SELECT INDEX_NAME, COLUMN_NAME, SUB_PART FROM information_schema.STATISTICS \
          WHERE TABLE_SCHEMA = {} AND TABLE_NAME = {} AND NON_UNIQUE = 0 \
            AND INDEX_NAME <> 'PRIMARY' \
          ORDER BY INDEX_NAME, SEQ_IN_INDEX",
@@ -2440,6 +2320,9 @@ async fn load_unique_index_column_sets(
     let mut sets: Vec<(String, Vec<String>)> = Vec::new();
     for row in rows {
         let index_name = mysql_text(&row, 0)?;
+        if row.try_get::<Option<u64>, _>(2).map_err(|error| error.to_string())?.is_some() {
+            return Ok(None); // Prefix uniqueness is not full-column equality.
+        }
         let column = match row.try_get::<Option<String>, _>(1) {
             Ok(Some(column)) => column,
             Ok(None) => return Ok(None),
@@ -2491,9 +2374,31 @@ fn synthesize_family_insert_sql(
     ))
 }
 
-/// Executes the extended INSERT family with exact pre-commit rollback:
-/// IGNORE and ON DUPLICATE KEY UPDATE via key-located before/after diffs, and
-/// SELECT sources via one-shot materialization into literal VALUES chunks.
+async fn ensure_conflict_locking_isolation(conn: &mut sqlx::MySqlConnection) -> Result<(), String> {
+    let rows = conn.fetch_all(sqlx::raw_sql(
+        "SHOW SESSION VARIABLES WHERE Variable_name IN ('transaction_isolation', 'tx_isolation')"
+    )).await.map_err(|error| format!("Could not verify conflict locking isolation: {error}"))?;
+    let isolation = rows.first().map(|row| mysql_text(row, 1)).transpose()?.unwrap_or_default();
+    if !safety::safe_conflict_isolation(&isolation) {
+        return Err(safety::refusal(&format!("conflict-handling INSERT needs REPEATABLE READ or SERIALIZABLE gap locking; current isolation is {isolation}")));
+    }
+    Ok(())
+}
+
+async fn verify_duplicate_only_warnings(conn: &mut sqlx::MySqlConnection) -> Result<(), String> {
+    // SHOW diagnostics do not clear the preceding statement's warning list.
+    let count_row = conn.fetch_one(sqlx::raw_sql("SHOW COUNT(*) WARNINGS")).await
+        .map_err(|error| format!("Could not read INSERT warning count: {error}"))?;
+    let count = mysql_text(&count_row, 0)?.parse::<u64>().map_err(|error| error.to_string())?;
+    let rows = conn.fetch_all(sqlx::raw_sql("SHOW WARNINGS")).await
+        .map_err(|error| format!("Could not inspect INSERT warnings: {error}"))?;
+    let codes = rows.iter().map(|row| mysql_text(row, 1)?.parse::<u64>().map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, String>>()?;
+    safety::complete_duplicate_warnings(count, &codes)
+}
+
+/// Extended literal INSERTs: exact conflict snapshots, stable-key after reads,
+/// and strict count/diagnostic validation. SELECT conversion stays refused.
 async fn execute_insert_family(
     conn: &mut sqlx::MySqlConnection,
     query: &str,
@@ -2503,8 +2408,12 @@ async fn execute_insert_family(
     recovery_journal: &mut RecoveryJournal,
     text: super::TextProto,
 ) -> Result<QueryResult, String> {
+    safety::validate_insert_source(plan)?;
     let metadata =
         load_locked_dml_metadata(conn, &plan.table, plan.upsert.is_some()).await?;
+    if plan.ignore || plan.upsert.is_some() {
+        ensure_conflict_locking_isolation(conn).await?;
+    }
     let columns: Vec<String> = match &plan.columns {
         Some(columns) => columns.clone(),
         None => {
@@ -2588,7 +2497,7 @@ async fn execute_insert_family(
             Some(sets) => key_sets.extend(sets),
             None => {
                 return Err(format!(
-                    "{UNPROTECTABLE}the target table has a functional unique index; upsert conflicts cannot be pre-located"
+                    "{UNPROTECTABLE}the target table has a functional or prefix unique index; upsert conflicts cannot be pre-located exactly"
                 ));
             }
         }
@@ -2636,6 +2545,7 @@ async fn execute_insert_family(
     let mut changed_before: Vec<CapturedRow> = Vec::new();
     let mut changed_after: Vec<CapturedRow> = Vec::new();
     let mut matched_total = 0_u64;
+    let mut after_total = 0_usize;
     let mut updated_total = 0_u64;
     let mut rollback_steps: Vec<RollbackStep> = Vec::new();
     let mut actual_changed_columns = BTreeSet::new();
@@ -2657,6 +2567,9 @@ async fn execute_insert_family(
         let before_by_key = if plan.ignore || plan.upsert.is_some() {
             let filter = filter.as_deref().expect("checked pk_locatable above");
             let before = capture_rows(conn, &metadata, Some(filter)).await?;
+            if plan.upsert.is_some() && before.len() > 1 {
+                return Err(safety::refusal("one upsert input conflicts with multiple existing rows through different unique keys"));
+            }
             matched_total += before.len() as u64;
             rows_by_primary_key(&metadata, before)?
         } else {
@@ -2678,13 +2591,26 @@ async fn execute_insert_family(
         };
         let result = super::exec_on_mysql_conn(conn, executed_sql, None, 1, text).await?;
         total_affected += result.affected_rows;
+        if plan.ignore {
+            verify_duplicate_only_warnings(conn).await?;
+        }
 
-        let after_condition = match &filter {
-            Some(filter) => filter.clone(),
-            None => auto_increment_insert_condition(conn, &metadata, chunk.len()).await?,
+        // Existing conflict rows must be followed by their captured stable
+        // identity even when the upsert changes every secondary unique value.
+        let after_condition = if plan.upsert.is_some() && !before_by_key.is_empty() {
+            captured_primary_key_filter(&metadata, &before_by_key.values().cloned().collect::<Vec<_>>())?
+        } else {
+            match &filter {
+                Some(filter) => filter.clone(),
+                None => auto_increment_insert_condition(conn, &metadata, chunk.len()).await?,
+            }
         };
         let after = capture_rows(conn, &metadata, Some(&after_condition)).await?;
         let after_by_key = rows_by_primary_key(&metadata, after)?;
+        after_total += after_by_key.len();
+        if before_by_key.keys().any(|key| !after_by_key.contains_key(key)) {
+            return Err("INSERT conflict handling lost a captured row identity; transaction must be rolled back".to_string());
+        }
 
         if plan.ignore || plan.upsert.is_some() {
             for (key, after_row) in after_by_key {
@@ -2741,19 +2667,8 @@ async fn execute_insert_family(
         }
     }
 
-    // Affected-rows tripwire for the conflict-handling forms. MySQL counts an
-    // upserted row as 2 and an IGNOREd duplicate as 0; with CLIENT_FOUND_ROWS
-    // every matched row counts 1. The row diffs above are the ground truth —
-    // this only catches a diverging execution.
     if plan.upsert.is_some() {
-        let inserted = inserted_total.len() as u64;
-        let standard = inserted + 2 * updated_total;
-        let found_rows = inserted + matched_total;
-        if total_affected != standard && total_affected != found_rows {
-            return Err(format!(
-                "upsert reported {total_affected} affected rows but the row diff found {inserted} inserts and {updated_total} updates; transaction was rolled back"
-            ));
-        }
+        safety::validate_upsert_counts(total_affected, matched_total as usize, after_total, inserted_total.len(), updated_total)?;
     } else if plan.ignore && total_affected != inserted_total.len() as u64 {
         return Err(format!(
             "INSERT IGNORE reported {total_affected} affected rows but {} rows were inserted; transaction was rolled back",
@@ -2887,6 +2802,13 @@ async fn load_multi_table_metadata(
     plan: &MultiTablePlan,
     require_assignable: bool,
 ) -> Result<Vec<TableMetadata>, String> {
+    safety::single_target(plan).map_err(|blocked| safety::refusal(&blocked.reason))?;
+    // FOR UPDATE must cover real transactional source tables too; reject views
+    // and nontransactional JOIN sources before evaluating any selection.
+    let refs_tokens = tokenize(&plan.refs_sql).map_err(|blocked| safety::refusal(&blocked.reason))?;
+    for (object, _) in parse_table_references(&refs_tokens).map_err(|blocked| safety::refusal(&blocked.reason))? {
+        load_locked_dml_metadata(conn, &object, false).await?;
+    }
     let mut metas = Vec::with_capacity(plan.targets.len());
     for target in &plan.targets {
         let metadata = load_locked_dml_metadata(conn, &target.table, true).await?;
@@ -2953,7 +2875,8 @@ async fn execute_multi_update(
         before_per_target.push(before);
     }
 
-    let result = super::exec_on_mysql_conn(conn, query, None, 1, text).await?;
+    let locked_sql = safety::restricted_multi_sql(query, plan, &metas[0], &before_per_target[0])?;
+    let result = super::exec_on_mysql_conn(conn, &locked_sql, None, 1, text).await?;
 
     let mut total_changed = 0_u64;
     let mut total_matched = 0_u64;
@@ -3064,7 +2987,8 @@ async fn execute_multi_delete(
         captured.push((filter, before));
     }
 
-    let result = super::exec_on_mysql_conn(conn, query, None, 1, text).await?;
+    let locked_sql = safety::restricted_multi_sql(query, plan, &metas[0], &captured[0].1)?;
+    let result = super::exec_on_mysql_conn(conn, &locked_sql, None, 1, text).await?;
 
     let mut total_deleted = 0_u64;
     for (metadata, (filter, before)) in metas.iter().zip(captured) {
@@ -3498,13 +3422,32 @@ async fn load_table_metadata(
         sql_hex(schema.as_bytes()),
         sql_hex(object.name.as_bytes())
     );
-    let primary_key = conn
+    let mut primary_key = conn
         .fetch_all(sqlx::raw_sql(&primary_sql))
         .await
         .map_err(|error| format!("Could not inspect primary key: {error}"))?
         .into_iter()
         .map(|row| mysql_text(&row, 0))
         .collect::<Result<Vec<_>, _>>()?;
+    if primary_key.is_empty() {
+        let unique_sql = format!(
+            "SELECT s.INDEX_NAME, s.COLUMN_NAME, \
+             (s.SUB_PART IS NULL AND c.IS_NULLABLE = 'NO' AND COALESCE(c.GENERATION_EXPRESSION, '') = '') \
+             FROM information_schema.STATISTICS s LEFT JOIN information_schema.COLUMNS c \
+             ON c.TABLE_SCHEMA=s.TABLE_SCHEMA AND c.TABLE_NAME=s.TABLE_NAME AND c.COLUMN_NAME=s.COLUMN_NAME \
+             WHERE s.TABLE_SCHEMA={} AND s.TABLE_NAME={} AND s.NON_UNIQUE=0 \
+             ORDER BY s.INDEX_NAME, s.SEQ_IN_INDEX",
+            sql_hex(schema.as_bytes()), sql_hex(object.name.as_bytes())
+        );
+        let mut candidates = Vec::new();
+        for row in conn.fetch_all(sqlx::raw_sql(&unique_sql)).await.map_err(|error| format!("Could not inspect stable unique identities: {error}"))? {
+            candidates.push((mysql_text(&row, 0)?, mysql_text(&row, 1)?, mysql_text(&row, 2)? == "1"));
+        }
+        if let Some(key) = safety::stable_unique_key(candidates) {
+            log::info!("Rollback protection uses a verified NOT NULL full unique key for {schema}.{}: {key:?}", object.name);
+            primary_key = key;
+        }
+    }
 
     Ok(TableMetadata {
         schema,
@@ -3522,8 +3465,8 @@ async fn load_locked_dml_metadata(
     check_cascades: bool,
 ) -> Result<TableMetadata, String> {
     let initial = load_table_metadata(conn, object).await.map_err(|error| {
-        // A view target is a legitimate statement whose inverse we cannot
-        // build — degrade instead of refusing the write outright.
+        // A view cannot be snapshotted as a proven base-table write set.
+        // Carry the refusal reason to the strict transaction error handler.
         if error.contains("not rollback-protected") {
             format!("{UNPROTECTABLE}{error}")
         } else {
@@ -3538,10 +3481,8 @@ async fn load_locked_dml_metadata(
         .await
         .map_err(|error| format!("Could not lock target table metadata: {error}"))?;
     let locked = load_table_metadata(conn, object).await?;
-    // Table-shape refusals (engine, triggers, cascades, exotic column types)
-    // mark the statement as unprotectable rather than failing it: under
-    // default-on protection a runnable statement must stay runnable, with the
-    // loss of exactness recorded in the recovery journal.
+    // Table-shape refusals abort protected execution; the marker carries the
+    // reason to the caller and is never permission for an unprotected retry.
     ensure_dml_safe_table(conn, &locked, check_cascades)
         .await
         .map_err(|error| format!("{UNPROTECTABLE}{error}"))?;
@@ -4210,12 +4151,9 @@ fn sql_hex(bytes: &[u8]) -> String {
 /// narrow: an external write side effect (INTO OUTFILE/DUMPFILE) or a stored
 /// function that writes tables behind the query.
 ///
-/// Reads use [`ensure_no_user_defined_function_calls`] rather than the proven-
-/// function allowlist. Both refuse stored functions; the allowlist additionally
-/// refuses every built-in it has not heard of, and that is where it went wrong
-/// — 193 names and still missing GROUP_CONCAT, ROW_NUMBER, LAG, MD5, UUID.
-/// Write statements keep the allowlist: they carry a rollback file, so an
-/// unrecognised function there is worth failing closed over.
+/// Reads and writes both require proven side-effect-free functions: a bare
+/// stored function can hide DML too. Common reporting functions are included
+/// explicitly; unknown function calls fail closed rather than hiding writes.
 ///
 /// `SELECT ... FOR UPDATE` / `FOR SHARE` / `LOCK IN SHARE MODE` stay read-only:
 /// they take row locks inside the caller's transaction but change no data.
@@ -4233,7 +4171,9 @@ fn classify_select(tokens: &[Token]) -> Result<ProtectedStatement, BlockedStatem
             "user-variable assignment with := is forbidden because session mutations are not represented in the rollback file",
         ));
     }
-    ensure_no_user_defined_function_calls(tokens)?;
+    // SELECT can invoke a stored function that writes another table. Only
+    // proven built-ins/SQL constructs are safe on a protection-enabled path.
+    ensure_only_proven_function_calls(tokens)?;
     Ok(ProtectedStatement::ReadOnly)
 }
 
@@ -4295,6 +4235,12 @@ fn matches_word_sequence(tokens: &[Token], expected: &[&str]) -> bool {
 }
 
 fn classify_set(sql: &str, tokens: &[Token]) -> Result<ProtectedStatement, BlockedStatement> {
+    // Changing the session default inside an active transaction does not
+    // change that transaction's isolation. Refuse the change so the runtime
+    // isolation probe cannot mistake the next transaction's default for this one.
+    if tokens.iter().any(|token| matches!(token.upper(), "TRANSACTION_ISOLATION" | "TX_ISOLATION" | "TRANSACTION_READ_ONLY" | "TX_READ_ONLY")) {
+        return Err(BlockedStatement::unsupported("transaction characteristics cannot change inside the protected session; configure isolation before opening the connection"));
+    }
     if let Some((variable, assignment_index)) = direct_user_variable(tokens) {
         if contains_word(tokens, "OUTFILE") || contains_word(tokens, "DUMPFILE") {
             return Err(BlockedStatement::unsupported(
@@ -4333,6 +4279,7 @@ fn classify_set(sql: &str, tokens: &[Token]) -> Result<ProtectedStatement, Block
                 "SET expressions with SELECT INTO OUTFILE/DUMPFILE have an external write side effect",
             ));
         }
+        ensure_only_proven_function_calls(tokens)?;
         return Ok(ProtectedStatement::Session(SessionPlan::Setting));
     }
 
@@ -4356,42 +4303,6 @@ fn direct_user_variable(tokens: &[Token]) -> Option<(&str, usize)> {
 
 fn ensure_only_proven_function_calls(tokens: &[Token]) -> Result<(), BlockedStatement> {
     ensure_only_proven_function_calls_with_assignment(tokens, None)
-}
-
-/// Refuses only the function calls that are *identifiably* user-defined, which
-/// is what reads actually need to worry about: a stored function can write to
-/// tables, and those writes land in no rollback file.
-///
-/// Two markers identify them without consulting any list:
-///   * schema qualification — `app.mutate_users(...)`
-///   * a quoted identifier  — `` `mutate_users`(...) ``
-///
-/// Built-in functions can be neither. That matters because the allowlist used
-/// by [`ensure_only_proven_function_calls`] holds 193 names and still missed
-/// GROUP_CONCAT, ROW_NUMBER, LAG, MD5 and UUID — every miss rejected a read
-/// that was never a risk, and adding names never converges.
-///
-/// A bare `SELECT mutate_users(1)` on a stored function in the *current* schema
-/// still slips through: nothing in the statement distinguishes it from a
-/// built-in. Writes it performs are outside rollback protection. That gap is
-/// the deliberate cost of not maintaining a list; write statements keep the
-/// stricter check, since they are the ones with a rollback file to falsify.
-fn ensure_no_user_defined_function_calls(tokens: &[Token]) -> Result<(), BlockedStatement> {
-    for (idx, token) in tokens.iter().enumerate() {
-        if !matches!(token.kind, TokenKind::Word | TokenKind::QuotedIdentifier)
-            || tokens.get(idx + 1).map(|next| next.text.as_str()) != Some("(")
-        {
-            continue;
-        }
-        let schema_qualified = idx > 0 && tokens[idx - 1].text == ".";
-        if token.kind == TokenKind::QuotedIdentifier || schema_qualified {
-            return Err(BlockedStatement::unsupported(format!(
-                "function call {}(...) is user-defined; stored functions can hide writes that no rollback file records",
-                token.text
-            )));
-        }
-    }
-    Ok(())
 }
 
 fn ensure_only_proven_function_calls_with_assignment(
@@ -4444,6 +4355,21 @@ fn is_proven_side_effect_free_function(name: &str) -> bool {
             | "SOME"
             | "VALUES"
             | "XOR"
+            | "FROM"
+            | "JOIN"
+            | "USING"
+            | "ON"
+            | "SELECT"
+            | "UNION"
+            // Common read-only functions; unknown functions still fail closed.
+            | "GROUP_CONCAT"
+            | "MD5"
+            | "SHA"
+            | "SHA1"
+            | "SHA2"
+            | "UUID"
+            | "UUID_SHORT"
+            | "RAND"
             // Numeric and aggregate functions.
             | "ABS"
             | "ACOS"
@@ -4744,6 +4670,9 @@ fn parse_update(sql: &str, tokens: &[Token]) -> Result<UpdatePlan, BlockedStatem
     let assignments_end = where_idx.unwrap_or(tokens.len());
     let assigned_columns = parse_assignments(&tokens[set_idx + 1..assignments_end])?;
     ensure_only_proven_function_calls(&tokens[set_idx + 1..])?;
+    if let Some(index) = where_idx {
+        safety::repeatable_selection(&tokens[index + 1..])?;
+    }
     let statement_prefix_end = where_idx
         .map(|idx| tokens[idx].start)
         .unwrap_or_else(|| statement_end(sql, tokens));
@@ -4779,7 +4708,7 @@ fn parse_delete(sql: &str, tokens: &[Token]) -> Result<DeletePlan, BlockedStatem
             "multi-table DELETE and DELETE ORDER BY/LIMIT/RETURNING are not supported",
         ));
     }
-    ensure_only_proven_function_calls(&tokens[idx..])?;
+    safety::repeatable_selection(&tokens[idx..])?;
     let where_idx = find_top_level_word(tokens, idx, &["WHERE"]);
     if where_idx.is_none() && idx != tokens.len() {
         return Err(BlockedStatement::unsupported(
@@ -4921,7 +4850,12 @@ fn parse_insert_family(
             InsertSource::Values(parse_values_rows(sql, source_tokens)?)
         }
         Some("SELECT") | Some("WITH") | Some("(") => {
-            InsertSource::Select(raw_token_range(sql, source_tokens)?)
+            // Validate the entire source even though conversion is currently
+            // refused: never let hidden writes enter an exact-image channel.
+            ensure_only_proven_function_calls(source_tokens)?;
+            return Err(BlockedStatement::unsupported(
+                "automatic INSERT SELECT rewriting is disabled until typed values, source locking and statement-time/default semantics are preserved; materialize and review typed rows explicitly"
+            ));
         }
         _ => {
             return Err(BlockedStatement::unsupported(
@@ -4953,13 +4887,9 @@ fn parse_insert_family(
         None
     };
 
-    Ok(InsertFamilyPlan {
-        table,
-        columns,
-        source,
-        ignore,
-        upsert,
-    })
+    let plan = InsertFamilyPlan { table, columns, source, ignore, upsert };
+    safety::validate_insert_source(&plan).map_err(BlockedStatement::unsupported)?;
+    Ok(plan)
 }
 
 const JOIN_KEYWORDS: &[&str] = &[
@@ -5143,6 +5073,7 @@ fn parse_multi_update(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
         ));
     }
     let references = parse_table_references(&tokens[1..set_idx])?;
+    safety::repeatable_selection(&tokens[1..set_idx])?;
     if find_top_level_word(tokens, set_idx + 1, &["ORDER", "LIMIT", "RETURNING"]).is_some() {
         return Err(BlockedStatement::unsupported(
             "UPDATE ORDER BY/LIMIT/RETURNING is not supported by the exact row-diff planner",
@@ -5181,6 +5112,12 @@ fn parse_multi_update(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
         }
     }
 
+    if let Some(index) = where_idx {
+        safety::repeatable_selection(&tokens[index + 1..])?;
+    }
+    if targets.len() != 1 {
+        return Err(BlockedStatement::unsupported("multiple UPDATE targets require manually reviewed transactional decomposition"));
+    }
     let refs_sql = raw_token_range(sql, &tokens[1..set_idx])?;
     let where_sql = where_idx
         .map(|idx| sql[tokens[idx].end..statement_end(sql, tokens)].trim().to_string());
@@ -5291,6 +5228,7 @@ fn parse_multi_delete(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
         ));
     }
     let references = parse_table_references(&tokens[refs_start..refs_end])?;
+    safety::repeatable_selection(&tokens[refs_start..refs_end])?;
     let mut targets = Vec::new();
     for alias in &target_aliases {
         let (object, resolved_alias) = resolve_reference(&references, alias).ok_or_else(|| {
@@ -5319,7 +5257,10 @@ fn parse_multi_delete(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
         ));
     }
     if let Some(where_idx) = where_idx {
-        ensure_only_proven_function_calls(&tokens[where_idx..])?;
+        safety::repeatable_selection(&tokens[where_idx..])?;
+    }
+    if targets.len() != 1 {
+        return Err(BlockedStatement::unsupported("multiple DELETE targets require manually reviewed transactional decomposition"));
     }
     Ok(MultiTablePlan {
         targets,
@@ -6213,36 +6154,3 @@ use crate::recovery_history::{
 use crate::rollback_sql::{RollbackEnvironment, RollbackJournal, RollbackStep, ServerIdentity};
 use sqlx::{Column, Connection, Executor, Row};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-
-/// Whether MySQL commits the open transaction as a side effect of this
-/// statement. Covers the DDL and administrative families from the server's
-/// implicit-commit list; anything unrecognised answers `false`, which only
-/// keeps the existing checkpoint behaviour.
-fn causes_implicit_commit(sql: &str) -> bool {
-    let body = crate::drivers::common::strip_leading_sql_comments(sql);
-    let keyword: String = body
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .flat_map(|c| c.to_uppercase())
-        .collect();
-    matches!(
-        keyword.as_str(),
-        "CREATE"
-            | "ALTER"
-            | "DROP"
-            | "RENAME"
-            | "TRUNCATE"
-            | "GRANT"
-            | "REVOKE"
-            | "FLUSH"
-            | "LOCK"
-            | "UNLOCK"
-            | "ANALYZE"
-            | "OPTIMIZE"
-            | "REPAIR"
-            | "CACHE"
-            | "INSTALL"
-            | "UNINSTALL"
-            | "LOAD"
-    )
-}
