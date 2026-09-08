@@ -19,6 +19,10 @@ interface Props {
 interface Session extends OnlineDdlSettings {
   statements: string[];
   database: string;
+  connectionId: string;
+  connectionName: string;
+  tableName: string;
+  databases: string[];
 }
 
 export function OnlineDdlButton({ connectionId, tableName, disabled, getStatements, onSuccess }: Props) {
@@ -34,6 +38,7 @@ export function OnlineDdlButton({ connectionId, tableName, disabled, getStatemen
   const notified = useRef<string | null>(null);
   const active = job !== null && !job.finished;
   const open = session !== null;
+  const taskConnectionId = session?.connectionId ?? connectionId;
 
   const receiveJob = useCallback((next: OnlineDdlJob | null) => {
     if (!next) return;
@@ -52,7 +57,7 @@ export function OnlineDdlButton({ connectionId, tableName, disabled, getStatemen
       if (pending) return;
       pending = true;
       try {
-        const next = await invoke<OnlineDdlJob | null>('get_online_ddl_job', { connectionId });
+        const next = await invoke<OnlineDdlJob | null>('get_online_ddl_job', { connectionId: taskConnectionId });
         if (!disposed) receiveJob(next);
       } catch (cause) {
         console.error('Online DDL status unavailable; execution state is not assumed', cause);
@@ -61,17 +66,17 @@ export function OnlineDdlButton({ connectionId, tableName, disabled, getStatemen
     };
     const timer = window.setInterval(() => void poll(), 1_000);
     return () => { disposed = true; window.clearInterval(timer); };
-  }, [open, active, connectionId, receiveJob]);
+  }, [open, active, taskConnectionId, receiveJob]);
 
   useEffect(() => {
     if (!session || job) return;
     let disposed = false;
     invoke<string>('preview_online_ddl', {
-      request: { connectionId, table: tableName, database: session.database, statements: session.statements, replicas: [], aliyunRds: session.aliyunRds },
+      request: { connectionId: session.connectionId, table: session.tableName, database: session.database, statements: session.statements, replicas: [], aliyunRds: session.aliyunRds },
     }).then(value => { if (!disposed) setPreview(value); })
       .catch(cause => { if (!disposed) { setPreview(''); setError(String(cause)); } });
     return () => { disposed = true; };
-  }, [session, job, connectionId, tableName]);
+  }, [session, job]);
 
   const launch = async () => {
     setBusy(true); setError(''); setPreview('');
@@ -80,7 +85,7 @@ export function OnlineDdlButton({ connectionId, tableName, disabled, getStatemen
       const existing = await invoke<OnlineDdlJob | null>('get_online_ddl_job', { connectionId });
       const statements = onlineDdlStatements(await getStatements());
       setJob(existing && !existing.finished ? existing : null);
-      setSession({ statements, database: databases.length === 1 ? databases[0] : '', ...loadOnlineDdlSettings(connectionId) });
+      setSession({ statements, database: databases.length === 1 ? databases[0] : '', connectionId, connectionName: data?.connectionName || connectionId, tableName, databases, ...loadOnlineDdlSettings(connectionId) });
     } catch (cause) { setError(String(cause)); }
     finally { setBusy(false); }
   };
@@ -91,10 +96,10 @@ export function OnlineDdlButton({ connectionId, tableName, disabled, getStatemen
     try {
       const replicas = replicaEndpoints(session.replicas);
       const settings: OnlineDdlSettings = { replicas: session.replicas, aliyunRds: session.aliyunRds };
-      try { localStorage.setItem(`online-ddl:${connectionId}`, JSON.stringify(settings)); }
+      try { localStorage.setItem(`online-ddl:${session.connectionId}`, JSON.stringify(settings)); }
       catch (cause) { console.warn('Online DDL settings were not persisted', cause); }
       const next = await invoke<OnlineDdlJob>('start_online_ddl', {
-        request: { connectionId, database: session.database, table: tableName, statements: session.statements, replicas, aliyunRds: session.aliyunRds },
+        request: { connectionId: session.connectionId, database: session.database, table: session.tableName, statements: session.statements, replicas, aliyunRds: session.aliyunRds },
       });
       receiveJob(next);
     } catch (cause) { setError(String(cause)); }
@@ -105,8 +110,8 @@ export function OnlineDdlButton({ connectionId, tableName, disabled, getStatemen
     if (!job) return;
     setBusy(true); setError('');
     try {
-      await invoke('control_online_ddl', { connectionId, jobId: job.id, action });
-      receiveJob(await invoke<OnlineDdlJob | null>('get_online_ddl_job', { connectionId }));
+      await invoke('control_online_ddl', { connectionId: job.connectionId, jobId: job.id, action });
+      receiveJob(await invoke<OnlineDdlJob | null>('get_online_ddl_job', { connectionId: job.connectionId }));
     } catch (cause) { setError(String(cause)); }
     finally { setBusy(false); }
   };
@@ -122,7 +127,7 @@ export function OnlineDdlButton({ connectionId, tableName, disabled, getStatemen
     <Modal isOpen={open} onClose={close} overlayClassName="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150]">
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[720px] max-w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-4 border-b border-default flex items-center justify-between bg-base">
-          <div><h2 className="text-lg font-semibold text-primary">{t('onlineDdl.title')}</h2><p className="text-xs text-secondary font-mono">{job ? `${job.database}.${job.table}` : `${session?.database || '?'}.${tableName}`}</p></div>
+          <div><h2 className="text-lg font-semibold text-primary">{t('onlineDdl.title')}</h2><p className="text-xs text-secondary font-mono">{session?.connectionName} · {job ? `${job.database}.${job.table}` : `${session?.database || '?'}.${session?.tableName}`}</p></div>
           <button type="button" aria-label={t('common.close')} disabled={active || busy} onClick={close} className="text-secondary disabled:opacity-30"><X size={20} /></button>
         </div>
         <div className="p-5 space-y-4 overflow-y-auto">
@@ -130,7 +135,7 @@ export function OnlineDdlButton({ connectionId, tableName, disabled, getStatemen
           {!job && session && <>
             <label className="block text-sm text-secondary">{t('onlineDdl.database')}
               <select aria-label={t('onlineDdl.database')} value={session.database} disabled={busy} onChange={event => { setPreview(''); setError(''); setSession({ ...session, database: event.target.value }); }} className="w-full mt-1 p-2 bg-base border border-strong rounded-lg text-primary">
-                <option value="">{t('onlineDdl.selectDatabase')}</option>{databases.map(database => <option key={database} value={database}>{database}</option>)}
+                <option value="">{t('onlineDdl.selectDatabase')}</option>{session.databases.map(database => <option key={database} value={database}>{database}</option>)}
               </select>
             </label>
             <label className="block text-sm text-secondary">{t('onlineDdl.replicas')}

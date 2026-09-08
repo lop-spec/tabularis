@@ -66,6 +66,19 @@ describe('OnlineDdlButton', () => {
     expect(vi.mocked(invoke).mock.calls.some(([command]) => command === 'start_online_ddl')).toBe(false);
   });
 
+  it('pins the confirmed connection and table when the underlying sidebar switches', async () => {
+    const view = renderButton();
+    fireEvent.click(screen.getByRole('button', { name: 'onlineDdl.button' }));
+    await screen.findByText(running.sql);
+    view.rerender(<OnlineDdlButton connectionId="different-connection" tableName="different_table" getStatements={async () => []} onSuccess={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('onlineDdl.replicas'), { target: { value: 'replica.example.invalid:3306' } });
+    fireEvent.click(screen.getByRole('button', { name: 'onlineDdl.execute' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('start_online_ddl', {
+      request: expect.objectContaining({ connectionId: 'fixture', database: 'fixture_db', table: 'orders' }),
+    }));
+    expect(screen.getByText('fixture · fixture_db.orders')).toBeInTheDocument();
+  });
+
   it('does not fall back to native DDL when the engine is missing', async () => {
     available = false;
     renderButton();
