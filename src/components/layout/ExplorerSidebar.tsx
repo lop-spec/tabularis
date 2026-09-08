@@ -135,6 +135,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     needsSchemaSelection,
     selectedDatabases,
     setSelectedDatabases,
+    setDefaultDatabase,
     refreshDatabaseSelection,
     databaseDataMap,
     loadDatabaseData,
@@ -182,6 +183,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     type: string;
     id: string;
     label: string;
+    connectionId: string | null;
     data?: ContextMenuData;
   } | null>(null);
   const [schemaModal, setSchemaModal] = useState<{ tableName: string; schema?: string } | null>(null);
@@ -511,7 +513,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     data?: ContextMenuData,
   ) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, type, id, label, data });
+    setContextMenu({ x: e.clientX, y: e.clientY, type, id, label, data, connectionId: activeConnectionId });
   };
 
   const handleImportDatabase = async (database?: string) => {
@@ -1397,6 +1399,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     <SidebarDatabaseItem
                       key={dbName}
                       databaseName={dbName}
+                      isDefault={dbName === selectedDatabases[0]}
                       databaseData={databaseDataMap[dbName]}
                       activeTable={activeTable}
                       activeSchema={activeSchema}
@@ -2377,6 +2380,21 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               })()
                           : contextMenu.type === "database"
                             ? [
+                                {
+                                  label: t("sidebar.setDefaultDatabase"),
+                                  icon: Star,
+                                  disabled: !contextMenu.connectionId ||
+                                    connectionDataMap[contextMenu.connectionId]?.selectedDatabases[0] === contextMenu.id,
+                                  action: async () => {
+                                    const connectionId = contextMenu.connectionId;
+                                    if (!connectionId) return;
+                                    try {
+                                      await setDefaultDatabase(connectionId, contextMenu.id);
+                                    } catch (error) {
+                                      showAlert(`${t("sidebar.setDefaultDatabaseFailed")} ${toErrorMessage(error)}`, { kind: "error" });
+                                    }
+                                  },
+                                },
                                 {
                                   label: t("sidebar.newConsole"),
                                   icon: FileCode,

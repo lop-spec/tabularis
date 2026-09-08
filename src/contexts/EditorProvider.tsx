@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Tab, SchemaCache, TableSchema, QueryResultEntry } from "../types/editor";
 import { EditorContext } from "./EditorContext";
 import { useDatabase } from "../hooks/useDatabase";
+import { getNewTabDatabase } from "../utils/defaultDatabase";
 import { invoke } from "@tauri-apps/api/core";
 import {
   generateTabId,
@@ -29,7 +30,7 @@ import {
 } from "../utils/notebookStore";
 
 export const EditorProvider = ({ children }: { children: ReactNode }) => {
-  const { activeConnectionId } = useDatabase();
+  const { activeConnectionId, connectionDataMap = {} } = useDatabase();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabIds, setActiveTabIds] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -149,9 +150,14 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
 
   const createInitialTab = useCallback(
     (partial?: Partial<Tab>): Tab => {
-      return createInitialTabState(activeConnectionId, partial);
+      const connectionId = partial?.connectionId ?? activeConnectionId;
+      const schema = partial?.schema ?? getNewTabDatabase(connectionDataMap[connectionId ?? ""]);
+      return createInitialTabState(activeConnectionId, {
+        ...partial,
+        ...(schema !== undefined ? { schema } : {}),
+      });
     },
-    [activeConnectionId],
+    [activeConnectionId, connectionDataMap],
   );
 
   // Flush all pending notebook saves on app close

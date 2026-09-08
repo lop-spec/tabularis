@@ -160,6 +160,7 @@ export interface DatabaseContextType {
   loadDatabaseData: (database: string, connectionId?: string) => Promise<void>;
   refreshDatabaseData: (database: string, connectionId?: string) => Promise<void>;
   setSelectedDatabases: (databases: string[], connectionId?: string) => void;
+  setDefaultDatabase: (connectionId: string, database: string) => Promise<void>;
   refreshDatabaseSelection: (
     connectionId: string,
     options?: { notifyWhenUnchanged?: boolean },

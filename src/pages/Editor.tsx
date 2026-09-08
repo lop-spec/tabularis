@@ -2207,12 +2207,7 @@ export const Editor = () => {
 
       if (matchesShortcut(e, "new_tab")) {
         e.preventDefault();
-        addTab({
-          type: "console",
-          ...(isMultiDatabaseDriver
-            ? { schema: getExecutionScopeForTab(undefined) }
-            : {}),
-        });
+        addTab({ type: "console" });
         return;
       }
 
@@ -3641,12 +3636,7 @@ export const Editor = () => {
             <p className="mb-4">{t("editor.noTabs")}</p>
             <button
               onClick={() =>
-                addTab({
-                  type: "console",
-                  ...(isMultiDatabaseDriver
-                    ? { schema: getExecutionScopeForTab(undefined) }
-                    : {}),
-                })
+                addTab({ type: "console" })
               }
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
             >
@@ -3817,12 +3807,7 @@ export const Editor = () => {
         </div>
         <button
           onClick={() =>
-            addTab({
-              type: "console",
-              ...(isMultiDb
-                ? { schema: getExecutionScopeForTab(undefined) }
-                : {}),
-            })
+            addTab({ type: "console" })
           }
           className="flex items-center justify-center w-9 h-full text-muted hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
           title={t("editor.newConsole")}

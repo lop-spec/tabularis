@@ -113,80 +113,12 @@ fn close_devtools(window: tauri::WebviewWindow) {
     log::info!("DevTools closed");
 }
 
-/// Real exit for close-to-hide mode: closing the window only hides it, so the
-/// frontend offers Ctrl/Cmd+Q which lands here. Runs the normal RunEvent::Exit
-/// path (exit backup, SSH tunnel shutdown) — nothing is skipped.
+/// Explicit keyboard exit. The main window's X uses this same normal
+/// RunEvent::Exit path (exit backup and SSH tunnel shutdown).
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     log::info!("Quit requested (Ctrl/Cmd+Q)");
     app.exit(0);
-}
-
-/// Suspends or resumes the hidden main window's WebView2 (close-to-hide mode).
-///
-/// Suspending asks WebView2 to shed most of its memory: the memory-usage
-/// target drops to Low (same call wry exposes as `set_memory_usage_level`)
-/// and `TrySuspend` pauses script/rendering. WebView2 resumes automatically
-/// when the window becomes visible again; the explicit Resume + Normal on
-/// focus is a belt-and-braces measure. Failures only cost memory savings,
-/// never correctness, so they are logged and ignored.
-#[cfg(windows)]
-fn set_main_webview_suspended(window: &tauri::WebviewWindow, suspend: bool) {
-    let outcome = window.with_webview(move |platform_webview| unsafe {
-        use webview2_com::Microsoft::Web::WebView2::Win32::{
-            ICoreWebView2_19, ICoreWebView2_3, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL,
-        };
-        use windows_core::Interface;
-
-        let controller = platform_webview.controller();
-        let core = match controller.CoreWebView2() {
-            Ok(core) => core,
-            Err(error) => {
-                log::warn!("WebView suspend skipped, no CoreWebView2: {error}");
-                return;
-            }
-        };
-
-        // Tauri's window.hide() hides the Win32 window but leaves the
-        // controller's IsVisible true, and TrySuspend rejects visible
-        // webviews with ERROR_INVALID_STATE (0x8007139F). Follow the
-        // documented sequence: IsVisible=false, then TrySuspend; and on the
-        // way back IsVisible=true unconditionally so the window can never
-        // come back as a blank surface.
-        if let Err(error) = controller.SetIsVisible(!suspend) {
-            log::warn!("Controller SetIsVisible failed: {error}");
-        }
-
-        // Memory target: 0 = Normal, 1 = Low (matches wry's mapping).
-        if let Ok(webview19) = core.cast::<ICoreWebView2_19>() {
-            let level = COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL(i32::from(suspend));
-            if let Err(error) = webview19.SetMemoryUsageTargetLevel(level) {
-                log::warn!("SetMemoryUsageTargetLevel failed: {error}");
-            }
-        }
-
-        if let Ok(webview3) = core.cast::<ICoreWebView2_3>() {
-            if suspend {
-                let handler = webview2_com::TrySuspendCompletedHandler::create(Box::new(
-                    |result, suspended| {
-                        log::info!(
-                            "WebView TrySuspend completed: result={result:?} suspended={suspended:?}"
-                        );
-                        Ok(())
-                    },
-                ));
-                if let Err(error) = webview3.TrySuspend(&handler) {
-                    log::warn!("WebView TrySuspend failed: {error}");
-                }
-            } else if let Err(error) = webview3.Resume() {
-                // Resuming a non-suspended webview reports an error; harmless.
-                log::debug!("WebView Resume no-op/failed: {error}");
-            }
-        }
-    });
-    if let Err(error) = outcome {
-        log::warn!("with_webview failed while toggling suspend: {error}");
-    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -262,20 +194,9 @@ pub fn run() {
                 return;
             }
             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
-                // This is also the warm-relaunch path for close-to-hide: the
-                // launcher just starts a second instance and we bring the
-                // window back HERE, in-process. External ShowWindowAsync pokes
-                // are queued messages that can land after a later hide and
-                // "resurrect" the window — so the launcher must never poke.
-                let was_hidden = !win.is_visible().unwrap_or(true);
                 let _ = win.show();
                 let _ = win.unminimize();
                 let _ = win.set_focus();
-                if was_hidden {
-                    log::info!("Warm relaunch: hidden main window shown again");
-                    #[cfg(windows)]
-                    set_main_webview_suspended(&win, false);
-                }
             }
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -387,56 +308,18 @@ pub fn run() {
                 }
             }
 
-            // Opt-in warm-instance mode: closing the main window hides it
-            // instead of exiting, so the next launch is a millisecond-level
-            // window activation rather than a cold WebView2 + bundle load.
-            // Gated on an env var set by the local dev launchers — official
-            // builds and `--explain` runs (which close main deliberately)
-            // keep the stock quit-on-close behaviour.
-            //
-            // While hidden the WebView is suspended (Windows), which releases
-            // most of its memory; WebView2 auto-resumes when the window is
-            // shown again, and the Focused handler resumes explicitly as a
-            // belt-and-braces measure.
-            if std::env::var("TABULARIS_CLOSE_TO_HIDE").as_deref() == Ok("1")
-                && args.explain.is_none()
-            {
+            // Closing the main window exits the whole application, including
+            // auxiliary windows, through the normal cleanup path. CLI explain
+            // mode deliberately closes main while its plan viewer stays open.
+            if args.explain.is_none() {
                 if let Some(window) = app.get_webview_window("main") {
-                    let hide_target = window.clone();
-                    window.on_window_event(move |event| match event {
-                        tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let handle = app.handle().clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                             api.prevent_close();
-                            if let Err(e) = hide_target.hide() {
-                                log::warn!("Close-to-hide failed, window stays open: {e}");
-                            } else {
-                                log::info!(
-                                    "Main window hidden (close-to-hide); process stays warm for instant relaunch"
-                                );
-                                // TrySuspend rejects with ERROR_INVALID_STATE
-                                // (0x8007139F) while the hide is still being
-                                // processed — give it a beat, then skip if the
-                                // user already brought the window back.
-                                #[cfg(windows)]
-                                {
-                                    let suspend_target = hide_target.clone();
-                                    tauri::async_runtime::spawn(async move {
-                                        tokio::time::sleep(
-                                            std::time::Duration::from_millis(800),
-                                        )
-                                        .await;
-                                        if suspend_target.is_visible().unwrap_or(true) {
-                                            return;
-                                        }
-                                        set_main_webview_suspended(&suspend_target, true);
-                                    });
-                                }
-                            }
+                            log::info!("Main window close requested; exiting application");
+                            handle.exit(0);
                         }
-                        tauri::WindowEvent::Focused(true) => {
-                            #[cfg(windows)]
-                            set_main_webview_suspended(&hide_target, false);
-                        }
-                        _ => {}
                     });
                 }
             }

@@ -18,6 +18,7 @@ import type { ReactNode } from 'react';
 import type { PluginManifest } from '../types/plugins';
 import { clearAutocompleteCache } from '../utils/autocomplete';
 import { toErrorMessage } from '../utils/errors';
+import { promoteDefaultDatabase } from '../utils/defaultDatabase';
 import { useToast } from '../hooks/useToast';
 import {
   isMultiDatabaseCapable,
@@ -557,6 +558,43 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       }
     }
   }, [activeConnectionId, connectionDataMap, updateConnectionData, loadDatabaseData]);
+
+  const setDefaultDatabase = useCallback(async (connectionId: string, database: string) => {
+    try {
+      const current = connectionDataMap[connectionId];
+      if (!current || !isMultiDatabaseCapable(current.capabilities)) {
+        throw new Error('This connection does not support selecting a default database');
+      }
+      const selected = current.selectedDatabases.length
+        ? current.selectedDatabases
+        : getDatabaseList(current.databaseName);
+      const databases = promoteDefaultDatabase(selected, database);
+      if (selected[0] === database) return;
+
+      // Persist just the selection, never round-trip credentials through a
+      // whole-connection edit or reconnect/retarget a live transaction.
+      await invoke('set_selected_databases', { connectionId, databases });
+      setConnections((previous) => previous.map((connection) =>
+        connection.id === connectionId
+          ? { ...connection, params: { ...connection.params, database: databases } }
+          : connection,
+      ));
+      setConnectionDataMap((previous) => {
+        if (!previous[connectionId]) return previous;
+        return {
+          ...previous,
+          [connectionId]: {
+            ...previous[connectionId],
+            selectedDatabases: databases,
+            databaseName: database,
+          },
+        };
+      });
+    } catch (error) {
+      console.error(`Failed to set default database for ${connectionId}:`, error);
+      throw error;
+    }
+  }, [connectionDataMap]);
 
   const connect = async (connectionId: string) => {
     // Capture previous state so we can restore it on failure
@@ -1237,6 +1275,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       loadDatabaseData,
       refreshDatabaseData,
       setSelectedDatabases,
+      setDefaultDatabase,
       refreshDatabaseSelection,
       getConnectionData,
       isConnectionOpen,

@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
+  Star,
   Plus,
   RefreshCw,
   Download,
@@ -30,6 +31,7 @@ import { fuzzyFilter } from "../../../utils/fuzzy";
 
 interface SidebarDatabaseItemProps {
   databaseName: string;
+  isDefault?: boolean;
   databaseData: SchemaData | undefined;
   activeTable: string | null;
   activeSchema: string | null;
@@ -68,6 +70,7 @@ interface SidebarDatabaseItemProps {
 
 export const SidebarDatabaseItem = ({
   databaseName,
+  isDefault = false,
   databaseData,
   activeTable,
   activeSchema,
@@ -181,6 +184,11 @@ export const SidebarDatabaseItem = ({
           <span className="text-sm font-medium text-secondary truncate">
             {databaseName}
           </span>
+          {isDefault && (
+            <span title={t("sidebar.defaultDatabase")} aria-label={t("sidebar.defaultDatabase")}>
+              <Star size={11} className="text-amber-400 shrink-0" fill="currentColor" aria-hidden="true" />
+            </span>
+          )}
           {isLoaded && (
             <span className="ml-1 text-[10px] text-muted opacity-60 shrink-0">
               {itemCount}
