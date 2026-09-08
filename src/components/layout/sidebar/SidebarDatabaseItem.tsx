@@ -160,42 +160,44 @@ export const SidebarDatabaseItem = ({
     <div className="flex flex-col">
       {/* Database header */}
       <div
-        className="flex items-center justify-between px-2 py-1.5 group/db cursor-pointer hover:bg-surface-secondary transition-colors"
+        className="flex flex-col items-stretch gap-1 px-2 py-1.5 group/db cursor-pointer hover:bg-surface-secondary transition-colors"
         onClick={handleToggle}
         onContextMenu={(e) => {
           e.preventDefault();
           onContextMenu(e, "database", databaseName, databaseName);
         }}
       >
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        <div className="flex items-start gap-1.5 min-w-0">
           {isExpanded ? (
-            <ChevronDown size={14} className="text-muted shrink-0" />
+            <ChevronDown size={14} className="mt-0.5 text-muted shrink-0" />
           ) : (
-            <ChevronRight size={14} className="text-muted shrink-0" />
+            <ChevronRight size={14} className="mt-0.5 text-muted shrink-0" />
           )}
           <Database
             size={14}
             className={
               activeSchema === databaseName
-                ? "text-blue-400 shrink-0"
-                : "text-muted group-hover/db:text-blue-400 shrink-0"
+                ? "mt-0.5 text-blue-400 shrink-0"
+                : "mt-0.5 text-muted group-hover/db:text-blue-400 shrink-0"
             }
           />
-          <span className="text-sm font-medium text-secondary truncate">
+          <span className="min-w-0 flex-1 text-sm font-medium text-secondary [overflow-wrap:anywhere]" title={databaseName}>
             {databaseName}
           </span>
           {isDefault && (
-            <span title={t("sidebar.defaultDatabase")} aria-label={t("sidebar.defaultDatabase")}>
+            <span className="mt-0.5 shrink-0" title={t("sidebar.defaultDatabase")} aria-label={t("sidebar.defaultDatabase")}>
               <Star size={11} className="text-amber-400 shrink-0" fill="currentColor" aria-hidden="true" />
             </span>
           )}
+        </div>
+        {/* Metadata and actions never compete with the database name for width. */}
+        <div className="ml-5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {isLoaded && (
-            <span className="ml-1 text-[10px] text-muted opacity-60 shrink-0">
+            <span className="min-w-0 text-[10px] text-muted opacity-60 [overflow-wrap:anywhere]">
               {itemCount}
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-0.5 shrink-0">
+          <div className="ml-auto flex items-center gap-0.5 shrink-0">
           {onImport && (
             <button
               onClick={(e) => { e.stopPropagation(); onImport(databaseName); }}
@@ -230,6 +232,7 @@ export const SidebarDatabaseItem = ({
           >
             <RefreshCw size={13} />
           </button>
+          </div>
         </div>
       </div>
 

@@ -17,6 +17,35 @@ function props(): ComponentProps<typeof SidebarDatabaseItem> {
 }
 
 describe("database default indicator", () => {
+  it("keeps the full database name in its own row, separate from counts and actions", () => {
+    const input = props();
+    const databaseName = "database_with_a_long_unbroken_identifier";
+    render(<SidebarDatabaseItem {...input} databaseName={databaseName} />);
+    const name = screen.getByText(databaseName);
+    const counts = screen.getByText("0T / 0V / 0R");
+    expect(name).toHaveAttribute("title", databaseName);
+    expect(name).toHaveClass("flex-1", "min-w-0", "[overflow-wrap:anywhere]");
+    expect(name).not.toHaveClass("truncate");
+    expect(name.parentElement).not.toContainElement(counts);
+    expect(name.parentElement).not.toContainElement(screen.getByTitle("sidebar.refreshTables"));
+    expect(name.parentElement?.parentElement).toHaveClass("flex-col");
+  });
+
+  it("retains all actions without toggling the database when a button is clicked", () => {
+    const input = { ...props(), onImport: vi.fn(), onDump: vi.fn(), onViewDiagram: vi.fn() };
+    render(<SidebarDatabaseItem {...input} />);
+    for (const [title, handler] of [
+      ["dump.importDatabase", input.onImport],
+      ["dump.dumpDatabase", input.onDump],
+      ["sidebar.viewERDiagram", input.onViewDiagram],
+      ["sidebar.refreshTables", input.onRefreshDatabase],
+    ] as const) {
+      fireEvent.click(screen.getByTitle(title));
+      expect(handler).toHaveBeenCalledWith("beta");
+    }
+    expect(input.onLoadDatabase).not.toHaveBeenCalled();
+  });
+
   it("marks the persisted default independently of the active database", () => {
     const input = props();
     const { rerender } = render(<SidebarDatabaseItem {...input} />);
