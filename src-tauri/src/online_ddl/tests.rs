@@ -90,6 +90,8 @@ fn credentials_are_ini_literals_and_never_command_arguments() {
         "--ok-to-drop-table",
         "--initially-drop",
         "--skip-foreign-key",
+        "--skip-metadata-lock-check",
+        "--allow-setup-metadata-lock-instruments",
         "--skip-renamed",
         "--switch-to-rbr",
         "--ignore-http-errors",

@@ -7,7 +7,7 @@
     "database": "Target database",
     "selectDatabase": "Select the exact target database",
     "replicas": "All read-replica endpoints",
-    "replicaHelp": "Comma/newline-separated host:port values, not a read/write proxy. All replicas must follow this primary directly and accept the same database credentials/TLS settings. Existing SSH forwarding is reused.",
+    "replicaHelp": "Comma/newline-separated host:port values, not a read/write proxy. All replicas must follow this primary directly and accept the same database credentials/TLS settings. Existing SSH forwarding is reused. Safe cutover requires metadata-lock instrumentation on the PRIMARY; replica Performance Schema is not required.",
     "aliyun": "Alibaba Cloud RDS",
     "lag": "Maximum replica heartbeat lag",
     "unknown": "Unknown / monitoring unavailable",

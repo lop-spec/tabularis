@@ -101,6 +101,16 @@ pub async fn prepare<R: Runtime>(
         plan::quote(&request.database)?,
         plan::quote(&request.table)?
     );
+    // gh-ost PR #1536 protects cutover from data loss when another session
+    // accesses the ghost table. Never bypass this primary-side safety check.
+    let instrument: Option<(String, String)> = sqlx::query_as(
+        "SELECT ENABLED, TIMED FROM performance_schema.setup_instruments WHERE NAME = 'wait/lock/metadata/sql/mdl'",
+    ).fetch_optional(&primary).await.map_err(|e| format!("Cannot inspect primary metadata-lock instrumentation: {e}"))?;
+    if !instrument.is_some_and(|(enabled, timed)| enabled == "YES" && timed == "YES") {
+        return Err("gh-ost requires primary Performance Schema metadata-lock instrumentation (ENABLED=YES, TIMED=YES). It is disabled; no DDL was started and no safety checks were skipped. Replica lag monitoring does not require replica Performance Schema.".into());
+    }
+    sqlx::query("SELECT m.OWNER_THREAD_ID FROM performance_schema.metadata_locks m JOIN performance_schema.threads t ON m.OWNER_THREAD_ID = t.THREAD_ID WHERE 1 = 0")
+        .fetch_all(&primary).await.map_err(|e| format!("Primary metadata-lock visibility is required for safe cutover: {e}"))?;
     let original_ddl = ddl(&primary, &target).await?;
     let engine: Option<String> = sqlx::query_scalar("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND TABLE_TYPE = 'BASE TABLE'")
         .bind(&request.database).bind(&request.table).fetch_optional(&primary).await.map_err(|e| e.to_string())?;
