@@ -40,6 +40,7 @@ pub mod models;
 #[cfg(test)]
 pub mod models_tests;
 pub mod notebooks;
+pub mod online_ddl;
 pub mod paths; // Added
 pub mod persistence;
 pub mod pool_manager;
@@ -347,6 +348,11 @@ pub fn run() {
             open_devtools,
             close_devtools,
             quit_app,
+            online_ddl::online_ddl_available,
+            online_ddl::preview_online_ddl,
+            online_ddl::start_online_ddl,
+            online_ddl::get_online_ddl_job,
+            online_ddl::control_online_ddl,
             commands::get_registered_drivers,
             commands::get_driver_manifest,
             commands::get_keybindings,
@@ -563,6 +569,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = &event {
+                if online_ddl::has_active_jobs() {
+                    api.prevent_exit();
+                    log::warn!("Exit blocked: finish or cancel the active Online DDL job first");
+                    use tauri_plugin_dialog::DialogExt;
+                    app_handle.dialog().message("Online DDL is still active. Finish or cancel it before closing Tabularis.").title("Online DDL").show(|_| {});
+                }
+            }
             if let tauri::RunEvent::Exit = event {
                 // Back up the freshest state before the process ends (no-op
                 // unless backups are enabled and due).

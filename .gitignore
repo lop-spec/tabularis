@@ -8,6 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+# Pinned upstream checkout used only while building the embedded gh-ost CLI.
+.gh-ost-source/
 dist
 dist-ssr
 *.local

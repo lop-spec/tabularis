@@ -74,6 +74,23 @@ jobs:
       # bundle re-enabled it and broke the build; the installer itself needs
       # no signing key. The updater endpoint points at the upstream repo and
       # was never live here anyway.
+      - name: Check out pinned gh-ost
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: github/gh-ost
+          ref: 2ed192cd39d8a5173b6ef7c4beaa746a2d3bf1aa # v1.1.11
+          path: .gh-ost-source
+          persist-credentials: false
+
+      - name: Set up Go for embedded gh-ost
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.8'
+          cache: false
+
+      - name: Build and smoke-test embedded gh-ost
+        run: node scripts/prepare-gh-ost.mjs .gh-ost-source
+
       - name: Build portable executable and NSIS installer
         run: pnpm tauri build --bundles nsis --ci --config src-tauri/tauri.nsis.conf.json
 
