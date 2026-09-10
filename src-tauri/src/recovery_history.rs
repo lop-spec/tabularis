@@ -116,8 +116,7 @@ pub struct RecoveryJournal {
     path: PathBuf,
     run: RecoveryRun,
     file: std::fs::File,
-    synced_len: u64,
-    poisoned: bool,
+    durability: crate::journal_durability::JournalDurability,
 }
 
 impl RecoveryJournal {
@@ -170,7 +169,7 @@ impl RecoveryJournal {
         let short_id = short_run_id(&run_id);
         let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
         // Append-only JSONL: the header line is the run itself (statements
-        // empty), each statement is one fsynced line, and `finalize` appends
+        // empty), statements are synced before commit, and `finalize` appends
         // a finish record. A run of `n` statements therefore writes O(n)
         // bytes instead of re-serializing every recorded row image per
         // statement. Legacy `.recovery.json` files remain readable.
@@ -197,8 +196,7 @@ impl RecoveryJournal {
             path,
             run,
             file,
-            synced_len: 0,
-            poisoned: false,
+            durability: Default::default(),
         };
         let header = serde_json::to_vec(&journal.run)
             .map_err(|error| format!("Could not serialize recovery history header: {error}"))?;
@@ -206,34 +204,27 @@ impl RecoveryJournal {
         Ok(journal)
     }
 
-    /// Appends one JSON line with flush+fsync. On failure the file is
-    /// truncated back to the last synced length so a torn line can never
-    /// corrupt later appends.
+    #[cfg(test)]
+    pub(crate) fn fail_next_sync_for_test(&mut self) {
+        self.durability.fail_next_sync = true;
+    }
+
+    pub(crate) fn defer_transaction_writes(&mut self) {
+        self.durability.defer();
+    }
+
+    pub(crate) fn finish_transaction_writes(&mut self) -> Result<(), String> {
+        self.durability
+            .finish(&mut self.file)
+            .map_err(|error| format!("Could not persist recovery history: {error}"))
+    }
+
+    /// Appends JSONL, synchronously unless an owning transaction defers writes.
     fn append_line(&mut self, mut line: Vec<u8>) -> Result<(), String> {
-        if self.poisoned {
-            return Err(
-                "Recovery history is unusable after an earlier write failure".to_string(),
-            );
-        }
         line.push(b'\n');
-        let outcome = crate::rollback_sql::run_blocking(|| {
-            self.file
-                .write_all(&line)
-                .and_then(|()| self.file.flush())
-                .and_then(|()| self.file.sync_all())
-        });
-        match outcome {
-            Ok(()) => {
-                self.synced_len += line.len() as u64;
-                Ok(())
-            }
-            Err(error) => {
-                if self.file.set_len(self.synced_len).is_err() {
-                    self.poisoned = true;
-                }
-                Err(format!("Could not append to recovery history: {error}"))
-            }
-        }
+        self.durability
+            .append(&mut self.file, &line)
+            .map_err(|error| format!("Could not append to recovery history: {error}"))
     }
 
     fn append_record(&mut self, record: &RunRecord) -> Result<(), String> {
@@ -271,15 +262,15 @@ impl RecoveryJournal {
                 self.run.statements.len()
             ));
         }
-        if checkpoint == self.run.statements.len() {
-            return Ok(());
+        if checkpoint != self.run.statements.len() {
+            self.append_record(&RunRecord::Rewind { checkpoint })?;
+            self.run.statements.truncate(checkpoint);
         }
-        self.append_record(&RunRecord::Rewind { checkpoint })?;
-        self.run.statements.truncate(checkpoint);
-        Ok(())
+        self.finish_transaction_writes()
     }
 
     pub fn finalize(mut self) -> Result<PathBuf, String> {
+        self.finish_transaction_writes()?;
         self.append_record(&RunRecord::Finish {
             status: "complete".to_string(),
             finished_at: chrono::Utc::now().to_rfc3339(),
@@ -296,6 +287,7 @@ impl RecoveryJournal {
             "Recovery run {} marked interrupted: {reason}",
             self.run.short_id
         );
+        self.finish_transaction_writes()?;
         self.append_record(&RunRecord::Finish {
             status: "interrupted".to_string(),
             finished_at: chrono::Utc::now().to_rfc3339(),
@@ -459,9 +451,8 @@ pub async fn record_unprotected_changes(
         // pass already produced something.
         if objects.is_empty() || crate::recovery_objects::dynamic_source(sql).is_some() {
             objects.extend(resolve_dynamic_objects(conn, database, sql, &mut prepared).await);
-            objects.sort_by(|a, b| {
-                (&a.kind, &a.schema, &a.name).cmp(&(&b.kind, &b.schema, &b.name))
-            });
+            objects
+                .sort_by(|a, b| (&a.kind, &a.schema, &a.name).cmp(&(&b.kind, &b.schema, &b.name)));
             objects.dedup();
         }
         if is_unprotected_non_recovery_operation(&operation) {
@@ -559,10 +550,7 @@ pub(crate) async fn resolve_dynamic_objects(
     }
 }
 
-async fn read_user_variable(
-    conn: &mut sqlx::MySqlConnection,
-    variable: &str,
-) -> Option<String> {
+async fn read_user_variable(conn: &mut sqlx::MySqlConnection, variable: &str) -> Option<String> {
     // The name came out of the tokenizer as an identifier; re-quoting it
     // keeps a hostile name from breaking out of the SELECT.
     let row = conn
@@ -1125,7 +1113,11 @@ fn offline_statement_steps(
     match statement.operation.as_str() {
         "insert" => {
             for row in statement.after_rows.iter().rev() {
-                push(offline_restore_delete(statement, &positions, row)?, Some(1), order);
+                push(
+                    offline_restore_delete(statement, &positions, row)?,
+                    Some(1),
+                    order,
+                );
             }
         }
         "delete" => {
@@ -1156,12 +1148,14 @@ fn offline_statement_steps(
                         }
                     }
                     None if statement.operation == "upsert" => {
-                        push(offline_restore_delete(statement, &positions, row)?, Some(1), order);
+                        push(
+                            offline_restore_delete(statement, &positions, row)?,
+                            Some(1),
+                            order,
+                        );
                     }
                     None => {
-                        return Err(
-                            "an after-image has no matching before-image".to_string()
-                        );
+                        return Err("an after-image has no matching before-image".to_string());
                     }
                 }
             }
@@ -1188,9 +1182,12 @@ fn render_offline_recovery_sql(
         "-- Generated purely from the recovery journal's recorded before/after row images;\n",
     );
     output.push_str("-- no database instance was queried during generation.\n");
-    output.push_str("-- Row guards assert the current row still matches the recorded after-image;\n");
-    output.push_str("-- a later change to the same row makes its guarded statement affect 0 rows.\n");
-    output.push_str("-- DML ends in ROLLBACK by default; replace it with COMMIT only after every\n");
+    output
+        .push_str("-- Row guards assert the current row still matches the recorded after-image;\n");
+    output
+        .push_str("-- a later change to the same row makes its guarded statement affect 0 rows.\n");
+    output
+        .push_str("-- DML ends in ROLLBACK by default; replace it with COMMIT only after every\n");
     output.push_str("-- ROW_COUNT result equals its expected_affected_rows.\n");
     output.push_str(&format!(
         "-- Target connection alias: {}\n",
@@ -1230,7 +1227,9 @@ fn render_offline_recovery_sql(
     for step in steps {
         let transactional = step.expected_affected_rows.is_some();
         if transactional && !transaction_open {
-            output.push_str("-- ===== Stage B: DML rollback (one transaction; run separately) =====\n");
+            output.push_str(
+                "-- ===== Stage B: DML rollback (one transaction; run separately) =====\n",
+            );
             output.push_str("SET time_zone = '+00:00';\n");
             output.push_str("START TRANSACTION;\n\n");
             transaction_open = true;
@@ -1316,8 +1315,7 @@ pub fn generate_offline_recovery_sql_in(
     // Newest first: later changes must be undone before earlier ones.
     for run in runs.iter().rev() {
         for statement in run.statements.iter().rev() {
-            if !selected_statement_ids.is_empty()
-                && !selected_statement_ids.contains(&statement.id)
+            if !selected_statement_ids.is_empty() && !selected_statement_ids.contains(&statement.id)
             {
                 continue;
             }
@@ -1362,10 +1360,7 @@ pub fn generate_offline_recovery_sql_in(
         unchanged_rows,
         exact: conflicts.is_empty(),
         conflicts,
-        target_instance: format!(
-            "{} · {}",
-            runs[0].connection_name, runs[0].target_identity
-        ),
+        target_instance: format!("{} · {}", runs[0].connection_name, runs[0].target_identity),
         backup_instance: "recorded row images (offline)".to_string(),
     })
 }
@@ -1680,7 +1675,10 @@ async fn compare_selected_statements(
     for database in &database_recreates {
         steps.push(RecoverySqlStep {
             order: restore_order,
-            sql: format!("CREATE DATABASE IF NOT EXISTS {}", quote_identifier(database)),
+            sql: format!(
+                "CREATE DATABASE IF NOT EXISTS {}",
+                quote_identifier(database)
+            ),
             expected_affected_rows: None,
             source: format!("recreate dropped database {database}"),
         });
@@ -1962,11 +1960,7 @@ fn contains_executable_semicolon(sql: &str) -> bool {
                 index += 2;
                 block_comment = false;
             } else {
-                index += rest
-                    .chars()
-                    .next()
-                    .expect("index is inside SQL")
-                    .len_utf8();
+                index += rest.chars().next().expect("index is inside SQL").len_utf8();
             }
             continue;
         }
@@ -2016,10 +2010,7 @@ fn strip_show_create_definer(sql: &str) -> String {
     let Some(start) = lowercase.find("definer=") else {
         return sql.to_string();
     };
-    if start > 0
-        && lowercase.as_bytes()[start - 1]
-            .is_ascii_alphanumeric()
-    {
+    if start > 0 && lowercase.as_bytes()[start - 1].is_ascii_alphanumeric() {
         return sql.to_string();
     }
 
@@ -2369,7 +2360,14 @@ async fn build_table_restore(
         &mut steps,
     )
     .await?;
-    append_auto_increment_reset(schema, table, target_auto_increment, order, source, &mut steps);
+    append_auto_increment_reset(
+        schema,
+        table,
+        target_auto_increment,
+        order,
+        source,
+        &mut steps,
+    );
     Ok((steps, notes))
 }
 
@@ -2551,7 +2549,9 @@ fn key_condition(work: &RowWork, key: &[String]) -> String {
                 .find(|metadata| metadata.name.eq_ignore_ascii_case(column))
                 .map(|metadata| metadata.data_type.as_str())
                 .unwrap_or_else(|| {
-                    log::warn!("Recovery key {column} has no type metadata; retaining byte-exact lookup");
+                    log::warn!(
+                        "Recovery key {column} has no type metadata; retaining byte-exact lookup"
+                    );
                     ""
                 });
             crate::mysql_row_identity::encoded_key_condition(
@@ -3516,17 +3516,17 @@ mod tests {
         let sql = &response.sql;
         // Identity precheck derives from the recorded label, offline; the
         // expected identity is hex-encoded by sql_text_literal.
-        assert!(
-            sql.contains(&sql_text_literal("uuid:feed-beef")),
-            "{sql}"
-        );
+        assert!(sql.contains(&sql_text_literal("uuid:feed-beef")), "{sql}");
         assert!(sql.contains("@@server_uuid"), "{sql}");
         // Inverses are guarded and reverse-ordered: delete-inverse (INSERT)
         // first, then insert-inverse (DELETE), then update-inverse (UPDATE).
         let insert_back = sql.find("INSERT INTO `app`.`users`").expect("insert-back");
         let delete_back = sql.find("DELETE FROM `app`.`users`").expect("delete-back");
         let update_back = sql.find("UPDATE `app`.`users` SET").expect("update-back");
-        assert!(insert_back < delete_back && delete_back < update_back, "{sql}");
+        assert!(
+            insert_back < delete_back && delete_back < update_back,
+            "{sql}"
+        );
         assert!(sql.contains("CAST(`id` AS BINARY) <=> X'31'"), "{sql}");
         assert!(sql.contains("`name` = CAST(X'61' AS BINARY)"), "{sql}");
         assert!(sql.contains("\nROLLBACK;\n"), "{sql}");

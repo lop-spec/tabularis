@@ -12,9 +12,7 @@ use std::path::{Path, PathBuf};
 /// runs inline.
 pub(crate) fn run_blocking<T>(work: impl FnOnce() -> T) -> T {
     match tokio::runtime::Handle::try_current() {
-        Ok(handle)
-            if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread =>
-        {
+        Ok(handle) if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
             tokio::task::block_in_place(work)
         }
         _ => work(),
@@ -69,7 +67,8 @@ const CRASH_SUFFIX: &str = ".crash.rollback.sql";
 
 /// Durable, connection-isolated rollback journal.
 ///
-/// Append-only: every step is one fsynced NDJSON line, so a batch of `n`
+/// Append-only: steps are NDJSON lines synced before database commit. An owning
+/// transaction may coalesce uncommitted appends, so a batch of `n`
 /// statements writes O(n) bytes instead of rewriting the whole journal per
 /// statement (the previous design cost ~n²/2 — ~673 MB for a real 3,429-step
 /// batch). The executable `.rollback.sql` is rendered once at `finalize`.
@@ -83,9 +82,7 @@ pub struct RollbackJournal {
     file: File,
     environment: RollbackEnvironment,
     steps: Vec<RollbackStep>,
-    synced_len: u64,
-    bytes_written: u64,
-    poisoned: bool,
+    durability: crate::journal_durability::JournalDurability,
 }
 
 impl RollbackJournal {
@@ -128,9 +125,7 @@ impl RollbackJournal {
             file,
             environment,
             steps: Vec::new(),
-            synced_len: 0,
-            bytes_written: 0,
-            poisoned: false,
+            durability: Default::default(),
         };
         let header = JournalRecord::Header {
             version: STEPS_VERSION,
@@ -159,7 +154,26 @@ impl RollbackJournal {
 
     #[cfg(test)]
     pub(crate) fn bytes_written(&self) -> u64 {
-        self.bytes_written
+        self.durability.bytes_written()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_sync_for_test(&mut self) {
+        self.durability.fail_next_sync = true;
+    }
+
+    pub(crate) fn requires_immediate_durability(&self) -> bool {
+        self.durability.requires_immediate()
+    }
+
+    pub(crate) fn defer_transaction_writes(&mut self) {
+        self.durability.defer();
+    }
+
+    pub(crate) fn finish_transaction_writes(&mut self) -> Result<(), String> {
+        self.durability
+            .finish(&mut self.file)
+            .map_err(|error| format!("Could not persist rollback steps journal: {error}"))
     }
 
     pub fn add_step(&mut self, step: RollbackStep) -> Result<(), String> {
@@ -169,6 +183,16 @@ impl RollbackJournal {
     pub fn add_steps(&mut self, steps: Vec<RollbackStep>) -> Result<(), String> {
         if steps.is_empty() {
             return Ok(());
+        }
+        if steps
+            .iter()
+            .any(|step| step.expected_affected_rows.is_none())
+        {
+            self.durability
+                .require_immediate(&mut self.file)
+                .map_err(|error| {
+                    format!("Could not persist nontransactional recovery boundary: {error}")
+                })?;
         }
         let records: Vec<JournalRecord> = steps
             .iter()
@@ -187,51 +211,28 @@ impl RollbackJournal {
                 self.steps.len()
             ));
         }
-        if checkpoint == self.steps.len() {
-            return Ok(());
+        if checkpoint != self.steps.len() {
+            self.append_records(&[JournalRecord::Rewind { checkpoint }])?;
+            self.steps.truncate(checkpoint);
         }
-        self.append_records(&[JournalRecord::Rewind { checkpoint }])?;
-        self.steps.truncate(checkpoint);
-        Ok(())
+        self.finish_transaction_writes()
     }
 
-    /// Appends records as NDJSON lines with one flush+fsync for the batch.
-    /// On a write error the file is truncated back to the last synced length
-    /// so a partial line can never corrupt later appends.
+    /// Appends NDJSON, synchronously unless an owning transaction defers writes.
     fn append_records(&mut self, records: &[JournalRecord]) -> Result<(), String> {
-        if self.poisoned {
-            return Err(
-                "Rollback steps journal is unusable after an earlier write failure".to_string(),
-            );
-        }
         let mut buffer = Vec::new();
         for record in records {
             serde_json::to_writer(&mut buffer, record)
                 .map_err(|error| format!("Could not serialize rollback step: {error}"))?;
             buffer.push(b'\n');
         }
-        let outcome = run_blocking(|| {
-            self.file
-                .write_all(&buffer)
-                .and_then(|()| self.file.flush())
-                .and_then(|()| self.file.sync_all())
-        });
-        match outcome {
-            Ok(()) => {
-                self.synced_len += buffer.len() as u64;
-                self.bytes_written += buffer.len() as u64;
-                Ok(())
-            }
-            Err(error) => {
-                if self.file.set_len(self.synced_len).is_err() {
-                    self.poisoned = true;
-                }
-                Err(format!("Could not append to rollback steps journal: {error}"))
-            }
-        }
+        self.durability
+            .append(&mut self.file, &buffer)
+            .map_err(|error| format!("Could not append to rollback steps journal: {error}"))
     }
 
-    pub fn finalize(self) -> Result<PathBuf, String> {
+    pub fn finalize(mut self) -> Result<PathBuf, String> {
+        self.finish_transaction_writes()?;
         if self.final_path.exists() {
             return Err(format!(
                 "Rollback destination already exists: {}",
@@ -280,7 +281,11 @@ impl RollbackJournal {
     /// whose outcome is unknown). Returns the path the operator should open;
     /// on a render failure the durable steps journal is kept and returned —
     /// the next startup renders it.
-    pub fn abandon(self) -> PathBuf {
+    pub fn abandon(mut self) -> PathBuf {
+        if let Err(error) = self.finish_transaction_writes() {
+            log::error!("Abandoned journal could not flush pending records; retaining the durable prefix: {error}");
+            return self.steps_path;
+        }
         let Self {
             stem,
             steps_path,
@@ -350,7 +355,10 @@ fn parse_step_journal(content: &str) -> Result<(RollbackEnvironment, Vec<Rollbac
     let (_, first) = lines
         .next()
         .ok_or_else(|| "steps journal is empty".to_string())?;
-    let JournalRecord::Header { version, environment } = serde_json::from_str(first)
+    let JournalRecord::Header {
+        version,
+        environment,
+    } = serde_json::from_str(first)
         .map_err(|error| format!("unreadable steps journal header: {error}"))?
     else {
         return Err("steps journal does not start with a header".to_string());

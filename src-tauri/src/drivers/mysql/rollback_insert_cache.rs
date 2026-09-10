@@ -17,6 +17,13 @@ pub(super) struct InsertMetadataCache {
 }
 
 impl InsertMetadataCache {
+    pub(super) fn locked_metadata(&self, object: &ObjectName) -> Option<&TableMetadata> {
+        self.entry
+            .as_ref()
+            .filter(|(key, _)| self.eligible && key == object)
+            .map(|(_, metadata)| metadata)
+    }
+
     /// Even reads, session settings, temporary-table changes and transaction
     /// boundaries end a reuse run. This avoids reasoning about hidden session
     /// effects and keeps USE/DDL/COMMIT/ROLLBACK invalidation fail-closed.

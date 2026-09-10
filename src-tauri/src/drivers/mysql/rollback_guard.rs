@@ -13,11 +13,18 @@ pub(super) enum ProtectionClass {
 #[path = "rollback_identity_tests.rs"]
 mod identity_tests;
 
-#[path = "rollback_safety.rs"]
-mod safety;
 #[path = "rollback_insert_cache.rs"]
 mod insert_cache;
+#[path = "rollback_safety.rs"]
+mod safety;
 use insert_cache::InsertMetadataCache;
+#[path = "rollback_dml_records.rs"]
+mod dml_records;
+#[path = "rollback_dml_window.rs"]
+mod dml_window;
+use dml_window::DmlWindow;
+#[path = "rollback_journal_barrier.rs"]
+mod journal_barrier;
 #[cfg(test)]
 #[path = "rollback_safety_tests.rs"]
 mod safety_tests;
@@ -749,21 +756,17 @@ async fn close_pinned_transaction_context(
     // Bounded wait: this runs from disconnect/cleanup paths, and a batch that
     // is stuck inside MySQL holds the context lock. Waiting forever would
     // make "disconnect" hang alongside the stuck batch (hang contagion).
-    let _context_guard = match tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        context_lock.lock(),
-    )
-    .await
-    {
-        Ok(guard) => guard,
-        Err(_) => {
-            return Err(format!(
-                "Pinned transaction {}/{} is still executing; close it again \
+    let _context_guard =
+        match tokio::time::timeout(std::time::Duration::from_secs(30), context_lock.lock()).await {
+            Ok(guard) => guard,
+            Err(_) => {
+                return Err(format!(
+                    "Pinned transaction {}/{} is still executing; close it again \
                  after the running batch finishes or times out ({reason})",
-                key.connection_id, key.context_id
-            ));
-        }
-    };
+                    key.connection_id, key.context_id
+                ));
+            }
+        };
     let Some(slot) = get_pinned_transaction_slot(key) else {
         return Ok(false);
     };
@@ -1083,6 +1086,7 @@ async fn execute_pinned_protected_batch(
     let mut uncertain_boundary = false;
     let statement_offset = session.statement_offset;
     let mut insert_metadata = InsertMetadataCache::default();
+    let mut row_window = DmlWindow::default();
 
     {
         let PinnedTransactionSession {
@@ -1103,6 +1107,12 @@ async fn execute_pinned_protected_batch(
             *last_activity = std::time::Instant::now();
             let start = std::time::Instant::now();
             insert_metadata.before_statement(plan, explicit_transaction_checkpoint.is_some());
+            row_window.before_statement(
+                plan,
+                statement_offset + index,
+                explicit_transaction_checkpoint.is_some(),
+                stopped,
+            )?;
             match complete_statement_without_database(
                 index,
                 plan,
@@ -1125,57 +1135,66 @@ async fn execute_pinned_protected_batch(
 
             // Set when a DML statement had to run without an exact inverse.
             let mut degraded: Option<String> = None;
-            let mut outcome = match plan {
-                ProtectedStatement::ReadOnly
-                | ProtectedStatement::Session(_)
-                | ProtectedStatement::Temporary(_) => {
-                    super::exec_on_mysql_conn(conn, query, limit, page, text).await
-                }
-                ProtectedStatement::Transaction(TransactionPlan::Start) => {
-                    *boundary_in_flight = Some(TransactionPlan::Start);
-                    let outcome = super::exec_on_mysql_conn(conn, query, None, 1, text).await;
-                    *boundary_in_flight = None;
-                    if outcome.is_ok() {
-                        *explicit_transaction_checkpoint = Some((
-                            journal.as_ref().map_or(0, RollbackJournal::checkpoint),
-                            recovery_journal
-                                .as_ref()
-                                .map_or(0, RecoveryJournal::checkpoint),
-                        ));
-                        transaction_outcome = Some("opened".to_string());
+            let barrier = journal_barrier::before_statement(
+                plan,
+                journal.as_mut(),
+                recovery_journal.as_mut(),
+            );
+            let durability_failed = barrier.is_err();
+            let mut outcome = if let Err(error) = barrier {
+                Err(error)
+            } else {
+                match plan {
+                    ProtectedStatement::ReadOnly
+                    | ProtectedStatement::Session(_)
+                    | ProtectedStatement::Temporary(_) => {
+                        super::exec_on_mysql_conn(conn, query, limit, page, text).await
                     }
-                    outcome
-                }
-                ProtectedStatement::Transaction(TransactionPlan::Commit) => {
-                    *boundary_in_flight = Some(TransactionPlan::Commit);
-                    match super::exec_on_mysql_conn(conn, query, None, 1, text).await {
-                        Ok(result) => {
-                            *boundary_in_flight = None;
-                            *explicit_transaction_checkpoint = None;
-                            transaction_outcome = Some("committed".to_string());
-                            Ok(result)
+                    ProtectedStatement::Transaction(TransactionPlan::Start) => {
+                        *boundary_in_flight = Some(TransactionPlan::Start);
+                        let outcome = super::exec_on_mysql_conn(conn, query, None, 1, text).await;
+                        *boundary_in_flight = None;
+                        if outcome.is_ok() {
+                            *explicit_transaction_checkpoint = Some((
+                                journal.as_ref().map_or(0, RollbackJournal::checkpoint),
+                                recovery_journal
+                                    .as_ref()
+                                    .map_or(0, RecoveryJournal::checkpoint),
+                            ));
+                            transaction_outcome = Some("opened".to_string());
                         }
-                        Err(error) => {
-                            uncertain_boundary = true;
-                            transaction_outcome = Some("unknown".to_string());
-                            Err(format!(
+                        outcome
+                    }
+                    ProtectedStatement::Transaction(TransactionPlan::Commit) => {
+                        *boundary_in_flight = Some(TransactionPlan::Commit);
+                        match super::exec_on_mysql_conn(conn, query, None, 1, text).await {
+                            Ok(result) => {
+                                *boundary_in_flight = None;
+                                *explicit_transaction_checkpoint = None;
+                                transaction_outcome = Some("committed".to_string());
+                                Ok(result)
+                            }
+                            Err(error) => {
+                                uncertain_boundary = true;
+                                transaction_outcome = Some("unknown".to_string());
+                                Err(format!(
                                     "COMMIT outcome is unknown ({error}); the physical connection will be closed and the durable rollback file retained"
                                 ))
+                            }
                         }
                     }
-                }
-                ProtectedStatement::Transaction(TransactionPlan::Rollback) => {
-                    let (rollback_checkpoint, recovery_checkpoint) =
-                        explicit_transaction_checkpoint.expect(
-                            "pinned preflight requires ROLLBACK to match an active transaction",
-                        );
-                    *boundary_in_flight = Some(TransactionPlan::Rollback);
-                    match super::exec_on_mysql_conn(conn, query, None, 1, text).await {
-                        Ok(result) => {
-                            *boundary_in_flight = None;
-                            *explicit_transaction_checkpoint = None;
-                            transaction_outcome = Some("rolled_back".to_string());
-                            match rewind_journals(
+                    ProtectedStatement::Transaction(TransactionPlan::Rollback) => {
+                        let (rollback_checkpoint, recovery_checkpoint) =
+                            explicit_transaction_checkpoint.expect(
+                                "pinned preflight requires ROLLBACK to match an active transaction",
+                            );
+                        *boundary_in_flight = Some(TransactionPlan::Rollback);
+                        match super::exec_on_mysql_conn(conn, query, None, 1, text).await {
+                            Ok(result) => {
+                                *boundary_in_flight = None;
+                                *explicit_transaction_checkpoint = None;
+                                transaction_outcome = Some("rolled_back".to_string());
+                                match rewind_journals(
                                     journal.as_mut(),
                                     rollback_checkpoint,
                                     recovery_journal.as_mut(),
@@ -1186,104 +1205,126 @@ async fn execute_pinned_protected_batch(
                                         "ROLLBACK succeeded, but obsolete rollback/recovery records could not be removed: {error}"
                                     )),
                                 }
-                        }
-                        Err(error) => {
-                            uncertain_boundary = true;
-                            transaction_outcome = Some("unknown".to_string());
-                            Err(format!(
-                                    "ROLLBACK outcome is unknown ({error}); the physical connection will be closed"
-                                ))
-                        }
-                    }
-                }
-                ProtectedStatement::Dml(plan) => {
-                    let statement_index = statement_offset + index;
-                    if explicit_transaction_checkpoint.is_some() {
-                        execute_protected_dml_body(
-                            conn,
-                            query,
-                            plan,
-                            statement_index,
-                            journal
-                                .as_mut()
-                                .expect("write batches always have a rollback journal"),
-                            recovery_journal
-                                .as_mut()
-                                .expect("write batches always have a recovery journal"),
-                            text,
-                            Some(&mut insert_metadata),
-                            &mut degraded,
-                        )
-                        .await
-                    } else {
-                        execute_protected_dml(
-                            conn,
-                            query,
-                            plan,
-                            statement_index,
-                            journal
-                                .as_mut()
-                                .expect("write batches always have a rollback journal"),
-                            recovery_journal
-                                .as_mut()
-                                .expect("write batches always have a recovery journal"),
-                            text,
-                            &mut degraded,
-                        )
-                        .await
-                    }
-                }
-                ProtectedStatement::Ddl(plan) => {
-                    let commit_error = if explicit_transaction_checkpoint.is_some() {
-                        *boundary_in_flight = Some(TransactionPlan::Commit);
-                        match super::exec_on_mysql_conn(conn, "COMMIT", None, 1, text).await {
-                            Ok(_) => {
-                                *boundary_in_flight = None;
-                                *explicit_transaction_checkpoint = None;
-                                transaction_outcome = Some("ddl_implicit_commit".to_string());
-                                None
                             }
                             Err(error) => {
                                 uncertain_boundary = true;
                                 transaction_outcome = Some("unknown".to_string());
-                                Some(format!(
-                                        "COMMIT before DDL has an unknown outcome ({error}); the DDL was not executed"
-                                    ))
+                                Err(format!(
+                                    "ROLLBACK outcome is unknown ({error}); the physical connection will be closed"
+                                ))
                             }
                         }
-                    } else {
-                        None
-                    };
-                    if let Some(error) = commit_error {
-                        Err(error)
-                    } else {
-                        execute_protected_ddl(
-                            conn,
-                            query,
-                            plan,
-                            statement_offset + index,
-                            journal
-                                .as_mut()
-                                .expect("write batches always have a rollback journal"),
-                            recovery_journal
-                                .as_mut()
-                                .expect("write batches always have a recovery journal"),
-                            text,
-                        )
-                        .await
+                    }
+                    ProtectedStatement::Dml(plan) => {
+                        let statement_index = statement_offset + index;
+                        let windowed = if explicit_transaction_checkpoint.is_some() {
+                            row_window
+                                .try_execute(
+                                    conn,
+                                    &queries[index..],
+                                    &plans[index..],
+                                    statement_index,
+                                    &insert_metadata,
+                                    journal.as_mut().expect("write journal"),
+                                    recovery_journal.as_mut().expect("recovery journal"),
+                                    text,
+                                )
+                                .await
+                        } else {
+                            None
+                        };
+                        if let Some(outcome) = windowed {
+                            outcome
+                        } else if explicit_transaction_checkpoint.is_some() {
+                            execute_protected_dml_body(
+                                conn,
+                                query,
+                                plan,
+                                statement_index,
+                                journal
+                                    .as_mut()
+                                    .expect("write batches always have a rollback journal"),
+                                recovery_journal
+                                    .as_mut()
+                                    .expect("write batches always have a recovery journal"),
+                                text,
+                                Some(&mut insert_metadata),
+                                &mut degraded,
+                            )
+                            .await
+                        } else {
+                            execute_protected_dml(
+                                conn,
+                                query,
+                                plan,
+                                statement_index,
+                                journal
+                                    .as_mut()
+                                    .expect("write batches always have a rollback journal"),
+                                recovery_journal
+                                    .as_mut()
+                                    .expect("write batches always have a recovery journal"),
+                                text,
+                                &mut degraded,
+                            )
+                            .await
+                        }
+                    }
+                    ProtectedStatement::Ddl(plan) => {
+                        let commit_error = if explicit_transaction_checkpoint.is_some() {
+                            *boundary_in_flight = Some(TransactionPlan::Commit);
+                            match super::exec_on_mysql_conn(conn, "COMMIT", None, 1, text).await {
+                                Ok(_) => {
+                                    *boundary_in_flight = None;
+                                    *explicit_transaction_checkpoint = None;
+                                    transaction_outcome = Some("ddl_implicit_commit".to_string());
+                                    None
+                                }
+                                Err(error) => {
+                                    uncertain_boundary = true;
+                                    transaction_outcome = Some("unknown".to_string());
+                                    Some(format!(
+                                        "COMMIT before DDL has an unknown outcome ({error}); the DDL was not executed"
+                                    ))
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                        if let Some(error) = commit_error {
+                            Err(error)
+                        } else {
+                            execute_protected_ddl(
+                                conn,
+                                query,
+                                plan,
+                                statement_offset + index,
+                                journal
+                                    .as_mut()
+                                    .expect("write batches always have a rollback journal"),
+                                recovery_journal
+                                    .as_mut()
+                                    .expect("write batches always have a recovery journal"),
+                                text,
+                            )
+                            .await
+                        }
+                    }
+                    ProtectedStatement::Unsupported(blocked) => {
+                        Err(safety::refusal(&blocked.reason))
                     }
                 }
-                ProtectedStatement::Unsupported(blocked) => Err(safety::refusal(&blocked.reason)),
             };
 
             if outcome.is_err()
                 && explicit_transaction_checkpoint.is_some()
-                && !matches!(
-                    plan,
-                    ProtectedStatement::Transaction(
-                        TransactionPlan::Commit | TransactionPlan::Rollback
-                    )
-                )
+                && (durability_failed
+                    || !matches!(
+                        plan,
+                        ProtectedStatement::Transaction(
+                            TransactionPlan::Commit | TransactionPlan::Rollback
+                        )
+                    ))
                 && !uncertain_boundary
             {
                 let error = outcome
@@ -1320,6 +1361,7 @@ async fn execute_pinned_protected_batch(
                 };
             }
             if outcome.is_err() {
+                row_window.discard();
                 stopped = true;
             }
             let result = BatchStatementResult::from_outcome(start, outcome);
@@ -1329,7 +1371,9 @@ async fn execute_pinned_protected_batch(
             // Unsupported statements cannot have executed in strict mode.
             if let Some(callback) = on_progress {
                 if let Err(error) = callback(index, &result) {
-                    *execution_in_flight = false;
+                    // A cancelled frame with pending images must never be
+                    // resumed by submitting COMMIT from a later Run All.
+                    *execution_in_flight = row_window.has_pending();
                     *last_activity = std::time::Instant::now();
                     return Err(error);
                 }
@@ -1357,9 +1401,7 @@ async fn execute_pinned_protected_batch(
             .take()
             .map(|journal| journal.abandon().to_string_lossy().to_string());
         if let Some(recovery_journal) = session.recovery_journal.take() {
-            if let Err(error) =
-                recovery_journal.interrupt("transaction boundary outcome unknown")
-            {
+            if let Err(error) = recovery_journal.interrupt("transaction boundary outcome unknown") {
                 log::warn!("Could not mark recovery run interrupted: {error}");
             }
         }
@@ -1468,9 +1510,20 @@ async fn execute_single_run_protected_batch(
     let mut stopped = false;
     let mut explicit_transaction_checkpoint = None;
     let mut insert_metadata = InsertMetadataCache::default();
+    let mut row_window = DmlWindow::default();
+    // Aborting a window must disconnect, not return an uncommitted physical
+    // connection with missing row images to a pool. Pinned runs retain their
+    // existing interrupted-frame close/rollback lifecycle instead.
+    conn.close_on_drop();
     for (index, (query, plan)) in queries.iter().zip(plans.iter()).enumerate() {
         let start = std::time::Instant::now();
         insert_metadata.before_statement(plan, explicit_transaction_checkpoint.is_some());
+        row_window.before_statement(
+            plan,
+            index,
+            explicit_transaction_checkpoint.is_some(),
+            stopped,
+        )?;
         if let Some(result) = complete_statement_without_database(
             index,
             plan,
@@ -1484,7 +1537,13 @@ async fn execute_single_run_protected_batch(
         }
         // Set when a DML statement had to run without an exact inverse.
         let mut degraded: Option<String> = None;
-        let mut outcome = match plan {
+        let barrier =
+            journal_barrier::before_statement(plan, journal.as_mut(), recovery_journal.as_mut());
+        let durability_failed = barrier.is_err();
+        let mut outcome = if let Err(error) = barrier {
+            Err(error)
+        } else {
+            match plan {
             ProtectedStatement::ReadOnly
                 | ProtectedStatement::Session(_)
                 | ProtectedStatement::Temporary(_) => {
@@ -1539,7 +1598,13 @@ async fn execute_single_run_protected_batch(
                     }
                 }
                 ProtectedStatement::Dml(plan) => {
-                    if explicit_transaction_checkpoint.is_some() {
+                    let windowed = if explicit_transaction_checkpoint.is_some() {
+                        row_window.try_execute(&mut conn, &queries[index..], &plans[index..], index,
+                            &insert_metadata, journal.as_mut().expect("write journal"),
+                            recovery_journal.as_mut().expect("recovery journal"), text).await
+                    } else { None };
+                    if let Some(outcome) = windowed { outcome }
+                    else if explicit_transaction_checkpoint.is_some() {
                         execute_protected_dml_body(
                             &mut conn,
                             query,
@@ -1591,15 +1656,17 @@ async fn execute_single_run_protected_batch(
                     .await
                 }
             ProtectedStatement::Unsupported(blocked) => Err(safety::refusal(&blocked.reason)),
+        }
         };
         if outcome.is_err()
             && explicit_transaction_checkpoint.is_some()
-            && !matches!(
-                plan,
-                ProtectedStatement::Transaction(
-                    TransactionPlan::Commit | TransactionPlan::Rollback
-                )
-            )
+            && (durability_failed
+                || !matches!(
+                    plan,
+                    ProtectedStatement::Transaction(
+                        TransactionPlan::Commit | TransactionPlan::Rollback
+                    )
+                ))
         {
             let error = outcome
                 .err()
@@ -1626,11 +1693,15 @@ async fn execute_single_run_protected_batch(
             };
         }
         if outcome.is_err() {
+            row_window.discard();
             stopped = true;
         }
         let mut result = BatchStatementResult::from_outcome(start, outcome);
         if degraded.take().is_some() {
-            return Err("Internal strict-protection invariant violated: an unprotected result was produced".to_string());
+            return Err(
+                "Internal strict-protection invariant violated: an unprotected result was produced"
+                    .to_string(),
+            );
         }
         result.rollback_file = rollback_path.clone();
         if let Some(callback) = on_progress {
@@ -1713,7 +1784,11 @@ async fn execute_protected_dml(
         None,
         degraded,
     )
-    .await;
+    .await
+    .and_then(|result| {
+        journal_barrier::finish(Some(rollback_journal), Some(recovery_journal))?;
+        Ok(result)
+    });
 
     match outcome {
         Ok(result) => {
@@ -1771,6 +1846,10 @@ async fn execute_protected_dml_body(
     insert_metadata: Option<&mut InsertMetadataCache>,
     degraded: &mut Option<String>,
 ) -> Result<QueryResult, String> {
+    // Every caller owns an active transaction. Uncommitted records may be
+    // coalesced, but both journals must be synced before any commit is sent.
+    rollback_journal.defer_transaction_writes();
+    recovery_journal.defer_transaction_writes();
     let outcome = match plan {
         DmlPlan::Insert(plan) => {
             execute_insert(
@@ -1851,14 +1930,21 @@ async fn execute_protected_dml_body(
     // including a refusal discovered after an earlier write in this transaction.
     // Never execute the user's statement a second time as a fallback.
     let _ = degraded;
-    outcome.map_err(|error| {
-        if let Some(reason) = unprotectable_reason(&error) {
-            safety::refusal(reason)
-        } else {
-            log::warn!("Protected DML failed; transaction must be rolled back: {error}");
-            error
-        }
-    })
+    outcome
+        .and_then(|result| {
+            if rollback_journal.requires_immediate_durability() {
+                journal_barrier::finish(Some(rollback_journal), Some(recovery_journal))?;
+            }
+            Ok(result)
+        })
+        .map_err(|error| {
+            if let Some(reason) = unprotectable_reason(&error) {
+                safety::refusal(reason)
+            } else {
+                log::warn!("Protected DML failed; transaction must be rolled back: {error}");
+                error
+            }
+        })
 }
 
 async fn execute_insert(
@@ -1914,44 +2000,18 @@ async fn execute_insert(
         ));
     }
 
-    let mut rollback_steps = Vec::new();
-    if let (Some(column), Some(next_value)) = (
-        metadata.auto_increment_primary_key(),
-        metadata.auto_increment_next,
-    ) {
-        let _ = column;
-        rollback_steps.push(RollbackStep {
-            statement_index,
-            sql: format!(
-                "ALTER TABLE {} AUTO_INCREMENT = {}",
-                metadata.qualified_name(),
-                next_value
-            ),
-            expected_affected_rows: None,
-        });
-    }
-    for row in &inserted {
-        rollback_steps.push(RollbackStep {
-            statement_index,
-            sql: build_insert_rollback_delete(&metadata, row)?,
-            expected_affected_rows: Some(1),
-        });
-    }
-    rollback_journal.add_steps(rollback_steps)?;
-    recovery_journal.add_statement(recovery_dml_statement(
+    dml_records::record(
         query,
+        &DmlPlan::Insert(plan.clone()),
         statement_index,
-        "insert",
         &metadata,
-        metadata
-            .writable_columns()
-            .map(|column| column.name.clone())
-            .collect(),
-        Some(key_condition),
         Vec::new(),
         inserted,
-    ))?;
-    Ok(result)
+        Some(key_condition),
+        result,
+        rollback_journal,
+        recovery_journal,
+    )
 }
 
 async fn execute_update(
@@ -1972,9 +2032,7 @@ async fn execute_update(
     for assigned in &plan.assigned_columns {
         let column = metadata
             .column(assigned)
-            .ok_or_else(|| {
-                format!("{UNPROTECTABLE}UPDATE references unknown column {assigned}")
-            })?;
+            .ok_or_else(|| format!("{UNPROTECTABLE}UPDATE references unknown column {assigned}"))?;
         if column.generated {
             return Err(format!(
                 "{UNPROTECTABLE}UPDATE of generated column {} cannot be rollback-protected",
@@ -1998,72 +2056,18 @@ async fn execute_update(
     );
     let result = super::exec_on_mysql_conn(conn, &guarded_query, None, 1, text).await?;
     let after = capture_rows_by_primary_keys(conn, &metadata, &before).await?;
-    let before_by_key = rows_by_primary_key(&metadata, before)?;
-    let after_by_key = rows_by_primary_key(&metadata, after)?;
-    if before_by_key.len() != after_by_key.len() || before_by_key.keys().ne(after_by_key.keys()) {
-        return Err(
-            "UPDATE changed row identity or caused rows to disappear; transaction was rolled back"
-                .to_string(),
-        );
-    }
-
-    let mut rollback_steps = Vec::new();
-    let mut changed_before = Vec::new();
-    let mut changed_after = Vec::new();
-    let writable_column_names = metadata
-        .writable_columns()
-        .map(|column| column.name.clone())
-        .collect::<Vec<_>>();
-    let mut actual_changed_columns = BTreeSet::new();
-    let mut changed_count = 0_u64;
-    for (key, before_row) in before_by_key {
-        let after_row = after_by_key
-            .get(&key)
-            .expect("key sets were verified as equal");
-        if before_row.values == after_row.values {
-            continue;
-        }
-        if before_row.values.len() != writable_column_names.len()
-            || after_row.values.len() != writable_column_names.len()
-        {
-            return Err(
-                "UPDATE row image width does not match writable column metadata".to_string(),
-            );
-        }
-        for (index, column) in writable_column_names.iter().enumerate() {
-            if before_row.values[index] != after_row.values[index] {
-                actual_changed_columns.insert(column.clone());
-            }
-        }
-        changed_count += 1;
-        changed_before.push(before_row.clone());
-        changed_after.push(after_row.clone());
-        rollback_steps.push(RollbackStep {
-            statement_index,
-            sql: build_update_rollback(&metadata, &before_row, after_row)?,
-            expected_affected_rows: Some(1),
-        });
-    }
-    if result.affected_rows != changed_count && result.affected_rows != after_by_key.len() as u64 {
-        return Err(format!(
-            "UPDATE reported {} affected rows but row diff found {}; transaction was rolled back",
-            result.affected_rows, changed_count
-        ));
-    }
-    if !rollback_steps.is_empty() {
-        rollback_journal.add_steps(rollback_steps)?;
-    }
-    recovery_journal.add_statement(recovery_dml_statement(
+    dml_records::record(
         _query,
+        &DmlPlan::Update(plan.clone()),
         statement_index,
-        "update",
         &metadata,
-        actual_changed_columns.into_iter().collect(),
+        before,
+        after,
         plan.where_sql.clone(),
-        changed_before,
-        changed_after,
-    ))?;
-    Ok(result)
+        result,
+        rollback_journal,
+        recovery_journal,
+    )
 }
 
 async fn execute_delete(
@@ -2089,38 +2093,18 @@ async fn execute_delete(
         &key_filter,
     );
     let result = super::exec_on_mysql_conn(conn, &guarded_query, None, 1, text).await?;
-    if result.affected_rows != before.len() as u64 {
-        return Err(format!(
-            "DELETE reported {} affected rows but {} before-images were locked; transaction was rolled back",
-            result.affected_rows,
-            before.len()
-        ));
-    }
-    let rollback_steps = before
-        .iter()
-        .map(|row| RollbackStep {
-            statement_index,
-            sql: build_delete_rollback_insert(&metadata, row),
-            expected_affected_rows: Some(1),
-        })
-        .collect();
-    if !before.is_empty() {
-        rollback_journal.add_steps(rollback_steps)?;
-    }
-    recovery_journal.add_statement(recovery_dml_statement(
+    dml_records::record(
         _query,
+        &DmlPlan::Delete(plan.clone()),
         statement_index,
-        "delete",
         &metadata,
-        metadata
-            .writable_columns()
-            .map(|column| column.name.clone())
-            .collect(),
-        plan.where_sql.clone(),
         before,
         Vec::new(),
-    ))?;
-    Ok(result)
+        plan.where_sql.clone(),
+        result,
+        rollback_journal,
+        recovery_journal,
+    )
 }
 
 /// Row-chunk size for synthesized VALUES statements built from a
@@ -2140,10 +2124,7 @@ fn empty_write_result(affected_rows: u64) -> QueryResult {
     }
 }
 
-fn validate_family_columns(
-    columns: &[String],
-    metadata: &TableMetadata,
-) -> Result<(), String> {
+fn validate_family_columns(columns: &[String], metadata: &TableMetadata) -> Result<(), String> {
     let mut seen = HashSet::new();
     for column in columns {
         if !seen.insert(column.to_ascii_lowercase()) {
@@ -2336,7 +2317,11 @@ async fn load_unique_index_column_sets(
     let mut sets: Vec<(String, Vec<String>)> = Vec::new();
     for row in rows {
         let index_name = mysql_text(&row, 0)?;
-        if row.try_get::<Option<u64>, _>(2).map_err(|error| error.to_string())?.is_some() {
+        if row
+            .try_get::<Option<u64>, _>(2)
+            .map_err(|error| error.to_string())?
+            .is_some()
+        {
             return Ok(None); // Prefix uniqueness is not full-column equality.
         }
         let column = match row.try_get::<Option<String>, _>(1) {
@@ -2394,7 +2379,11 @@ async fn ensure_conflict_locking_isolation(conn: &mut sqlx::MySqlConnection) -> 
     let rows = conn.fetch_all(sqlx::raw_sql(
         "SHOW SESSION VARIABLES WHERE Variable_name IN ('transaction_isolation', 'tx_isolation')"
     )).await.map_err(|error| format!("Could not verify conflict locking isolation: {error}"))?;
-    let isolation = rows.first().map(|row| mysql_text(row, 1)).transpose()?.unwrap_or_default();
+    let isolation = rows
+        .first()
+        .map(|row| mysql_text(row, 1))
+        .transpose()?
+        .unwrap_or_default();
     if !safety::safe_conflict_isolation(&isolation) {
         return Err(safety::refusal(&format!("conflict-handling INSERT needs REPEATABLE READ or SERIALIZABLE gap locking; current isolation is {isolation}")));
     }
@@ -2407,18 +2396,27 @@ fn mysql_nonnegative_integer(row: &sqlx::mysql::MySqlRow, index: usize) -> Resul
     if let Ok(value) = row.try_get::<u64, _>(index) {
         return Ok(value);
     }
-    let value = row.try_get::<i64, _>(index).map_err(|error| format!("Could not decode MySQL diagnostic integer {index}: {error}"))?;
-    u64::try_from(value).map_err(|error| format!("Negative MySQL diagnostic integer {index}: {error}"))
+    let value = row
+        .try_get::<i64, _>(index)
+        .map_err(|error| format!("Could not decode MySQL diagnostic integer {index}: {error}"))?;
+    u64::try_from(value)
+        .map_err(|error| format!("Negative MySQL diagnostic integer {index}: {error}"))
 }
 
 async fn verify_duplicate_only_warnings(conn: &mut sqlx::MySqlConnection) -> Result<(), String> {
     // SHOW diagnostics do not clear the preceding statement's warning list.
-    let count_row = conn.fetch_one(sqlx::raw_sql("SHOW COUNT(*) WARNINGS")).await
+    let count_row = conn
+        .fetch_one(sqlx::raw_sql("SHOW COUNT(*) WARNINGS"))
+        .await
         .map_err(|error| format!("Could not read INSERT warning count: {error}"))?;
     let count = mysql_nonnegative_integer(&count_row, 0)?;
-    let rows = conn.fetch_all(sqlx::raw_sql("SHOW WARNINGS")).await
+    let rows = conn
+        .fetch_all(sqlx::raw_sql("SHOW WARNINGS"))
+        .await
         .map_err(|error| format!("Could not inspect INSERT warnings: {error}"))?;
-    let codes = rows.iter().map(|row| mysql_nonnegative_integer(row, 1))
+    let codes = rows
+        .iter()
+        .map(|row| mysql_nonnegative_integer(row, 1))
         .collect::<Result<Vec<_>, String>>()?;
     safety::complete_duplicate_warnings(count, &codes)
 }
@@ -2435,8 +2433,7 @@ async fn execute_insert_family(
     text: super::TextProto,
 ) -> Result<QueryResult, String> {
     safety::validate_insert_source(plan)?;
-    let metadata =
-        load_locked_dml_metadata(conn, &plan.table, plan.upsert.is_some()).await?;
+    let metadata = load_locked_dml_metadata(conn, &plan.table, plan.upsert.is_some()).await?;
     if plan.ignore || plan.upsert.is_some() {
         ensure_conflict_locking_isolation(conn).await?;
     }
@@ -2464,7 +2461,9 @@ async fn execute_insert_family(
     if let Some(upsert) = &plan.upsert {
         for assigned in &upsert.assigned_columns {
             let column = metadata.column(assigned).ok_or_else(|| {
-                format!("{UNPROTECTABLE}ON DUPLICATE KEY UPDATE references unknown column {assigned}")
+                format!(
+                    "{UNPROTECTABLE}ON DUPLICATE KEY UPDATE references unknown column {assigned}"
+                )
             })?;
             if column.generated {
                 return Err(format!(
@@ -2541,23 +2540,22 @@ async fn execute_insert_family(
         ));
     }
 
-    let auto_increment_reset =
-        if let (Some(_), Some(next_value)) = (
-            metadata.auto_increment_primary_key(),
-            metadata.auto_increment_next,
-        ) {
-            Some(RollbackStep {
-                statement_index,
-                sql: format!(
-                    "ALTER TABLE {} AUTO_INCREMENT = {}",
-                    metadata.qualified_name(),
-                    next_value
-                ),
-                expected_affected_rows: None,
-            })
-        } else {
-            None
-        };
+    let auto_increment_reset = if let (Some(_), Some(next_value)) = (
+        metadata.auto_increment_primary_key(),
+        metadata.auto_increment_next,
+    ) {
+        Some(RollbackStep {
+            statement_index,
+            sql: format!(
+                "ALTER TABLE {} AUTO_INCREMENT = {}",
+                metadata.qualified_name(),
+                next_value
+            ),
+            expected_affected_rows: None,
+        })
+    } else {
+        None
+    };
 
     let upsert_tail = plan.upsert.as_ref().map(|tail| tail.tail_sql.as_str());
     let chunks: Vec<&[Vec<String>]> = if encoded {
@@ -2604,13 +2602,8 @@ async fn execute_insert_family(
 
         let chunk_sql;
         let executed_sql = if encoded {
-            chunk_sql = synthesize_family_insert_sql(
-                &metadata,
-                &columns,
-                chunk,
-                plan.ignore,
-                upsert_tail,
-            )?;
+            chunk_sql =
+                synthesize_family_insert_sql(&metadata, &columns, chunk, plan.ignore, upsert_tail)?;
             chunk_sql.as_str()
         } else {
             query
@@ -2624,7 +2617,10 @@ async fn execute_insert_family(
         // Existing conflict rows must be followed by their captured stable
         // identity even when the upsert changes every secondary unique value.
         let after_condition = if plan.upsert.is_some() && !before_by_key.is_empty() {
-            captured_primary_key_filter(&metadata, &before_by_key.values().cloned().collect::<Vec<_>>())?
+            captured_primary_key_filter(
+                &metadata,
+                &before_by_key.values().cloned().collect::<Vec<_>>(),
+            )?
         } else {
             match &filter {
                 Some(filter) => filter.clone(),
@@ -2634,7 +2630,10 @@ async fn execute_insert_family(
         let after = capture_rows(conn, &metadata, Some(&after_condition)).await?;
         let after_by_key = rows_by_primary_key(&metadata, after)?;
         after_total += after_by_key.len();
-        if before_by_key.keys().any(|key| !after_by_key.contains_key(key)) {
+        if before_by_key
+            .keys()
+            .any(|key| !after_by_key.contains_key(key))
+        {
             return Err("INSERT conflict handling lost a captured row identity; transaction must be rolled back".to_string());
         }
 
@@ -2694,7 +2693,13 @@ async fn execute_insert_family(
     }
 
     if plan.upsert.is_some() {
-        safety::validate_upsert_counts(total_affected, matched_total as usize, after_total, inserted_total.len(), updated_total)?;
+        safety::validate_upsert_counts(
+            total_affected,
+            matched_total as usize,
+            after_total,
+            inserted_total.len(),
+            updated_total,
+        )?;
     } else if plan.ignore && total_affected != inserted_total.len() as u64 {
         return Err(format!(
             "INSERT IGNORE reported {total_affected} affected rows but {} rows were inserted; transaction was rolled back",
@@ -2711,7 +2716,11 @@ async fn execute_insert_family(
         rollback_journal.add_steps(rollback_steps)?;
     }
 
-    let operation = if plan.upsert.is_some() { "upsert" } else { "insert" };
+    let operation = if plan.upsert.is_some() {
+        "upsert"
+    } else {
+        "insert"
+    };
     let mut before_rows = changed_before;
     let mut after_rows = changed_after;
     after_rows.extend(inserted_total);
@@ -2831,8 +2840,11 @@ async fn load_multi_table_metadata(
     safety::single_target(plan).map_err(|blocked| safety::refusal(&blocked.reason))?;
     // FOR UPDATE must cover real transactional source tables too; reject views
     // and nontransactional JOIN sources before evaluating any selection.
-    let refs_tokens = tokenize(&plan.refs_sql).map_err(|blocked| safety::refusal(&blocked.reason))?;
-    for (object, _) in parse_table_references(&refs_tokens).map_err(|blocked| safety::refusal(&blocked.reason))? {
+    let refs_tokens =
+        tokenize(&plan.refs_sql).map_err(|blocked| safety::refusal(&blocked.reason))?;
+    for (object, _) in
+        parse_table_references(&refs_tokens).map_err(|blocked| safety::refusal(&blocked.reason))?
+    {
         load_locked_dml_metadata(conn, &object, false).await?;
     }
     let mut metas = Vec::with_capacity(plan.targets.len());
@@ -2906,18 +2918,12 @@ async fn execute_multi_update(
 
     let mut total_changed = 0_u64;
     let mut total_matched = 0_u64;
-    for ((target, metadata), before) in plan
-        .targets
-        .iter()
-        .zip(&metas)
-        .zip(before_per_target)
-    {
+    for ((target, metadata), before) in plan.targets.iter().zip(&metas).zip(before_per_target) {
         total_matched += before.len() as u64;
         let after = capture_rows_by_primary_keys(conn, metadata, &before).await?;
         let before_by_key = rows_by_primary_key(metadata, before)?;
         let after_by_key = rows_by_primary_key(metadata, after)?;
-        if before_by_key.len() != after_by_key.len()
-            || before_by_key.keys().ne(after_by_key.keys())
+        if before_by_key.len() != after_by_key.len() || before_by_key.keys().ne(after_by_key.keys())
         {
             return Err(format!(
                 "UPDATE changed row identity in {}; transaction was rolled back",
@@ -3466,8 +3472,16 @@ async fn load_table_metadata(
             sql_hex(schema.as_bytes()), sql_hex(object.name.as_bytes())
         );
         let mut candidates = Vec::new();
-        for row in conn.fetch_all(sqlx::raw_sql(&unique_sql)).await.map_err(|error| format!("Could not inspect stable unique identities: {error}"))? {
-            candidates.push((mysql_text(&row, 0)?, mysql_text(&row, 1)?, mysql_text(&row, 2)? == "1"));
+        for row in conn
+            .fetch_all(sqlx::raw_sql(&unique_sql))
+            .await
+            .map_err(|error| format!("Could not inspect stable unique identities: {error}"))?
+        {
+            candidates.push((
+                mysql_text(&row, 0)?,
+                mysql_text(&row, 1)?,
+                mysql_text(&row, 2)? == "1",
+            ));
         }
         if let Some(key) = safety::stable_unique_key(candidates) {
             log::info!("Rollback protection uses a verified NOT NULL full unique key for {schema}.{}: {key:?}", object.name);
@@ -3608,9 +3622,7 @@ fn validate_insert_columns(plan: &InsertPlan, metadata: &TableMetadata) -> Resul
         }
         let metadata_column = metadata
             .column(column)
-            .ok_or_else(|| {
-                format!("{UNPROTECTABLE}INSERT references unknown column {column}")
-            })?;
+            .ok_or_else(|| format!("{UNPROTECTABLE}INSERT references unknown column {column}"))?;
         if metadata_column.generated {
             return Err(format!(
                 "{UNPROTECTABLE}INSERT into generated column {} cannot be rollback-protected",
@@ -4264,7 +4276,12 @@ fn classify_set(sql: &str, tokens: &[Token]) -> Result<ProtectedStatement, Block
     // Changing the session default inside an active transaction does not
     // change that transaction's isolation. Refuse the change so the runtime
     // isolation probe cannot mistake the next transaction's default for this one.
-    if tokens.iter().any(|token| matches!(token.upper(), "TRANSACTION_ISOLATION" | "TX_ISOLATION" | "TRANSACTION_READ_ONLY" | "TX_READ_ONLY")) {
+    if tokens.iter().any(|token| {
+        matches!(
+            token.upper(),
+            "TRANSACTION_ISOLATION" | "TX_ISOLATION" | "TRANSACTION_READ_ONLY" | "TX_READ_ONLY"
+        )
+    }) {
         return Err(BlockedStatement::unsupported("transaction characteristics cannot change inside the protected session; configure isolation before opening the connection"));
     }
     if let Some((variable, assignment_index)) = direct_user_variable(tokens) {
@@ -4794,10 +4811,7 @@ fn find_on_duplicate_key_update(tokens: &[Token], start: usize) -> Option<usize>
 }
 
 /// Parses `VALUES (…), (…) [AS alias [(cols)]]` into raw row expressions.
-fn parse_values_rows(
-    sql: &str,
-    tokens: &[Token],
-) -> Result<Vec<Vec<String>>, BlockedStatement> {
+fn parse_values_rows(sql: &str, tokens: &[Token]) -> Result<Vec<Vec<String>>, BlockedStatement> {
     // tokens[0] is VALUES/VALUE.
     let mut idx = 1;
     let mut rows = Vec::new();
@@ -4840,10 +4854,7 @@ fn parse_values_rows(
 /// Parses the extended INSERT family:
 /// `INSERT [IGNORE] INTO t [(cols)] (VALUES … | SELECT …) [ON DUPLICATE KEY
 /// UPDATE …]`. Everything else fails closed.
-fn parse_insert_family(
-    sql: &str,
-    tokens: &[Token],
-) -> Result<InsertFamilyPlan, BlockedStatement> {
+fn parse_insert_family(sql: &str, tokens: &[Token]) -> Result<InsertFamilyPlan, BlockedStatement> {
     let mut idx = 1;
     let mut ignore = false;
     if tokens.get(idx).is_some_and(|t| t.upper() == "IGNORE") {
@@ -4913,7 +4924,13 @@ fn parse_insert_family(
         None
     };
 
-    let plan = InsertFamilyPlan { table, columns, source, ignore, upsert };
+    let plan = InsertFamilyPlan {
+        table,
+        columns,
+        source,
+        ignore,
+        upsert,
+    };
     safety::validate_insert_source(&plan).map_err(BlockedStatement::unsupported)?;
     Ok(plan)
 }
@@ -4933,9 +4950,7 @@ const JOIN_KEYWORDS: &[&str] = &[
 /// Extracts `(table, alias)` pairs from raw table references (`a JOIN b ON …`,
 /// `t1, t2`, `db.t AS x`). Derived tables, index hints, and anything else that
 /// would make the alias map unreliable fail closed.
-fn parse_table_references(
-    tokens: &[Token],
-) -> Result<Vec<(ObjectName, String)>, BlockedStatement> {
+fn parse_table_references(tokens: &[Token]) -> Result<Vec<(ObjectName, String)>, BlockedStatement> {
     let mut references = Vec::new();
     let mut idx = 0;
     loop {
@@ -5037,9 +5052,7 @@ fn parse_qualified_assignments(
             let equals = segment
                 .iter()
                 .position(|token| token.text == "=")
-                .ok_or_else(|| {
-                    BlockedStatement::unsupported("UPDATE assignment must contain =")
-                })?;
+                .ok_or_else(|| BlockedStatement::unsupported("UPDATE assignment must contain ="))?;
             let lhs = &segment[..equals];
             if segment[equals + 1..].is_empty() {
                 return Err(BlockedStatement::unsupported(
@@ -5090,9 +5103,8 @@ fn parse_multi_update(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
             "UPDATE modifiers are not supported",
         ));
     }
-    let set_idx = find_top_level_word(tokens, 1, &["SET"]).ok_or_else(|| {
-        BlockedStatement::unsupported("UPDATE must contain a SET clause")
-    })?;
+    let set_idx = find_top_level_word(tokens, 1, &["SET"])
+        .ok_or_else(|| BlockedStatement::unsupported("UPDATE must contain a SET clause"))?;
     if set_idx <= 1 {
         return Err(BlockedStatement::unsupported(
             "UPDATE is missing its table references",
@@ -5142,11 +5154,16 @@ fn parse_multi_update(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
         safety::repeatable_selection(&tokens[index + 1..])?;
     }
     if targets.len() != 1 {
-        return Err(BlockedStatement::unsupported("multiple UPDATE targets require manually reviewed transactional decomposition"));
+        return Err(BlockedStatement::unsupported(
+            "multiple UPDATE targets require manually reviewed transactional decomposition",
+        ));
     }
     let refs_sql = raw_token_range(sql, &tokens[1..set_idx])?;
-    let where_sql = where_idx
-        .map(|idx| sql[tokens[idx].end..statement_end(sql, tokens)].trim().to_string());
+    let where_sql = where_idx.map(|idx| {
+        sql[tokens[idx].end..statement_end(sql, tokens)]
+            .trim()
+            .to_string()
+    });
     if where_sql.as_deref() == Some("") {
         return Err(BlockedStatement::unsupported(
             "UPDATE WHERE clause is empty",
@@ -5160,10 +5177,7 @@ fn parse_multi_update(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
 }
 
 /// Strips an optional `.*` suffix from a DELETE target alias list entry.
-fn parse_delete_target(
-    tokens: &[Token],
-    idx: usize,
-) -> Result<(String, usize), BlockedStatement> {
+fn parse_delete_target(tokens: &[Token], idx: usize) -> Result<(String, usize), BlockedStatement> {
     let (name, mut next) = parse_single_identifier(tokens, idx)?;
     if tokens.get(next).map(|t| t.text.as_str()) == Some(".")
         && tokens.get(next + 1).map(|t| t.text.as_str()) == Some("*")
@@ -5183,70 +5197,68 @@ fn parse_multi_delete(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
             "DELETE ORDER BY/LIMIT/RETURNING is not supported",
         ));
     }
-    let (target_aliases, refs_start, refs_end) = if tokens
-        .get(1)
-        .is_some_and(|t| t.upper() == "FROM")
-    {
-        let using_idx = find_top_level_word(tokens, 2, &["USING"]);
-        match using_idx {
-            Some(using_idx) => {
-                // DELETE FROM <targets> USING <refs>.
-                let mut aliases = Vec::new();
-                let mut idx = 2;
-                loop {
-                    let (name, next) = parse_delete_target(tokens, idx)?;
-                    aliases.push(name);
-                    idx = next;
-                    if tokens.get(idx).map(|t| t.text.as_str()) == Some(",") {
-                        idx += 1;
-                        continue;
+    let (target_aliases, refs_start, refs_end) =
+        if tokens.get(1).is_some_and(|t| t.upper() == "FROM") {
+            let using_idx = find_top_level_word(tokens, 2, &["USING"]);
+            match using_idx {
+                Some(using_idx) => {
+                    // DELETE FROM <targets> USING <refs>.
+                    let mut aliases = Vec::new();
+                    let mut idx = 2;
+                    loop {
+                        let (name, next) = parse_delete_target(tokens, idx)?;
+                        aliases.push(name);
+                        idx = next;
+                        if tokens.get(idx).map(|t| t.text.as_str()) == Some(",") {
+                            idx += 1;
+                            continue;
+                        }
+                        break;
                     }
-                    break;
+                    if idx != using_idx {
+                        return Err(BlockedStatement::unsupported(
+                            "unexpected tokens in DELETE target list",
+                        ));
+                    }
+                    let where_idx = find_top_level_word(tokens, using_idx + 1, &["WHERE"]);
+                    (aliases, using_idx + 1, where_idx.unwrap_or(tokens.len()))
                 }
-                if idx != using_idx {
-                    return Err(BlockedStatement::unsupported(
-                        "unexpected tokens in DELETE target list",
-                    ));
+                None => {
+                    // DELETE FROM t [AS] alias [WHERE]: single aliased table.
+                    let where_idx = find_top_level_word(tokens, 2, &["WHERE"]);
+                    let refs_end = where_idx.unwrap_or(tokens.len());
+                    let references = parse_table_references(&tokens[2..refs_end])?;
+                    if references.len() != 1 {
+                        return Err(BlockedStatement::unsupported(
+                            "multi-table DELETE must name its targets before FROM or via USING",
+                        ));
+                    }
+                    (vec![references[0].1.clone()], 2, refs_end)
                 }
-                let where_idx = find_top_level_word(tokens, using_idx + 1, &["WHERE"]);
-                (aliases, using_idx + 1, where_idx.unwrap_or(tokens.len()))
             }
-            None => {
-                // DELETE FROM t [AS] alias [WHERE]: single aliased table.
-                let where_idx = find_top_level_word(tokens, 2, &["WHERE"]);
-                let refs_end = where_idx.unwrap_or(tokens.len());
-                let references = parse_table_references(&tokens[2..refs_end])?;
-                if references.len() != 1 {
-                    return Err(BlockedStatement::unsupported(
-                        "multi-table DELETE must name its targets before FROM or via USING",
-                    ));
+        } else {
+            // DELETE <targets> FROM <refs>.
+            let mut aliases = Vec::new();
+            let mut idx = 1;
+            loop {
+                let (name, next) = parse_delete_target(tokens, idx)?;
+                aliases.push(name);
+                idx = next;
+                if tokens.get(idx).map(|t| t.text.as_str()) == Some(",") {
+                    idx += 1;
+                    continue;
                 }
-                (vec![references[0].1.clone()], 2, refs_end)
+                break;
             }
-        }
-    } else {
-        // DELETE <targets> FROM <refs>.
-        let mut aliases = Vec::new();
-        let mut idx = 1;
-        loop {
-            let (name, next) = parse_delete_target(tokens, idx)?;
-            aliases.push(name);
-            idx = next;
-            if tokens.get(idx).map(|t| t.text.as_str()) == Some(",") {
-                idx += 1;
-                continue;
-            }
-            break;
-        }
-        expect_word(
-            tokens,
-            idx,
-            "FROM",
-            "DELETE targets must be followed by FROM",
-        )?;
-        let where_idx = find_top_level_word(tokens, idx + 1, &["WHERE"]);
-        (aliases, idx + 1, where_idx.unwrap_or(tokens.len()))
-    };
+            expect_word(
+                tokens,
+                idx,
+                "FROM",
+                "DELETE targets must be followed by FROM",
+            )?;
+            let where_idx = find_top_level_word(tokens, idx + 1, &["WHERE"]);
+            (aliases, idx + 1, where_idx.unwrap_or(tokens.len()))
+        };
 
     if refs_start >= refs_end {
         return Err(BlockedStatement::unsupported(
@@ -5258,9 +5270,7 @@ fn parse_multi_delete(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
     let mut targets = Vec::new();
     for alias in &target_aliases {
         let (object, resolved_alias) = resolve_reference(&references, alias).ok_or_else(|| {
-            BlockedStatement::unsupported(
-                "DELETE target does not match a table reference",
-            )
+            BlockedStatement::unsupported("DELETE target does not match a table reference")
         })?;
         if targets
             .iter()
@@ -5275,8 +5285,11 @@ fn parse_multi_delete(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
         });
     }
     let where_idx = find_top_level_word(tokens, refs_end, &["WHERE"]);
-    let where_sql = where_idx
-        .map(|idx| sql[tokens[idx].end..statement_end(sql, tokens)].trim().to_string());
+    let where_sql = where_idx.map(|idx| {
+        sql[tokens[idx].end..statement_end(sql, tokens)]
+            .trim()
+            .to_string()
+    });
     if where_sql.as_deref() == Some("") {
         return Err(BlockedStatement::unsupported(
             "DELETE WHERE clause is empty",
@@ -5286,7 +5299,9 @@ fn parse_multi_delete(sql: &str, tokens: &[Token]) -> Result<MultiTablePlan, Blo
         safety::repeatable_selection(&tokens[where_idx..])?;
     }
     if targets.len() != 1 {
-        return Err(BlockedStatement::unsupported("multiple DELETE targets require manually reviewed transactional decomposition"));
+        return Err(BlockedStatement::unsupported(
+            "multiple DELETE targets require manually reviewed transactional decomposition",
+        ));
     }
     Ok(MultiTablePlan {
         targets,

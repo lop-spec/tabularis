@@ -1,11 +1,14 @@
-use super::super::super::TextProto;
+use super::super::super::{exec_on_mysql_conn, TextProto};
 use super::super::{execute_insert, plan_for_rollback, InsertPlan};
 use super::*;
 use crate::{
     recovery_history::RecoveryJournal,
     rollback_sql::{RollbackEnvironment, RollbackJournal, ServerIdentity},
 };
-use std::{fs, time::Instant};
+use std::{
+    fs,
+    time::{Duration, Instant},
+};
 
 #[path = "rollback_insert_fixture.rs"]
 mod fixture;
@@ -55,11 +58,16 @@ fn recovery_statements(path: &std::path::Path) -> Vec<serde_json::Value> {
         .collect()
 }
 
-async fn run_insert_batch(count: usize, reuse: bool) -> (usize, String, Vec<serde_json::Value>) {
+async fn run_insert_batch(
+    count: usize,
+    reuse: bool,
+) -> (usize, Duration, String, Vec<serde_json::Value>) {
     let mut fixture = Fixture::new().await;
     let root = tempfile::tempdir().unwrap();
     let (mut rollback, mut recovery) = journals(root.path());
     let mut cache = InsertMetadataCache::default();
+    rollback.defer_transaction_writes();
+    recovery.defer_transaction_writes();
     let start = Instant::now();
     for index in 0..count {
         let (sql, statement) = insert(index as u64 + 1);
@@ -77,35 +85,77 @@ async fn run_insert_batch(count: usize, reuse: bool) -> (usize, String, Vec<serd
         .await
         .unwrap();
         assert_eq!(result.affected_rows, 1);
-        // Every INSERT has durable inverse and recovery entries before the
-        // next one, regardless of whether table inspection is reused.
+        // Preserve every inverse and row image in order. Both journals must
+        // become durable at the simulated transaction commit barrier below.
         assert_eq!(rollback.checkpoint(), index + 1);
         assert_eq!(recovery.checkpoint(), index + 1);
     }
+    assert_eq!(
+        fs::read_to_string(rollback.current_recovery_path())
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    super::super::journal_barrier::finish(Some(&mut rollback), Some(&mut recovery)).unwrap();
+    let rollback_path = rollback.finalize().unwrap();
+    let recovery_path = recovery.finalize().unwrap();
+    let elapsed = start.elapsed();
     let requests = fixture.count();
     eprintln!(
-        "INSERT protocol fixture: count={count}, reuse={reuse}, requests={requests}, elapsed={:?}",
-        start.elapsed()
+        "INSERT protocol fixture: count={count}, reuse={reuse}, commit_buffered=true, requests={requests}, elapsed={elapsed:?}"
     );
     if reuse {
         assert_eq!(cache.inspections, 1);
         assert_eq!(cache.hits, count - 1);
     }
-    let rollback_sql = fs::read_to_string(rollback.finalize().unwrap()).unwrap();
-    let recovered = recovery_statements(&recovery.finalize().unwrap());
+    let rollback_sql = fs::read_to_string(rollback_path).unwrap();
+    let recovered = recovery_statements(&recovery_path);
     assert_eq!(fixture.state.lock().unwrap().rows.len(), count);
     assert_eq!(recovered.len(), count);
-    (requests, rollback_sql, recovered)
+    (requests, elapsed, rollback_sql, recovered)
+}
+
+async fn run_ordinary_insert_batch(count: usize) -> Duration {
+    let mut fixture = Fixture::new().await;
+    let start = Instant::now();
+    for index in 0..count {
+        let sql = format!("INSERT INTO items (id) VALUES ({})", index + 1);
+        let result = exec_on_mysql_conn(
+            &mut fixture.conn,
+            &sql,
+            None,
+            1,
+            TextProto::protocol_only(true),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.affected_rows, 1);
+    }
+    let elapsed = start.elapsed();
+    assert_eq!(fixture.count(), count);
+    assert_eq!(fixture.state.lock().unwrap().rows.len(), count);
+    eprintln!(
+        "INSERT ordinary protocol fixture: count={count}, requests={count}, elapsed={elapsed:?}"
+    );
+    elapsed
 }
 
 #[tokio::test]
 async fn protected_3429_insert_batch_removes_repeated_roundtrips_without_changing_journals() {
-    // Both paths retain the existing COM_QUERY selection used by bastions.
-    // This measures real sqlx protocol requests, not production DB latency;
-    // SQL text, execution order and the selected protocol are unchanged.
+    // All paths retain the existing COM_QUERY selection used by bastions.
+    // This is a component baseline, not application end-to-end acceptance:
+    // the fixture has no real MySQL commit, frontend, audit outbox, or network
+    // latency. Protected elapsed time includes durable journal finalization.
     let count = 3429;
-    let (before, baseline_sql, baseline_recovery) = run_insert_batch(count, false).await;
-    let (after, optimized_sql, optimized_recovery) = run_insert_batch(count, true).await;
+    let ordinary_elapsed = run_ordinary_insert_batch(count).await;
+    let (before, _, baseline_sql, baseline_recovery) = run_insert_batch(count, false).await;
+    let (after, protected_elapsed, optimized_sql, optimized_recovery) =
+        run_insert_batch(count, true).await;
+    eprintln!(
+        "INSERT component protected/ordinary ratio={:.3}; future native path target<=1.10, NOT EXERCISED",
+        protected_elapsed.as_secs_f64() / ordinary_elapsed.as_secs_f64()
+    );
     assert_eq!(before, count * 13);
     assert_eq!(after, count * 3 + 10);
     assert!(after * 100 < before * 30, "at least 70% fewer requests");

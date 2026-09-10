@@ -51,6 +51,7 @@ pub mod profile_crypto;
 pub mod query_history;
 #[cfg(test)]
 pub mod query_history_tests;
+mod journal_durability;
 pub mod recovery_history;
 mod mysql_row_identity;
 pub mod recovery_objects;

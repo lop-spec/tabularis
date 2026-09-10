@@ -22,6 +22,9 @@ pub(super) struct State {
     pub auto_increment: bool,
     pub next_id: u64,
     pub fail_refresh: bool,
+    pub fail_capture: bool,
+    pub omit_capture: bool,
+    transaction_rows: Option<BTreeSet<u64>>,
 }
 
 pub(super) struct Fixture {
@@ -45,6 +48,9 @@ impl Fixture {
             auto_increment: false,
             next_id: 1,
             fail_refresh: false,
+            fail_capture: false,
+            omit_capture: false,
+            transaction_rows: None,
         }));
         let server_state = state.clone();
         let worker = tokio::spawn(async move {
@@ -181,8 +187,30 @@ fn respond(state: &mut State, query: &str) -> Vec<u8> {
     state.queries.push(query.to_string());
     let string = (0xfd, 0);
     let unsigned = (8, 32);
+    if query == "START TRANSACTION" {
+        assert!(state.transaction_rows.is_none());
+        state.transaction_rows = Some(state.rows.clone());
+        return packet(1, &ok(0));
+    }
+    if query == "ROLLBACK" {
+        state.rows = state
+            .transaction_rows
+            .take()
+            .expect("Owned fixture transaction");
+        return packet(1, &ok(0));
+    }
+    if query == "COMMIT" {
+        state
+            .transaction_rows
+            .take()
+            .expect("Owned fixture transaction");
+        return packet(1, &ok(0));
+    }
     if query.starts_with("SET ") {
         return packet(1, &ok(0));
+    }
+    if query == "SELECT VERSION()" {
+        return rows(&[string], vec![vec![text("8.0.36-fixture")]]);
     }
     if query == "SELECT DATABASE()" {
         return rows(&[string], vec![vec![text(&state.schema)]]);
@@ -233,25 +261,40 @@ fn respond(state: &mut State, query: &str) -> Vec<u8> {
         return rows(&[(8, 0)], vec![]);
     }
     if query.starts_with("SELECT CASE WHEN") {
-        let id: u64 = query
+        if state.fail_capture {
+            let mut error = vec![0xff, 0x51, 0x04];
+            error.extend_from_slice(b"#HY000injected window capture failure");
+            return packet(1, &error);
+        }
+        if state.omit_capture {
+            return rows(&[string], vec![]);
+        }
+        let ids: BTreeSet<u64> = query
             .split("`id` <=> ")
-            .nth(1)
-            .unwrap()
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect::<String>()
-            .parse()
-            .unwrap();
-        let captured = if state.rows.contains(&id) {
-            let hex = id
-                .to_string()
-                .bytes()
-                .map(|b| format!("{b:02X}"))
-                .collect::<String>();
-            vec![vec![text(&format!("X'{hex}'"))]]
-        } else {
-            vec![]
-        };
+            .skip(1)
+            .map(|part| {
+                part.chars()
+                    .take_while(char::is_ascii_digit)
+                    .collect::<String>()
+                    .parse()
+                    .unwrap()
+            })
+            .collect();
+        assert!(
+            !ids.is_empty(),
+            "fixture requires explicit numeric key conditions"
+        );
+        let captured = ids
+            .intersection(&state.rows)
+            .map(|id| {
+                let hex = id
+                    .to_string()
+                    .bytes()
+                    .map(|b| format!("{b:02X}"))
+                    .collect::<String>();
+                vec![text(&format!("X'{hex}'"))]
+            })
+            .collect();
         return rows(&[string], captured);
     }
     if query.starts_with("INSERT INTO items (id) VALUES (") {
