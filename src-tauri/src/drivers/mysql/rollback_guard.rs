@@ -15,6 +15,9 @@ mod identity_tests;
 
 #[path = "rollback_safety.rs"]
 mod safety;
+#[path = "rollback_insert_cache.rs"]
+mod insert_cache;
+use insert_cache::InsertMetadataCache;
 #[cfg(test)]
 #[path = "rollback_safety_tests.rs"]
 mod safety_tests;
@@ -1079,6 +1082,7 @@ async fn execute_pinned_protected_batch(
     let mut transaction_outcome: Option<String> = None;
     let mut uncertain_boundary = false;
     let statement_offset = session.statement_offset;
+    let mut insert_metadata = InsertMetadataCache::default();
 
     {
         let PinnedTransactionSession {
@@ -1098,6 +1102,7 @@ async fn execute_pinned_protected_batch(
         for (index, (query, plan)) in queries.iter().zip(plans.iter()).enumerate() {
             *last_activity = std::time::Instant::now();
             let start = std::time::Instant::now();
+            insert_metadata.before_statement(plan, explicit_transaction_checkpoint.is_some());
             match complete_statement_without_database(
                 index,
                 plan,
@@ -1206,6 +1211,7 @@ async fn execute_pinned_protected_batch(
                                 .as_mut()
                                 .expect("write batches always have a recovery journal"),
                             text,
+                            Some(&mut insert_metadata),
                             &mut degraded,
                         )
                         .await
@@ -1461,8 +1467,10 @@ async fn execute_single_run_protected_batch(
     let mut results = Vec::with_capacity(queries.len());
     let mut stopped = false;
     let mut explicit_transaction_checkpoint = None;
+    let mut insert_metadata = InsertMetadataCache::default();
     for (index, (query, plan)) in queries.iter().zip(plans.iter()).enumerate() {
         let start = std::time::Instant::now();
+        insert_metadata.before_statement(plan, explicit_transaction_checkpoint.is_some());
         if let Some(result) = complete_statement_without_database(
             index,
             plan,
@@ -1544,6 +1552,7 @@ async fn execute_single_run_protected_batch(
                                 .as_mut()
                                 .expect("write batches always have a recovery journal"),
                             text,
+                            Some(&mut insert_metadata),
                             &mut degraded,
                         )
                         .await
@@ -1701,6 +1710,7 @@ async fn execute_protected_dml(
         rollback_journal,
         recovery_journal,
         text,
+        None,
         degraded,
     )
     .await;
@@ -1758,6 +1768,7 @@ async fn execute_protected_dml_body(
     rollback_journal: &mut RollbackJournal,
     recovery_journal: &mut RecoveryJournal,
     text: super::TextProto,
+    insert_metadata: Option<&mut InsertMetadataCache>,
     degraded: &mut Option<String>,
 ) -> Result<QueryResult, String> {
     let outcome = match plan {
@@ -1770,6 +1781,7 @@ async fn execute_protected_dml_body(
                 rollback_journal,
                 recovery_journal,
                 text,
+                insert_metadata,
             )
             .await
         }
@@ -1857,8 +1869,12 @@ async fn execute_insert(
     rollback_journal: &mut RollbackJournal,
     recovery_journal: &mut RecoveryJournal,
     text: super::TextProto,
+    insert_metadata: Option<&mut InsertMetadataCache>,
 ) -> Result<QueryResult, String> {
-    let metadata = load_locked_dml_metadata(conn, &plan.table, false).await?;
+    let metadata = match insert_metadata {
+        Some(cache) => cache.load(conn, &plan.table).await?,
+        None => load_locked_dml_metadata(conn, &plan.table, false).await?,
+    };
     validate_insert_columns(plan, &metadata)?;
 
     let explicit_key_condition = explicit_insert_key_condition(plan, &metadata)?;

@@ -89,6 +89,11 @@ pub struct RollbackJournal {
 }
 
 impl RollbackJournal {
+    #[cfg(test)]
+    pub(crate) fn create_for_test(root: &Path, environment: RollbackEnvironment) -> Self {
+        Self::create_in(root, environment).expect("create isolated rollback journal")
+    }
+
     pub fn create(environment: RollbackEnvironment) -> Result<Self, String> {
         let data_dir = crate::paths::get_app_data_dir()
             .ok_or_else(|| "Could not resolve the Tabularis data directory".to_string())?;

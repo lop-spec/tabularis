@@ -121,6 +121,18 @@ pub struct RecoveryJournal {
 }
 
 impl RecoveryJournal {
+    #[cfg(test)]
+    pub(crate) fn create_for_test(root: &Path) -> Self {
+        Self::create_in(
+            root,
+            "fixture".into(),
+            "fixture".into(),
+            "fixture".into(),
+            "fixture".into(),
+        )
+        .expect("create isolated recovery journal")
+    }
+
     pub fn create(
         connection_id: String,
         connection_name: String,

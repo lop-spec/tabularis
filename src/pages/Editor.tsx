@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import { interruptBatchResults } from "../utils/batchInterruption";
 import {
   formatResultForExport,
   getLoadedRowsExportLimit,
@@ -136,6 +137,7 @@ import { useKeybindings } from "../hooks/useKeybindings";
 import type {
   BatchStatementResult,
   QueryResult,
+  QueryResultEntry,
   Tab,
   PendingInsertion,
   TableColumn,
@@ -1321,12 +1323,19 @@ export const Editor = () => {
       // rewrite) so the UI shows per-statement status in real time instead of
       // waiting for the entire batch.
       const applied = new Set<number>();
+      // React state can lag the last progress event when cancellation rejects
+      // invoke. Keep a separate, synchronous snapshot for final reconciliation.
+      const batchEntries = [...entries];
+      const patchBatchEntry = (index: number, partial: Partial<QueryResultEntry>) => {
+        batchEntries[index] = { ...batchEntries[index], ...partial };
+        patchResultEntry(targetTabId, entries[index].id, partial);
+      };
       const applyStatement = (index: number, item: BatchStatementResult) => {
         const entry = entries[index];
         if (!entry) return;
         const execTime = item?.execution_time_ms ?? null;
         if (item?.skipped) {
-          patchResultEntry(targetTabId, entry.id, {
+          patchBatchEntry(index, {
             error: t("editor.rollbackRiskSkippedResult", {
               reason: item.error ?? "",
             }),
@@ -1346,7 +1355,7 @@ export const Editor = () => {
               batchDatabase ?? historyDb,
             );
           }
-          patchResultEntry(targetTabId, entry.id, {
+          patchBatchEntry(index, {
             error: item.error,
             executionTime: execTime,
             isLoading: false,
@@ -1381,7 +1390,7 @@ export const Editor = () => {
             batchDatabase ?? historyDb,
           );
         }
-        patchResultEntry(targetTabId, entry.id, {
+        patchBatchEntry(index, {
           result: res,
           executionTime: execTime,
           isLoading: false,
@@ -1407,7 +1416,6 @@ export const Editor = () => {
       // Run the whole script on a single pooled connection so statements
       // can share session state (SET @var, LAST_INSERT_ID(), transactions,
       // TEMP TABLE).
-      const batchStart = performance.now();
       let batchResults: BatchStatementResult[];
       try {
         batchResults = await invoke<BatchStatementResult[]>(
@@ -1468,30 +1476,23 @@ export const Editor = () => {
           }
           return;
         }
-        // Batch-level failure (e.g. connection acquisition, cancellation):
-        // mark only the entries that haven't already resolved via a live event
-        // as failed, so statements that completed first keep their results.
-        const fallbackElapsed = performance.now() - batchStart;
         const message = typeof err === "string" ? err : t("editor.queryFailed");
-        entries.forEach((entry, idx) => {
-          if (applied.has(idx)) return;
-          if (shouldRecordHistory) {
-            addHistoryEntry(
-              entry.query,
-              fallbackElapsed,
-              "error",
-              null,
-              message,
-              historyDb,
-            );
-          }
-          patchResultEntry(targetTabId, entry.id, {
-            error: message,
-            executionTime: fallbackElapsed,
-            isLoading: false,
-          });
+        updateTab(targetTabId, {
+          results: interruptBatchResults(batchEntries, message),
+          isLoading: false,
         });
-        updateTab(targetTabId, { isLoading: false });
+        if (shouldRecordHistory) {
+          // Record the failed batch once. Unconfirmed statements might never
+          // have been sent, so they have no individual execution or timing.
+          addHistoryEntry(
+            entries.map((entry) => entry.query).join(";\n"),
+            null,
+            "error",
+            null,
+            message,
+            historyDb,
+          );
+        }
         return;
       }
 
