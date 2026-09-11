@@ -1,33 +1,4 @@
 {
-  "onlineDdl": {
-    "button": "在线变更",
-    "title": "在线表结构变更 · gh-ost",
-    "unavailable": "当前构建未包含 gh-ost，请安装云端 CI 生成的在线变更版本。",
-    "warning": "本机执行，请保持 Tabularis 和电脑运行。副本延迟达到 3 秒时节流；低于 10 秒是目标，不是硬保证。需要额外表和 binlog 空间。保留旧表，但普通回滚保护不覆盖本次迁移，切表后不能直接无损回滚。",
-    "database": "目标数据库",
-    "selectDatabase": "请选择本次变更的准确数据库",
-    "replicas": "全部只读副本地址",
-    "replicaHelp": "填写以逗号或换行分隔的 host:port，不填读写分离代理。副本必须直接复制此主库，并支持相同的数据库账号和 TLS 设置；复用已有 SSH 转发。安全切表要求主库开启元数据锁观测，副本无需开启 Performance Schema。",
-    "aliyun": "阿里云 RDS",
-    "lag": "副本最大心跳延迟",
-    "unknown": "未知 / 监控不可用",
-    "threshold": "节流阈值：3 秒",
-    "logs": "迁移日志",
-    "pause": "暂停",
-    "resume": "继续",
-    "cancel": "取消迁移",
-    "execute": "确认并在线执行",
-    "states": {
-      "preparing": "正在预检",
-      "running": "拷贝 / 应用增量中",
-      "throttled": "已暂停 / 延迟节流",
-      "cancelling": "等待取消完成",
-      "succeeded": "已完成",
-      "cancelled": "已停止，请核实表状态",
-      "failed": "执行失败",
-      "needs_review": "需要核实结果"
-    }
-  },
   "toolbar": {
     "filters": "筛选器",
     "toggleFilterPanel": "切换结构化筛选面板",

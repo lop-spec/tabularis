@@ -1,33 +1,4 @@
 {
-  "onlineDdl": {
-    "button": "Online change",
-    "title": "Online schema change · gh-ost",
-    "unavailable": "This build does not include gh-ost. Install the CI-built Online DDL release.",
-    "warning": "Runs locally. Keep Tabularis and this computer running. Throttles at 3 s; below 10 s is a target, not a guarantee. Uses extra table/binlog space. The old table is retained, but ordinary rollback protection does not cover this migration and post-cutover rollback is not lossless.",
-    "database": "Target database",
-    "selectDatabase": "Select the exact target database",
-    "replicas": "All read-replica endpoints",
-    "replicaHelp": "Comma/newline-separated host:port values, not a read/write proxy. All replicas must follow this primary directly and accept the same database credentials/TLS settings. Existing SSH forwarding is reused. Safe cutover requires metadata-lock instrumentation on the PRIMARY; replica Performance Schema is not required.",
-    "aliyun": "Alibaba Cloud RDS",
-    "lag": "Maximum replica heartbeat lag",
-    "unknown": "Unknown / monitoring unavailable",
-    "threshold": "Throttle threshold: 3 s",
-    "logs": "Migration logs",
-    "pause": "Pause",
-    "resume": "Continue",
-    "cancel": "Cancel migration",
-    "execute": "Confirm and execute online",
-    "states": {
-      "preparing": "Preflight",
-      "running": "Copying / applying changes",
-      "throttled": "Paused / throttled",
-      "cancelling": "Waiting for cancellation",
-      "succeeded": "Completed",
-      "cancelled": "Stopped; inspect table state",
-      "failed": "Failed",
-      "needs_review": "Needs verification"
-    }
-  },
   "toolbar": {
     "filters": "Filters",
     "toggleFilterPanel": "Toggle structured filter panel",

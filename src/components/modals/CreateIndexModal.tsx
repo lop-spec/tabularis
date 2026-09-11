@@ -5,7 +5,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { SqlPreview } from '../ui/SqlPreview';
 import { useDatabase } from '../../hooks/useDatabase';
 import { Modal } from '../ui/Modal';
-import { OnlineDdlButton } from './OnlineDdlButton';
 
 interface CreateIndexModalProps {
   isOpen: boolean;
@@ -26,7 +25,6 @@ export const CreateIndexModal = ({
   onSuccess,
   connectionId,
   tableName,
-  driver,
 }: CreateIndexModalProps) => {
   const { t } = useTranslation();
   const { activeSchema } = useDatabase();
@@ -205,14 +203,6 @@ export const CreateIndexModal = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-default bg-base/50 flex flex-wrap justify-end gap-3">
-           {driver === 'mysql' && <OnlineDdlButton
-             connectionId={connectionId} tableName={tableName} onSuccess={onSuccess}
-             disabled={loading || selectedColumns.length === 0 || !indexName.trim()}
-             getStatements={() => invoke<string[]>('get_create_index_sql', {
-               connectionId, table: tableName, indexName, columns: selectedColumns, isUnique,
-               ...(activeSchema ? { schema: activeSchema } : {}),
-             })}
-           />}
            <button onClick={onClose} className="px-4 py-2 text-secondary hover:text-primary transition-colors text-sm">
              {t('createIndex.cancel')}
            </button>

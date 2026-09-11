@@ -7,7 +7,6 @@ import { useDatabase } from "../../hooks/useDatabase";
 import { useDataTypes } from "../../hooks/useDataTypes";
 import { useDrivers } from "../../hooks/useDrivers";
 import { Modal } from "../ui/Modal";
-import { OnlineDdlButton } from './OnlineDdlButton';
 import { Select } from "../ui/Select";
 import { supportsAlterColumn } from "../../utils/driverCapabilities";
 import { parseColumnType, buildColumnDefinition } from "../../utils/columnTypes";
@@ -391,22 +390,6 @@ export const ModifyColumnModal = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-default bg-base/50 flex flex-wrap justify-end gap-3">
-          {driver === 'mysql' && <OnlineDdlButton
-            connectionId={connectionId} tableName={tableName} onSuccess={onSuccess}
-            disabled={loading || !form.name.trim() || form.isPk || form.isAutoInc || (isEdit && form.name !== column?.name)}
-            getStatements={() => {
-              const options = { connectionId, table: tableName, ...(activeSchema ? { schema: activeSchema } : {}) };
-              if (column) {
-                const parsed = parseColumnType(column.data_type, availableTypes);
-                return invoke<string[]>('get_alter_column_sql', {
-                  ...options,
-                  oldColumn: buildColumnDefinition({ name: column.name, type: parsed.type, length: parsed.length, isNullable: column.is_nullable, defaultValue: '', isPk: column.is_pk, isAutoInc: column.is_auto_increment }),
-                  newColumn: buildColumnDefinition(form),
-                });
-              }
-              return invoke<string[]>('get_add_column_sql', { ...options, column: buildColumnDefinition(form) });
-            }}
-          />}
           <button
             onClick={onClose}
             className="px-4 py-2 text-secondary hover:text-primary transition-colors text-sm"
